@@ -17,7 +17,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
-import { getSupabaseClient } from '@/template';
+import { useAlert, getSupabaseClient } from '@/template';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import {
   CapturedImage,
@@ -31,7 +31,6 @@ import {
 } from '@/services/aiIdentificationService';
 import { useApp } from '@/hooks/useApp';
 import { useSubscription } from '@/hooks/useSubscription';
-import { useAlert, getSupabaseClient } from '@/template';
 import { startCheckout } from '@/services/subscriptionService';
 import { Image } from 'expo-image';
 
