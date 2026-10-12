@@ -30,7 +30,14 @@ const MIN_SUPPORTING_EVIDENCE_FOR_MEDIUM = 2;
 const MIN_SUPPORTING_EVIDENCE_FOR_HIGH   = 4;
 
 function isCoinLikeSpecialist(sid: string): boolean {
-  return sid === 'coins' || sid === 'coins_uk' || sid?.includes('coin') || sid?.includes('numismatic') || sid === 'curiosities_collectibles';
+  // Only route to coin/numismatic pipeline for explicitly coin-related specialists.
+  // curiosities_collectibles is a GENERIC specialist used for bikes, clothing, etc.
+  // Do NOT route those through the Numista coin verification pipeline.
+  return sid === 'coins' || sid === 'coins_uk' || sid === 'coins_currency' || sid === 'coins_world' ||
+    sid === 'islamic_silver' || sid === 'banknotes' || sid === 'gold' || sid === 'silver' ||
+    sid === 'ancient_artefacts' || sid === 'jewellery_precious_metals' ||
+    (sid?.includes('coin') && sid !== 'curiosities_collectibles') ||
+    sid?.includes('numismatic');
 }
 function isVehicleSpecialist(sid: string): boolean { return sid === 'motocross'; }
 function isClothingSpecialist(sid: string): boolean { return sid === 'clothing' || sid === 'trainers_sneakers'; }

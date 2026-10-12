@@ -73,8 +73,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
 
   // Niche state — persisted to AsyncStorage
-  const [enabledNiches, setEnabledNiches] = useState<NicheId[]>(['coins']);
-  const [activeNicheId, setActiveNicheId] = useState<NicheId>('coins');
+  const [enabledNiches, setEnabledNiches] = useState<NicheId[]>(['general']);
+  const [activeNicheId, setActiveNicheId] = useState<NicheId>('general');
 
   // Load persisted niche preferences
   useEffect(() => {
@@ -95,13 +95,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setActiveNiche = (id: NicheId) => {
     setActiveNicheId(id);
-    // Also ensure it's in the enabled list
+    // Also ensure it's in the enabled list — use single update via functional setter
     setEnabledNiches(prev => {
       const next = prev.includes(id) ? prev : [id, ...prev];
-      persistNiches(id, next);
+      persistNiches(id, next); // persist with the correct, up-to-date enabled list
       return next;
     });
-    persistNiches(id, enabledNiches.includes(id) ? enabledNiches : [id, ...enabledNiches]);
   };
 
   const enableNiche = (id: NicheId) => {
@@ -123,7 +122,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const activeNiche = NICHES[activeNicheId] ?? NICHES.coins;
+  // Safe fallback: use 'general' niche (never coin-specific) when activeNicheId is invalid
+  const activeNiche = NICHES[activeNicheId] ?? NICHES.general;
 
   // Track whether background image/title sync has already fired this session
   const bgSyncFiredRef = useRef(false);

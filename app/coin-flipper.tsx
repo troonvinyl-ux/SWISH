@@ -21,7 +21,7 @@ import { Image } from 'expo-image';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { useSubscription } from '@/hooks/useSubscription';
-import { useAlert } from '@/template';
+import { useAlert, getSupabaseClient } from '@/template';
 import {
   CapturedImage,
   AIIdentificationResult,
@@ -1531,7 +1531,8 @@ function InsightsTab({ tenant, onTabSelect }: { tenant: any; onTabSelect: (t: CF
   const router = useRouter();
   const [stats, setStats] = useState<{ items: number; listed: number; sold: number; totalValue: number } | null>(null);
   const [loading, setLoading] = useState(true);
-  const { getSupabaseClient } = require('@/template');
+// getSupabaseClient imported at top of file
+// (remaining imports are already at top of file)
 
   useEffect(() => {
     if (!tenant?.id) { setLoading(false); return; }
