@@ -1203,6 +1203,23 @@ function MvStatRow({ label, value, accent }: { label: string; value: string; acc
   );
 }
 
+// ── Niche evidence helpers ───────────────────────────────────────────────────
+function isCoinNiche(specialistId: string | undefined): boolean {
+  const id = specialistId ?? '';
+  return id === 'coins' || id === 'coins_uk' || id === 'coins_world' ||
+    id === 'islamic_silver' || id === 'banknotes' || id === 'gold' ||
+    id === 'silver' || id === 'ancient_artefacts' || id === 'curiosities_collectibles' ||
+    id.includes('coin') || id.includes('numismatic');
+}
+
+function getNicheEvidenceLabel(specialistId: string | undefined): string {
+  const id = specialistId ?? '';
+  if (id === 'motocross') return 'Motocross / off-road eBay sold comps';
+  if (id === 'bicycles' || id === 'cycling') return 'MTB & road bike eBay sold comps';
+  if (id === 'clothing' || id === 'trainers_sneakers') return 'Vintage & streetwear eBay sold comps';
+  return 'eBay sold + Numista catalogue';
+}
+
 function MarketValuePanel({
   item, tenantId, onUpdated, externalResult,
 }: { item: Item; tenantId: string; onUpdated: (updates: Partial<Item>, mv?: MarketValueResult) => void; externalResult?: MarketValueResult | null }) {
@@ -1222,9 +1239,10 @@ function MarketValuePanel({
   const handleReValue = useCallback(async () => {
     setLoading(true); setError(null);
     const attrs = item.attributes ?? {};
-    const numistaTypeId = attrs['numista_type_id'] ? Number(attrs['numista_type_id']) : (attrs['numista_candidate_id'] ? Number(attrs['numista_candidate_id']) : null);
-    const numistaMatchScore = attrs['numista_match_score'] ? Number(attrs['numista_match_score']) : 0;
-    const numistaMatchTier = attrs['numista_status'] ?? (numistaTypeId ? 'candidate' : 'no_match');
+    const coinNiche = isCoinNiche(item.specialistId);
+    const numistaTypeId = coinNiche && attrs['numista_type_id'] ? Number(attrs['numista_type_id']) : (coinNiche && attrs['numista_candidate_id'] ? Number(attrs['numista_candidate_id']) : null);
+    const numistaMatchScore = coinNiche ? (attrs['numista_match_score'] ? Number(attrs['numista_match_score']) : 0) : 0;
+    const numistaMatchTier = coinNiche ? (attrs['numista_status'] ?? (numistaTypeId ? 'candidate' : 'no_match')) : 'unavailable';
     const { result: mv, error: mvErr } = await getMarketValue({
       tenantId, itemId: item.id, title: item.canonicalTitle, specialistId: item.specialistId,
       attributes: { ...(item.attributes ?? {}), ruler: item.ruler, denomination: item.denomination, year_made: item.yearMade, period: item.period, mint: item.mint, material: item.material, weight: item.weightGrams, diameter: item.diameterMm, country: item.countryOfOrigin },
@@ -1251,6 +1269,8 @@ function MarketValuePanel({
   const val = result?.valuation;
   const numista = result?.numista;
   const ds = result?.dataSource;
+  const coinNichePanel = isCoinNiche(item.specialistId);
+  const evidenceLabel = getNicheEvidenceLabel(item.specialistId);
 
   return (
     <View style={mv.panel}>
@@ -1315,14 +1335,14 @@ function MarketValuePanel({
             <View style={[mv.valItem, mv.valItemMid]}><Text style={mv.valLabel}>FAIR MKT</Text><Text style={mv.valValueMid}>£{val.valuationMid.toFixed(2)}</Text></View>
             <View style={mv.valItem}><Text style={mv.valLabel}>HIGH</Text><Text style={mv.valValueSm}>£{val.valuationHigh.toFixed(2)}</Text></View>
           </View>
-          {result?.numistaSales?.available && result.numistaSales.relevantCount > 0 ? (
+          {coinNichePanel && result?.numistaSales?.available && result.numistaSales.relevantCount > 0 ? (
             <View style={mv.sourceProvenanceRow}>
               <View style={mv.sourceChip}><MaterialIcons name="verified" size={10} color={Colors.success} /><Text style={[mv.sourceChipText, { color: Colors.success }]}>{`Numista: ${result.numistaSales.numistaN} · ${result.numistaSales.relevantCount} sale${result.numistaSales.relevantCount === 1 ? '' : 's'}`}</Text></View>
             </View>
           ) : null}
           {result?.soldMarket && result.soldMarket.relevantSoldCount > 0 ? (
             <View style={mv.sourceProvenanceRow}>
-              <View style={mv.sourceChip}><MaterialIcons name="shopping-bag" size={10} color={Colors.primary} /><Text style={[mv.sourceChipText, { color: Colors.primary }]}>{`eBay: ${result.soldMarket.relevantSoldCount} verified sold`}</Text></View>
+              <View style={mv.sourceChip}><MaterialIcons name="shopping-bag" size={10} color={Colors.primary} /><Text style={[mv.sourceChipText, { color: Colors.primary }]}>{`${result.soldMarket.relevantSoldCount} verified sold · ${evidenceLabel}`}</Text></View>
             </View>
           ) : null}
           <View style={mv.recListingCard}>
@@ -1346,7 +1366,7 @@ function MarketValuePanel({
           ) : (
             <View style={mv.noDataRow}><MaterialIcons name="search-off" size={13} color={Colors.textTertiary} /><Text style={mv.noDataText}>No verified sold data found</Text></View>
           )}
-          {numista ? (
+          {coinNichePanel && numista ? (
             <>
               <View style={mv.divider} />
               <Text style={mv.sectionLabel}>NUMISTA CATALOGUE</Text>
@@ -1363,9 +1383,23 @@ function MarketValuePanel({
                 ) : null}
               </View>
             </>
+          ) : !coinNichePanel && result?.soldMarket && result.soldMarket.relevantSoldCount > 0 ? (
+            <>
+              <View style={mv.divider} />
+              <Text style={mv.sectionLabel}>EVIDENCE SOURCE</Text>
+              <View style={[mv.numistaCard, { borderColor: Colors.primary + '30' }]}>
+                <View style={mv.numistaHeader}>
+                  <MaterialIcons name="analytics" size={13} color={Colors.primary} />
+                  <Text style={[mv.numistaTitle, { color: Colors.primary }]}>{evidenceLabel}</Text>
+                </View>
+                <Text style={{ fontSize: 10, color: Colors.textTertiary, marginTop: 4, lineHeight: 14 }}>
+                  {result.soldMarket.relevantSoldCount} relevant sold comparables · verified eBay UK transactions only · no Numista used
+                </Text>
+              </View>
+            </>
           ) : null}
           {ds ? (
-            <><View style={mv.divider} /><View style={mv.dsRow}><MaterialIcons name="storage" size={11} color={Colors.textTertiary} /><Text style={mv.dsText}>eBay sold: {ds.findingApiTotal} · Active: {ds.browseApiActive} · Numista: {ds.numistaFound}</Text></View></>
+            <><View style={mv.divider} /><View style={mv.dsRow}><MaterialIcons name="storage" size={11} color={Colors.textTertiary} /><Text style={mv.dsText}>{coinNichePanel ? `eBay sold: ${ds.findingApiTotal} · Active: ${ds.browseApiActive} · Numista: ${ds.numistaFound}` : `eBay sold: ${ds.findingApiTotal} · Active: ${ds.browseApiActive}`}</Text></View></>
           ) : null}
         </View>
       ) : null}
@@ -1790,13 +1824,15 @@ export default function StockListingScreen() {
     if (!item || !tenant) return;
     setReValuing(true);
     const attrs = item.attributes ?? {};
-    const numistaTypeId = attrs['numista_type_id'] ? Number(attrs['numista_type_id']) : (attrs['numista_candidate_id'] ? Number(attrs['numista_candidate_id']) : null);
+    const coinNiche = isCoinNiche(item.specialistId);
+    const numistaTypeId = coinNiche && attrs['numista_type_id'] ? Number(attrs['numista_type_id']) : (coinNiche && attrs['numista_candidate_id'] ? Number(attrs['numista_candidate_id']) : null);
+    const numistaMatchTier = coinNiche ? (attrs['numista_status'] ?? (numistaTypeId ? 'candidate' : 'no_match')) : 'unavailable';
     const { result: mv, error: mvErr } = await getMarketValue({
       tenantId: tenant.id, itemId: item.id, title: item.canonicalTitle, specialistId: item.specialistId,
       attributes: { ...(item.attributes ?? {}), ruler: item.ruler, denomination: item.denomination, year_made: item.yearMade, period: item.period, mint: item.mint, material: item.material, weight: item.weightGrams, diameter: item.diameterMm, country: item.countryOfOrigin },
       condition: item.condition, identificationConfidence: item.identificationConfidence,
       identificationTier: item.valuationConfidence as string ?? 'medium',
-      numistaTypeId, numistaMatchScore: 0, numistaMatchTier: numistaTypeId ? 'candidate' : 'no_match', applyToItem: true,
+      numistaTypeId, numistaMatchScore: 0, numistaMatchTier, applyToItem: true,
     });
     setReValuing(false);
     if (mvErr || !mv) { showAlert('Re-Value Failed', mvErr ?? 'Market value lookup failed'); return; }
