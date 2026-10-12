@@ -66,82 +66,89 @@ jobs:
             -keypass "swish123" \
             -dname "CN=SWISH, OU=Mobile, O=SWISH, L=London, S=London, C=GB"
 
-      - name: Patch Android app build.gradle for release signing (idempotent + safe)
+      - name: Patch Android app build.gradle for release signing (robust idempotent)
         working-directory: ${{ github.workspace }}
         run: |
           python - <<'PY'
-          """
-          Idempotent Gradle signingConfigs patch.
-
-          Behavior:
-          - Inspect android/app/build.gradle
-          - If a well-formed signingConfigs.release exists and references the expected keystore file and alias, do nothing and exit 0.
-          - If signingConfigs exists but release block is missing or incomplete, amend the existing signingConfigs.release safely.
-          - If signingConfigs is missing, insert a signingConfigs.release block before the 'buildTypes {' marker.
-          - Ensure the 'release' buildType uses signingConfig signingConfigs.release.
-          - Do not print passwords or keystore content. Print only short diagnostics.
-          - Run the patch twice to verify idempotency.
-          """
-          import re
           import sys
+          import re
           from pathlib import Path
+
+          GRADLE_PATH = Path('android/app/build.gradle')
+          if not GRADLE_PATH.exists():
+              print('ERROR: android/app/build.gradle not found')
+              sys.exit(0)
 
           KEYS = {
               'keystore': 'swish-release.keystore',
               'alias': 'swish',
-              # store/key passwords are intentionally not printed to logs
               'password': 'swish123'
           }
 
-          GRADLE_PATH = Path('android/app/build.gradle')
+          def find_block(text, start_idx):
+              i = start_idx
+              depth = 0
+              n = len(text)
+              while i < n:
+                  if text[i] == '{':
+                      depth += 1
+                  elif text[i] == '}':
+                      depth -= 1
+                      if depth == 0:
+                          return i
+                  i += 1
+              return -1
 
-          def read():
-              if not GRADLE_PATH.exists():
-                  print('ERROR: android/app/build.gradle not found')
+          def locate_keyword_block(text, keyword):
+              m = re.search(r'{}\s*\{{'.format(re.escape(keyword)), text)
+              if not m:
                   return None
-              return GRADLE_PATH.read_text()
-
-          def has_release_signing_block(text):
-              m = re.search(r'signingConfigs\s*\{[\s\S]*?release\s*\{([\s\S]*?)\}\s*\}', text)
-              return m
-
-          def release_block_ok(inner):
-              # check for storeFile and keyAlias presence
-              if re.search(r'storeFile\s*file\(["\']{}["\']\)'.format(re.escape(KEYS['keystore'])), inner):
-                  if re.search(r'keyAlias\s*["\']{}["\']'.format(re.escape(KEYS['alias'])), inner):
-                      return True
-              return False
+              open_brace_idx = text.find('{', m.end()-1)
+              close_brace_idx = find_block(text, open_brace_idx)
+              if close_brace_idx == -1:
+                  return None
+              return (m.start(), open_brace_idx, close_brace_idx)
 
           def ensure_signing_configs(text):
-              changed = False
-
-              m = has_release_signing_block(text)
-              if m:
-                  inner = m.group(1)
-                  if release_block_ok(inner):
-                      print('Found existing signingConfigs.release with expected keystore and alias.')
-                      return text, changed
-                  # release block exists but incomplete: replace the release block content only
-                  print('Found signingConfigs.release but it appears incomplete; updating release block (without printing secrets).')
-                  new_release = (
-                      'signingConfigs {\n'
-                      '        release {\n'
+              loc = locate_keyword_block(text, 'signingConfigs')
+              if loc:
+                  s_start, s_open, s_close = loc
+                  signing_block = text[s_open+1:s_close]
+                  rel_match = re.search(r'release\s*\{', signing_block)
+                  if rel_match:
+                      rel_open_in_block = signing_block.find('{', rel_match.end()-1)
+                      rel_open_idx = s_open + 1 + rel_open_in_block
+                      rel_close_idx = find_block(text, rel_open_idx)
+                      if rel_close_idx == -1:
+                          return None, False, 'Malformed release block in signingConfigs (unbalanced braces)'
+                      release_inner = text[rel_open_idx+1:rel_close_idx]
+                      if (re.search(r'storeFile\s*file\(["\']{}["\']\)'.format(re.escape(KEYS['keystore'])), release_inner)
+                          and re.search(r'keyAlias\s*["\']{}["\']'.format(re.escape(KEYS['alias'])), release_inner)):
+                          return text, False, 'Existing signingConfigs.release correct'
+                      new_release = (
+                          'release {\n'
+                          '            storeFile file("%s")\n'
+                          '            storePassword "%s"\n'
+                          '            keyAlias "%s"\n'
+                          '            keyPassword "%s"\n'
+                          '        }') % (KEYS['keystore'], KEYS['password'], KEYS['alias'], KEYS['password'])
+                      sb_before = text[s_open+1:rel_open_idx]
+                      sb_after = text[rel_close_idx+1:s_close]
+                      new_signing = sb_before + new_release + sb_after
+                      new_text = text[:s_open+1] + new_signing + text[s_close:]
+                      return new_text, True, 'Updated existing signingConfigs.release'
+                  insert = (
+                      '\n        release {\n'
                       '            storeFile file("%s")\n'
                       '            storePassword "%s"\n'
                       '            keyAlias "%s"\n'
                       '            keyPassword "%s"\n'
-                      '        }\n'
-                      '    }') % (KEYS['keystore'], KEYS['password'], KEYS['alias'], KEYS['password'])
+                      '        }\n') % (KEYS['keystore'], KEYS['password'], KEYS['alias'], KEYS['password'])
+                  new_text = text[:s_close] + insert + text[s_close:]
+                  return new_text, True, 'Inserted release block into signingConfigs'
 
-                  # replace entire signingConfigs { ... } including release
-                  text = re.sub(r'signingConfigs\s*\{[\s\S]*?\}', new_release, text, count=1)
-                  changed = True
-                  return text, changed
-
-              # signingConfigs absent — insert before buildTypes
-              marker = '    buildTypes {'
-              if marker in text:
-                  print('Inserting signingConfigs.release before buildTypes block.')
+              bt_loc = text.find('    buildTypes {')
+              if bt_loc != -1:
                   insert = (
                       '    signingConfigs {\n'
                       '        release {\n'
@@ -151,85 +158,60 @@ jobs:
                       '            keyPassword "%s"\n'
                       '        }\n'
                       '    }\n\n') % (KEYS['keystore'], KEYS['password'], KEYS['alias'], KEYS['password'])
-                  text = text.replace(marker, insert + marker, 1)
-                  changed = True
-                  return text, changed
+                  new_text = text.replace('    buildTypes {', insert + '    buildTypes {', 1)
+                  return new_text, True, 'Inserted signingConfigs before buildTypes'
 
-              print("Could not find insertion point ('buildTypes {') in build.gradle — aborting with diagnostic.")
-              return None, False
+              return None, False, "Could not find 'buildTypes {' marker to insert signingConfigs"
 
           def ensure_release_buildtype(text):
-              # Ensure release { has signingConfig signingConfigs.release
-              # Find the release block inside android { ... }
-              release_pattern = re.compile(r'release\s*\{([\s\S]*?)\n\s*\}', re.M)
-              m = release_pattern.search(text)
+              bt_loc = locate_keyword_block(text, 'buildTypes')
+              if not bt_loc:
+                  return None, False, "Could not locate buildTypes block"
+              _, bt_open, bt_close = bt_loc
+              bt_text = text[bt_open+1:bt_close]
+              m = re.search(r'release\s*\{', bt_text)
               if not m:
-                  # fallback: try to find 'buildTypes {' block and then locate release inside
-                  bt = re.search(r'buildTypes\s*\{([\s\S]*?)\n\s*\}', text)
-                  if not bt:
-                      print('Could not locate buildTypes/release block to modify.')
-                      return None, False
-                  bt_content = bt.group(1)
-                  if 'release' in bt_content and 'signingConfig signingConfigs.release' in bt_content:
-                      print('release buildType already references signingConfigs.release')
-                      return text, False
-                  # attempt to replace signingConfig debug with release if present
-              # If release block exists, check presence
-              if m:
-                  inner = m.group(1)
-                  if 'signingConfig signingConfigs.release' in inner:
-                      print('release buildType already uses signingConfigs.release')
-                      return text, False
-                  # If it references debug, replace it
-                  new_inner = inner
-                  if 'signingConfig signingConfigs.debug' in inner:
-                      new_inner = inner.replace('signingConfig signingConfigs.debug', 'signingConfig signingConfigs.release')
-                  else:
-                      # insert signingConfig as the first line in the block
-                      new_inner = '\n            signingConfig signingConfigs.release\n' + inner
-                  text = text[:m.start(1)] + new_inner + text[m.end(1):]
-                  return text, True
+                  return None, False, 'No release buildType found'
+              rel_open_in_bt = bt_text.find('{', m.end()-1)
+              rel_open_idx = bt_open + 1 + rel_open_in_bt
+              rel_close_idx = find_block(text, rel_open_idx)
+              if rel_close_idx == -1:
+                  return None, False, 'Malformed release block (unbalanced braces)'
+              release_inner = text[rel_open_idx+1:rel_close_idx]
+              if 'signingConfig signingConfigs.release' in release_inner:
+                  return text, False, 'release buildType already uses signingConfigs.release'
+              if 'signingConfig signingConfigs.debug' in release_inner:
+                  new_inner = release_inner.replace('signingConfig signingConfigs.debug', 'signingConfig signingConfigs.release')
+              else:
+                  new_inner = '\n            signingConfig signingConfigs.release\n' + release_inner
+              new_text = text[:rel_open_idx+1] + new_inner + text[rel_close_idx:]
+              return new_text, True, 'Updated release buildType to use signingConfigs.release'
 
-              return text, False
-
-          def patch_once():
-              text = read()
-              if text is None:
-                  return 2
-
-              new_text, changed = ensure_signing_configs(text)
+          for i in range(2):
+              text = GRADLE_PATH.read_text()
+              new_text, changed, msg = ensure_signing_configs(text)
               if new_text is None:
-                  # diagnostic already printed
-                  return 3
+                  print('ERROR:', msg)
+                  raise SystemExit(1)
               if changed:
                   GRADLE_PATH.write_text(new_text)
-                  print('Wrote updated signingConfigs to build.gradle (secrets not shown).')
+                  print('INFO:', msg)
               else:
-                  print('No change required for signingConfigs.')
+                  print('INFO:', msg)
 
-              # ensure release buildtype uses release signing config
-              final_text = GRADLE_PATH.read_text()
-              final_text, changed2 = ensure_release_buildtype(final_text)
+              text = GRADLE_PATH.read_text()
+              final_text, changed2, msg2 = ensure_release_buildtype(text)
               if final_text is None:
-                  return 4
+                  print('ERROR:', msg2)
+                  raise SystemExit(1)
               if changed2:
                   GRADLE_PATH.write_text(final_text)
-                  print('Updated release buildType to reference signingConfigs.release.')
+                  print('INFO:', msg2)
               else:
-                  print('release buildType already correct or no edit necessary.')
+                  print('INFO:', msg2)
 
-              return 0
-
-          # Run patch twice to validate idempotency
-          for i in (1,2):
-              print(f'Run {i}:')
-              code = patch_once()
-              if code != 0:
-                  print(f'Patch failed on run {i} with code {code}.')
-                  sys.exit(code)
-
-          print('Patch completed successfully (idempotent on two runs).')
-          sys.exit(0)
+          print('Patch completed successfully (idempotent verification done).')
+          raise SystemExit(0)
           PY
 
       - name: Build release APK
