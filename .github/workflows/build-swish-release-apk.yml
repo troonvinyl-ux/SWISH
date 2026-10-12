@@ -66,60 +66,40 @@ jobs:
             -keypass "swish123" \
             -dname "CN=SWISH, OU=Mobile, O=SWISH, L=London, S=London, C=GB"
 
-      - name: Configure Gradle signing
+      - name: Patch Android app build.gradle for release signing only
         run: |
-          cat > android/app/build.gradle <<'EOF'
-          apply plugin: "com.android.application"
-          apply plugin: "org.jetbrains.kotlin.android"
-          apply plugin: "expo-module-gradle-plugin"
-          apply plugin: "com.facebook.react"
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/build.gradle')
+          text = p.read_text()
 
-          def projectRoot = rootProject.projectDir
+          if 'signingConfigs' in text:
+              raise SystemExit('signingConfigs already present; aborting to avoid duplicate config')
 
-          android {
-            ndkVersion rootProject.ext.ndkVersion
-            compileSdkVersion rootProject.ext.compileSdkVersion
+          marker = "    buildTypes {\n"
+          insert = """    signingConfigs {\n        release {\n            storeFile file(\"swish-release.keystore\")\n            storePassword \"swish123\"\n            keyAlias \"swish\"\n            keyPassword \"swish123\"\n        }\n    }\n\n"""
 
-            namespace 'com.swish.inventory'
-            defaultConfig {
-              applicationId 'com.swish.inventory'
-              minSdkVersion rootProject.ext.minSdkVersion
-              targetSdkVersion rootProject.ext.targetSdkVersion
-              versionCode 1
-              versionName "1.0.0"
-            }
+          idx = text.index(marker)
+          text = text[:idx] + insert + text[idx:]
 
-            signingConfigs {
-              release {
-                storeFile file("swish-release.keystore")
-                storePassword "swish123"
-                keyAlias "swish"
-                keyPassword "swish123"
-              }
-            }
+          text = text.replace(
+              "        release {\n            signingConfig signingConfigs.debug\n            minifyEnabled enableProguardInReleaseBuilds\n            proguardFiles getDefaultProguardFile(\"proguard-android-optimize.txt\"), \"proguard-rules.pro\"\n        }",
+              "        release {\n            signingConfig signingConfigs.release\n            minifyEnabled enableProguardInReleaseBuilds\n            proguardFiles getDefaultProguardFile(\"proguard-android-optimize.txt\"), \"proguard-rules.pro\"\n        }"
+          )
 
-            buildTypes {
-              debug {
-                signingConfig signingConfigs.debug
-              }
-              release {
-                signingConfig signingConfigs.release
-                minifyEnabled false
-                shrinkResources false
-              }
-            }
-          }
+          text = text.replace(
+              "        debug {\n            debuggable true\n            signingConfig signingConfigs.debug\n        }",
+              "        debug {\n            debuggable true\n            signingConfig signingConfigs.debug\n        }"
+          )
 
-          repositories {
-            google()
-            mavenCentral()
-          }
+          if 'signingConfig signingConfigs.release' not in text:
+              text = text.replace(
+                  "        release {\n            signingConfig signingConfigs.debug\n",
+                  "        release {\n            signingConfig signingConfigs.release\n"
+              )
 
-          dependencies {
-            implementation project(':expo')
-            implementation project(':react-native-gesture-handler')
-          }
-          EOF
+          p.write_text(text)
+          PY
 
       - name: Build release APK
         working-directory: android
