@@ -698,7 +698,7 @@ const ins = StyleSheet.create({
 });
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
-export default function ThreadsFlip() {
+export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean } = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { tenant } = useApp();
@@ -718,9 +718,13 @@ export default function ThreadsFlip() {
     <View style={main.container}>
       <StatusBar style="light" />
       <View style={[main.header, { paddingTop: insets.top + Spacing.sm }]}>
-        <Pressable onPress={() => router.back()} style={main.backBtn} hitSlop={8}>
-          <MaterialIcons name="arrow-back" size={20} color={TF.pink} />
-        </Pressable>
+        {!isHomeTab ? (
+          <Pressable onPress={() => router.back()} style={main.backBtn} hitSlop={8}>
+            <MaterialIcons name="arrow-back" size={20} color={TF.pink} />
+          </Pressable>
+        ) : (
+          <View style={{ width: 36 }} />
+        )}
         <Pressable onPress={() => setActiveTab('home')} style={main.logoArea} hitSlop={4}>
           <View style={main.logoIcon}><MaterialIcons name="checkroom" size={14} color={TF.pink} /></View>
           <View>

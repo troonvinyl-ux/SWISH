@@ -1639,7 +1639,7 @@ const ins = StyleSheet.create({
 // MAIN SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function CoinFlipperScreen() {
+export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: boolean } = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { tenant, setScanMode } = useApp();
@@ -1832,9 +1832,13 @@ export default function CoinFlipperScreen() {
 
       {/* ── Header ── */}
       <View style={[main.header, { paddingTop: insets.top + Spacing.sm }]}>
-        <Pressable onPress={() => router.back()} style={main.backBtn} hitSlop={8}>
-          <MaterialIcons name="arrow-back" size={20} color={CF.gold} />
-        </Pressable>
+        {!isHomeTab ? (
+          <Pressable onPress={() => router.back()} style={main.backBtn} hitSlop={8}>
+            <MaterialIcons name="arrow-back" size={20} color={CF.gold} />
+          </Pressable>
+        ) : (
+          <View style={{ width: 36 }} />
+        )}
         <Pressable onPress={() => setActiveTab('home')} style={main.logoArea} hitSlop={4}>
           <View style={main.logoIcon}>
             <MaterialIcons name="toll" size={14} color={CF.gold} />

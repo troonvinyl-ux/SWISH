@@ -676,7 +676,7 @@ const ins = StyleSheet.create({
 });
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
-export default function BikeFlipper() {
+export default function BikeFlipper({ isHomeTab = false }: { isHomeTab?: boolean } = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { tenant } = useApp();
@@ -696,9 +696,13 @@ export default function BikeFlipper() {
     <View style={main.container}>
       <StatusBar style="light" />
       <View style={[main.header, { paddingTop: insets.top + Spacing.sm }]}>
-        <Pressable onPress={() => router.back()} style={main.backBtn} hitSlop={8}>
-          <MaterialIcons name="arrow-back" size={20} color={BF.green} />
-        </Pressable>
+        {!isHomeTab ? (
+          <Pressable onPress={() => router.back()} style={main.backBtn} hitSlop={8}>
+            <MaterialIcons name="arrow-back" size={20} color={BF.green} />
+          </Pressable>
+        ) : (
+          <View style={{ width: 36 }} />
+        )}
         <Pressable onPress={() => setActiveTab('home')} style={main.logoArea} hitSlop={4}>
           <View style={main.logoIcon}><MaterialIcons name="pedal-bike" size={14} color={BF.green} /></View>
           <View>

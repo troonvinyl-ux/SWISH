@@ -1154,7 +1154,7 @@ const ins = StyleSheet.create({
 });
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
-export default function FlipperMXScreen() {
+export default function FlipperMXScreen({ isHomeTab = false }: { isHomeTab?: boolean } = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { tenant } = useApp();
@@ -1281,9 +1281,13 @@ export default function FlipperMXScreen() {
       <StatusBar style="light" />
       {/* Header */}
       <View style={[main.header, { paddingTop: insets.top + Spacing.sm }]}>
-        <Pressable onPress={() => router.back()} style={main.backBtn} hitSlop={8}>
-          <MaterialIcons name="arrow-back" size={20} color={MX.orange} />
-        </Pressable>
+        {!isHomeTab ? (
+          <Pressable onPress={() => router.back()} style={main.backBtn} hitSlop={8}>
+            <MaterialIcons name="arrow-back" size={20} color={MX.orange} />
+          </Pressable>
+        ) : (
+          <View style={{ width: 36 }} />
+        )}
         <Pressable onPress={() => setActiveTab('home')} style={main.logoArea} hitSlop={4}>
           <View style={main.logoIcon}><MaterialIcons name="two-wheeler" size={14} color={MX.orange} /></View>
           <View>

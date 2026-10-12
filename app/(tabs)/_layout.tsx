@@ -11,6 +11,20 @@ import { Colors, Typography, Spacing, Radius } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { getLiveListingCount } from '@/services/listingService';
 import { IS_TV } from '@/hooks/useTVNavigation';
+import { NICHES } from '@/constants/niches';
+
+// Derive the home tab icon and label from the active niche
+function useNicheHomeTab() {
+  const { activeNicheId } = useApp();
+  const id = (activeNicheId ?? '').toLowerCase();
+  if (id.includes('coin') || id === 'gold' || id === 'silver' || id === 'banknotes' || id === 'islamic_silver') {
+    return { icon: 'toll' as const, label: 'Coins' };
+  }
+  if (id === 'motocross' || id === 'mx') return { icon: 'two-wheeler' as const, label: 'MX' };
+  if (id === 'bicycles' || id === 'cycling' || id === 'bikes') return { icon: 'pedal-bike' as const, label: 'Bikes' };
+  if (id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers' || id === 'trainers') return { icon: 'checkroom' as const, label: 'Fashion' };
+  return { icon: 'dashboard' as const, label: 'Home' };
+}
 
 // ── Live listings count ───────────────────────────────────────────────────────
 
@@ -64,6 +78,7 @@ function TVTabHint() {
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const liveCount = useLiveListingCount();
+  const nicheHome = useNicheHomeTab();
 
   const tabBarStyle = {
     height: Platform.select({
@@ -94,14 +109,14 @@ export default function TabLayout() {
         tabBarShowLabel: false,
       }}
     >
-      {/* ── Tab 1: Home Dashboard ── */}
+      {/* ── Tab 1: Niche Home ── */}
       <Tabs.Screen
         name="index"
         options={{
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.tabItem, focused && styles.tabItemActive]}>
-              <MaterialIcons name="dashboard" size={22} color={color} />
-              <TabLabel label="Home" focused={focused} />
+              <MaterialIcons name={nicheHome.icon} size={22} color={color} />
+              <TabLabel label={nicheHome.label} focused={focused} />
             </View>
           ),
         }}
