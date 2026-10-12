@@ -1,0 +1,592 @@
+// SWISH Login Screen
+// OTP + Password authentication for subscribers.
+// Handles both login (existing users) and registration (new users).
+
+import React, { useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  Pressable,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  ActivityIndicator,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { useAuth, useAlert } from '@/template';
+import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
+
+type AuthMode = 'login' | 'register';
+type RegisterStep = 'email_password' | 'verify_otp';
+
+export default function LoginScreen() {
+  const insets = useSafeAreaInsets();
+  const { sendOTP, verifyOTPAndLogin, signInWithPassword, operationLoading } = useAuth();
+  const { showAlert } = useAlert();
+  const router = useRouter();
+
+  const [mode, setMode] = useState<AuthMode>('login');
+  const [registerStep, setRegisterStep] = useState<RegisterStep>('email_password');
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [otp, setOtp] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  const isValidEmail = email.includes('@') && email.includes('.');
+
+  // ── LOGIN ─────────────────────────────────────────────────────────────
+  const handleLogin = useCallback(async () => {
+    if (!isValidEmail || !password) {
+      showAlert('Please enter your email and password.', undefined, [{ text: 'OK' }]);
+      return;
+    }
+    const { error } = await signInWithPassword(email.trim().toLowerCase(), password);
+    if (error) showAlert('Login Failed', error, [{ text: 'OK', style: 'destructive' }]);
+  }, [email, password, isValidEmail, signInWithPassword, showAlert]);
+
+  // ── REGISTER STEP 1: Send OTP ─────────────────────────────────────────
+  const handleSendOTP = useCallback(async () => {
+    if (!isValidEmail) {
+      showAlert('Please enter a valid email address.');
+      return;
+    }
+    if (!password || password.length < 6) {
+      showAlert('Password must be at least 6 characters.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      showAlert('Passwords do not match.');
+      return;
+    }
+    const { error } = await sendOTP(email.trim().toLowerCase());
+    if (error) {
+      showAlert('Could not send verification code', error, [{ text: 'OK', style: 'destructive' }]);
+      return;
+    }
+    setRegisterStep('verify_otp');
+    showAlert('Verification Code Sent', `Check ${email} for your 4-digit code.`);
+  }, [email, password, confirmPassword, isValidEmail, sendOTP, showAlert]);
+
+  // ── REGISTER STEP 2: Verify OTP & create account ──────────────────────
+  const handleVerifyOTP = useCallback(async () => {
+    if (otp.length !== 4) {
+      showAlert('Please enter the 4-digit verification code.');
+      return;
+    }
+    const { error } = await verifyOTPAndLogin(email.trim().toLowerCase(), otp, { password });
+    if (error) {
+      showAlert('Verification Failed', error, [{ text: 'OK', style: 'destructive' }]);
+      return;
+    }
+    // AuthRouter handles navigation automatically
+  }, [email, otp, password, verifyOTPAndLogin, showAlert]);
+
+  const handleResendOTP = useCallback(async () => {
+    const { error } = await sendOTP(email.trim().toLowerCase());
+    if (!error) showAlert('New code sent', `Check ${email} for your new 4-digit code.`);
+  }, [email, sendOTP, showAlert]);
+
+  return (
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <StatusBar style="light" />
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + Spacing.xl }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Brand header */}
+          <View style={styles.brand}>
+            <View style={styles.logoWrap}>
+              <View style={styles.logoMark}>
+                <Text style={styles.logoS}>S</Text>
+              </View>
+              <View style={styles.logoGlow} />
+            </View>
+            <Text style={styles.appName}>SWISH</Text>
+            <Text style={styles.appTagline}>Commerce Intelligence Platform</Text>
+          </View>
+
+          {/* Mode selector */}
+          <View style={styles.modeTabs}>
+            <Pressable
+              style={[styles.modeTab, mode === 'login' && styles.modeTabActive]}
+              onPress={() => { setMode('login'); setRegisterStep('email_password'); }}
+            >
+              <Text style={[styles.modeTabText, mode === 'login' && styles.modeTabTextActive]}>
+                Sign In
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.modeTab, mode === 'register' && styles.modeTabActive]}
+              onPress={() => { setMode('register'); setRegisterStep('email_password'); }}
+            >
+              <Text style={[styles.modeTabText, mode === 'register' && styles.modeTabTextActive]}>
+                Create Account
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* ── LOGIN FORM ── */}
+          {mode === 'login' ? (
+            <View style={styles.form}>
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Email Address</Text>
+                <View style={styles.inputWrap}>
+                  <MaterialIcons name="email" size={18} color={Colors.textTertiary} />
+                  <TextInput
+                    style={styles.input}
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="you@example.com"
+                    placeholderTextColor={Colors.textTertiary}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Password</Text>
+                <View style={styles.inputWrap}>
+                  <MaterialIcons name="lock" size={18} color={Colors.textTertiary} />
+                  <TextInput
+                    style={styles.input}
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="Your password"
+                    placeholderTextColor={Colors.textTertiary}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <Pressable onPress={() => setShowPassword((v) => !v)} hitSlop={8}>
+                    <MaterialIcons
+                      name={showPassword ? 'visibility-off' : 'visibility'}
+                      size={18}
+                      color={Colors.textTertiary}
+                    />
+                  </Pressable>
+                </View>
+              </View>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryBtn,
+                  (operationLoading || !isValidEmail || !password) && styles.btnDisabled,
+                  pressed && { opacity: 0.88 },
+                ]}
+                onPress={handleLogin}
+                disabled={operationLoading || !isValidEmail || !password}
+              >
+                {operationLoading ? (
+                  <ActivityIndicator color={Colors.background} size="small" />
+                ) : (
+                  <>
+                    <Text style={styles.primaryBtnText}>Sign In to SWISH</Text>
+                    <MaterialIcons name="arrow-forward" size={18} color={Colors.background} />
+                  </>
+                )}
+              </Pressable>
+            </View>
+          ) : null}
+
+          {/* ── REGISTER: Step 1 — Email + Password ── */}
+          {mode === 'register' && registerStep === 'email_password' ? (
+            <View style={styles.form}>
+              <View style={styles.infoBox}>
+                <MaterialIcons name="info-outline" size={14} color={Colors.info} />
+                <Text style={styles.infoText}>
+                  A verification code will be sent to your email to confirm your account.
+                </Text>
+              </View>
+
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Email Address</Text>
+                <View style={styles.inputWrap}>
+                  <MaterialIcons name="email" size={18} color={Colors.textTertiary} />
+                  <TextInput
+                    style={styles.input}
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="you@example.com"
+                    placeholderTextColor={Colors.textTertiary}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Password</Text>
+                <View style={styles.inputWrap}>
+                  <MaterialIcons name="lock" size={18} color={Colors.textTertiary} />
+                  <TextInput
+                    style={styles.input}
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="At least 6 characters"
+                    placeholderTextColor={Colors.textTertiary}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <Pressable onPress={() => setShowPassword((v) => !v)} hitSlop={8}>
+                    <MaterialIcons
+                      name={showPassword ? 'visibility-off' : 'visibility'}
+                      size={18}
+                      color={Colors.textTertiary}
+                    />
+                  </Pressable>
+                </View>
+              </View>
+
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Confirm Password</Text>
+                <View style={[
+                  styles.inputWrap,
+                  confirmPassword && confirmPassword !== password && { borderColor: Colors.danger }
+                ]}>
+                  <MaterialIcons name="lock-outline" size={18} color={Colors.textTertiary} />
+                  <TextInput
+                    style={styles.input}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    placeholder="Repeat your password"
+                    placeholderTextColor={Colors.textTertiary}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+                {confirmPassword && confirmPassword !== password ? (
+                  <Text style={styles.fieldError}>Passwords do not match</Text>
+                ) : null}
+              </View>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryBtn,
+                  (operationLoading || !isValidEmail || !password || password !== confirmPassword) && styles.btnDisabled,
+                  pressed && { opacity: 0.88 },
+                ]}
+                onPress={handleSendOTP}
+                disabled={operationLoading || !isValidEmail || !password || password !== confirmPassword}
+              >
+                {operationLoading ? (
+                  <ActivityIndicator color={Colors.background} size="small" />
+                ) : (
+                  <>
+                    <Text style={styles.primaryBtnText}>Send Verification Code</Text>
+                    <MaterialIcons name="send" size={18} color={Colors.background} />
+                  </>
+                )}
+              </Pressable>
+            </View>
+          ) : null}
+
+          {/* ── REGISTER: Step 2 — Verify OTP ── */}
+          {mode === 'register' && registerStep === 'verify_otp' ? (
+            <View style={styles.form}>
+              <View style={styles.otpHeader}>
+                <View style={styles.otpIconWrap}>
+                  <MaterialIcons name="mark-email-read" size={32} color={Colors.primary} />
+                </View>
+                <Text style={styles.otpTitle}>Check Your Email</Text>
+                <Text style={styles.otpSubtitle}>
+                  We sent a 4-digit code to{'\n'}
+                  <Text style={{ color: Colors.textPrimary, fontWeight: Typography.weight.semibold }}>
+                    {email}
+                  </Text>
+                </Text>
+              </View>
+
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Verification Code</Text>
+                <View style={[styles.inputWrap, styles.otpInputWrap]}>
+                  <MaterialIcons name="pin" size={18} color={Colors.primary} />
+                  <TextInput
+                    style={[styles.input, styles.otpInput]}
+                    value={otp}
+                    onChangeText={(v) => setOtp(v.replace(/\D/g, '').slice(0, 4))}
+                    placeholder="0000"
+                    placeholderTextColor={Colors.textTertiary}
+                    keyboardType="number-pad"
+                    maxLength={4}
+                    autoFocus
+                  />
+                </View>
+              </View>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryBtn,
+                  (operationLoading || otp.length !== 4) && styles.btnDisabled,
+                  pressed && { opacity: 0.88 },
+                ]}
+                onPress={handleVerifyOTP}
+                disabled={operationLoading || otp.length !== 4}
+              >
+                {operationLoading ? (
+                  <ActivityIndicator color={Colors.background} size="small" />
+                ) : (
+                  <>
+                    <Text style={styles.primaryBtnText}>Create My Account</Text>
+                    <MaterialIcons name="check" size={18} color={Colors.background} />
+                  </>
+                )}
+              </Pressable>
+
+              <View style={styles.resendRow}>
+                <Text style={styles.resendText}>Did not receive the code?</Text>
+                <Pressable onPress={handleResendOTP} disabled={operationLoading}>
+                  <Text style={styles.resendLink}>Resend Code</Text>
+                </Pressable>
+              </View>
+
+              <Pressable
+                onPress={() => setRegisterStep('email_password')}
+                style={styles.backLink}
+              >
+                <MaterialIcons name="arrow-back" size={14} color={Colors.textTertiary} />
+                <Text style={styles.backLinkText}>Change email or password</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {/* Footer */}
+          <View style={styles.footer}>
+            <View style={styles.footerDivider} />
+            <Text style={styles.footerText}>
+              By continuing you agree to the SWISH Terms of Service and{' '}
+              <Text
+                style={styles.footerLink}
+                onPress={() => router.push('/privacy-policy' as any)}
+              >
+                Privacy Policy
+              </Text>
+              .
+            </Text>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: Colors.background },
+  flex: { flex: 1 },
+  scroll: {
+    flexGrow: 1,
+    padding: Spacing.xl,
+    gap: Spacing.xl,
+  },
+
+  // Brand
+  brand: { alignItems: 'center', paddingVertical: Spacing.xl, gap: Spacing.md },
+  logoWrap: { position: 'relative', alignItems: 'center', justifyContent: 'center' },
+  logoMark: {
+    width: 64,
+    height: 64,
+    borderRadius: Radius.xl,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadow.glow,
+  },
+  logoGlow: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.primary + '20',
+  },
+  logoS: {
+    fontSize: 32,
+    fontWeight: Typography.weight.extrabold,
+    color: Colors.textPrimary,
+  },
+  appName: {
+    fontSize: 28,
+    fontWeight: Typography.weight.extrabold,
+    color: Colors.textPrimary,
+    letterSpacing: 4,
+    marginTop: Spacing.sm,
+  },
+  appTagline: {
+    fontSize: Typography.size.sm,
+    color: Colors.textTertiary,
+    letterSpacing: 0.5,
+  },
+
+  // Mode tabs
+  modeTabs: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+  },
+  modeTab: {
+    flex: 1,
+    paddingVertical: Spacing.md,
+    alignItems: 'center',
+    borderRadius: Radius.md,
+  },
+  modeTabActive: { backgroundColor: Colors.primary },
+  modeTabText: {
+    fontSize: Typography.size.sm,
+    fontWeight: Typography.weight.semibold,
+    color: Colors.textTertiary,
+  },
+  modeTabTextActive: { color: Colors.background },
+
+  // Form
+  form: { gap: Spacing.lg },
+  field: { gap: Spacing.xs },
+  fieldLabel: {
+    fontSize: Typography.size.xs,
+    fontWeight: Typography.weight.semibold,
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  fieldError: {
+    fontSize: Typography.size.xs,
+    color: Colors.danger,
+    marginTop: 2,
+  },
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+  },
+  input: {
+    flex: 1,
+    fontSize: Typography.size.base,
+    color: Colors.textPrimary,
+    includeFontPadding: false,
+  },
+
+  // OTP
+  otpHeader: { alignItems: 'center', gap: Spacing.sm },
+  otpIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: Radius.xl,
+    backgroundColor: Colors.primaryDim,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.primary + '40',
+  },
+  otpTitle: {
+    fontSize: Typography.size.xl,
+    fontWeight: Typography.weight.bold,
+    color: Colors.textPrimary,
+  },
+  otpSubtitle: {
+    fontSize: Typography.size.sm,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  otpInputWrap: { borderColor: Colors.primary, borderWidth: 1.5 },
+  otpInput: {
+    fontSize: Typography.size.xxl,
+    fontWeight: Typography.weight.bold,
+    letterSpacing: 12,
+    textAlign: 'center',
+  },
+  resendRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    alignItems: 'center',
+  },
+  resendText: { fontSize: Typography.size.sm, color: Colors.textTertiary },
+  resendLink: { fontSize: Typography.size.sm, color: Colors.primary, fontWeight: Typography.weight.semibold },
+  backLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  backLinkText: { fontSize: Typography.size.xs, color: Colors.textTertiary },
+
+  // Buttons
+  primaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.md,
+    padding: Spacing.base,
+    minHeight: 52,
+    ...Shadow.glow,
+  },
+  btnDisabled: { opacity: 0.4 },
+  primaryBtnText: {
+    fontSize: Typography.size.base,
+    fontWeight: Typography.weight.bold,
+    color: Colors.background,
+  },
+
+  // Info
+  infoBox: {
+    flexDirection: 'row',
+    gap: Spacing.xs,
+    backgroundColor: Colors.infoDim,
+    borderRadius: Radius.sm,
+    padding: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.info + '30',
+  },
+  infoText: {
+    flex: 1,
+    fontSize: Typography.size.xs,
+    color: Colors.info,
+    lineHeight: 16,
+  },
+
+  // Footer
+  footer: { alignItems: 'center', gap: Spacing.md, marginTop: Spacing.md },
+  footerDivider: {
+    width: 40,
+    height: 1,
+    backgroundColor: Colors.surfaceBorder,
+  },
+  footerText: {
+    fontSize: Typography.size.xs,
+    color: Colors.textTertiary,
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  footerLink: {
+    fontSize: Typography.size.xs,
+    color: Colors.primary,
+    textDecorationLine: 'underline',
+  },
+});
