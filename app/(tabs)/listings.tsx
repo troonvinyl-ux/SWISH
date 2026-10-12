@@ -968,8 +968,26 @@ const row = StyleSheet.create({
 export default function ListingsTabScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant } = useApp();
+  const { tenant, activeNicheId } = useApp();
   const { showAlert } = useAlert();
+
+  // Niche specialist IDs — used to filter listings to the active niche
+  const nicheSpecialistIds = useMemo((): string[] => {
+    const id = (activeNicheId ?? '').toLowerCase();
+    if (id === 'motocross' || id === 'mx') return ['motocross'];
+    if (id === 'bicycles' || id === 'cycling' || id === 'bikes') return ['bicycles', 'cycling'];
+    if (id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers' || id === 'trainers') return ['clothing', 'trainers_sneakers'];
+    return ['coins', 'coins_uk', 'coins_world', 'islamic_silver', 'banknotes', 'gold', 'silver', 'ancient_artefacts', 'curiosities_collectibles'];
+  }, [activeNicheId]);
+
+  // Niche accent colour + icon for the header
+  const nicheStyle = useMemo(() => {
+    const id = (activeNicheId ?? '').toLowerCase();
+    if (id === 'motocross' || id === 'mx') return { accent: '#FF5500', icon: 'two-wheeler' as const, label: 'MX Listings' };
+    if (id === 'bicycles' || id === 'cycling' || id === 'bikes') return { accent: '#6ED020', icon: 'pedal-bike' as const, label: 'Bike Listings' };
+    if (id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers' || id === 'trainers') return { accent: '#E91E8C', icon: 'checkroom' as const, label: 'Fashion Listings' };
+    return { accent: Colors.primary, icon: 'toll' as const, label: 'Coin Listings' };
+  }, [activeNicheId]);
 
   const [listings, setListings] = useState<ListingWithItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1039,13 +1057,18 @@ export default function ListingsTabScreen() {
   // ── Search + sort (client-side, applied to already-loaded listings) ────────
   const filteredAndSorted = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    let result = q
-      ? listings.filter(
+    // Niche isolation — filter to active niche's specialist IDs
+    let result = nicheSpecialistIds.length > 0
+      ? listings.filter(l => nicheSpecialistIds.includes(l.itemSpecialistId))
+      : listings;
+    // Text search on niche-filtered results
+    result = q
+      ? result.filter(
           l =>
             l.title.toLowerCase().includes(q) ||
             l.itemTitle.toLowerCase().includes(q),
         )
-      : listings;
+      : result;
 
     result = [...result].sort((a, b) => {
       const marginA = a.itemAcquiredCost > 0
@@ -1067,7 +1090,7 @@ export default function ListingsTabScreen() {
     });
 
     return result;
-  }, [listings, searchQuery, sortBy]);
+  }, [listings, searchQuery, sortBy, nicheSpecialistIds]);
 
   // ── Counts per filter ──────────────────────────────────────────────────────
   const countsByStatus = listings.reduce<Record<string, number>>((acc, l) => {
@@ -1473,19 +1496,22 @@ export default function ListingsTabScreen() {
       <StatusBar style="light" />
 
       {/* Header */}
-      <View style={[s.header, { paddingTop: insets.top + Spacing.base }]}>
+      <View style={[s.header, { paddingTop: insets.top + Spacing.base, borderBottomColor: nicheStyle.accent + '30' }]}>
+        <View style={[s.nicheIcon, { backgroundColor: nicheStyle.accent + '18' }]}>
+          <MaterialIcons name={nicheStyle.icon} size={18} color={nicheStyle.accent} />
+        </View>
         <View style={s.flex}>
-          <Text style={s.title}>Listings</Text>
+          <Text style={[s.title, { color: nicheStyle.accent }]}>{nicheStyle.label}</Text>
           {bulkProgress ? (
             <View style={s.bulkProgressRow}>
-              <ActivityIndicator size="small" color={Colors.primary} style={{ width: 12, height: 12 }} />
-              <Text style={s.bulkProgressText}>
+              <ActivityIndicator size="small" color={nicheStyle.accent} style={{ width: 12, height: 12 }} />
+              <Text style={[s.bulkProgressText, { color: nicheStyle.accent }]}>
                 Submitting {bulkProgress.current}/{bulkProgress.total}
                 {bulkProgress.failed > 0 ? ` · ${bulkProgress.failed} failed` : ''}
               </Text>
             </View>
           ) : (
-            <Text style={s.subtitle}>{totalCount} total · {liveCount} live</Text>
+            <Text style={s.subtitle}>{filteredAndSorted.length} total · {liveCount} live</Text>
           )}
         </View>
         {draftCount > 0 && !bulkSubmitting ? (
@@ -1718,6 +1744,10 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
     paddingHorizontal: Spacing.base, paddingBottom: Spacing.md,
     borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder,
+  },
+  nicheIcon: {
+    width: 38, height: 38, borderRadius: Radius.md,
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
   title: { fontSize: Typography.size.xl, fontWeight: Typography.weight.bold, color: Colors.textPrimary },
   subtitle: { fontSize: Typography.size.xs, color: Colors.textTertiary, marginTop: 2 },
