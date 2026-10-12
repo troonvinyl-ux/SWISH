@@ -71,34 +71,41 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           p = Path('android/app/build.gradle')
+          if not p.exists():
+              print('android/app/build.gradle not found; nothing to patch.')
+              raise SystemExit(0)
+
           text = p.read_text()
 
           if 'signingConfigs' in text:
-              raise SystemExit('signingConfigs already present; aborting to avoid duplicate config')
+              print('signingConfigs already present; skipping patch.')
+              raise SystemExit(0)
 
           marker = "    buildTypes {\n"
-          insert = """    signingConfigs {\n        release {\n            storeFile file(\"swish-release.keystore\")\n            storePassword \"swish123\"\n            keyAlias \"swish\"\n            keyPassword \"swish123\"\n        }\n    }\n\n"""
+          insert = """    signingConfigs {
+        release {
+            storeFile file(\"swish-release.keystore\")
+            storePassword \"swish123\"
+            keyAlias \"swish\"
+            keyPassword \"swish123\"
+        }
+    }
 
-          idx = text.index(marker)
-          text = text[:idx] + insert + text[idx:]
+"""
+
+          if marker in text:
+              text = text.replace(marker, insert + marker, 1)
+          else:
+              print("Could not find 'buildTypes' marker; aborting patch.")
+              raise SystemExit(1)
 
           text = text.replace(
-              "        release {\n            signingConfig signingConfigs.debug\n            minifyEnabled enableProguardInReleaseBuilds\n            proguardFiles getDefaultProguardFile(\"proguard-android-optimize.txt\"), \"proguard-rules.pro\"\n        }",
-              "        release {\n            signingConfig signingConfigs.release\n            minifyEnabled enableProguardInReleaseBuilds\n            proguardFiles getDefaultProguardFile(\"proguard-android-optimize.txt\"), \"proguard-rules.pro\"\n        }"
+              '        release {\n            signingConfig signingConfigs.debug',
+              '        release {\n            signingConfig signingConfigs.release'
           )
-
-          text = text.replace(
-              "        debug {\n            debuggable true\n            signingConfig signingConfigs.debug\n        }",
-              "        debug {\n            debuggable true\n            signingConfig signingConfigs.debug\n        }"
-          )
-
-          if 'signingConfig signingConfigs.release' not in text:
-              text = text.replace(
-                  "        release {\n            signingConfig signingConfigs.debug\n",
-                  "        release {\n            signingConfig signingConfigs.release\n"
-              )
 
           p.write_text(text)
+          print('Patched android/app/build.gradle successfully.')
           PY
 
       - name: Build release APK
