@@ -106,7 +106,8 @@ export interface ItemFilter {
   status?: string;
   statuses?: string[];       // multiple status filter
   lifecycleGroup?: 'active' | 'draft' | 'live' | 'sold' | 'archived' | 'history';
-  specialistId?: string;
+  specialistId?: string;     // single specialist filter
+  specialistIds?: string[];  // multiple specialist filter (niche isolation)
   acquisitionId?: string;
   search?: string;
   reviewRequired?: boolean;
@@ -208,7 +209,12 @@ export async function listItems(
   } else if (filter.status) {
     query = query.eq('status', filter.status);
   }
-  if (filter.specialistId) query = query.eq('specialist_id', filter.specialistId);
+  // Niche isolation: filter by specialist_id(s)
+  if (filter.specialistIds && filter.specialistIds.length > 0) {
+    query = query.in('specialist_id', filter.specialistIds);
+  } else if (filter.specialistId) {
+    query = query.eq('specialist_id', filter.specialistId);
+  }
   if (filter.acquisitionId) query = query.eq('acquisition_id', filter.acquisitionId);
   if (filter.reviewRequired) query = query.eq('status', 'review_required');
   if (filter.search) {
@@ -224,16 +230,22 @@ export async function listItems(
   return { items: (data ?? []).map(mapItem), error: null };
 }
 
-// Get item counts by status
+// Get item counts by status — optionally scoped to niche specialist IDs
 export async function getItemStatusCounts(
-  tenantId: string
+  tenantId: string,
+  specialistIds?: string[]
 ): Promise<Record<string, number>> {
   const supabase = getSupabaseClient();
-  const { data } = await supabase
+  let query = supabase
     .from('items')
     .select('status')
     .eq('tenant_id', tenantId);
 
+  if (specialistIds && specialistIds.length > 0) {
+    query = query.in('specialist_id', specialistIds);
+  }
+
+  const { data } = await query;
   const counts: Record<string, number> = {};
   (data ?? []).forEach((row) => {
     counts[row.status] = (counts[row.status] ?? 0) + 1;

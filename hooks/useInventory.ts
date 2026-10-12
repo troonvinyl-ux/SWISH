@@ -75,7 +75,7 @@ export function useInventory(filter: ItemFilter = {}) {
 
     const [itemsResult, counts] = await Promise.all([
       listItems(tenant.id, effectiveFilter),
-      getItemStatusCounts(tenant.id),
+      getItemStatusCounts(tenant.id, effectiveFilter.specialistIds),
     ]);
 
     setStatusGroups(counts);
