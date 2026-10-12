@@ -977,7 +977,9 @@ export default function ListingsTabScreen() {
     if (id === 'motocross' || id === 'mx') return ['motocross'];
     if (id === 'bicycles' || id === 'cycling' || id === 'bikes') return ['bicycles', 'cycling'];
     if (id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers' || id === 'trainers') return ['clothing', 'trainers_sneakers'];
-    return ['coins', 'coins_uk', 'coins_world', 'islamic_silver', 'banknotes', 'gold', 'silver', 'ancient_artefacts', 'curiosities_collectibles'];
+    // Coins: strict specialist list — excludes curiosities_collectibles (eBay import default)
+    // to prevent non-coin eBay-imported items leaking into the coin listings view
+    return ['coins', 'coins_uk', 'coins_world', 'islamic_silver', 'banknotes', 'gold', 'silver', 'ancient_artefacts'];
   }, [activeNicheId]);
 
   // Niche accent colour + icon for the header
@@ -1092,12 +1094,19 @@ export default function ListingsTabScreen() {
     return result;
   }, [listings, searchQuery, sortBy, nicheSpecialistIds]);
 
-  // ── Counts per filter ──────────────────────────────────────────────────────
-  const countsByStatus = listings.reduce<Record<string, number>>((acc, l) => {
+  // ── Counts per filter — scoped to niche (filteredAndSorted before status filter) ──
+  // We need pre-search, post-niche counts for the filter chips. Compute from niche-only slice.
+  const nicheOnlyListings = useMemo(() =>
+    nicheSpecialistIds.length > 0
+      ? listings.filter(l => nicheSpecialistIds.includes(l.itemSpecialistId))
+      : listings,
+  [listings, nicheSpecialistIds]);
+
+  const countsByStatus = nicheOnlyListings.reduce<Record<string, number>>((acc, l) => {
     acc[l.status] = (acc[l.status] ?? 0) + 1;
     return acc;
   }, {});
-  const totalCount = listings.length;
+  const totalCount = nicheOnlyListings.length;
 
   // ── Submit ─────────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async (listing: ListingWithItem) => {
@@ -1385,11 +1394,11 @@ export default function ListingsTabScreen() {
     setShippingInput('');
   }, [shippingInput, showAlert]);
 
-  // ── Submit All Drafts ────────────────────────────────────────────────────────
+  // ── Submit All Drafts — only niche-scoped drafts ───────────────────────────
   const handleSubmitAllDrafts = useCallback(async () => {
     if (!tenant) return;
 
-    const drafts = listings.filter(
+    const drafts = nicheOnlyListings.filter(
       l => l.status === 'draft' || l.status === 'needs_correction',
     );
     if (drafts.length === 0) {
@@ -1484,10 +1493,10 @@ export default function ListingsTabScreen() {
     setListings(prev => prev.map(l => l.id === listing.id ? { ...l, views, watchers } : l));
   }, [tenant, showAlert]);
 
-  // ── Summary stats ──────────────────────────────────────────────────────────
-  const liveCount = listings.filter(l => l.status === 'active').length;
-  const draftCount = listings.filter(l => l.status === 'draft' || l.status === 'needs_correction').length;
-  const totalLiveValue = listings
+  // ── Summary stats — scoped to active niche ───────────────────────────────
+  const liveCount = nicheOnlyListings.filter(l => l.status === 'active').length;
+  const draftCount = nicheOnlyListings.filter(l => l.status === 'draft' || l.status === 'needs_correction').length;
+  const totalLiveValue = nicheOnlyListings
     .filter(l => l.status === 'active')
     .reduce((sum, l) => sum + l.price, 0);
 
@@ -1501,7 +1510,7 @@ export default function ListingsTabScreen() {
           <MaterialIcons name={nicheStyle.icon} size={18} color={nicheStyle.accent} />
         </View>
         <View style={s.flex}>
-          <Text style={[s.title, { color: nicheStyle.accent }]}>{nicheStyle.label}</Text>
+          <Text style={[s.title, { color: nicheStyle.accent }]} numberOfLines={1}>{nicheStyle.label}</Text>
           {bulkProgress ? (
             <View style={s.bulkProgressRow}>
               <ActivityIndicator size="small" color={nicheStyle.accent} style={{ width: 12, height: 12 }} />
@@ -1749,7 +1758,8 @@ const s = StyleSheet.create({
     width: 38, height: 38, borderRadius: Radius.md,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  title: { fontSize: Typography.size.xl, fontWeight: Typography.weight.bold, color: Colors.textPrimary },
+  title: { fontSize: Typography.size.base, fontWeight: Typography.weight.bold, color: Colors.textPrimary },
+
   subtitle: { fontSize: Typography.size.xs, color: Colors.textTertiary, marginTop: 2 },
   bulkProgressRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
   bulkProgressText: { fontSize: Typography.size.xs, color: Colors.primary, fontWeight: Typography.weight.semibold },

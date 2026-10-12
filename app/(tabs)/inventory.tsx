@@ -63,7 +63,9 @@ function getNicheTheme(activeNicheId: string | null | undefined): NicheTheme {
       label: 'Coin Inventory',
       itemLabel: 'Coin',
       itemsLabel: 'Coins',
-      specialistIds: ['coins', 'coins_uk', 'coins_world', 'islamic_silver', 'banknotes', 'gold', 'silver', 'ancient_artefacts', 'curiosities_collectibles'],
+      // Strict coin specialists only — excludes curiosities_collectibles to prevent
+      // eBay-imported items with no specialist being shown in coin view
+      specialistIds: ['coins', 'coins_uk', 'coins_world', 'islamic_silver', 'banknotes', 'gold', 'silver', 'ancient_artefacts'],
       subFilters: [
         { label: 'All Types', value: 'all', search: '' },
         { label: 'Silver', value: 'silver', search: 'silver' },
