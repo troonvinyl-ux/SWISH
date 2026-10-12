@@ -8,7 +8,10 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "android:prebuild": "npx expo prebuild --platform android --clean",
+    "android:debug": "cd android && ./gradlew assembleDebug",
+    "android:build": "npm run android:prebuild && npm run android:debug"
   },
   "dependencies": {
     "@expo/metro-runtime": "5.0.4",
