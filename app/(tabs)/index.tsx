@@ -24,21 +24,25 @@ import ThreadsFlipScreen from '@/app/threads-flip';
 function nicheToProduct(nicheId: string | null | undefined): 'coins' | 'mx' | 'bikes' | 'clothing' | null {
   if (!nicheId) return null;
   const id = nicheId.toLowerCase();
-  if (id === 'coins' || id.includes('coin') || id === 'banknotes' || id === 'gold' || id === 'silver' || id === 'islamic_silver') return 'coins';
+  // Coins: 'coins' (settings switcher), coin-related IDs
+  if (id === 'coins' || id.includes('coin') || id === 'banknotes' || id === 'gold' || id === 'silver' || id === 'islamic_silver' || id === 'ancient_artefacts' || id === 'curiosities_collectibles') return 'coins';
+  // MX: 'motocross' (settings switcher)
   if (id === 'motocross' || id === 'mx' || id === 'flipper_mx') return 'mx';
+  // Bikes: 'bicycles' (settings switcher)
   if (id === 'bicycles' || id === 'cycling' || id === 'bike_flipper' || id === 'bikes') return 'bikes';
+  // Clothing: 'clothing' (settings switcher)
   if (id === 'clothing' || id === 'fashion' || id === 'threads_flip' || id === 'trainers_sneakers' || id === 'trainers') return 'clothing';
   return null;
 }
 
 export default function NicheHomeScreen() {
-  const { activeNicheId, tenant, loading: appLoading } = useApp();
+  const { activeNicheId, tenant, tenantLoading } = useApp();
 
   // Map the active niche to a product
   const product = nicheToProduct(activeNicheId);
 
   // Show a brief spinner while AppContext is initialising
-  if (appLoading && !tenant) {
+  if (tenantLoading && !tenant) {
     return (
       <View style={s.loading}>
         <ActivityIndicator size="large" color={Colors.primary} />
@@ -47,15 +51,16 @@ export default function NicheHomeScreen() {
   }
 
   // Render the correct niche product as the home screen
+  // key prop forces full remount when niche changes — prevents stale state
   // Each screen receives isHomeTab={true} to suppress the back button
-  if (product === 'coins') return <CoinFlipperScreen isHomeTab />;
-  if (product === 'mx')    return <FlipperMXScreen isHomeTab />;
-  if (product === 'bikes') return <BikeFlipperScreen isHomeTab />;
-  if (product === 'clothing') return <ThreadsFlipScreen isHomeTab />;
+  if (product === 'coins') return <CoinFlipperScreen key={activeNicheId} isHomeTab />;
+  if (product === 'mx')    return <FlipperMXScreen key={activeNicheId} isHomeTab />;
+  if (product === 'bikes') return <BikeFlipperScreen key={activeNicheId} isHomeTab />;
+  if (product === 'clothing') return <ThreadsFlipScreen key={activeNicheId} isHomeTab />;
 
   // Default: if no niche set or unrecognised, show Coin Flipper (most common)
   // The niche screens themselves handle the case where a user hasn't subscribed
-  return <CoinFlipperScreen isHomeTab />;
+  return <CoinFlipperScreen key={activeNicheId ?? 'default'} isHomeTab />;
 }
 
 const s = StyleSheet.create({
