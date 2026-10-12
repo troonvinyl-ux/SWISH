@@ -69,27 +69,30 @@ jobs:
       - name: Patch Android app build.gradle for release signing only
         run: |
           python - <<'PY'
+          import sys
           from pathlib import Path
+
           p = Path('android/app/build.gradle')
           if not p.exists():
               print('android/app/build.gradle not found; nothing to patch.')
-              raise SystemExit(0)
+              sys.exit(0)
 
           text = p.read_text()
 
+          # If signingConfigs already present, do nothing and exit successfully
           if 'signingConfigs' in text:
               print('signingConfigs already present; skipping patch.')
-              raise SystemExit(0)
+              sys.exit(0)
 
           marker = "    buildTypes {\n"
           insert = """    signingConfigs {
-        release {
-            storeFile file(\"swish-release.keystore\")
-            storePassword \"swish123\"
-            keyAlias \"swish\"
-            keyPassword \"swish123\"
-        }
-    }
+              release {
+                  storeFile file(\"swish-release.keystore\")
+                  storePassword \"swish123\"
+                  keyAlias \"swish\"
+                  keyPassword \"swish123\"
+              }
+          }
 
 """
 
@@ -97,8 +100,9 @@ jobs:
               text = text.replace(marker, insert + marker, 1)
           else:
               print("Could not find 'buildTypes' marker; aborting patch.")
-              raise SystemExit(1)
+              sys.exit(1)
 
+          # Ensure release build uses the release signingConfig
           text = text.replace(
               '        release {\n            signingConfig signingConfigs.debug',
               '        release {\n            signingConfig signingConfigs.release'
@@ -106,6 +110,7 @@ jobs:
 
           p.write_text(text)
           print('Patched android/app/build.gradle successfully.')
+          sys.exit(0)
           PY
 
       - name: Build release APK
