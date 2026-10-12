@@ -2952,6 +2952,57 @@ export default function SettingsScreen() {
           />
         </CardGroup>
 
+        {/* ── Niche Switcher — visible to lifetime / master admin only ── */}
+        {(() => {
+          const tierVal = (tenant as any)?.subscriptionTier ?? (tenant as any)?.subscription_tier ?? '';
+          const isLifetime = tierVal === 'lifetime' || tierVal === 'professional' || tierVal === 'enterprise';
+          if (!isLifetime) return null;
+          const NICHE_OPTIONS = [
+            { id: 'coins', label: 'Coin Flipper', icon: 'toll', color: '#F5C842', desc: 'Coins · Numismatics · Ancient' },
+            { id: 'motocross', label: 'Flipper MX', icon: 'two-wheeler', color: '#FF5500', desc: 'Motocross · Enduro · Parts' },
+            { id: 'bicycles', label: 'Bike Flipper', icon: 'pedal-bike', color: '#6ED020', desc: 'Mountain Bikes · Road · Components' },
+            { id: 'clothing', label: 'Threads Flip', icon: 'checkroom', color: '#E91E8C', desc: 'Vintage · Designer · Streetwear' },
+          ] as const;
+          const { setActiveNiche, activeNicheId } = useApp();
+          return (
+            <View style={masterStyles.card}>
+              <View style={masterStyles.header}>
+                <View style={masterStyles.crownWrap}><MaterialIcons name="workspace-premium" size={18} color="#F5C842" /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={masterStyles.headerTitle}>Master Admin — Niche Switcher</Text>
+                  <Text style={masterStyles.headerSub}>LIFETIME PRO · All niches unlocked</Text>
+                </View>
+                <View style={masterStyles.lifetimeBadge}><Text style={masterStyles.lifetimeBadgeText}>LIFETIME</Text></View>
+              </View>
+              <View style={masterStyles.grid}>
+                {NICHE_OPTIONS.map(n => {
+                  const isActive = activeNicheId === n.id;
+                  return (
+                    <Pressable
+                      key={n.id}
+                      onPress={() => setActiveNiche(n.id as any)}
+                      style={({ pressed }) => [masterStyles.nicheCard, isActive && { borderColor: n.color + '80', backgroundColor: n.color + '18' }, pressed && { opacity: 0.82 }]}
+                    >
+                      <View style={[masterStyles.nicheIcon, { backgroundColor: n.color + '25' }]}>
+                        <MaterialIcons name={n.icon as any} size={22} color={n.color} />
+                      </View>
+                      <Text style={[masterStyles.nicheName, isActive && { color: n.color }]}>{n.label}</Text>
+                      <Text style={masterStyles.nicheDesc} numberOfLines={1}>{n.desc}</Text>
+                      {isActive ? (
+                        <View style={[masterStyles.activeChip, { backgroundColor: n.color }]}>
+                          <MaterialIcons name="check" size={10} color="#000" />
+                          <Text style={masterStyles.activeChipText}>Active</Text>
+                        </View>
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Text style={masterStyles.note}>Tap a niche to switch the home tab instantly. Your data is never lost when switching.</Text>
+            </View>
+          );
+        })()}
+
         {/* ── Account ─────────────────────────────────────────────── */}
         <SectionHead title="Account" />
         <CardGroup>
@@ -3212,4 +3263,22 @@ const styles = StyleSheet.create({
 
   version: { fontSize: Typography.size.xs, color: Colors.textTertiary, textAlign: 'center', paddingVertical: Spacing.xl, lineHeight: 20 },
   versionLink: { fontSize: Typography.size.xs, color: Colors.primary, textDecorationLine: 'underline' },
+});
+
+const masterStyles = StyleSheet.create({
+  card: { backgroundColor: Colors.surface, marginHorizontal: Spacing.base, borderRadius: Radius.xl, borderWidth: 1, borderColor: '#F5C842' + '40', overflow: 'hidden', ...Shadow.sm, marginBottom: Spacing.sm },
+  header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.base, borderBottomWidth: 1, borderBottomColor: '#F5C842' + '20', backgroundColor: '#2A2000' },
+  crownWrap: { width: 36, height: 36, borderRadius: Radius.sm, backgroundColor: '#F5C842' + '20', alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: '#F5C842' },
+  headerSub: { fontSize: Typography.size.xs, color: '#F5C842' + 'AA', marginTop: 2 },
+  lifetimeBadge: { backgroundColor: '#F5C842', borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
+  lifetimeBadgeText: { fontSize: 8, fontWeight: Typography.weight.extrabold, color: '#000', letterSpacing: 1 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, padding: Spacing.base },
+  nicheCard: { width: '47%', backgroundColor: Colors.surfaceHighlight, borderRadius: Radius.xl, padding: Spacing.md, gap: 5, borderWidth: 1.5, borderColor: Colors.surfaceBorder, alignItems: 'center' },
+  nicheIcon: { width: 48, height: 48, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
+  nicheName: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: Colors.textPrimary, textAlign: 'center' },
+  nicheDesc: { fontSize: 9, color: Colors.textTertiary, textAlign: 'center' },
+  activeChip: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 3, marginTop: 2 },
+  activeChipText: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: '#000' },
+  note: { fontSize: 10, color: Colors.textTertiary, textAlign: 'center', padding: Spacing.md, paddingTop: 0, lineHeight: 15 },
 });
