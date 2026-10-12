@@ -1157,8 +1157,9 @@ const ins = StyleSheet.create({
 export default function FlipperMXScreen({ isHomeTab = false }: { isHomeTab?: boolean } = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant } = useApp();
+  const { tenant, setScanMode } = useApp();
   const { isPremium } = useSubscription();
+  const { showAlert } = useAlert();
   const [activeTab, setActiveTab] = useState<MXTab>('home');
   const [showPaywall, setShowPaywall] = useState(false);
 
