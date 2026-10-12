@@ -13,12 +13,22 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
-import { getSupabaseClient } from '@/template';
+import { useAlert, getSupabaseClient } from '@/template';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { useSubscription } from '@/hooks/useSubscription';
-import { useAlert } from '@/template';
 import { startCheckout } from '@/services/subscriptionService';
+import {
+  CapturedImage,
+  AIIdentificationResult,
+  captureFromCamera,
+  pickFromLibrary,
+  identifyItemWithAI,
+  saveIdentifiedItem,
+  uploadItemImages,
+  updateItemMedia,
+} from '@/services/aiIdentificationService';
+import { Image } from 'expo-image';
 
 // ── Bike Flipper design tokens ────────────────────────────────────────────────
 const BF = {
@@ -60,6 +70,25 @@ const BIKE_CATEGORIES = [
   { id: 'kids', label: "Kids' Bikes", sub: '12" – 26" wheel' },
   { id: 'parts', label: 'Parts', sub: 'Wheels · Groupsets · Forks' },
 ];
+
+// ── Bike Flip Score calculation ───────────────────────────────────────────────
+function calculateBikeFlipScore(result: AIIdentificationResult): number {
+  const base = Math.round(result.confidence * 100);
+  let adj = 0;
+  const cond = (result.condition ?? '').toLowerCase();
+  if (cond.includes('excellent') || cond.includes('very good')) adj += 10;
+  else if (cond.includes('good condition') || cond.includes('good overall')) adj += 5;
+  else if (cond.includes('poor') || cond.includes('damaged') || cond.includes('cracked') || cond.includes('bent')) adj -= 22;
+  else if (cond.includes('fair') || cond.includes('average')) adj -= 5;
+  const rideable = String(result.attributes?.rideable_status ?? '').toLowerCase();
+  if (rideable.includes('rideable') || rideable.includes('ready to ride')) adj += 12;
+  else if (rideable.includes('non-rideable') || rideable.includes('needs work')) adj -= 15;
+  const frameCond = String(result.attributes?.frame_condition ?? '').toLowerCase();
+  if (frameCond.includes('cracked') || frameCond.includes('bent') || frameCond.includes('damaged')) adj -= 20;
+  else if (frameCond.includes('excellent') || frameCond.includes('no damage')) adj += 6;
+  adj -= Math.min(result.warnings?.length ?? 0, 3) * 4;
+  return Math.max(10, Math.min(98, base + adj));
+}
 
 // ── Flip Score ────────────────────────────────────────────────────────────────
 function FlipScore({ score }: { score: number }) {
@@ -347,81 +376,464 @@ const ht = StyleSheet.create({
   proConfirmedText: { fontSize: Typography.size.sm, color: BF.green, fontWeight: Typography.weight.semibold },
 });
 
-// ── Find Tab ──────────────────────────────────────────────────────────────────
-function FindTab() {
+// ── Find Tab — Full AI Identification Flow ────────────────────────────────────
+function FindTab({
+  capturedImages, onCapture, onRemoveImage, onIdentify, identifying,
+  processingStatus, aiError, idResult, isSaving, savedItemId, isUploading,
+  uploadProgress, onSave, onReset, isPremium, tenant,
+}: {
+  capturedImages: CapturedImage[];
+  onCapture: (index: number) => void;
+  onRemoveImage: (index: number) => void;
+  onIdentify: () => void;
+  identifying: boolean;
+  processingStatus: string;
+  aiError: string | null;
+  idResult: AIIdentificationResult | null;
+  isSaving: boolean;
+  savedItemId: string | null;
+  isUploading: boolean;
+  uploadProgress: string;
+  onSave: () => void;
+  onReset: () => void;
+  isPremium: boolean;
+  tenant: any;
+}) {
   const router = useRouter();
-  return (
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ft.content}>
-      <View style={ft.hero}>
-        <MaterialIcons name="search" size={32} color={BF.green} />
-        <View style={{ flex: 1 }}>
-          <Text style={ft.heroTitle}>Scan & Identify</Text>
-          <Text style={ft.heroSub}>Photograph or import a listing — AI identifies make, model, year and gives you a Flip Score</Text>
+
+  const getBikeFields = (result: AIIdentificationResult) => ({
+    brand: String(result.attributes?.manufacturer ?? result.attributes?.brand ?? '').replace(/Not established/i, '').trim() || null,
+    model: String(result.attributes?.model ?? result.attributes?.model_name ?? '').replace(/Not established/i, '').trim() || null,
+    frameType: String(result.attributes?.bike_type ?? result.attributes?.frame_type ?? '').replace(/Not established/i, '').replace(/_/g, ' ').trim() || null,
+    yearRange: String(result.attributes?.year_range ?? '').replace(/Not established/i, '').trim() || null,
+    frameSize: String(result.attributes?.frame_size ?? '').replace(/Not established/i, '').trim() || null,
+    frameMaterial: String(result.attributes?.frame_material ?? '').replace(/Not established/i, '').trim() || null,
+    groupset: String(result.attributes?.groupset ?? result.attributes?.drivetrain ?? '').replace(/Not established/i, '').trim() || null,
+    wheelSize: String(result.attributes?.wheel_size ?? '').replace(/Not established/i, '').trim() || null,
+    brakeType: String(result.attributes?.brake_type ?? result.attributes?.brakes ?? '').replace(/Not established/i, '').trim() || null,
+    rideableStatus: String(result.attributes?.rideable_status ?? 'Unknown from images alone'),
+    frameCond: String(result.attributes?.frame_condition ?? '').replace(/Not established/i, '').trim() || null,
+    tyresCond: String(result.attributes?.tyres_condition ?? result.attributes?.tyre_condition ?? '').replace(/Not established/i, '').trim() || null,
+    modifications: String(result.attributes?.modifications ?? '').replace(/Not established/i, '').trim() || null,
+    prepEstimate: String(result.attributes?.preparation_estimate ?? result.attributes?.prep_needed ?? '').replace(/Not established/i, '').trim() || null,
+  });
+
+  const getRideableColor = (status: string) => {
+    const s = status.toLowerCase();
+    if (s.includes('rideable') || s.includes('ready')) return BF.success;
+    if (s.includes('minor') || s.includes('service')) return BF.warning;
+    if (s.includes('non-rideable') || s.includes('needs work') || s.includes('major')) return BF.danger;
+    return BF.textMuted;
+  };
+
+  // ── Capture phase ──────────────────────────────────────────────────────────
+  if (!idResult) {
+    const canIdentify = capturedImages.length > 0;
+    const MAX_PHOTOS = 4;
+    return (
+      <View style={{ flex: 1 }}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ft.content}>
+          <View style={ft.hero}>
+            <MaterialIcons name="photo-camera" size={28} color={BF.green} />
+            <View style={{ flex: 1 }}>
+              <Text style={ft.heroTitle}>Find & Identify</Text>
+              <Text style={ft.heroSub}>Photograph the bike — AI identifies make, model, year, groupset, frame material and generates a Flip Score</Text>
+            </View>
+          </View>
+
+          {aiError ? (
+            <View style={ft.errorBanner}>
+              <MaterialIcons
+                name={aiError.includes('quota') ? 'workspace-premium' : 'error-outline'}
+                size={15}
+                color={aiError.includes('quota') ? BF.green : BF.danger}
+              />
+              <Text style={[ft.errorText, aiError.includes('quota') && { color: BF.green }]} numberOfLines={5}>
+                {aiError}
+              </Text>
+              {aiError.includes('quota') && !isPremium ? (
+                <Pressable onPress={() => router.push('/subscription' as any)} style={ft.quotaBtn}>
+                  <Text style={ft.quotaBtnText}>Upgrade</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+
+          <Text style={ft.sectionLabel}>BIKE PHOTOS</Text>
+          <View style={ft.photoGrid}>
+            {Array.from({ length: MAX_PHOTOS }).map((_, idx) => {
+              const img = capturedImages[idx] ?? null;
+              const isFirst = idx === 0;
+              return (
+                <View key={idx} style={isFirst ? ft.slotLarge : ft.slotSmall}>
+                  <Pressable
+                    onPress={() => onCapture(idx)}
+                    style={({ pressed }) => [
+                      ft.slotInner,
+                      img ? ft.slotCaptured : ft.slotEmpty,
+                      isFirst && !img ? ft.slotPrimary : null,
+                      pressed && { opacity: 0.82 },
+                    ]}
+                  >
+                    {img ? (
+                      <>
+                        <Image source={{ uri: img.uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                        <View style={ft.capturedBar}>
+                          <MaterialIcons name="check-circle" size={10} color={BF.success} />
+                          <Text style={ft.capturedLabel} numberOfLines={1}>Photo {idx + 1}</Text>
+                          <Pressable
+                            onPress={e => { e.stopPropagation(); onRemoveImage(idx); }}
+                            style={ft.removeBtn} hitSlop={8}
+                          >
+                            <MaterialIcons name="close" size={11} color="#fff" />
+                          </Pressable>
+                        </View>
+                      </>
+                    ) : (
+                      <View style={ft.emptySlot}>
+                        <View style={[ft.emptyIcon, isFirst && ft.emptyIconPrimary]}>
+                          <MaterialIcons
+                            name={isFirst ? 'add-a-photo' : 'add-photo-alternate'}
+                            size={isFirst ? 28 : 20}
+                            color={isFirst ? BF.green : BF.textMuted}
+                          />
+                        </View>
+                        <Text style={[ft.emptyLabel, isFirst && { color: BF.textPrimary }]} numberOfLines={1}>
+                          {isFirst ? 'Main Photo' : `Photo ${idx + 1}`}
+                        </Text>
+                        <Text style={[ft.optionalText, isFirst && { color: BF.green + 'BB' }]}>
+                          {isFirst ? 'Required' : 'Optional'}
+                        </Text>
+                      </View>
+                    )}
+                  </Pressable>
+                </View>
+              );
+            })}
+          </View>
+
+          <View style={ft.tip}>
+            <MaterialIcons name="lightbulb-outline" size={13} color={BF.green} />
+            <Text style={ft.tipText}>
+              Full side profile, head badge, and drivetrain shots give the best identification. Add a detail shot of the frame number or groupset markings.
+            </Text>
+          </View>
+
+          <Text style={ft.sectionLabel}>WHAT THE AI IDENTIFIES</Text>
+          <View style={ft.aiCard}>
+            {[
+              'Brand and model from head badge, decals and frame design',
+              'Frame type (MTB, road, gravel, BMX, e-bike, hybrid)',
+              'Year range from geometry, component spec and graphics',
+              'Frame size from visible markings or geometry estimate',
+              'Frame material (aluminium, carbon, steel, titanium)',
+              'Groupset brand and level (Shimano, SRAM, Campagnolo)',
+              'Wheel size and tyre condition',
+              'Brake type (disc, rim, hydraulic, mechanical)',
+              'Visible modifications and aftermarket upgrades',
+              'Overall condition and rideability assessment',
+            ].map((item, i) => (
+              <View key={i} style={ft.aiRow}>
+                <MaterialIcons name="check-circle" size={12} color={BF.green} />
+                <Text style={ft.aiText}>{item}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={{ height: 100 }} />
+        </ScrollView>
+
+        <View style={ft.actionBar}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={ft.actionCount}>{capturedImages.length} of 4 photos added</Text>
+            <Text style={ft.actionHint}>
+              {capturedImages.length === 0 ? 'Add at least 1 photo to identify' : 'Ready — tap Identify to analyse'}
+            </Text>
+          </View>
+          <Pressable
+            onPress={onIdentify}
+            disabled={!canIdentify || identifying}
+            style={({ pressed }) => [
+              ft.identifyBtn,
+              !canIdentify && ft.identifyBtnDisabled,
+              pressed && canIdentify && { opacity: 0.88 },
+            ]}
+          >
+            {identifying ? (
+              <ActivityIndicator size="small" color={BF.black} />
+            ) : (
+              <MaterialIcons name="auto-awesome" size={18} color={canIdentify ? BF.black : BF.textMuted} />
+            )}
+            <Text style={[ft.identifyBtnText, !canIdentify && { color: BF.textMuted }]}>
+              {identifying ? (processingStatus || 'Identifying...') : 'Identify Bike'}
+            </Text>
+          </Pressable>
         </View>
       </View>
-      <View style={ft.methodRow}>
+    );
+  }
+
+  // ── Result view ───────────────────────────────────────────────────────────
+  const bikeFields = getBikeFields(idResult);
+  const flipScore = calculateBikeFlipScore(idResult);
+  const rideableColor = getRideableColor(bikeFields.rideableStatus);
+  const confColor = idResult.confidence >= 0.75 ? BF.success : idResult.confidence >= 0.55 ? BF.warning : BF.danger;
+
+  return (
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ft.content}>
+      {savedItemId ? (
+        <View style={ft.savedBanner}>
+          <MaterialIcons name="check-circle" size={18} color={BF.success} />
+          <View style={{ flex: 1 }}>
+            <Text style={ft.savedText}>Saved to inventory</Text>
+            {uploadProgress ? <Text style={ft.savedSub}>{uploadProgress}</Text> : null}
+          </View>
+        </View>
+      ) : null}
+
+      <View style={ft.resultHero}>
+        <FlipScore score={flipScore} />
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={ft.resultTitle} numberOfLines={3}>{idResult.canonicalTitle}</Text>
+          <View style={ft.confRow}>
+            <View style={[ft.confDot, { backgroundColor: confColor }]} />
+            <Text style={[ft.confText, { color: confColor }]}>
+              {Math.round(idResult.confidence * 100)}% confidence · {idResult.confidenceTier}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {capturedImages.length > 0 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm }}>
+          {capturedImages.map((img, idx) => (
+            <Image key={idx} source={{ uri: img.uri }} style={ft.thumb} contentFit="cover" />
+          ))}
+        </ScrollView>
+      ) : null}
+
+      {/* Rideability — key commercial signal */}
+      <View style={[ft.rideableCard, { borderColor: rideableColor + '50', backgroundColor: rideableColor + '12' }]}>
+        <MaterialIcons name="pedal-bike" size={18} color={rideableColor} />
+        <View style={{ flex: 1 }}>
+          <Text style={ft.rideableLabel}>Rideability</Text>
+          <Text style={[ft.rideableStatus, { color: rideableColor }]}>{bikeFields.rideableStatus}</Text>
+        </View>
+        {bikeFields.rideableStatus.toLowerCase().includes('rideable') || bikeFields.rideableStatus.toLowerCase().includes('ready') ? (
+          <MaterialIcons name="check-circle" size={18} color={BF.success} />
+        ) : bikeFields.rideableStatus.toLowerCase().includes('non-rideable') || bikeFields.rideableStatus.toLowerCase().includes('needs work') ? (
+          <MaterialIcons name="build" size={18} color={BF.warning} />
+        ) : (
+          <MaterialIcons name="help-outline" size={18} color={BF.textMuted} />
+        )}
+      </View>
+
+      <View style={ft.specsCard}>
+        <Text style={ft.specsTitle}>BIKE SPECIFICATION</Text>
         {[
-          { icon: 'photo-camera', label: 'Photo', desc: 'Photograph the bike' },
-          { icon: 'image', label: 'Gallery', desc: 'From photo library' },
-          { icon: 'link', label: 'Link', desc: 'eBay / Gumtree URL' },
-          { icon: 'edit', label: 'Manual', desc: 'Enter details' },
-        ].map(m => (
-          <Pressable key={m.label} onPress={() => router.navigate('/(tabs)/scan')} style={({ pressed }) => [ft.methodCard, pressed && { opacity: 0.82 }]}>
-            <View style={ft.methodIcon}><MaterialIcons name={m.icon as any} size={22} color={BF.green} /></View>
-            <Text style={ft.methodLabel}>{m.label}</Text>
-            <Text style={ft.methodDesc}>{m.desc}</Text>
+          { label: 'Brand', value: bikeFields.brand, icon: 'business' as const },
+          { label: 'Model', value: bikeFields.model, icon: 'label' as const },
+          { label: 'Bike Type', value: bikeFields.frameType, icon: 'pedal-bike' as const },
+          { label: 'Year Range', value: bikeFields.yearRange, icon: 'calendar-today' as const },
+          { label: 'Frame Size', value: bikeFields.frameSize, icon: 'straighten' as const },
+          { label: 'Frame Material', value: bikeFields.frameMaterial, icon: 'layers' as const },
+          { label: 'Groupset', value: bikeFields.groupset, icon: 'settings' as const },
+          { label: 'Wheel Size', value: bikeFields.wheelSize, icon: 'radio-button-unchecked' as const },
+          { label: 'Brakes', value: bikeFields.brakeType, icon: 'stop-circle' as const },
+        ].filter(r => r.value).map((row, i) => (
+          <View key={i} style={ft.specRow}>
+            <MaterialIcons name={row.icon} size={13} color={BF.textMuted} style={{ width: 18 }} />
+            <Text style={ft.specKey}>{row.label}</Text>
+            <Text style={ft.specValue} numberOfLines={1}>{row.value}</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={ft.condCard}>
+        <Text style={ft.specsTitle}>CONDITION</Text>
+        <Text style={ft.condOverall}>{idResult.condition}</Text>
+        {bikeFields.frameCond ? (
+          <View style={ft.condRow}>
+            <Text style={ft.condLabel}>Frame</Text>
+            <Text style={ft.condVal}>{bikeFields.frameCond}</Text>
+          </View>
+        ) : null}
+        {bikeFields.tyresCond ? (
+          <View style={ft.condRow}>
+            <Text style={ft.condLabel}>Tyres</Text>
+            <Text style={ft.condVal}>{bikeFields.tyresCond}</Text>
+          </View>
+        ) : null}
+        {bikeFields.prepEstimate ? (
+          <View style={ft.condRow}>
+            <Text style={ft.condLabel}>Work Needed</Text>
+            <Text style={[ft.condVal, {
+              color: bikeFields.prepEstimate.toLowerCase().includes('none') ? BF.success
+                : bikeFields.prepEstimate.toLowerCase().includes('major') ? BF.danger
+                : BF.warning,
+            }]}>{bikeFields.prepEstimate}</Text>
+          </View>
+        ) : null}
+      </View>
+
+      {bikeFields.modifications ? (
+        <View style={ft.modsCard}>
+          <MaterialIcons name="build" size={13} color={BF.green} />
+          <View style={{ flex: 1 }}>
+            <Text style={ft.modsLabel}>UPGRADES & MODIFICATIONS</Text>
+            <Text style={ft.modsText}>{bikeFields.modifications}</Text>
+          </View>
+        </View>
+      ) : null}
+
+      {idResult.warnings?.length > 0 ? (
+        <View style={ft.warningsCard}>
+          {idResult.warnings.slice(0, 3).map((w, i) => (
+            <View key={i} style={ft.warningRow}>
+              <MaterialIcons name="warning" size={11} color={BF.warning} />
+              <Text style={ft.warningText} numberOfLines={3}>{w}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      <View style={ft.flipScoreGuide}>
+        <Text style={ft.specsTitle}>FLIP SCORE GUIDE</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+          {[{ score: 82, label: 'Strong buy' }, { score: 60, label: 'Negotiate' }, { score: 35, label: 'Pass' }].map(s => (
+            <View key={s.score} style={{ alignItems: 'center', gap: 6 }}>
+              <FlipScore score={s.score} />
+              <Text style={{ fontSize: 10, color: BF.textSub }}>{s.label}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={ft.actions}>
+        <Pressable onPress={onReset} style={ft.resetBtn}>
+          <MaterialIcons name="refresh" size={16} color={BF.textSub} />
+          <Text style={ft.resetText}>New Scan</Text>
+        </Pressable>
+        {savedItemId ? (
+          <Pressable
+            onPress={() => router.push(`/create-listing?id=${savedItemId}` as any)}
+            style={ft.primaryBtn}
+          >
+            {isUploading ? <ActivityIndicator size="small" color={BF.black} /> : <MaterialIcons name="sell" size={16} color={BF.black} />}
+            <Text style={ft.primaryBtnText}>{isUploading ? 'Uploading...' : 'List on eBay'}</Text>
           </Pressable>
-        ))}
+        ) : (
+          <Pressable onPress={onSave} disabled={isSaving} style={ft.primaryBtn}>
+            {isSaving ? <ActivityIndicator size="small" color={BF.black} /> : <MaterialIcons name="add" size={16} color={BF.black} />}
+            <Text style={ft.primaryBtnText}>{isSaving ? 'Saving...' : 'Save to Inventory'}</Text>
+          </Pressable>
+        )}
       </View>
-      <Text style={ft.sectionLabel}>POSSIBLE MATCHES EXAMPLE</Text>
-      <View style={ft.matchCard}>
-        {[
-          { name: 'Scott Scale 50', year: '2010–2012', conf: 92 },
-          { name: 'Scott Aspect', year: '2009–2011', conf: 85 },
-          { name: 'Cube Aim', year: '2010–2012', conf: 72 },
-        ].map(m => (
-          <View key={m.name} style={ft.matchRow}>
-            <View style={ft.matchIcon}><MaterialIcons name="pedal-bike" size={18} color={BF.green} /></View>
-            <View style={{ flex: 1 }}>
-              <Text style={ft.matchName}>{m.name}</Text>
-              <Text style={ft.matchYear}>{m.year}</Text>
-            </View>
-            <View style={[ft.confBadge, { backgroundColor: m.conf >= 85 ? BF.green : m.conf >= 75 ? BF.warning : BF.danger }]}>
-              <Text style={ft.confText}>{m.conf}%</Text>
-            </View>
-          </View>
-        ))}
-      </View>
-      <Text style={ft.sectionLabel}>FLIP SCORE GUIDE</Text>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-around', paddingVertical: Spacing.sm }}>
-        {[{ score: 78, label: 'Good buy' }, { score: 55, label: 'Negotiate hard' }, { score: 30, label: 'Pass on this' }].map(s => (
-          <View key={s.score} style={{ alignItems: 'center', gap: 6 }}>
-            <FlipScore score={s.score} />
-            <Text style={{ fontSize: 10, color: BF.textSub }}>{s.label}</Text>
-          </View>
-        ))}
-      </View>
+
+      {savedItemId ? (
+        <Pressable
+          onPress={() => router.push(`/item/${savedItemId}` as any)}
+          style={({ pressed }) => [ft.viewItemBtn, pressed && { opacity: 0.85 }]}
+        >
+          <MaterialIcons name="inventory-2" size={15} color={BF.green} />
+          <Text style={ft.viewItemText}>View in Inventory</Text>
+          <MaterialIcons name="chevron-right" size={15} color={BF.textMuted} />
+        </Pressable>
+      ) : null}
+
+      <View style={{ height: 40 }} />
     </ScrollView>
   );
 }
+
 const ft = StyleSheet.create({
-  content: { padding: Spacing.base, gap: Spacing.lg, paddingBottom: 40 },
+  content: { padding: Spacing.base, gap: Spacing.md, paddingBottom: 40 },
   sectionLabel: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: BF.textMuted, textTransform: 'uppercase', letterSpacing: 0.8 },
   hero: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, backgroundColor: BF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: BF.green + '30' },
   heroTitle: { fontSize: Typography.size.xl, fontWeight: Typography.weight.extrabold, color: BF.white },
   heroSub: { fontSize: Typography.size.xs, color: BF.textSub, lineHeight: 17, marginTop: 3 },
-  methodRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  methodCard: { width: '48%', backgroundColor: BF.surface, borderRadius: Radius.xl, padding: Spacing.base, gap: Spacing.sm, borderWidth: 1, borderColor: BF.border },
-  methodIcon: { width: 40, height: 40, borderRadius: Radius.md, backgroundColor: BF.greenDim, alignItems: 'center', justifyContent: 'center' },
-  methodLabel: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: BF.white },
-  methodDesc: { fontSize: Typography.size.xs, color: BF.textSub },
-  matchCard: { backgroundColor: BF.surface, borderRadius: Radius.xl, padding: Spacing.md, gap: Spacing.sm, borderWidth: 1, borderColor: BF.border },
-  matchRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: 4 },
-  matchIcon: { width: 36, height: 36, borderRadius: Radius.md, backgroundColor: BF.greenDim, alignItems: 'center', justifyContent: 'center' },
-  matchName: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: BF.white },
-  matchYear: { fontSize: Typography.size.xs, color: BF.textSub },
-  confBadge: { borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
-  confText: { fontSize: 11, fontWeight: Typography.weight.extrabold, color: '#000' },
+
+  errorBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: BF.greenDim, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: BF.danger + '40' },
+  errorText: { flex: 1, fontSize: Typography.size.xs, color: BF.danger, lineHeight: 17 },
+  quotaBtn: { backgroundColor: BF.greenDim, borderRadius: Radius.md, paddingHorizontal: Spacing.sm, paddingVertical: 4, borderWidth: 1, borderColor: BF.green + '40' },
+  quotaBtnText: { fontSize: 10, fontWeight: Typography.weight.bold, color: BF.green },
+
+  photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  slotLarge: { width: '100%', aspectRatio: 1.7 },
+  slotSmall: { width: '31%', aspectRatio: 1 },
+  slotInner: { flex: 1, borderRadius: Radius.lg, overflow: 'hidden', position: 'relative' },
+  slotEmpty: { backgroundColor: BF.surface, borderWidth: 1.5, borderStyle: 'dashed', borderColor: BF.border, alignItems: 'center', justifyContent: 'center' },
+  slotPrimary: { borderColor: BF.green + '60' },
+  slotCaptured: { borderWidth: 2, borderColor: BF.success + '70', borderStyle: 'solid' },
+  emptySlot: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: Spacing.sm },
+  emptyIcon: { width: 48, height: 48, borderRadius: Radius.md, backgroundColor: BF.surfaceHigh, alignItems: 'center', justifyContent: 'center' },
+  emptyIconPrimary: { backgroundColor: BF.greenDim },
+  emptyLabel: { fontSize: 11, fontWeight: Typography.weight.semibold, color: BF.textSub, textAlign: 'center' },
+  optionalText: { fontSize: 8, color: BF.textMuted, textTransform: 'uppercase', letterSpacing: 0.2 },
+  capturedBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.62)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 5, gap: 4 },
+  capturedLabel: { flex: 1, fontSize: 9, color: '#fff', fontWeight: Typography.weight.semibold },
+  removeBtn: { backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 10, width: 20, height: 20, alignItems: 'center', justifyContent: 'center' },
+
+  tip: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: BF.greenDim, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: BF.green + '25' },
+  tipText: { flex: 1, fontSize: 11, color: BF.green, lineHeight: 16 },
+
+  aiCard: { backgroundColor: BF.surface, borderRadius: Radius.xl, padding: Spacing.base, gap: Spacing.sm, borderWidth: 1, borderColor: BF.border },
+  aiRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm },
+  aiText: { flex: 1, fontSize: Typography.size.xs, color: BF.textSub, lineHeight: 17 },
+
+  actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: BF.surface, borderTopWidth: 1, borderTopColor: BF.border, padding: Spacing.base, flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  actionCount: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: BF.textPrimary },
+  actionHint: { fontSize: Typography.size.xs, color: BF.textSub },
+  identifyBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, backgroundColor: BF.green, borderRadius: Radius.md, padding: Spacing.md, shadowColor: BF.green, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.45, shadowRadius: 10, elevation: 6 },
+  identifyBtnDisabled: { backgroundColor: BF.surfaceHigh, shadowOpacity: 0 },
+  identifyBtnText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: BF.black },
+
+  savedBanner: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: '#0A2010', borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: BF.success + '40' },
+  savedText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: BF.success },
+  savedSub: { fontSize: 10, color: BF.success + 'BB', marginTop: 2 },
+
+  resultHero: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md, backgroundColor: BF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: BF.green + '40' },
+  resultTitle: { fontSize: Typography.size.base, fontWeight: Typography.weight.bold, color: BF.white, lineHeight: 22 },
+  confRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  confDot: { width: 7, height: 7, borderRadius: 4 },
+  confText: { fontSize: Typography.size.xs, fontWeight: Typography.weight.semibold },
+
+  thumb: { width: 80, height: 80, borderRadius: Radius.md },
+
+  rideableCard: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1 },
+  rideableLabel: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: BF.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  rideableStatus: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, lineHeight: 18, marginTop: 2 },
+
+  specsCard: { backgroundColor: BF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: BF.border, gap: 2 },
+  specsTitle: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: BF.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.sm },
+  specRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: BF.border + '60' },
+  specKey: { flex: 1, fontSize: Typography.size.xs, color: BF.textSub },
+  specValue: { fontSize: Typography.size.xs, fontWeight: Typography.weight.semibold, color: BF.textPrimary, maxWidth: '55%', textAlign: 'right' },
+
+  condCard: { backgroundColor: BF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: BF.border },
+  condOverall: { fontSize: Typography.size.sm, color: BF.textPrimary, lineHeight: 18, marginBottom: Spacing.sm },
+  condRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderTopWidth: 1, borderTopColor: BF.border + '50' },
+  condLabel: { fontSize: Typography.size.xs, color: BF.textSub },
+  condVal: { fontSize: Typography.size.xs, fontWeight: Typography.weight.semibold, color: BF.textPrimary, maxWidth: '60%', textAlign: 'right' },
+
+  modsCard: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: BF.greenDim, borderRadius: Radius.lg, padding: Spacing.md, borderWidth: 1, borderColor: BF.green + '30' },
+  modsLabel: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: BF.green, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 },
+  modsText: { fontSize: Typography.size.xs, color: BF.textSub, lineHeight: 17 },
+
+  warningsCard: { backgroundColor: BF.surfaceHigh, borderRadius: Radius.lg, padding: Spacing.md, gap: Spacing.sm, borderWidth: 1, borderColor: BF.warning + '30' },
+  warningRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+  warningText: { flex: 1, fontSize: Typography.size.xs, color: BF.warning, lineHeight: 16 },
+
+  flipScoreGuide: { backgroundColor: BF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: BF.border },
+
+  actions: { flexDirection: 'row', gap: Spacing.sm },
+  resetBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, padding: Spacing.md, borderRadius: Radius.md, backgroundColor: BF.surface, borderWidth: 1, borderColor: BF.border },
+  resetText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: BF.textSub },
+  primaryBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, backgroundColor: BF.green, borderRadius: Radius.md, padding: Spacing.md, shadowColor: BF.green, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 5 },
+  primaryBtnText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: BF.black },
+
+  viewItemBtn: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: BF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: BF.green + '30' },
+  viewItemText: { flex: 1, fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: BF.green },
 });
 
 // ── Assess Tab ────────────────────────────────────────────────────────────────
@@ -681,8 +1093,112 @@ export default function BikeFlipper({ isHomeTab = false }: { isHomeTab?: boolean
   const router = useRouter();
   const { tenant } = useApp();
   const { isPremium } = useSubscription();
+  const { showAlert } = useAlert();
   const [activeTab, setActiveTab] = useState<BFTab>('home');
   const [showPaywall, setShowPaywall] = useState(false);
+
+  // ── Find Tab capture & AI state ────────────────────────────────────────────
+  const [capturedImages, setCapturedImages] = useState<CapturedImage[]>([]);
+  const [identifying, setIdentifying] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState('');
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [idResult, setIdResult] = useState<AIIdentificationResult | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedItemId, setSavedItemId] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
+
+  const handleCapture = useCallback(async (index: number) => {
+    let image: CapturedImage | null = await captureFromCamera();
+    if (!image) image = await pickFromLibrary(`slot_${index}`, `Photo ${index + 1}`);
+    if (!image) return;
+    setCapturedImages(prev => {
+      const next = [...prev];
+      next[index] = { ...image!, slotId: `slot_${index}`, slotLabel: `Photo ${index + 1}` };
+      return next;
+    });
+  }, []);
+
+  const handleRemoveImage = useCallback((index: number) => {
+    setCapturedImages(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleIdentify = useCallback(async () => {
+    if (capturedImages.length === 0) return;
+    setIdentifying(true);
+    setAiError(null);
+
+    const statusMsgs = [
+      'Preparing bike images...',
+      'Routing to bicycle specialist...',
+      'AI vision analysis...',
+      'Identifying make & model...',
+      'Calculating Flip Score...',
+    ];
+    for (const msg of statusMsgs) {
+      setProcessingStatus(msg);
+      await new Promise(r => setTimeout(r, 300));
+    }
+
+    const { result, error, quotaExceeded } = await identifyItemWithAI(
+      capturedImages, 'bicycles', undefined, undefined,
+      { tenantId: tenant?.id },
+    );
+
+    setIdentifying(false);
+
+    if (quotaExceeded) {
+      setAiError(`Monthly quota reached (${quotaExceeded.used}/${quotaExceeded.limit} free identifications). Upgrade to Bike Flipper Pro for unlimited identifications.`);
+      return;
+    }
+    if (error || !result) {
+      setAiError(error ?? 'Identification failed — please try again');
+      return;
+    }
+
+    setIdResult(result);
+    setSavedItemId(null);
+    setIsUploading(false);
+    setUploadProgress('');
+  }, [capturedImages, tenant?.id]);
+
+  const handleSaveBike = useCallback(async () => {
+    if (!idResult || !tenant) return;
+    setIsSaving(true);
+    const { item, error } = await saveIdentifiedItem(tenant.id, idResult, {
+      mediaUris: capturedImages.map(i => i.uri),
+    });
+    setIsSaving(false);
+    if (error || !item) { showAlert('Save Failed', error ?? 'Could not save bike.'); return; }
+    setSavedItemId(item.id);
+    if (capturedImages.length > 0) {
+      setIsUploading(true);
+      setUploadProgress('Uploading photos...');
+      try {
+        const { urls } = await uploadItemImages(item.id, capturedImages);
+        if (urls.length > 0) {
+          await updateItemMedia(tenant.id, item.id, urls);
+          setUploadProgress(`${urls.length} photo${urls.length === 1 ? '' : 's'} saved`);
+        } else {
+          setUploadProgress('Photos saved locally');
+        }
+      } catch {
+        setUploadProgress('Photos saved locally');
+      } finally {
+        setIsUploading(false);
+      }
+    }
+  }, [idResult, tenant, capturedImages, showAlert]);
+
+  const handleResetFind = useCallback(() => {
+    setCapturedImages([]);
+    setIdResult(null);
+    setAiError(null);
+    setSavedItemId(null);
+    setIsUploading(false);
+    setUploadProgress('');
+    setProcessingStatus('');
+  }, []);
 
   const handleTabSelect = useCallback((tab: BFTab) => {
     const premiumTabs: BFTab[] = ['profits', 'insights'];
@@ -732,7 +1248,26 @@ export default function BikeFlipper({ isHomeTab = false }: { isHomeTab?: boolean
       </View>
       <View style={{ flex: 1 }}>
         {activeTab === 'home' ? <HomeTab isPremium={isPremium} onTabSelect={handleTabSelect} onUpgrade={() => setShowPaywall(true)} tenant={tenant} /> : null}
-        {activeTab === 'find' ? <FindTab /> : null}
+        {activeTab === 'find' ? (
+          <FindTab
+            capturedImages={capturedImages}
+            onCapture={handleCapture}
+            onRemoveImage={handleRemoveImage}
+            onIdentify={handleIdentify}
+            identifying={identifying}
+            processingStatus={processingStatus}
+            aiError={aiError}
+            idResult={idResult}
+            isSaving={isSaving}
+            savedItemId={savedItemId}
+            isUploading={isUploading}
+            uploadProgress={uploadProgress}
+            onSave={handleSaveBike}
+            onReset={handleResetFind}
+            isPremium={isPremium}
+            tenant={tenant}
+          />
+        ) : null}
         {activeTab === 'assess' ? <AssessTab /> : null}
         {activeTab === 'upgrade' ? <UpgradeTab /> : null}
         {activeTab === 'profits' ? <ProfitsTab /> : null}
