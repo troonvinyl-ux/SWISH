@@ -2815,12 +2815,9 @@ const nichStyles = StyleSheet.create({
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, businessConfig, reloadBusinessConfig } = useApp();
-  const { triggerInventoryReload } = useApp();
-  const { activeNiche } = useApp();
-  const { logout } = useAuth();
+  const { tenant, businessConfig, reloadBusinessConfig, triggerInventoryReload, activeNiche, activeNicheId, setActiveNiche } = useApp();
+  const { logout, user } = useAuth();
   const { showAlert } = useAlert();
-  const { user } = useAuth();
 
   const [controls, setControls] = useState<AutonomyControls | null>(null);
   const [ebayStatus, setEbayStatus] = useState<EbayConnectorStatus | null>(null);
@@ -2963,7 +2960,6 @@ export default function SettingsScreen() {
             { id: 'bicycles', label: 'Bike Flipper', icon: 'pedal-bike', color: '#6ED020', desc: 'Mountain Bikes · Road · Components' },
             { id: 'clothing', label: 'Threads Flip', icon: 'checkroom', color: '#E91E8C', desc: 'Vintage · Designer · Streetwear' },
           ] as const;
-          const { setActiveNiche, activeNicheId } = useApp();
           return (
             <View style={masterStyles.card}>
               <View style={masterStyles.header}>
