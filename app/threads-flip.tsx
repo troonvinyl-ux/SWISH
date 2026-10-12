@@ -15,12 +15,22 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
-import { getSupabaseClient } from '@/template';
+import { getSupabaseClient, useAlert } from '@/template';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { useSubscription } from '@/hooks/useSubscription';
-import { useAlert } from '@/template';
 import { startCheckout } from '@/services/subscriptionService';
+import {
+  CapturedImage,
+  AIIdentificationResult,
+  captureFromCamera,
+  pickFromLibrary,
+  identifyItemWithAI,
+  saveIdentifiedItem,
+  uploadItemImages,
+  updateItemMedia,
+} from '@/services/aiIdentificationService';
+import { Image } from 'expo-image';
 
 // ── Threads Flip design tokens ────────────────────────────────────────────────
 const TF = {
@@ -36,7 +46,7 @@ const TF = {
   white:       '#F5EEF5',
   textPrimary: '#F5EEF5',
   textSub:     '#9A7090',
-  textMuted:     '#5A3050',
+  textMuted:   '#5A3050',
   success:     '#4CAF50',
   danger:      '#E53935',
   warning:     '#FFC107',
@@ -64,7 +74,7 @@ const CLOTHING_CATEGORIES = [
   { id: 'sportswear', label: 'Sportswear', sub: 'Activewear · Athleisure' },
 ];
 
-const TOP_BRANDS = ['Levi\'s', 'Nike', 'Carhartt', 'Ralph Lauren', 'Stone Island', 'The North Face', 'Adidas', 'Burberry', 'Prada', 'Supreme'];
+const TOP_BRANDS = ["Levi's", 'Nike', 'Carhartt', 'Ralph Lauren', 'Stone Island', 'The North Face', 'Adidas', 'Burberry', 'Prada', 'Supreme'];
 
 // ── Paywall ───────────────────────────────────────────────────────────────────
 function TFPaywall({ onBack }: { onBack: () => void }) {
@@ -111,8 +121,8 @@ function TFPaywall({ onBack }: { onBack: () => void }) {
         <Pressable onPress={handleUpgrade} disabled={upgrading} style={({ pressed }) => [pw.upgradeBtn, pressed && { opacity: 0.88 }]}>
           <MaterialIcons name="workspace-premium" size={18} color={TF.black} />
           <View>
-            <Text style={pw.upgradeBtnText}>{upgrading ? 'Opening checkout…' : 'Upgrade to Threads Flip Pro'}</Text>
-            <Text style={pw.upgradeBtnSub}>£9.99 / month · Cancel any time</Text>
+            <Text style={pw.upgradeBtnText}>{upgrading ? 'Opening checkout...' : 'Upgrade to Threads Flip Pro'}</Text>
+            <Text style={pw.upgradeBtnSub}>9.99 / month - Cancel any time</Text>
           </View>
           {upgrading ? <ActivityIndicator size="small" color={TF.black} style={{ marginLeft: 'auto' }} /> : <MaterialIcons name="arrow-forward" size={16} color={TF.black} style={{ marginLeft: 'auto' }} />}
         </Pressable>
@@ -194,7 +204,6 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ht.content}>
-      {/* Hero */}
       <View style={ht.hero}>
         <View style={ht.heroLeft}>
           <View style={ht.heroIcon}><MaterialIcons name="checkroom" size={32} color={TF.pink} /></View>
@@ -202,7 +211,7 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
         <View style={{ flex: 1, gap: 3 }}>
           <Text style={ht.brandText}>Threads<Text style={{ color: TF.pink }}> Flip</Text></Text>
           <Text style={ht.tagline}>Turn fashion into opportunity.</Text>
-          <Text style={ht.subTagline}>IDENTIFY • VALUE • STYLE • SELL</Text>
+          <Text style={ht.subTagline}>IDENTIFY - VALUE - STYLE - SELL</Text>
           <View style={ht.categoryRow}>
             {['Vintage', 'Designer', 'Streetwear'].map(c => (
               <View key={c} style={ht.catChip}><Text style={ht.catChipText}>{c}</Text></View>
@@ -212,12 +221,11 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
         {isPremium ? <View style={ht.proBadge}><Text style={ht.proBadgeText}>PRO</Text></View> : null}
       </View>
 
-      {/* Stats */}
       <View style={ht.statsRow}>
         {[
-          { label: 'Items in Stock', value: itemCount !== null ? String(itemCount) : '—', color: TF.white },
+          { label: 'Items in Stock', value: itemCount !== null ? String(itemCount) : '-', color: TF.white },
           { label: 'Categories', value: '8', color: TF.pink },
-          { label: 'AI Powered', value: '✓', color: TF.success },
+          { label: 'AI Powered', value: 'Yes', color: TF.success },
         ].map((s, i) => (
           <View key={s.label} style={[ht.stat, i > 0 && { borderLeftWidth: 1, borderLeftColor: TF.border }]}>
             <Text style={[ht.statNum, { color: s.color }]}>{s.value}</Text>
@@ -226,7 +234,6 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
         ))}
       </View>
 
-      {/* Feature grid */}
       <Text style={ht.sectionLabel}>TOOLS</Text>
       <View style={ht.grid}>
         {FEATURES.map(f => {
@@ -251,7 +258,6 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
         })}
       </View>
 
-      {/* Category scroller */}
       <Text style={ht.sectionLabel}>CATEGORIES</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm, paddingVertical: 4 }}>
         {CLOTHING_CATEGORIES.map(cat => (
@@ -268,14 +274,14 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
           <MaterialIcons name="workspace-premium" size={18} color={TF.black} />
           <View style={{ flex: 1 }}>
             <Text style={ht.upgradeText}>Upgrade to Threads Flip Pro</Text>
-            <Text style={ht.upgradeSub}>Live market values · Care guides · Listing templates</Text>
+            <Text style={ht.upgradeSub}>Live market values - Care guides - Listing templates</Text>
           </View>
-          <Text style={ht.upgradePrice}>£9.99/mo</Text>
+          <Text style={ht.upgradePrice}>9.99/mo</Text>
         </Pressable>
       ) : (
         <View style={ht.proConfirmed}>
           <MaterialIcons name="workspace-premium" size={15} color={TF.pink} />
-          <Text style={ht.proConfirmedText}>Threads Flip Pro — all features unlocked</Text>
+          <Text style={ht.proConfirmedText}>Threads Flip Pro - all features unlocked</Text>
         </View>
       )}
     </ScrollView>
@@ -316,105 +322,418 @@ const ht = StyleSheet.create({
   proConfirmedText: { fontSize: Typography.size.sm, color: TF.pink, fontWeight: Typography.weight.semibold },
 });
 
-// ── Identify Tab ──────────────────────────────────────────────────────────────
-function IdentifyTab() {
+// ── Identify Tab — Full AI Identification Flow ────────────────────────────────
+function IdentifyTab({
+  capturedImages, onCapture, onRemoveImage, onIdentify, identifying,
+  processingStatus, aiError, idResult, isSaving, savedItemId, isUploading,
+  uploadProgress, onSave, onReset, isPremium, tenant,
+}: {
+  capturedImages: CapturedImage[];
+  onCapture: (index: number) => void;
+  onRemoveImage: (index: number) => void;
+  onIdentify: () => void;
+  identifying: boolean;
+  processingStatus: string;
+  aiError: string | null;
+  idResult: AIIdentificationResult | null;
+  isSaving: boolean;
+  savedItemId: string | null;
+  isUploading: boolean;
+  uploadProgress: string;
+  onSave: () => void;
+  onReset: () => void;
+  isPremium: boolean;
+  tenant: any;
+}) {
   const router = useRouter();
+
+  const getClothingFields = (result: AIIdentificationResult) => ({
+    brand: String(result.attributes?.brand ?? result.attributes?.brand_label ?? '').replace(/Not legible|Not established/gi, '').trim() || null,
+    garmentType: String(result.attributes?.garment_type ?? '').replace(/Not established/gi, '').trim() || null,
+    era: String(result.attributes?.era ?? result.attributes?.era_estimate ?? '').replace(/Not established/gi, '').trim() || null,
+    size: String(result.attributes?.size ?? result.attributes?.labelled_size ?? '').replace(/Not legible|Not established/gi, '').trim() || null,
+    composition: String(result.attributes?.composition ?? result.attributes?.fiber_composition ?? '').replace(/Not legible|Not established/gi, '').trim() || null,
+    colour: String(result.attributes?.colour ?? result.attributes?.color_description ?? '').replace(/Not established/gi, '').trim() || null,
+    countryManufacture: String(result.attributes?.country_manufacture ?? result.attributes?.country_of_origin ?? '').replace(/Not legible|Not established/gi, '').trim() || null,
+    isVintage: result.attributes?.is_vintage === 'true' || result.attributes?.is_vintage === true,
+    isDeadstock: result.attributes?.is_deadstock === 'true' || result.attributes?.is_deadstock === true,
+    authRisk: String(result.attributes?.authenticity_risk_level ?? result.attributes?.authentication_risk_level ?? 'NOT_APPLICABLE'),
+    authRiskReason: String(result.attributes?.authenticity_risk_reason ?? '').replace(/Not established/gi, '').trim() || null,
+    marketplace: String(result.attributes?.recommended_marketplace ?? '').replace(/Not established/gi, '').trim() || null,
+    damage: String(result.attributes?.damage_notes ?? '').replace(/Not established/gi, '').trim() || null,
+  });
+
+  const getAuthRiskColor = (risk: string) => {
+    if (risk === 'LOW') return TF.success;
+    if (risk === 'MEDIUM') return TF.warning;
+    if (risk === 'HIGH') return TF.danger;
+    return TF.textMuted;
+  };
+
+  if (!idResult) {
+    const SLOTS = [
+      { label: 'Brand Label', hint: 'Inside neck or waist - required', primary: true },
+      { label: 'Garment', hint: 'Full front view of item', primary: false },
+      { label: 'Detail / Flaw', hint: 'Damage, hardware, care label', primary: false },
+    ];
+    const canIdentify = capturedImages.length > 0;
+    return (
+      <View style={{ flex: 1 }}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={id.content}>
+          <View style={id.hero}>
+            <MaterialIcons name="photo-camera" size={28} color={TF.pink} />
+            <View style={{ flex: 1 }}>
+              <Text style={id.heroTitle}>Identify Item</Text>
+              <Text style={id.heroSub}>Photograph the label and garment - AI reads brand, era, size, composition, condition, and authentication risk</Text>
+            </View>
+          </View>
+
+          {aiError ? (
+            <View style={id.errorBanner}>
+              <MaterialIcons
+                name={aiError.includes('quota') ? 'workspace-premium' : 'error-outline'}
+                size={15}
+                color={aiError.includes('quota') ? TF.pink : TF.danger}
+              />
+              <Text style={[id.errorText, aiError.includes('quota') ? { color: TF.pink } : null]} numberOfLines={5}>
+                {aiError}
+              </Text>
+              {aiError.includes('quota') && !isPremium ? (
+                <Pressable onPress={() => router.push('/subscription' as any)} style={id.quotaBtn}>
+                  <Text style={id.quotaBtnText}>Upgrade</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+
+          <Text style={id.sectionLabel}>PHOTOS</Text>
+          <View style={id.photoGrid}>
+            {SLOTS.map((slot, idx) => {
+              const img = capturedImages[idx] ?? null;
+              return (
+                <View key={idx} style={idx === 0 ? id.slotLarge : id.slotSmall}>
+                  <Pressable
+                    onPress={() => onCapture(idx)}
+                    style={({ pressed }) => [
+                      id.slotInner,
+                      img ? id.slotCaptured : id.slotEmpty,
+                      idx === 0 && !img ? id.slotPrimary : null,
+                      pressed && { opacity: 0.82 },
+                    ]}
+                  >
+                    {img ? (
+                      <>
+                        <Image source={{ uri: img.uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                        <View style={id.capturedBar}>
+                          <MaterialIcons name="check-circle" size={10} color={TF.success} />
+                          <Text style={id.capturedLabel} numberOfLines={1}>{slot.label}</Text>
+                          <Pressable onPress={e => { e.stopPropagation(); onRemoveImage(idx); }} style={id.removeBtn} hitSlop={8}>
+                            <MaterialIcons name="close" size={11} color="#fff" />
+                          </Pressable>
+                        </View>
+                      </>
+                    ) : (
+                      <View style={id.emptySlot}>
+                        <View style={[id.emptyIcon, idx === 0 ? id.emptyIconPrimary : null]}>
+                          <MaterialIcons
+                            name={idx === 0 ? 'add-a-photo' : 'add-photo-alternate'}
+                            size={idx === 0 ? 28 : 20}
+                            color={idx === 0 ? TF.pink : TF.textMuted}
+                          />
+                        </View>
+                        <Text style={[id.emptyLabel, idx === 0 ? { color: TF.textPrimary } : null]} numberOfLines={1}>{slot.label}</Text>
+                        <Text style={[id.optionalText, idx === 0 ? { color: TF.pink + 'BB' } : null]}>
+                          {slot.primary ? 'Required' : 'Optional'}
+                        </Text>
+                        <Text style={id.hintText} numberOfLines={1}>{slot.hint}</Text>
+                      </View>
+                    )}
+                  </Pressable>
+                </View>
+              );
+            })}
+          </View>
+
+          <View style={id.tip}>
+            <MaterialIcons name="lightbulb-outline" size={13} color={TF.pink} />
+            <Text style={id.tipText}>
+              Brand label photo is most important - flat, well-lit, legible. Add care label for era dating and composition.
+            </Text>
+          </View>
+
+          <Text style={id.sectionLabel}>WHAT THE AI IDENTIFIES</Text>
+          <View style={id.aiCard}>
+            {[
+              'Brand label (exact text character by character)',
+              'Era dating from label font, care symbols, construction',
+              'Fibre composition from care label',
+              'Garment type and gender category',
+              'Condition: staining, holes, fading, hardware',
+              'Authentication risk (LOW / MEDIUM / HIGH)',
+              'Recommended marketplace (eBay, Depop, Vinted)',
+            ].map((item, i) => (
+              <View key={i} style={id.aiRow}>
+                <MaterialIcons name="check-circle" size={12} color={TF.pink} />
+                <Text style={id.aiText}>{item}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={{ height: 100 }} />
+        </ScrollView>
+
+        <View style={id.actionBar}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={id.actionCount}>{capturedImages.length} of 3 photos added</Text>
+            <Text style={id.actionHint}>
+              {capturedImages.length === 0 ? 'Add brand label photo first' : 'Ready - tap Identify to analyse'}
+            </Text>
+          </View>
+          <Pressable
+            onPress={onIdentify}
+            disabled={!canIdentify || identifying}
+            style={({ pressed }) => [
+              id.identifyBtn,
+              !canIdentify ? id.identifyBtnDisabled : null,
+              pressed && canIdentify ? { opacity: 0.88 } : null,
+            ]}
+          >
+            {identifying ? (
+              <ActivityIndicator size="small" color={TF.black} />
+            ) : (
+              <MaterialIcons name="auto-awesome" size={18} color={canIdentify ? TF.black : TF.textMuted} />
+            )}
+            <Text style={[id.identifyBtnText, !canIdentify ? { color: TF.textMuted } : null]}>
+              {identifying ? (processingStatus || 'Identifying...') : 'Identify Item'}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  const clothingFields = getClothingFields(idResult);
+  const authRiskColor = getAuthRiskColor(clothingFields.authRisk);
+  const confColor = idResult.confidence >= 0.75 ? TF.success : idResult.confidence >= 0.55 ? TF.warning : TF.danger;
+
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={id.content}>
-      <View style={id.hero}>
-        <MaterialIcons name="photo-camera" size={28} color={TF.pink} />
-        <View style={{ flex: 1 }}>
-          <Text style={id.heroTitle}>Scan & Identify</Text>
-          <Text style={id.heroSub}>Photograph the label and garment — AI reads brand, era, composition, condition, and authentication risk</Text>
+      {savedItemId ? (
+        <View style={id.savedBanner}>
+          <MaterialIcons name="check-circle" size={18} color={TF.success} />
+          <View style={{ flex: 1 }}>
+            <Text style={id.savedText}>Saved to inventory</Text>
+            {uploadProgress ? <Text style={id.savedSub}>{uploadProgress}</Text> : null}
+          </View>
+        </View>
+      ) : null}
+
+      <View style={id.resultHero}>
+        <View style={id.resultIconWrap}>
+          <MaterialIcons name="checkroom" size={32} color={TF.pink} />
+        </View>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={id.resultTitle} numberOfLines={3}>{idResult.canonicalTitle}</Text>
+          <View style={id.confRow}>
+            <View style={[id.confDot, { backgroundColor: confColor }]} />
+            <Text style={[id.confText, { color: confColor }]}>
+              {Math.round(idResult.confidence * 100)}% confidence - {idResult.confidenceTier}
+            </Text>
+          </View>
         </View>
       </View>
-      <View style={id.methodRow}>
+
+      {capturedImages.length > 0 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm }}>
+          {capturedImages.map((img, idx) => (
+            <Image key={idx} source={{ uri: img.uri }} style={id.thumb} contentFit="cover" />
+          ))}
+        </ScrollView>
+      ) : null}
+
+      {clothingFields.authRisk !== 'NOT_APPLICABLE' ? (
+        <View style={[id.authCard, { borderColor: authRiskColor + '50', backgroundColor: authRiskColor + '12' }]}>
+          <MaterialIcons name="verified" size={18} color={authRiskColor} />
+          <View style={{ flex: 1 }}>
+            <Text style={id.authLabel}>Authentication Risk</Text>
+            <Text style={[id.authStatus, { color: authRiskColor }]}>{clothingFields.authRisk}</Text>
+            {clothingFields.authRiskReason ? (
+              <Text style={id.authNote} numberOfLines={3}>{clothingFields.authRiskReason}</Text>
+            ) : null}
+          </View>
+          {clothingFields.authRisk === 'HIGH' ? (
+            <MaterialIcons name="warning" size={18} color={TF.danger} />
+          ) : clothingFields.authRisk === 'LOW' ? (
+            <MaterialIcons name="check-circle" size={18} color={TF.success} />
+          ) : (
+            <MaterialIcons name="help-outline" size={18} color={TF.warning} />
+          )}
+        </View>
+      ) : null}
+
+      <View style={id.specsCard}>
+        <Text style={id.specsTitle}>ITEM DETAILS</Text>
         {[
-          { icon: 'photo-camera', label: 'Photo', desc: 'Photograph label & garment' },
-          { icon: 'image', label: 'Gallery', desc: 'From photo library' },
-          { icon: 'link', label: 'Link', desc: 'eBay / Vinted listing' },
-          { icon: 'edit', label: 'Manual', desc: 'Enter details manually' },
-        ].map(m => (
-          <Pressable key={m.label} onPress={() => router.navigate('/(tabs)/scan')} style={({ pressed }) => [id.methodCard, pressed && { opacity: 0.82 }]}>
-            <View style={id.methodIcon}><MaterialIcons name={m.icon as any} size={22} color={TF.pink} /></View>
-            <Text style={id.methodLabel}>{m.label}</Text>
-            <Text style={id.methodDesc}>{m.desc}</Text>
+          { label: 'Brand', value: clothingFields.brand, icon: 'label' as const },
+          { label: 'Garment Type', value: clothingFields.garmentType, icon: 'checkroom' as const },
+          { label: 'Era', value: clothingFields.era, icon: 'history' as const },
+          { label: 'Size', value: clothingFields.size, icon: 'straighten' as const },
+          { label: 'Composition', value: clothingFields.composition, icon: 'layers' as const },
+          { label: 'Colour', value: clothingFields.colour, icon: 'palette' as const },
+          { label: 'Made In', value: clothingFields.countryManufacture, icon: 'public' as const },
+        ].filter(r => r.value).map((row, i) => (
+          <View key={i} style={id.specRow}>
+            <MaterialIcons name={row.icon} size={13} color={TF.textMuted} style={{ width: 18 }} />
+            <Text style={id.specKey}>{row.label}</Text>
+            <Text style={id.specValue} numberOfLines={1}>{row.value}</Text>
+          </View>
+        ))}
+        <View style={{ flexDirection: 'row', gap: Spacing.xs, marginTop: Spacing.xs, flexWrap: 'wrap' }}>
+          {clothingFields.isVintage ? (
+            <View style={[id.tagChip, { backgroundColor: TF.gold + '20', borderColor: TF.gold + '50' }]}>
+              <Text style={[id.tagText, { color: TF.gold }]}>VINTAGE</Text>
+            </View>
+          ) : null}
+          {clothingFields.isDeadstock ? (
+            <View style={[id.tagChip, { backgroundColor: TF.success + '20', borderColor: TF.success + '50' }]}>
+              <Text style={[id.tagText, { color: TF.success }]}>DEADSTOCK</Text>
+            </View>
+          ) : null}
+        </View>
+      </View>
+
+      <View style={id.condCard}>
+        <Text style={id.specsTitle}>CONDITION</Text>
+        <Text style={id.condOverall}>{idResult.condition}</Text>
+        {clothingFields.damage ? (
+          <View style={id.condRow}>
+            <Text style={id.condLabel}>Damage / Notes</Text>
+            <Text style={[id.condVal, { color: TF.warning }]}>{clothingFields.damage}</Text>
+          </View>
+        ) : null}
+        {clothingFields.marketplace ? (
+          <View style={id.condRow}>
+            <Text style={id.condLabel}>Best Marketplace</Text>
+            <Text style={[id.condVal, { color: TF.pink }]}>{clothingFields.marketplace}</Text>
+          </View>
+        ) : null}
+      </View>
+
+      {idResult.warnings && idResult.warnings.length > 0 ? (
+        <View style={id.warningsCard}>
+          {idResult.warnings.slice(0, 3).map((w, i) => (
+            <View key={i} style={id.warningRow}>
+              <MaterialIcons name="warning" size={11} color={TF.warning} />
+              <Text style={id.warningText} numberOfLines={3}>{w}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      <View style={id.actions}>
+        <Pressable onPress={onReset} style={id.resetBtn}>
+          <MaterialIcons name="refresh" size={16} color={TF.textSub} />
+          <Text style={id.resetText}>New Scan</Text>
+        </Pressable>
+        {savedItemId ? (
+          <Pressable onPress={() => router.push(`/create-listing?id=${savedItemId}` as any)} style={id.primaryBtn}>
+            {isUploading ? <ActivityIndicator size="small" color={TF.black} /> : <MaterialIcons name="sell" size={16} color={TF.black} />}
+            <Text style={id.primaryBtnText}>{isUploading ? 'Uploading...' : 'List on eBay'}</Text>
           </Pressable>
-        ))}
+        ) : (
+          <Pressable onPress={onSave} disabled={isSaving} style={id.primaryBtn}>
+            {isSaving ? <ActivityIndicator size="small" color={TF.black} /> : <MaterialIcons name="add" size={16} color={TF.black} />}
+            <Text style={id.primaryBtnText}>{isSaving ? 'Saving...' : 'Save to Inventory'}</Text>
+          </Pressable>
+        )}
       </View>
-      <Text style={id.sectionLabel}>EXAMPLE IDENTIFICATION</Text>
-      <View style={id.exampleCard}>
-        <View style={id.exampleHeader}>
-          <View style={id.exampleThumb}><MaterialIcons name="checkroom" size={22} color={TF.pink} /></View>
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={id.exampleTitle}>Levi's Vintage Denim Jacket</Text>
-            <Text style={id.exampleSub}>Type III · 1980s</Text>
-            <View style={[id.confBadge, { backgroundColor: TF.success }]}><Text style={id.confText}>95%</Text></View>
-          </View>
-        </View>
-        {[
-          { label: 'Brand', value: "Levi's" },
-          { label: 'Era', value: '1980s' },
-          { label: 'Style', value: 'Type III (Trucker)' },
-          { label: 'Material', value: 'Denim (Cotton)' },
-          { label: 'Condition', value: 'Excellent' },
-          { label: 'Authentication', value: 'LOW RISK', color: TF.success },
-        ].map(row => (
-          <View key={row.label} style={id.attrRow}>
-            <Text style={id.attrKey}>{row.label}</Text>
-            <Text style={[id.attrValue, row.color ? { color: row.color } : {}]}>{row.value}</Text>
-          </View>
-        ))}
-      </View>
-      <Text style={id.sectionLabel}>POSSIBLE MATCHES</Text>
-      <View style={id.matchCard}>
-        {[
-          { name: "Levi's Vintage Denim Jacket", sub: 'Type III · 1980s', conf: 95 },
-          { name: 'Carhartt Detroit Jacket', sub: 'Work wear · 1990s', conf: 87 },
-          { name: 'Ralph Lauren Denim Shirt', sub: 'Casual · 1990s', conf: 82 },
-          { name: 'Vintage Nike Windbreaker', sub: 'Sportswear · 1990s', conf: 76 },
-        ].map(m => (
-          <View key={m.name} style={id.matchRow}>
-            <View style={id.matchThumb}><MaterialIcons name="checkroom" size={16} color={TF.pink} /></View>
-            <View style={{ flex: 1 }}>
-              <Text style={id.matchName}>{m.name}</Text>
-              <Text style={id.matchSub}>{m.sub}</Text>
-            </View>
-            <View style={[id.confBadge, { backgroundColor: m.conf >= 90 ? TF.success : m.conf >= 80 ? TF.warning : TF.danger }]}>
-              <Text style={id.confText}>{m.conf}%</Text>
-            </View>
-          </View>
-        ))}
-      </View>
+
+      {savedItemId ? (
+        <Pressable onPress={() => router.push(`/item/${savedItemId}` as any)} style={({ pressed }) => [id.viewItemBtn, pressed && { opacity: 0.85 }]}>
+          <MaterialIcons name="inventory-2" size={15} color={TF.pink} />
+          <Text style={id.viewItemText}>View in Inventory</Text>
+          <MaterialIcons name="chevron-right" size={15} color={TF.textMuted} />
+        </Pressable>
+      ) : null}
+
+      <View style={{ height: 40 }} />
     </ScrollView>
   );
 }
+
 const id = StyleSheet.create({
-  content: { padding: Spacing.base, gap: Spacing.lg, paddingBottom: 40 },
+  content: { padding: Spacing.base, gap: Spacing.md, paddingBottom: 40 },
   sectionLabel: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: TF.textMuted, textTransform: 'uppercase', letterSpacing: 0.8 },
   hero: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, backgroundColor: TF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: TF.pink + '30' },
   heroTitle: { fontSize: Typography.size.xl, fontWeight: Typography.weight.extrabold, color: TF.white },
   heroSub: { fontSize: Typography.size.xs, color: TF.textSub, lineHeight: 17, marginTop: 3 },
-  methodRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  methodCard: { width: '48%', backgroundColor: TF.surface, borderRadius: Radius.xl, padding: Spacing.base, gap: Spacing.sm, borderWidth: 1, borderColor: TF.border },
-  methodIcon: { width: 40, height: 40, borderRadius: Radius.md, backgroundColor: TF.pinkDim, alignItems: 'center', justifyContent: 'center' },
-  methodLabel: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: TF.white },
-  methodDesc: { fontSize: Typography.size.xs, color: TF.textSub },
-  exampleCard: { backgroundColor: TF.surface, borderRadius: Radius.xl, padding: Spacing.md, borderWidth: 1, borderColor: TF.pink + '30' },
-  exampleHeader: { flexDirection: 'row', gap: Spacing.md, marginBottom: Spacing.md, alignItems: 'center' },
-  exampleThumb: { width: 48, height: 48, borderRadius: Radius.md, backgroundColor: TF.pinkDim, alignItems: 'center', justifyContent: 'center' },
-  exampleTitle: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: TF.white },
-  exampleSub: { fontSize: Typography.size.xs, color: TF.textSub },
-  confBadge: { borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start' },
-  confText: { fontSize: 10, fontWeight: Typography.weight.extrabold, color: '#000' },
-  attrRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: TF.border + '60' },
-  attrKey: { fontSize: Typography.size.sm, color: TF.textSub },
-  attrValue: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: TF.white },
-  matchCard: { backgroundColor: TF.surface, borderRadius: Radius.xl, padding: Spacing.md, gap: Spacing.sm, borderWidth: 1, borderColor: TF.border },
-  matchRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: 4 },
-  matchThumb: { width: 36, height: 36, borderRadius: Radius.md, backgroundColor: TF.pinkDim, alignItems: 'center', justifyContent: 'center' },
-  matchName: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: TF.white },
-  matchSub: { fontSize: Typography.size.xs, color: TF.textSub },
+  errorBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: TF.pinkDim, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: TF.danger + '40' },
+  errorText: { flex: 1, fontSize: Typography.size.xs, color: TF.danger, lineHeight: 17 },
+  quotaBtn: { backgroundColor: TF.pinkDim, borderRadius: Radius.md, paddingHorizontal: Spacing.sm, paddingVertical: 4, borderWidth: 1, borderColor: TF.pink + '40' },
+  quotaBtnText: { fontSize: 10, fontWeight: Typography.weight.bold, color: TF.pink },
+  photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  slotLarge: { width: '100%', aspectRatio: 1.5 },
+  slotSmall: { width: '48%', aspectRatio: 1 },
+  slotInner: { flex: 1, borderRadius: Radius.lg, overflow: 'hidden', position: 'relative' },
+  slotEmpty: { backgroundColor: TF.surface, borderWidth: 1.5, borderStyle: 'dashed', borderColor: TF.border, alignItems: 'center', justifyContent: 'center' },
+  slotPrimary: { borderColor: TF.pink + '60' },
+  slotCaptured: { borderWidth: 2, borderColor: TF.success + '70', borderStyle: 'solid' },
+  emptySlot: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: Spacing.sm },
+  emptyIcon: { width: 48, height: 48, borderRadius: Radius.md, backgroundColor: TF.surfaceHigh, alignItems: 'center', justifyContent: 'center' },
+  emptyIconPrimary: { backgroundColor: TF.pinkDim },
+  emptyLabel: { fontSize: 11, fontWeight: Typography.weight.semibold, color: TF.textSub, textAlign: 'center' },
+  optionalText: { fontSize: 8, color: TF.textMuted, textTransform: 'uppercase', letterSpacing: 0.2 },
+  hintText: { fontSize: 9, color: TF.textMuted, textAlign: 'center', lineHeight: 13 },
+  capturedBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.62)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 5, gap: 4 },
+  capturedLabel: { flex: 1, fontSize: 9, color: '#fff', fontWeight: Typography.weight.semibold },
+  removeBtn: { backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 10, width: 20, height: 20, alignItems: 'center', justifyContent: 'center' },
+  tip: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: TF.pinkDim, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: TF.pink + '25' },
+  tipText: { flex: 1, fontSize: 11, color: TF.pink, lineHeight: 16 },
+  aiCard: { backgroundColor: TF.surface, borderRadius: Radius.xl, padding: Spacing.base, gap: Spacing.sm, borderWidth: 1, borderColor: TF.border },
+  aiRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm },
+  aiText: { flex: 1, fontSize: Typography.size.xs, color: TF.textSub, lineHeight: 17 },
+  actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: TF.surface, borderTopWidth: 1, borderTopColor: TF.border, padding: Spacing.base, flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  actionCount: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: TF.textPrimary },
+  actionHint: { fontSize: Typography.size.xs, color: TF.textSub },
+  identifyBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, backgroundColor: TF.pink, borderRadius: Radius.md, padding: Spacing.md, shadowColor: TF.pink, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.45, shadowRadius: 10, elevation: 6 },
+  identifyBtnDisabled: { backgroundColor: TF.surfaceHigh, shadowOpacity: 0 },
+  identifyBtnText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: TF.black },
+  savedBanner: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: '#0A2010', borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: TF.success + '40' },
+  savedText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: TF.success },
+  savedSub: { fontSize: 10, color: TF.success + 'BB', marginTop: 2 },
+  resultHero: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md, backgroundColor: TF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: TF.pink + '40' },
+  resultIconWrap: { width: 56, height: 56, borderRadius: Radius.lg, backgroundColor: TF.pinkDim, alignItems: 'center', justifyContent: 'center' },
+  resultTitle: { fontSize: Typography.size.base, fontWeight: Typography.weight.bold, color: TF.white, lineHeight: 22 },
+  confRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  confDot: { width: 7, height: 7, borderRadius: 4 },
+  confText: { fontSize: Typography.size.xs, fontWeight: Typography.weight.semibold },
+  thumb: { width: 80, height: 80, borderRadius: Radius.md },
+  authCard: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1 },
+  authLabel: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: TF.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  authStatus: { fontSize: Typography.size.base, fontWeight: Typography.weight.extrabold, lineHeight: 22, marginTop: 2 },
+  authNote: { fontSize: Typography.size.xs, color: TF.textSub, lineHeight: 16, marginTop: 4 },
+  specsCard: { backgroundColor: TF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: TF.border, gap: 2 },
+  specsTitle: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: TF.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.sm },
+  specRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: TF.border + '60' },
+  specKey: { flex: 1, fontSize: Typography.size.xs, color: TF.textSub },
+  specValue: { fontSize: Typography.size.xs, fontWeight: Typography.weight.semibold, color: TF.textPrimary, maxWidth: '55%', textAlign: 'right' },
+  tagChip: { borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1 },
+  tagText: { fontSize: 9, fontWeight: Typography.weight.extrabold, letterSpacing: 0.5 },
+  condCard: { backgroundColor: TF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: TF.border },
+  condOverall: { fontSize: Typography.size.sm, color: TF.textPrimary, lineHeight: 18, marginBottom: Spacing.sm },
+  condRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderTopWidth: 1, borderTopColor: TF.border + '50' },
+  condLabel: { fontSize: Typography.size.xs, color: TF.textSub },
+  condVal: { fontSize: Typography.size.xs, fontWeight: Typography.weight.semibold, color: TF.textPrimary, maxWidth: '55%', textAlign: 'right' },
+  warningsCard: { backgroundColor: TF.surfaceHigh, borderRadius: Radius.lg, padding: Spacing.md, gap: Spacing.sm, borderWidth: 1, borderColor: TF.warning + '30' },
+  warningRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+  warningText: { flex: 1, fontSize: Typography.size.xs, color: TF.warning, lineHeight: 16 },
+  actions: { flexDirection: 'row', gap: Spacing.sm },
+  resetBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, padding: Spacing.md, borderRadius: Radius.md, backgroundColor: TF.surface, borderWidth: 1, borderColor: TF.border },
+  resetText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: TF.textSub },
+  primaryBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, backgroundColor: TF.pink, borderRadius: Radius.md, padding: Spacing.md, shadowColor: TF.pink, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 5 },
+  primaryBtnText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: TF.black },
+  viewItemBtn: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: TF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: TF.pink + '30' },
+  viewItemText: { flex: 1, fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: TF.pink },
 });
 
 // ── Value Tab ─────────────────────────────────────────────────────────────────
@@ -425,47 +744,31 @@ function ValueTab() {
         <MaterialIcons name="bar-chart" size={28} color={TF.pink} />
         <View style={{ flex: 1 }}>
           <Text style={vt.heroTitle}>Value & Profit</Text>
-          <Text style={vt.heroSub}>Resale Value · Costs · Trends</Text>
+          <Text style={vt.heroSub}>Resale Value - Costs - Trends</Text>
         </View>
       </View>
       <Text style={vt.sectionLabel}>EXAMPLE — VALUE ANALYSIS</Text>
       <View style={vt.valueCard}>
-        <Text style={vt.valueName}>Levi's Vintage Denim Jacket · 1980s</Text>
+        <Text style={vt.valueName}>Levis Vintage Denim Jacket - 1980s</Text>
         <View style={vt.priceRange}>
           <Text style={vt.priceLabel}>Estimated Resale Value</Text>
-          <Text style={vt.priceMain}>£70 – £140</Text>
+          <Text style={vt.priceMain}>70 - 140</Text>
         </View>
         <View style={vt.opportunitySection}>
           <Text style={vt.oppTitle}>SELLING OPPORTUNITY</Text>
           {[
-            { label: 'Typical Buy Price', value: '£10 – £25' },
-            { label: 'Cleaning / Minor Repairs', value: '£5' },
-            { label: 'Total Investment', value: '£25', bold: false },
-            { label: 'Likely Selling Price', value: '£100', bold: false },
-            { label: 'Potential Profit', value: '£60 – £75', pink: true },
+            { label: 'Typical Buy Price', value: '10 - 25' },
+            { label: 'Cleaning / Minor Repairs', value: '5' },
+            { label: 'Total Investment', value: '25', bold: false },
+            { label: 'Likely Selling Price', value: '100', bold: false },
+            { label: 'Potential Profit', value: '60 - 75', pink: true },
           ].map(row => (
             <View key={row.label} style={vt.oppRow}>
-              <Text style={[vt.oppLabel, row.bold && { fontWeight: Typography.weight.bold, color: TF.white }]}>{row.label}</Text>
-              <Text style={[vt.oppValue, row.pink && { color: TF.pink, fontWeight: Typography.weight.extrabold }]}>{row.value}</Text>
+              <Text style={[vt.oppLabel, row.bold ? { fontWeight: Typography.weight.bold, color: TF.white } : null]}>{row.label}</Text>
+              <Text style={[vt.oppValue, row.pink ? { color: TF.pink, fontWeight: Typography.weight.extrabold } : null]}>{row.value}</Text>
             </View>
           ))}
         </View>
-      </View>
-      <Text style={vt.sectionLabel}>RECENT EBAY SALES</Text>
-      <View style={vt.salesCard}>
-        {[
-          { item: "Levi's Type III Trucker", price: '£125', date: '12 Mar 2024' },
-          { item: "Levi's Vintage Denim Jacket", price: '£98', date: '5 Mar 2024' },
-          { item: "Levi's 80s Denim Jacket", price: '£110', date: '28 Feb 2024' },
-        ].map(sale => (
-          <View key={sale.date} style={vt.saleRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={vt.saleItem}>{sale.item}</Text>
-              <Text style={vt.saleDate}>{sale.date}</Text>
-            </View>
-            <Text style={vt.salePrice}>{sale.price}</Text>
-          </View>
-        ))}
       </View>
       <View style={vt.infoCard}>
         <MaterialIcons name="info-outline" size={14} color={TF.pink} />
@@ -490,11 +793,6 @@ const vt = StyleSheet.create({
   oppRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: TF.border + '60' },
   oppLabel: { fontSize: Typography.size.sm, color: TF.textSub },
   oppValue: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: TF.white },
-  salesCard: { backgroundColor: TF.surface, borderRadius: Radius.xl, padding: Spacing.md, borderWidth: 1, borderColor: TF.border },
-  saleRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: TF.border + '60' },
-  saleItem: { fontSize: Typography.size.sm, color: TF.white },
-  saleDate: { fontSize: Typography.size.xs, color: TF.textMuted },
-  salePrice: { fontSize: Typography.size.base, fontWeight: Typography.weight.extrabold, color: TF.pink },
   infoCard: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: TF.pinkDim, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: TF.pink + '25' },
   infoText: { flex: 1, fontSize: Typography.size.xs, color: TF.pink, lineHeight: 17 },
 });
@@ -513,7 +811,7 @@ function StyleTab() {
         <MaterialIcons name="style" size={28} color={TF.pink} />
         <View style={{ flex: 1 }}>
           <Text style={st.heroTitle}>Style Guide</Text>
-          <Text style={st.heroSub}>Brand recognition · Authentication · Trends · Care</Text>
+          <Text style={st.heroSub}>Brand recognition - Authentication - Trends - Care</Text>
         </View>
       </View>
       {CATEGORIES_INFO.map(cat => (
@@ -579,7 +877,7 @@ function SellTab() {
         <MaterialIcons name="sell" size={28} color={TF.pink} />
         <View style={{ flex: 1 }}>
           <Text style={sl.heroTitle}>Sell</Text>
-          <Text style={sl.heroSub}>eBay · Depop · Vinted · Etsy · Global reach</Text>
+          <Text style={sl.heroSub}>eBay - Depop - Vinted - Etsy - Global reach</Text>
         </View>
       </View>
       {[
@@ -600,11 +898,11 @@ function SellTab() {
       <View style={sl.platformsCard}>
         <Text style={sl.sectionLabel}>BEST PLATFORMS BY CATEGORY</Text>
         {[
-          { cat: 'Vintage clothing', platform: 'Depop · eBay', tip: 'Story-led listings perform best' },
-          { cat: 'Designer items', platform: 'eBay · Vestiaire', tip: 'Authentication proof essential' },
-          { cat: 'Streetwear', platform: 'eBay · StockX · Depop', tip: 'Condition is everything' },
-          { cat: 'High street', platform: 'Vinted · eBay', tip: 'Competitive pricing wins' },
-          { cat: 'Trainers', platform: 'eBay · StockX · GOAT', tip: 'Deadstock commands huge premium' },
+          { cat: 'Vintage clothing', platform: 'Depop - eBay', tip: 'Story-led listings perform best' },
+          { cat: 'Designer items', platform: 'eBay - Vestiaire', tip: 'Authentication proof essential' },
+          { cat: 'Streetwear', platform: 'eBay - StockX - Depop', tip: 'Condition is everything' },
+          { cat: 'High street', platform: 'Vinted - eBay', tip: 'Competitive pricing wins' },
+          { cat: 'Trainers', platform: 'eBay - StockX - GOAT', tip: 'Deadstock commands huge premium' },
         ].map(row => (
           <View key={row.cat} style={sl.platformRow}>
             <View style={{ flex: 1 }}>
@@ -644,7 +942,7 @@ function InsightsTab() {
         <MaterialIcons name="lightbulb" size={28} color={TF.pink} />
         <View style={{ flex: 1 }}>
           <Text style={ins.heroTitle}>Insights</Text>
-          <Text style={ins.heroSub}>Trends · Opportunities · AI recommendations</Text>
+          <Text style={ins.heroSub}>Trends - Opportunities - AI recommendations</Text>
         </View>
       </View>
       {[
@@ -665,7 +963,7 @@ function InsightsTab() {
       <View style={ins.factsCard}>
         <Text style={ins.sectionLabel}>FASHION FLIPPING FACTS</Text>
         {[
-          'Levi\'s 501s sell every 3 minutes on eBay globally',
+          "Levi's 501s sell every 3 minutes on eBay globally",
           'Vintage band tees can yield 10x+ on charity shop finds',
           'Authentication evidence doubles sale price on designer items',
           'Good photography is worth more than any listing upgrade',
@@ -703,8 +1001,112 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
   const router = useRouter();
   const { tenant } = useApp();
   const { isPremium } = useSubscription();
+  const { showAlert } = useAlert();
   const [activeTab, setActiveTab] = useState<TFTab>('home');
   const [showPaywall, setShowPaywall] = useState(false);
+
+  // ── Identify Tab capture & AI state ──────────────────────────────────────
+  const [capturedImages, setCapturedImages] = useState<CapturedImage[]>([]);
+  const [identifying, setIdentifying] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState('');
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [idResult, setIdResult] = useState<AIIdentificationResult | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedItemId, setSavedItemId] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
+
+  const handleCapture = useCallback(async (index: number) => {
+    let image: CapturedImage | null = await captureFromCamera();
+    if (!image) image = await pickFromLibrary(`slot_${index}`, `Photo ${index + 1}`);
+    if (!image) return;
+    setCapturedImages(prev => {
+      const next = [...prev];
+      next[index] = { ...image!, slotId: `slot_${index}`, slotLabel: `Photo ${index + 1}` };
+      return next;
+    });
+  }, []);
+
+  const handleRemoveImage = useCallback((index: number) => {
+    setCapturedImages(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleIdentify = useCallback(async () => {
+    if (capturedImages.length === 0) return;
+    setIdentifying(true);
+    setAiError(null);
+
+    const statusMsgs = [
+      'Preparing garment images...',
+      'Routing to clothing specialist...',
+      'AI vision analysis...',
+      'Reading brand label...',
+      'Assessing authentication risk...',
+    ];
+    for (const msg of statusMsgs) {
+      setProcessingStatus(msg);
+      await new Promise(r => setTimeout(r, 300));
+    }
+
+    const { result, error, quotaExceeded } = await identifyItemWithAI(
+      capturedImages, 'clothing', undefined, undefined,
+      { tenantId: tenant?.id },
+    );
+
+    setIdentifying(false);
+
+    if (quotaExceeded) {
+      setAiError(`Monthly quota reached (${quotaExceeded.used}/${quotaExceeded.limit} free identifications). Upgrade to Threads Flip Pro for unlimited identifications.`);
+      return;
+    }
+    if (error || !result) {
+      setAiError(error ?? 'Identification failed - please try again');
+      return;
+    }
+
+    setIdResult(result);
+    setSavedItemId(null);
+    setIsUploading(false);
+    setUploadProgress('');
+  }, [capturedImages, tenant?.id]);
+
+  const handleSaveClothing = useCallback(async () => {
+    if (!idResult || !tenant) return;
+    setIsSaving(true);
+    const { item, error } = await saveIdentifiedItem(tenant.id, idResult, {
+      mediaUris: capturedImages.map(i => i.uri),
+    });
+    setIsSaving(false);
+    if (error || !item) { showAlert('Save Failed', error ?? 'Could not save item.'); return; }
+    setSavedItemId(item.id);
+    if (capturedImages.length > 0) {
+      setIsUploading(true);
+      setUploadProgress('Uploading photos...');
+      try {
+        const { urls } = await uploadItemImages(item.id, capturedImages);
+        if (urls.length > 0) {
+          await updateItemMedia(tenant.id, item.id, urls);
+          setUploadProgress(`${urls.length} photo${urls.length === 1 ? '' : 's'} saved`);
+        } else {
+          setUploadProgress('Photos saved locally');
+        }
+      } catch {
+        setUploadProgress('Photos saved locally');
+      } finally {
+        setIsUploading(false);
+      }
+    }
+  }, [idResult, tenant, capturedImages, showAlert]);
+
+  const handleResetIdentify = useCallback(() => {
+    setCapturedImages([]);
+    setIdResult(null);
+    setAiError(null);
+    setSavedItemId(null);
+    setIsUploading(false);
+    setUploadProgress('');
+    setProcessingStatus('');
+  }, []);
 
   const handleTabSelect = useCallback((tab: TFTab) => {
     const premiumTabs: TFTab[] = ['insights'];
@@ -729,7 +1131,7 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
           <View style={main.logoIcon}><MaterialIcons name="checkroom" size={14} color={TF.pink} /></View>
           <View>
             <Text style={main.logoText}>Threads<Text style={{ color: TF.pink }}> Flip</Text></Text>
-            <Text style={main.logoSub}>IDENTIFY • VALUE • STYLE • SELL</Text>
+            <Text style={main.logoSub}>IDENTIFY - VALUE - STYLE - SELL</Text>
           </View>
           {isPremium ? <View style={main.proBadge}><Text style={main.proBadgeText}>PRO</Text></View> : null}
         </Pressable>
@@ -754,7 +1156,26 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
       </View>
       <View style={{ flex: 1 }}>
         {activeTab === 'home' ? <HomeTab isPremium={isPremium} onTabSelect={handleTabSelect} onUpgrade={() => setShowPaywall(true)} tenant={tenant} /> : null}
-        {activeTab === 'identify' ? <IdentifyTab /> : null}
+        {activeTab === 'identify' ? (
+          <IdentifyTab
+            capturedImages={capturedImages}
+            onCapture={handleCapture}
+            onRemoveImage={handleRemoveImage}
+            onIdentify={handleIdentify}
+            identifying={identifying}
+            processingStatus={processingStatus}
+            aiError={aiError}
+            idResult={idResult}
+            isSaving={isSaving}
+            savedItemId={savedItemId}
+            isUploading={isUploading}
+            uploadProgress={uploadProgress}
+            onSave={handleSaveClothing}
+            onReset={handleResetIdentify}
+            isPremium={isPremium}
+            tenant={tenant}
+          />
+        ) : null}
         {activeTab === 'value' ? <ValueTab /> : null}
         {activeTab === 'style' ? <StyleTab /> : null}
         {activeTab === 'sell' ? <SellTab /> : null}
@@ -765,7 +1186,7 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
           <MaterialIcons name="workspace-premium" size={13} color={TF.black} />
           <Text style={main.upgradeBarText}>Upgrade to Threads Flip Pro</Text>
           <Pressable onPress={() => setShowPaywall(true)} style={main.upgradeBarBtn}>
-            <Text style={main.upgradeBarBtnText}>£9.99/mo</Text>
+            <Text style={main.upgradeBarBtnText}>9.99/mo</Text>
           </Pressable>
         </View>
       ) : <View style={{ height: insets.bottom }} />}
