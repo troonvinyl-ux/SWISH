@@ -133,13 +133,37 @@ interface ComparableItem {
 }
 
 // ── eBay search query builder ─────────────────────────────────────────────────
+// ── Title sanitiser ─────────────────────────────────────────────────────────
+// Removes eBay listing noise before sending to the Finding API:
+//   - Price strings (£300, $150, €200, inc VAT, +P&P, etc.)
+//   - Condition / listing qualifiers (Spares/Repairs, For Parts, Not Working, etc.)
+//   - Special punctuation (–, —, |, +, #) that confuse eBay keyword matching
+//   - Seller-added suffixes ("see desc", "fast delivery", etc.)
+function sanitiseTitleForSearch(raw: string): string {
+  return raw
+    // Remove price strings: £300, £299.99, $150, €200
+    .replace(/[£\$€]\s*\d+(?:[.,]\d+)?/g, ' ')
+    // Remove condition qualifiers
+    .replace(/\b(spares?\s*\/\s*repairs?|for parts?|not working|project bike?|parts only|see desc(?:ription)?|read desc(?:ription)?|fast delivery|free postage|inc(?:luding)?\s+p&p|\+p&p|collection only|buyer collects?)\b/gi, ' ')
+    // Remove em-dash/en-dash separators (common in eBay titles)
+    .replace(/[–—]/g, ' ')
+    // Remove trailing pipe / hash / plus (common eBay suffix separators)
+    .replace(/[|#+](?=\s|$)/g, ' ')
+    // Collapse multiple spaces
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 function buildSearchQueries(title: string, attributes: Record<string, any>, specialistId: string, numistaTitle?: string): string[] {
   const queries: string[] = [];
 
-  const cleanTitle = title
+  const sanitised = sanitiseTitleForSearch(title);
+  const cleanTitle = sanitised
     .replace(/^(vintage|antique|old|rare|beautiful|stunning|amazing|lovely|nice|ex|extraordinary)\s+/gi, '')
     .replace(/\s+/g, ' ').trim().slice(0, 100);
-  queries.push(cleanTitle);
+
+  // Only add the cleaned title if it's meaningfully different from the raw (i.e. we actually removed noise)
+  if (cleanTitle.length >= 5) queries.push(cleanTitle);
 
   // ── MX / Motocross ────────────────────────────────────────────────────────
   if (isMXSpecialist(specialistId)) {
@@ -168,23 +192,57 @@ function buildSearchQueries(title: string, attributes: Record<string, any>, spec
 
   // ── Bicycles ──────────────────────────────────────────────────────────────
   if (specialistId === 'bicycles' || specialistId === 'cycling') {
-    const brand = String(attributes?.manufacturer ?? attributes?.brand ?? '').trim();
-    const model = String(attributes?.model ?? attributes?.model_name ?? '').trim();
+    let brand = String(attributes?.manufacturer ?? attributes?.brand ?? '').trim();
+    let model = String(attributes?.model ?? attributes?.model_name ?? '').trim();
     const frameType = String(attributes?.bike_type ?? attributes?.frame_type ?? '').trim();
     const frameSize = String(attributes?.frame_size ?? '').trim();
     const year = String(attributes?.year_range ?? attributes?.year_made ?? '').trim();
-    const groupset = String(attributes?.groupset ?? attributes?.drivetrain ?? '').trim();
+
+    // If brand missing from attributes (common on eBay imports), extract from sanitised title
+    if (!brand) {
+      const knownBrands = ['on-one','trek','specialized','scott','giant','cannondale','cube','merida','orbea','bianchi','santa cruz','yeti','commencal','whyte','nukeproof','norco','marin','transition','kona','genesis','boardman','voodoo','carrera','raleigh','pinarello','cervelo','fuji','ghost','lapierre','ribble','vitus','colnago','canyon','focus','calibre','kinesis','cotic','singular','orange','ragley','salsa','surly','all-city','bombtrack','haibike','felt','diamondback'];
+      const sanitisedLower = sanitised.toLowerCase();
+      for (const kb of knownBrands) {
+        if (sanitisedLower.startsWith(kb) || sanitisedLower.includes(' ' + kb + ' ') || sanitisedLower.startsWith(kb + ' ')) {
+          brand = sanitised.slice(0, kb.length + 1).trim().split(' ')[0] || kb;
+          // Preserve original casing from sanitised title
+          const idx = sanitisedLower.indexOf(kb);
+          brand = sanitised.slice(idx, idx + kb.length);
+          break;
+        }
+      }
+    }
+
+    // If model missing and brand found, extract next 1-2 words from sanitised title as model
+    if (brand && !model) {
+      const brandIdx = sanitised.toLowerCase().indexOf(brand.toLowerCase());
+      if (brandIdx !== -1) {
+        const afterBrand = sanitised.slice(brandIdx + brand.length).trim();
+        const noiseWords = new Set(['carbon','aluminium','aluminum','steel','titanium','frame','hardtail','full','suspension','mtb','road','bike','bicycle','mountain','racing','gravel','cyclocross','enduro','downhill']);
+        const modelWords = afterBrand.split(/\s+/).filter(w => w.length >= 2 && !noiseWords.has(w.toLowerCase())).slice(0, 2);
+        if (modelWords.length > 0) model = modelWords.join(' ');
+      }
+    }
 
     // Primary: brand + model + year
     const primaryParts = [brand, model, year ? year.split('-')[0] : ''].filter(Boolean);
     if (primaryParts.length >= 2) queries.push(primaryParts.join(' ').slice(0, 100));
 
-    // Fallback 1: brand + frameType + frameSize
-    const fallback1 = [brand, frameType, frameSize].filter(Boolean);
-    if (fallback1.length >= 2) queries.push(fallback1.join(' ').slice(0, 100));
+    // Fallback 1: brand + frame type keyword from title
+    const frameKeyword = frameType || (sanitised.toLowerCase().includes('hardtail') ? 'hardtail mountain bike' : sanitised.toLowerCase().includes('full suspension') ? 'full suspension mountain bike' : 'mountain bike');
+    if (brand) {
+      const fb1 = [brand, frameKeyword, frameSize].filter(Boolean).join(' ').slice(0, 100);
+      if (!queries.includes(fb1)) queries.push(fb1);
+    }
 
-    // Fallback 2: brand only (broadest for rare bikes)
-    if (brand && frameType) queries.push(`${brand} ${frameType} bike`.slice(0, 100));
+    // Fallback 2: brand + model (no extras)
+    if (brand && model) {
+      const fb2 = `${brand} ${model}`.slice(0, 80);
+      if (!queries.includes(fb2)) queries.push(fb2);
+    }
+
+    // Fallback 3: frame type with brand for max coverage
+    if (brand) queries.push(`${brand} frame`.slice(0, 60));
   }
 
   // ── Clothing ──────────────────────────────────────────────────────────────
@@ -521,7 +579,8 @@ function scoreComparableRelevance(
   }
 
   const compLower = comparable.title.toLowerCase();
-  const targetLower = targetTitle.toLowerCase();
+  // Use sanitised target title for scoring so eBay listing noise doesn't hurt overlap
+  const targetLower = sanitiseTitleForSearch(targetTitle).toLowerCase();
   const targetWords = targetLower.split(/\s+/).filter(w => w.length > 2);
   const matchedWords = targetWords.filter(w => compLower.includes(w));
   const titleOverlap = targetWords.length > 0 ? matchedWords.length / targetWords.length : 0;
