@@ -14,6 +14,12 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { getMarketValue, MarketValueResult } from '@/services/marketValueService';
+import {
+  applyValuationGuardrails,
+  getEvidenceSummaryLabel,
+  type ValuationGuardrailResult,
+  type EvidenceClass,
+} from '@/services/valuationGuardrailService';
 
 // ── Niche config ──────────────────────────────────────────────────────────────
 
@@ -228,12 +234,16 @@ export default function NicheValuationPanel({
   const accentDim = config.accentDim;
 
   const [result, setResult] = useState<MarketValueResult | null>(initialResult);
+  const [guardrailResult, setGuardrailResult] = useState<ValuationGuardrailResult | null>(
+    initialResult ? applyValuationGuardrails(initialResult, { identificationConfidence, specialistId: config.specialistId }) : null
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [applied, setApplied] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [comparablesExpanded, setComparablesExpanded] = useState(false);
   const [queriesExpanded, setQueriesExpanded] = useState(false);
+  const [provenanceExpanded, setProvenanceExpanded] = useState(false);
 
   const handleFetch = useCallback(async () => {
     if (!title || title.length < 3) {
@@ -263,6 +273,9 @@ export default function NicheValuationPanel({
       setError(e ?? 'Valuation unavailable — try again');
     } else {
       setResult(r);
+      // Apply guardrails immediately after receiving the result
+      const guarded = applyValuationGuardrails(r, { identificationConfidence, specialistId: config.specialistId });
+      setGuardrailResult(guarded);
       if (applyToItem) setApplied(true);
       setExpanded(true);
     }
@@ -279,16 +292,21 @@ export default function NicheValuationPanel({
   useEffect(() => {
     if (initialResult && initialResult !== result) {
       setResult(initialResult);
+      const guarded = applyValuationGuardrails(initialResult, { identificationConfidence, specialistId: config.specialistId });
+      setGuardrailResult(guarded);
       setExpanded(true);
       if (applyToItem) setApplied(true);
     }
   }, [initialResult]);
 
-  const v = result?.valuation;
+  // Use guarded valuation if available, else fall back to raw
+  const v = guardrailResult?.guardedValuation ?? result?.valuation;
   const sold = result?.soldMarket;
   const asking = result?.activeAskingPrices;
   const isMX = isMXNiche(specialistId);
   const hasValue = v && (v.valuationMid ?? 0) > 0;
+  const guardrailDecision = guardrailResult?.decision;
+  const isDowngraded = guardrailDecision === 'downgraded' || guardrailDecision === 'identification_conflict';
   const confColor = !v ? Colors.textTertiary :
     v.valuationConfidence === 'high' ? Colors.success :
     v.valuationConfidence === 'medium' ? Colors.warning :
@@ -495,6 +513,23 @@ export default function NicheValuationPanel({
         </View>
       ) : null}
 
+      {/* Guardrail decision banner — shown when confidence is downgraded */}
+      {isDowngraded && guardrailResult ? (
+        <View style={s.guardrailBanner}>
+          <MaterialIcons name="info-outline" size={11} color={Colors.warning} />
+          <View style={{ flex: 1 }}>
+            <Text style={s.guardrailBannerTitle}>
+              {guardrailDecision === 'identification_conflict'
+                ? 'Low ID Confidence — Indicative Only'
+                : 'Evidence Guardrail Applied'}
+            </Text>
+            <Text style={s.guardrailBannerText}>
+              {getEvidenceSummaryLabel(guardrailResult.evidenceProvenance)}
+            </Text>
+          </View>
+        </View>
+      ) : null}
+
       {/* Evidence summary — always visible */}
       <View style={s.evidenceRow}>
         {sold && sold.relevantSoldCount > 0 ? (
@@ -609,6 +644,52 @@ export default function NicheValuationPanel({
                 </View>
               )}
             </View>
+          ) : null}
+
+          {/* Evidence provenance — collapsible audit trail */}
+          {guardrailResult ? (
+            <>
+              <Pressable onPress={() => setProvenanceExpanded(p => !p)} style={s.provenanceToggle}>
+                <MaterialIcons name="policy" size={11} color={Colors.textTertiary} />
+                <Text style={s.provenanceToggleText}>Evidence provenance</Text>
+                <MaterialIcons name={provenanceExpanded ? 'expand-less' : 'expand-more'} size={13} color={Colors.textTertiary} />
+              </Pressable>
+              {provenanceExpanded ? (
+                <View style={s.provenanceCard}>
+                  {guardrailResult.evidenceProvenance.sources.map((src, i) => (
+                    <View key={i} style={s.provenanceRow}>
+                      <View style={[s.provenanceClassDot, {
+                        backgroundColor:
+                          src.class === 'verified_sold' ? Colors.success :
+                          src.class === 'active_asking' ? Colors.warning :
+                          src.class === 'reference_data' ? Colors.info :
+                          src.class === 'ai_inference' ? Colors.textTertiary :
+                          Colors.textTertiary,
+                      }]} />
+                      <View style={{ flex: 1 }}>
+                        <View style={s.provenanceLabelRow}>
+                          <Text style={s.provenanceLabel}>{src.label}</Text>
+                          <Text style={[s.provenanceClassTag, {
+                            color: src.usedInValuation ? Colors.success : Colors.textTertiary,
+                          }]}>
+                            {src.usedInValuation ? 'USED' : 'EXCLUDED'}
+                          </Text>
+                        </View>
+                        <Text style={s.provenanceNote} numberOfLines={3}>{src.note}</Text>
+                      </View>
+                    </View>
+                  ))}
+                  {guardrailResult.guardrailReasons.length > 0 ? (
+                    <View style={s.guardrailReasonsCard}>
+                      <Text style={s.guardrailReasonsTitle}>GUARDRAIL DECISIONS</Text>
+                      {guardrailResult.guardrailReasons.map((r, i) => (
+                        <Text key={i} style={s.guardrailReason}>{r}</Text>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+            </>
           ) : null}
 
           {/* Valuation warnings */}
@@ -795,6 +876,25 @@ const s = StyleSheet.create({
   // Footer
   footerRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   footerText: { flex: 1, fontSize: 10, color: Colors.textTertiary, lineHeight: 14 },
+
+  // Guardrail
+  guardrailBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, backgroundColor: Colors.warningDim, borderRadius: Radius.sm, padding: Spacing.sm, borderWidth: 1, borderColor: Colors.warning + '25' },
+  guardrailBannerTitle: { fontSize: 10, fontWeight: Typography.weight.bold, color: Colors.warning, marginBottom: 2 },
+  guardrailBannerText: { fontSize: 9, color: Colors.warning + 'CC', lineHeight: 13 },
+
+  // Provenance
+  provenanceToggle: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  provenanceToggleText: { flex: 1, fontSize: Typography.size.xs, color: Colors.textTertiary },
+  provenanceCard: { backgroundColor: Colors.surfaceHighlight, borderRadius: Radius.md, padding: Spacing.md, gap: Spacing.sm, borderWidth: 1, borderColor: Colors.surfaceBorder },
+  provenanceRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm },
+  provenanceClassDot: { width: 6, height: 6, borderRadius: 3, marginTop: 5, flexShrink: 0 },
+  provenanceLabelRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: 2 },
+  provenanceLabel: { flex: 1, fontSize: Typography.size.xs, fontWeight: Typography.weight.semibold, color: Colors.textSecondary },
+  provenanceClassTag: { fontSize: 8, fontWeight: Typography.weight.bold, letterSpacing: 0.3 },
+  provenanceNote: { fontSize: 9, color: Colors.textTertiary, lineHeight: 13 },
+  guardrailReasonsCard: { backgroundColor: Colors.dangerDim, borderRadius: Radius.sm, padding: Spacing.sm, gap: 3, borderWidth: 1, borderColor: Colors.danger + '20', marginTop: 4 },
+  guardrailReasonsTitle: { fontSize: 9, fontWeight: Typography.weight.bold, color: Colors.danger, textTransform: 'uppercase', letterSpacing: 0.4 },
+  guardrailReason: { fontSize: 9, color: Colors.danger + 'CC', lineHeight: 13 },
 
   // No result
   noResultCard: { alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.surfaceHighlight, borderRadius: Radius.lg, padding: Spacing.xl, borderWidth: 1, borderColor: Colors.surfaceBorder },
