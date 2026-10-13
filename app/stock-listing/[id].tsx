@@ -68,6 +68,7 @@ import {
   type ItemCommercialIntelligence,
 } from '@/services/commercialEngine';
 import { CommercialIntelligenceCard } from '@/components/feature/CommercialIntelligenceCard';
+import NicheValuationPanel from '@/components/feature/NicheValuationPanel';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const GALLERY_HEIGHT = 320;
@@ -2343,6 +2344,49 @@ export default function StockListingScreen() {
             tenantId={tenant.id}
             onUpdated={handleMarketValueUpdated}
             externalResult={reValueResult}
+          />
+        ) : null}
+
+        {/* ── NICHE VALUATION PANEL ── */}
+        {tenant && item ? (
+          <NicheValuationPanel
+            tenantId={tenant.id}
+            itemId={item.id}
+            title={item.canonicalTitle}
+            specialistId={item.specialistId ?? 'curiosities_collectibles'}
+            attributes={{
+              ...(item.attributes ?? {}),
+              ruler: item.ruler,
+              denomination: item.denomination,
+              year_made: item.yearMade,
+              period: item.period,
+              mint: item.mint,
+              material: item.material,
+              weight: item.weightGrams,
+              diameter: item.diameterMm,
+              country: item.countryOfOrigin,
+            }}
+            condition={item.condition ?? ''}
+            identificationConfidence={item.identificationConfidence ?? 0.5}
+            identificationTier={item.valuationConfidence as string ?? 'medium'}
+            numistaTypeId={
+              item.attributes?.numista_type_id
+                ? Number(item.attributes.numista_type_id)
+                : item.attributes?.numista_candidate_id
+                ? Number(item.attributes.numista_candidate_id)
+                : null
+            }
+            numistaMatchScore={
+              item.attributes?.numista_match_score
+                ? Number(item.attributes.numista_match_score)
+                : 0
+            }
+            numistaMatchTier={
+              (item.attributes?.numista_status as string) ??
+              (item.attributes?.numista_type_id ? 'candidate' : 'no_match')
+            }
+            applyToItem={true}
+            initialResult={reValueResult}
           />
         ) : null}
 
