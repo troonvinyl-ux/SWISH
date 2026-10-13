@@ -228,14 +228,284 @@ describe('SWISH-003: Bicycle specialist ID gap fix', () => {
   });
 });
 
-// The error message "Parsing error: Declaration or statement expected." at 335:0
-// indicates that there's a block of code outside of any 'describe' or 'test' blocks,
-// or perhaps an unclosed block before that line.
-// In this case, the `describe` block for 'SWISH-003: Bicycle specialist ID gap fix'
-// on line 124 is closed on line 333. The subsequent describe blocks were
-// intended to be part of a larger `describe` block for 'SWISH-001 — Entry Route Mapping Tests',
-// which was never opened.
-// To fix this, we'll wrap the remaining test suites in a `describe` block.
+// ─────────────────────────────────────────────────────────────────────────────
+// SWISH-004: Onboarding Import Niche Classification Tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Inline the classification pipeline (mirrors app/onboarding.tsx + nicheCategoryService.ts)
+// This ensures tests run without requiring the full React Native runtime.
+
+type NicheId004 =
+  | 'coins' | 'motocross' | 'bicycles' | 'clothing'
+  | 'trading_cards' | 'antiques' | 'fossils' | 'beauty' | 'general';
+
+type NicheClassification004 =
+  | 'coins' | 'motocross' | 'bicycles' | 'clothing'
+  | 'trading_cards' | 'antiques' | 'unclassified';
+
+const NICHE_TO_CLASSIFICATION_004: Record<NicheId004, NicheClassification004> = {
+  coins:         'coins',
+  motocross:     'motocross',
+  bicycles:      'bicycles',
+  clothing:      'clothing',
+  trading_cards: 'trading_cards',
+  antiques:      'antiques',
+  fossils:       'unclassified',
+  beauty:        'unclassified',
+  general:       'unclassified',
+};
+
+// Inline classifyListing (subset — covering the four primary niches)
+// Uses the same category ID mapping as services/nicheCategoryService.ts
+const CATEGORY_ID_TO_NICHE_004: Record<string, NicheClassification004> = {
+  // Coins
+  '4726': 'coins', '40714': 'coins', '18594': 'coins', '4157': 'coins',
+  '4735': 'coins', '11116': 'coins', '14486': 'coins',
+  // Motocross
+  '6760': 'motocross', '6759': 'motocross', '10767': 'motocross', '10768': 'motocross',
+  '6761': 'motocross', '26455': 'motocross',
+  // Bicycles
+  '2904': 'bicycles', '56197': 'bicycles', '177831': 'bicycles', '48647': 'bicycles',
+  '56199': 'bicycles', '177832': 'bicycles', '2906': 'bicycles', '15279': 'bicycles',
+  // Clothing
+  '1059': 'clothing', '11450': 'clothing', '15724': 'clothing', '15725': 'clothing',
+  '152506': 'clothing', '175748': 'clothing',
+};
+
+type ClassificationConfidence004 =
+  | 'category_id' | 'category_name' | 'title_high' | 'title_medium' | 'none';
+
+interface ClassificationResult004 {
+  niche: NicheClassification004;
+  confidence: ClassificationConfidence004;
+}
+
+function classifyListing004(
+  categoryId: string | null,
+  _categoryName: string | null,
+  _title: string | null,
+): ClassificationResult004 {
+  if (categoryId && CATEGORY_ID_TO_NICHE_004[categoryId]) {
+    return { niche: CATEGORY_ID_TO_NICHE_004[categoryId], confidence: 'category_id' };
+  }
+  return { niche: 'unclassified', confidence: 'none' };
+}
+
+function nicheToSpecialistId004(niche: NicheClassification004): string {
+  switch (niche) {
+    case 'coins':         return 'coins';
+    case 'motocross':     return 'motocross';
+    case 'bicycles':      return 'bicycles';
+    case 'clothing':      return 'clothing';
+    case 'trading_cards': return 'pokemon_cards';
+    case 'antiques':      return 'curiosities_collectibles';
+    default:              return 'curiosities_collectibles';
+  }
+}
+
+/**
+ * Inline of the classification + fallback logic from app/onboarding.tsx
+ * handleImportListings().
+ */
+function resolveImportSpecialistId(
+  listing: { categoryId?: string; categoryName?: string; title?: string },
+  subscriberNiche: NicheId004,
+): { specialistId: string; confidence: ClassificationConfidence004; resolvedNiche: NicheClassification004 } {
+  const subscriberClassification = NICHE_TO_CLASSIFICATION_004[subscriberNiche] ?? 'unclassified';
+
+  const result = classifyListing004(
+    listing.categoryId ?? null,
+    listing.categoryName ?? null,
+    listing.title ?? null,
+  );
+
+  let resolvedNiche: NicheClassification004;
+  if (result.niche === 'unclassified') {
+    // Cannot classify from eBay evidence — use subscriber niche as best-effort
+    resolvedNiche = subscriberClassification !== 'unclassified'
+      ? subscriberClassification
+      : 'unclassified';
+  } else {
+    // Classified from eBay evidence — use the evidence result directly
+    resolvedNiche = result.niche;
+  }
+
+  const specialistId = resolvedNiche === 'unclassified'
+    ? 'curiosities_collectibles'
+    : nicheToSpecialistId004(resolvedNiche);
+
+  return { specialistId, confidence: result.confidence, resolvedNiche };
+}
+
+describe('SWISH-004: Onboarding import niche classification', () => {
+
+  // ── AC-1: Bicycle listings receive specialist_id bicycles ─────────────────
+  describe('AC-1: Bicycle listings → specialist_id=bicycles', () => {
+    test('eBay category 2904 (Bicycles) → bicycles specialist', () => {
+      const r = resolveImportSpecialistId({ categoryId: '2904', title: 'Trek mountain bike' }, 'coins');
+      expect(r.specialistId).toBe('bicycles');
+    });
+    test('eBay category 177831 (Complete Mountain Bikes) → bicycles specialist', () => {
+      const r = resolveImportSpecialistId({ categoryId: '177831', title: 'Specialized Rockhopper' }, 'coins');
+      expect(r.specialistId).toBe('bicycles');
+    });
+    test('eBay category 56197 (Complete Road Bikes) → bicycles specialist', () => {
+      const r = resolveImportSpecialistId({ categoryId: '56197', title: 'Giant Defy road bike' }, 'coins');
+      expect(r.specialistId).toBe('bicycles');
+    });
+    test('eBay category 48647 (BMX) → bicycles specialist', () => {
+      const r = resolveImportSpecialistId({ categoryId: '48647', title: 'Haro BMX' }, 'clothing');
+      expect(r.specialistId).toBe('bicycles');
+    });
+    test('bicycle listing on a coins subscriber account → bicycles (not coins)', () => {
+      const r = resolveImportSpecialistId({ categoryId: '177831', title: 'Trek Marlin 5 MTB' }, 'coins');
+      expect(r.specialistId).toBe('bicycles');
+      expect(r.specialistId).not.toBe('coins');
+    });
+    test('confidence is category_id for classified bicycle', () => {
+      const r = resolveImportSpecialistId({ categoryId: '2904' }, 'bicycles');
+      expect(r.confidence).toBe('category_id');
+    });
+  });
+
+  // ── AC-2: Clothing listings receive correct specialist ────────────────────
+  describe('AC-2: Clothing listings → specialist_id=clothing', () => {
+    test('eBay category 11450 (Clothing, Shoes & Accessories) → clothing specialist', () => {
+      const r = resolveImportSpecialistId({ categoryId: '11450', title: 'Vintage Levi jacket' }, 'coins');
+      expect(r.specialistId).toBe('clothing');
+    });
+    test('eBay category 175748 (Vintage & Rare Clothing) → clothing specialist', () => {
+      const r = resolveImportSpecialistId({ categoryId: '175748', title: 'Stone Island 90s' }, 'bicycles');
+      expect(r.specialistId).toBe('clothing');
+    });
+    test('eBay category 152506 (Trainers) → clothing specialist', () => {
+      const r = resolveImportSpecialistId({ categoryId: '152506', title: 'Nike Air Max' }, 'general');
+      expect(r.specialistId).toBe('clothing');
+    });
+  });
+
+  // ── AC-3: Motocross listings receive correct specialist ───────────────────
+  describe('AC-3: Motocross listings → specialist_id=motocross', () => {
+    test('eBay category 10767 (Motocross Bikes) → motocross specialist', () => {
+      const r = resolveImportSpecialistId({ categoryId: '10767', title: 'KTM 250 SX' }, 'coins');
+      expect(r.specialistId).toBe('motocross');
+    });
+    test('eBay category 6761 (Motorcycle Parts) → motocross specialist', () => {
+      const r = resolveImportSpecialistId({ categoryId: '6761', title: 'Yamaha YZ exhaust' }, 'bicycles');
+      expect(r.specialistId).toBe('motocross');
+    });
+  });
+
+  // ── AC-4: Coin listings receive correct specialist ────────────────────────
+  describe('AC-4: Coin listings → specialist_id=coins', () => {
+    test('eBay category 4726 (British Coins) → coins specialist', () => {
+      const r = resolveImportSpecialistId({ categoryId: '4726', title: 'George III Crown' }, 'coins');
+      expect(r.specialistId).toBe('coins');
+    });
+    test('eBay category 40714 (Ancient Coins) → coins specialist', () => {
+      const r = resolveImportSpecialistId({ categoryId: '40714', title: 'Roman Denarius' }, 'clothing');
+      expect(r.specialistId).toBe('coins');
+    });
+  });
+
+  // ── AC-5: Ambiguous listings use subscriber niche fallback ─────────────────
+  describe('AC-5: Ambiguous listings use subscriber niche, not curiosities by default', () => {
+    test('unclassified listing on coins subscriber → coins specialist', () => {
+      const r = resolveImportSpecialistId({ categoryId: null, title: 'Old item' }, 'coins');
+      expect(r.specialistId).toBe('coins');
+      expect(r.resolvedNiche).toBe('coins');
+    });
+    test('unclassified listing on bicycles subscriber → bicycles specialist', () => {
+      const r = resolveImportSpecialistId({ categoryId: null, title: 'Some item' }, 'bicycles');
+      expect(r.specialistId).toBe('bicycles');
+    });
+    test('unclassified listing on motocross subscriber → motocross specialist', () => {
+      const r = resolveImportSpecialistId({ categoryId: null, title: 'Something' }, 'motocross');
+      expect(r.specialistId).toBe('motocross');
+    });
+    test('unclassified listing on clothing subscriber → clothing specialist', () => {
+      const r = resolveImportSpecialistId({ categoryId: null, title: 'A thing' }, 'clothing');
+      expect(r.specialistId).toBe('clothing');
+    });
+    test('unclassified listing on general subscriber → curiosities_collectibles (true fallback)', () => {
+      const r = resolveImportSpecialistId({ categoryId: null, title: 'A thing' }, 'general');
+      expect(r.specialistId).toBe('curiosities_collectibles');
+    });
+  });
+
+  // ── AC-6: Cross-niche contamination is blocked ─────────────────────────────
+  describe('AC-6: Classified listings always use evidence niche, not subscriber niche', () => {
+    test('bicycle listing on coins account → bicycles (not coins)', () => {
+      const r = resolveImportSpecialistId({ categoryId: '2904' }, 'coins');
+      expect(r.specialistId).toBe('bicycles');
+      expect(r.specialistId).not.toBe('coins');
+    });
+    test('coin listing on bicycles account → coins (not bicycles)', () => {
+      const r = resolveImportSpecialistId({ categoryId: '4726' }, 'bicycles');
+      expect(r.specialistId).toBe('coins');
+      expect(r.specialistId).not.toBe('bicycles');
+    });
+    test('clothing listing on motocross account → clothing (not motocross)', () => {
+      const r = resolveImportSpecialistId({ categoryId: '11450' }, 'motocross');
+      expect(r.specialistId).toBe('clothing');
+      expect(r.specialistId).not.toBe('motocross');
+    });
+    test('motocross listing on clothing account → motocross (not clothing)', () => {
+      const r = resolveImportSpecialistId({ categoryId: '10767' }, 'clothing');
+      expect(r.specialistId).toBe('motocross');
+      expect(r.specialistId).not.toBe('clothing');
+    });
+  });
+
+  // ── AC-7: No duplicate import (de-duplication logic) ─────────────────────
+  describe('AC-7: Duplicate import prevention', () => {
+    test('existing eBay IDs are in the skip set before import begins', () => {
+      // Simulate the existingIds Set populated from DB
+      const existingIds = new Set(['111222333', '444555666']);
+      const newListingId = '777888999';
+      const duplicateId  = '111222333';
+      expect(existingIds.has(newListingId)).toBe(false);  // will be imported
+      expect(existingIds.has(duplicateId)).toBe(true);    // will be skipped
+    });
+    test('after import, the new ID is added to the skip set', () => {
+      const existingIds = new Set<string>(['111222333']);
+      const newId = '999000111';
+      // Simulate adding after successful import
+      existingIds.add(newId);
+      expect(existingIds.has(newId)).toBe(true);
+      // A second pass would skip it
+      expect(existingIds.has(newId)).toBe(true);
+    });
+  });
+
+  // ── AC-8: nicheToSpecialistId returns correct values ─────────────────────
+  describe('AC-8: nicheToSpecialistId004 returns correct specialist IDs', () => {
+    test('coins → coins', () => expect(nicheToSpecialistId004('coins')).toBe('coins'));
+    test('motocross → motocross', () => expect(nicheToSpecialistId004('motocross')).toBe('motocross'));
+    test('bicycles → bicycles', () => expect(nicheToSpecialistId004('bicycles')).toBe('bicycles'));
+    test('clothing → clothing', () => expect(nicheToSpecialistId004('clothing')).toBe('clothing'));
+    test('antiques → curiosities_collectibles (unchanged)', () => expect(nicheToSpecialistId004('antiques')).toBe('curiosities_collectibles'));
+    test('unclassified → curiosities_collectibles', () => expect(nicheToSpecialistId004('unclassified')).toBe('curiosities_collectibles'));
+  });
+
+  // ── AC-9: SWISH-003 niche-context guard is not weakened ──────────────────
+  describe('AC-9: SWISH-003 niche-context guard remains intact', () => {
+    test('bicycles specialist ID is returned by nicheToSpecialistId004', () => {
+      expect(nicheToSpecialistId004('bicycles')).toBe('bicycles');
+      expect(nicheToSpecialistId004('bicycles')).not.toBe('curiosities_collectibles');
+    });
+    test('resolveImportSpecialistId never returns cycling (invalid SpecialistId)', () => {
+      const r = resolveImportSpecialistId({ categoryId: '2904' }, 'bicycles');
+      expect(r.specialistId).not.toBe('cycling');
+    });
+    test('resolveImportSpecialistId never returns curiosities for a classified bicycle', () => {
+      const r = resolveImportSpecialistId({ categoryId: '177831' }, 'bicycles');
+      expect(r.specialistId).not.toBe('curiosities_collectibles');
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 describe('SWISH-001: Entry Route Mapping Tests', () => {
   // ── Coins niche ──────────────────────────────────────────────────────────

@@ -32,6 +32,8 @@ import { upsertBusinessConfig } from '@/services/businessConfigService';
 import { getSupabaseClient } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import type { NicheId } from '@/constants/niches';
+import { classifyListing, nicheToSpecialistId } from '@/services/nicheCategoryService';
+import type { SpecialistId } from '@/constants/specialists';
 
 const TOTAL_STEPS = 3;
 const STEP_LABELS = ['Your Niche', 'Your Store', 'Connect eBay'];
@@ -344,6 +346,8 @@ export default function OnboardingScreen() {
         return;
       }
 
+      // Deduplicate against already-imported listings to prevent duplicates.
+      // We check both external_listing_id (eBay item ID) to block exact re-imports.
       const { data: existingListings } = await supabase
         .from('listings')
         .select('external_listing_id')
@@ -355,27 +359,118 @@ export default function OnboardingScreen() {
         (existingListings ?? []).map((l: any) => l.external_listing_id).filter(Boolean),
       );
 
+      // Resolve the subscriber's selected niche to a baseline NicheClassification
+      // so the classification function can use it as a strong prior when a listing
+      // cannot be classified from category/title evidence alone.
+      type NicheClassification004 =
+        | 'coins' | 'motocross' | 'bicycles' | 'clothing'
+        | 'trading_cards' | 'antiques' | 'unclassified';
+
+      const NICHE_TO_CLASSIFICATION: Record<NicheId, NicheClassification004> = {
+        coins:        'coins',
+        motocross:    'motocross',
+        bicycles:     'bicycles',
+        clothing:     'clothing',
+        trading_cards:'trading_cards',
+        antiques:     'antiques',
+        fossils:      'unclassified',
+        beauty:       'unclassified',
+        general:      'unclassified',
+      };
+
+      const subscriberNicheClassification: NicheClassification004 =
+        NICHE_TO_CLASSIFICATION[selectedNiche] ?? 'unclassified';
+
       let imported = 0;
       let skipped = 0;
 
       for (const listing of fetchedListings) {
         if (!listing.itemId || !listing.title) { skipped++; continue; }
+        // Prevent duplicate imports — same eBay listing ID already in this tenant.
         if (existingIds.has(listing.itemId)) { skipped++; continue; }
 
         try {
+          // ── Niche Classification ──────────────────────────────────────────
+          // Priority order (highest confidence first):
+          //   1. eBay category ID → nicheCategoryService.classifyListing()
+          //   2. eBay category name → nicheCategoryService.classifyListing()
+          //   3. Listing title pattern → nicheCategoryService.classifyListing()
+          //   4. Subscriber's selected onboarding niche (used ONLY when the
+          //      listing is 'unclassified' — prevents contamination of a coins
+          //      subscriber's account with a stray bicycle listing they happened
+          //      to sell once, while correctly assigning their own-niche items).
+          //
+          // If the listing is definitively classified as a DIFFERENT niche from
+          // the subscriber's selection (e.g. a bike listing on a coins account),
+          // the classification result is respected and 'curiosities_collectibles'
+          // is used as the fallback specialist so the item is importable but
+          // won't pollute the primary niche inventory view.
+
+          const classification = classifyListing(
+            listing.categoryId ?? listing.category_id ?? null,
+            listing.categoryName ?? listing.category_name ?? null,
+            listing.title,
+            listing.description ?? null,
+          );
+
+          let resolvedNiche: NicheClassification004;
+
+          if (classification.niche === 'unclassified') {
+            // Cannot be classified from eBay evidence — use the subscriber's
+            // selected niche as a best-effort assignment, keeping items visible.
+            resolvedNiche = subscriberNicheClassification !== 'unclassified'
+              ? subscriberNicheClassification
+              : 'unclassified';
+          } else {
+            // Definitively classified — respect the result regardless of the
+            // subscriber's selected niche. A coins subscriber who also sells a
+            // bicycle should have that bicycle imported with specialist_id='bicycles',
+            // not 'coins'.
+            resolvedNiche = classification.niche as NicheClassification004;
+          }
+
+          // Map NicheClassification → SpecialistId
+          const specialistId: SpecialistId = resolvedNiche === 'unclassified'
+            ? 'curiosities_collectibles'
+            : nicheToSpecialistId(resolvedNiche as any) as SpecialistId;
+
+          // Identification confidence reflects classification quality:
+          //   category_id evidence → 0.85 (reliable)
+          //   category_name evidence → 0.75
+          //   title pattern (high) → 0.65
+          //   title pattern (medium) → 0.55
+          //   subscriber niche fallback → 0.45
+          //   unclassified → 0.30
+          const CONFIDENCE_MAP: Record<string, number> = {
+            category_id:     0.85,
+            category_name:   0.75,
+            title_high:      0.65,
+            title_medium:    0.55,
+          };
+          const classificationConfidence = CONFIDENCE_MAP[classification.confidence]
+            ?? (resolvedNiche !== 'unclassified' ? 0.45 : 0.30);
+
           const { data: itemRow, error: itemErr } = await supabase
             .from('items')
             .insert({
               tenant_id: tenant.id,
               canonical_title: listing.title.slice(0, 200),
               description: listing.description ?? '',
-              specialist_id: 'curiosities_collectibles',
+              specialist_id: specialistId,
               status: listing.ebayStatus === 'sold' ? 'sold' : 'listed',
               identification_source: 'user_confirmed',
-              identification_confidence: 0.7,
+              identification_confidence: classificationConfidence,
               expected_selling_price: listing.price ?? 0,
               media: listing.photos ?? (listing.galleryUrl ? [listing.galleryUrl] : []),
               inventory_origin: 'ebay_import',
+              // Store classification metadata in attributes for traceability
+              attributes: {
+                ebay_category_id: listing.categoryId ?? listing.category_id ?? null,
+                ebay_category_name: listing.categoryName ?? listing.category_name ?? null,
+                classification_niche: resolvedNiche,
+                classification_confidence: classification.confidence,
+                classification_reason: classification.reason,
+              },
             })
             .select('id')
             .single();
@@ -397,6 +492,8 @@ export default function OnboardingScreen() {
             published_at: listing.listedAt ?? new Date().toISOString(),
             ended_at: listing.endedAt ?? null,
             import_source: 'onboarding_import',
+            // Store eBay category for later use in listing submission
+            category_id: listing.categoryId ?? listing.category_id ?? null,
           });
 
           existingIds.add(listing.itemId);
@@ -412,7 +509,7 @@ export default function OnboardingScreen() {
     } finally {
       setImporting(false);
     }
-  }, [tenant?.id, showAlert]);
+  }, [tenant?.id, selectedNiche, showAlert]);
 
   // ── Complete onboarding — route to correct niche entry point ──────────────
 
