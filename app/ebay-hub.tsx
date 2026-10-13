@@ -18,6 +18,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { getSupabaseClient } from '@/template';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
+import { useMemo } from 'react';
 import { useAlert } from '@/template';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -63,12 +64,19 @@ interface ActionItem {
 
 // ── Load metrics from DB ───────────────────────────────────────────────────────
 
-async function loadEbayMetrics(tenantId: string): Promise<EbayMetrics> {
+async function loadEbayMetrics(tenantId: string, specialistIds?: string[]): Promise<EbayMetrics> {
   const supabase = getSupabaseClient();
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
   const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+  // Build niche-filtered listing query
+  let listingQuery = supabase
+    .from('listings')
+    .select('status, items(specialist_id)')
+    .eq('tenant_id', tenantId)
+    .eq('marketplace_id', 'ebay');
 
   const [
     connectorRes, listingCountsRes, ordersDispatchRes,
@@ -76,7 +84,7 @@ async function loadEbayMetrics(tenantId: string): Promise<EbayMetrics> {
     messagesRes, returnsRes, casesRes, offersRes, financialsRes, feedbackRes,
   ] = await Promise.all([
     supabase.from('marketplace_connectors').select('status, access_token_expires_at, seller_account_id, last_sync_at').eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle(),
-    supabase.from('listings').select('status').eq('tenant_id', tenantId).eq('marketplace_id', 'ebay'),
+    listingQuery,
     supabase.from('orders').select('id, fulfilment_status, dispatched_at').eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').in('fulfilment_status', ['awaiting_dispatch', 'packing', 'label_created']),
     supabase.from('sales').select('sale_price, net_revenue').eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').gte('sold_at', todayStart),
     supabase.from('sales').select('sale_price, net_revenue').eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').gte('sold_at', weekStart),
@@ -93,7 +101,11 @@ async function loadEbayMetrics(tenantId: string): Promise<EbayMetrics> {
   const isConnected = connector?.status === 'connected';
   const tokenExpiry = connector?.access_token_expires_at ?? null;
   const tokenHealthy = tokenExpiry ? new Date(tokenExpiry) > new Date(Date.now() + 60 * 60 * 1000) : false;
-  const listingRows = listingCountsRes.data ?? [];
+  // Apply niche filter to listing rows
+  const allListingRows = listingCountsRes.data ?? [];
+  const listingRows = specialistIds && specialistIds.length > 0
+    ? allListingRows.filter(l => specialistIds.includes((l as any).items?.specialist_id ?? ''))
+    : allListingRows;
   const activeListings = listingRows.filter(l => l.status === 'active').length;
   const draftListings = listingRows.filter(l => l.status === 'draft' || l.status === 'pending').length;
   const endedListings = listingRows.filter(l => l.status === 'ended').length;
@@ -345,12 +357,24 @@ const hc = StyleSheet.create({
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
+// ── Niche theme for eBay Hub header ─────────────────────────────────────────
+function useNicheHubStyle(activeNicheId: string | null | undefined) {
+  return useMemo(() => {
+    const id = (activeNicheId ?? '').toLowerCase();
+    if (id === 'motocross' || id === 'mx') return { accent: '#FF5500', icon: 'two-wheeler' as const, label: 'MX', specialistIds: ['motocross'] };
+    if (id === 'bicycles' || id === 'cycling' || id === 'bikes') return { accent: '#6ED020', icon: 'pedal-bike' as const, label: 'Bikes', specialistIds: ['bicycles', 'cycling'] };
+    if (id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers' || id === 'trainers') return { accent: '#E91E8C', icon: 'checkroom' as const, label: 'Fashion', specialistIds: ['clothing', 'trainers_sneakers'] };
+    return { accent: Colors.primary, icon: 'toll' as const, label: 'Coins', specialistIds: ['coins', 'coins_uk', 'coins_world', 'islamic_silver', 'banknotes', 'gold', 'silver', 'ancient_artefacts'] };
+  }, [activeNicheId]);
+}
+
 export default function EbayHubScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant } = useApp();
+  const { tenant, activeNicheId } = useApp();
   const { showAlert } = useAlert();
   const supabase = getSupabaseClient();
+  const nicheStyle = useNicheHubStyle(activeNicheId);
 
   const [metrics, setMetrics] = useState<EbayMetrics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -378,7 +402,7 @@ export default function EbayHubScreen() {
   const load = useCallback(async () => {
     if (!tenant) return;
     try {
-      const m = await loadEbayMetrics(tenant.id);
+      const m = await loadEbayMetrics(tenant.id, nicheStyle.specialistIds);
       setMetrics(m);
     } catch (e: any) {
       showAlert('Load Error', e?.message ?? 'Failed to load eBay metrics');
@@ -519,18 +543,21 @@ export default function EbayHubScreen() {
     <View style={s.container}>
       <StatusBar style="light" />
 
-      {/* Header */}
-      <View style={[s.header, { paddingTop: insets.top + Spacing.base }]}>
+      {/* Header — niche-aware */}
+      <View style={[s.header, { paddingTop: insets.top + Spacing.base, borderBottomColor: nicheStyle.accent + '30' }]}>
         <Pressable onPress={() => router.back()} style={s.backBtn} hitSlop={8}>
           <MaterialIcons name="arrow-back" size={20} color={Colors.textSecondary} />
         </Pressable>
         <View style={s.flex}>
           <View style={s.titleRow}>
-            <View style={s.ebayBadge}><Text style={s.ebayBadgeText}>eBay</Text></View>
-            <Text style={s.title}>Seller Hub</Text>
+            <View style={[s.ebayBadge, { backgroundColor: nicheStyle.accent + '18', borderColor: nicheStyle.accent + '50' }]}>
+              <MaterialIcons name={nicheStyle.icon} size={12} color={nicheStyle.accent} />
+              <Text style={[s.ebayBadgeText, { color: nicheStyle.accent }]}>eBay</Text>
+            </View>
+            <Text style={[s.title, { color: nicheStyle.accent }]}>{nicheStyle.label} Seller Hub</Text>
           </View>
           <Text style={s.subtitle}>
-            {metrics?.activeListings ?? 0} active · £{((metrics?.revenueMonth ?? 0)).toFixed(0)} this month
+            {metrics?.activeListings ?? 0} {nicheStyle.label.toLowerCase()} listings · £{((metrics?.revenueMonth ?? 0)).toFixed(0)} this month
           </Text>
         </View>
         <Pressable onPress={() => router.push('/marketplaces' as any)} style={s.settingsBtn} hitSlop={8}>
@@ -716,8 +743,8 @@ const s = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.base, paddingBottom: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder },
   backBtn: { width: 34, height: 34, borderRadius: Radius.md, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  ebayBadge: { backgroundColor: '#E5323820', borderRadius: Radius.sm, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1, borderColor: '#E5323850' },
-  ebayBadgeText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.extrabold, color: '#E53238', letterSpacing: 0.5 },
+  ebayBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: Radius.sm, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1 },
+  ebayBadgeText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.extrabold, letterSpacing: 0.5 },
   title: { fontSize: Typography.size.xl, fontWeight: Typography.weight.bold, color: Colors.textPrimary },
   subtitle: { fontSize: Typography.size.xs - 1, color: Colors.textTertiary, marginTop: 2 },
   settingsBtn: { width: 34, height: 34, borderRadius: Radius.md, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder },

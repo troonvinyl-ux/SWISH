@@ -53,25 +53,25 @@ const BF = {
 type BFTab = 'home' | 'find' | 'assess' | 'upgrade' | 'profits' | 'insights';
 
 const TABS: Array<{ id: BFTab; label: string; icon: string }> = [
-  { id: 'find',     label: 'Find',     icon: 'search'           },
-  { id: 'assess',   label: 'Assess',   icon: 'assignment'       },
-  { id: 'upgrade',  label: 'Upgrade',  icon: 'build'            },
-  { id: 'profits',  label: 'Profits',  icon: 'bar-chart'        },
-  { id: 'insights', label: 'Insights', icon: 'lightbulb'        },
+  { id: 'find',     label: 'Find',     icon: 'search'    },
+  { id: 'assess',   label: 'Assess',   icon: 'assignment'},
+  { id: 'upgrade',  label: 'Upgrade',  icon: 'build'     },
+  { id: 'profits',  label: 'Profits',  icon: 'bar-chart' },
+  { id: 'insights', label: 'Insights', icon: 'lightbulb' },
 ];
 
 const BIKE_CATEGORIES = [
-  { id: 'mtb', label: 'Mountain Bikes', sub: 'Full Suspension · Hardtail' },
-  { id: 'trail', label: 'Trail Bikes', sub: 'Enduro · Downhill' },
-  { id: 'road', label: 'Road Bikes', sub: 'Racing · Gravel · CX' },
-  { id: 'hybrid', label: 'Hybrids', sub: 'City · Commuter · Touring' },
-  { id: 'bmx', label: 'BMX', sub: 'Race · Freestyle · Street' },
-  { id: 'electric', label: 'Electric', sub: 'eMTB · eCargo · Folding' },
-  { id: 'kids', label: "Kids' Bikes", sub: '12" – 26" wheel' },
-  { id: 'parts', label: 'Parts', sub: 'Wheels · Groupsets · Forks' },
+  { id: 'mtb',      label: 'Mountain Bikes', sub: 'Full Suspension · Hardtail' },
+  { id: 'trail',    label: 'Trail Bikes',    sub: 'Enduro · Downhill'          },
+  { id: 'road',     label: 'Road Bikes',     sub: 'Racing · Gravel · CX'       },
+  { id: 'hybrid',   label: 'Hybrids',        sub: 'City · Commuter · Touring'  },
+  { id: 'bmx',      label: 'BMX',            sub: 'Race · Freestyle · Street'  },
+  { id: 'electric', label: 'Electric',       sub: 'eMTB · eCargo · Folding'    },
+  { id: 'kids',     label: "Kids' Bikes",    sub: '12" – 26" wheel'            },
+  { id: 'parts',    label: 'Parts',          sub: 'Wheels · Groupsets · Forks' },
 ];
 
-// ── Bike Flip Score calculation ───────────────────────────────────────────────
+// ── Bike Flip Score ───────────────────────────────────────────────────────────
 function calculateBikeFlipScore(result: AIIdentificationResult): number {
   const base = Math.round(result.confidence * 100);
   let adj = 0;
@@ -90,7 +90,6 @@ function calculateBikeFlipScore(result: AIIdentificationResult): number {
   return Math.max(10, Math.min(98, base + adj));
 }
 
-// ── Flip Score ────────────────────────────────────────────────────────────────
 function FlipScore({ score }: { score: number }) {
   const color = score >= 75 ? BF.green : score >= 55 ? BF.warning : BF.danger;
   const label = score >= 75 ? 'BUY' : score >= 55 ? 'MAYBE' : 'PASS';
@@ -149,12 +148,12 @@ function BFPaywall({ onBack }: { onBack: () => void }) {
   }, [showAlert]);
 
   const FEATURES = [
-    { icon: 'search', label: 'Advanced AI identification engine' },
-    { icon: 'bar-chart', label: 'Live market values from eBay' },
-    { icon: 'build', label: 'Repair cost estimator' },
-    { icon: 'sell', label: 'eBay-ready listing tools' },
-    { icon: 'settings', label: 'Component compatibility checker' },
-    { icon: 'trending-up', label: 'Profit tracking & analytics' },
+    { icon: 'search',       label: 'Advanced AI identification engine' },
+    { icon: 'bar-chart',    label: 'Live market values from eBay'       },
+    { icon: 'build',        label: 'Repair cost estimator'              },
+    { icon: 'sell',         label: 'eBay-ready listing tools'           },
+    { icon: 'settings',     label: 'Component compatibility checker'    },
+    { icon: 'trending-up',  label: 'Profit tracking & analytics'        },
   ];
 
   return (
@@ -255,17 +254,16 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
   }, [tenant?.id]);
 
   const FEATURES = [
-    { label: 'Find a Bike', icon: 'search', tab: 'find' as BFTab, pro: false },
-    { label: 'My Bikes', icon: 'pedal-bike', route: '/(tabs)/inventory', pro: false },
-    { label: 'Assess', icon: 'assignment', tab: 'assess' as BFTab, pro: false },
-    { label: 'Upgrade', icon: 'build', tab: 'upgrade' as BFTab, pro: false },
-    { label: 'Profits', icon: 'bar-chart', tab: 'profits' as BFTab, pro: true },
-    { label: 'Insights', icon: 'lightbulb', tab: 'insights' as BFTab, pro: true },
+    { label: 'Find a Bike', icon: 'search',    tab: 'find'    as BFTab, pro: false },
+    { label: 'My Bikes',    icon: 'pedal-bike', route: '/(tabs)/inventory',  pro: false },
+    { label: 'Assess',      icon: 'assignment', tab: 'assess'  as BFTab, pro: false },
+    { label: 'Upgrade',     icon: 'build',      tab: 'upgrade' as BFTab, pro: false },
+    { label: 'Profits',     icon: 'bar-chart',  tab: 'profits' as BFTab, pro: true  },
+    { label: 'Insights',    icon: 'lightbulb',  tab: 'insights'as BFTab, pro: true  },
   ];
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ht.content}>
-      {/* Hero */}
       <View style={ht.hero}>
         <View style={ht.heroIcon}><MaterialIcons name="pedal-bike" size={36} color={BF.green} /></View>
         <View style={{ flex: 1, gap: 2 }}>
@@ -276,7 +274,6 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
         {isPremium ? <View style={ht.proBadge}><Text style={ht.proBadgeText}>PRO</Text></View> : null}
       </View>
 
-      {/* Stats */}
       <View style={ht.statsRow}>
         {[
           { label: 'Bikes in Stock', value: bikeCount !== null ? String(bikeCount) : '—', color: BF.white },
@@ -290,7 +287,6 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
         ))}
       </View>
 
-      {/* Feature grid */}
       <Text style={ht.sectionLabel}>TOOLS</Text>
       <View style={ht.grid}>
         {FEATURES.map(f => {
@@ -315,7 +311,6 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
         })}
       </View>
 
-      {/* Category browser */}
       <Text style={ht.sectionLabel}>CATEGORIES</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm, paddingVertical: 4 }}>
         {BIKE_CATEGORIES.map(cat => (
@@ -376,7 +371,7 @@ const ht = StyleSheet.create({
   proConfirmedText: { fontSize: Typography.size.sm, color: BF.green, fontWeight: Typography.weight.semibold },
 });
 
-// ── Find Tab — Full AI Identification Flow ────────────────────────────────────
+// ── Find Tab ──────────────────────────────────────────────────────────────────
 function FindTab({
   capturedImages, onCapture, onRemoveImage, onIdentify, identifying,
   processingStatus, aiError, idResult, isSaving, savedItemId, isUploading,
@@ -426,7 +421,6 @@ function FindTab({
     return BF.textMuted;
   };
 
-  // ── Capture phase ──────────────────────────────────────────────────────────
   if (!idResult) {
     const canIdentify = capturedImages.length > 0;
     const MAX_PHOTOS = 4;
@@ -443,14 +437,8 @@ function FindTab({
 
           {aiError ? (
             <View style={ft.errorBanner}>
-              <MaterialIcons
-                name={aiError.includes('quota') ? 'workspace-premium' : 'error-outline'}
-                size={15}
-                color={aiError.includes('quota') ? BF.green : BF.danger}
-              />
-              <Text style={[ft.errorText, aiError.includes('quota') && { color: BF.green }]} numberOfLines={5}>
-                {aiError}
-              </Text>
+              <MaterialIcons name={aiError.includes('quota') ? 'workspace-premium' : 'error-outline'} size={15} color={aiError.includes('quota') ? BF.green : BF.danger} />
+              <Text style={[ft.errorText, aiError.includes('quota') && { color: BF.green }]} numberOfLines={5}>{aiError}</Text>
               {aiError.includes('quota') && !isPremium ? (
                 <Pressable onPress={() => router.push('/subscription' as any)} style={ft.quotaBtn}>
                   <Text style={ft.quotaBtnText}>Upgrade</Text>
@@ -466,25 +454,14 @@ function FindTab({
               const isFirst = idx === 0;
               return (
                 <View key={idx} style={isFirst ? ft.slotLarge : ft.slotSmall}>
-                  <Pressable
-                    onPress={() => onCapture(idx)}
-                    style={({ pressed }) => [
-                      ft.slotInner,
-                      img ? ft.slotCaptured : ft.slotEmpty,
-                      isFirst && !img ? ft.slotPrimary : null,
-                      pressed && { opacity: 0.82 },
-                    ]}
-                  >
+                  <Pressable onPress={() => onCapture(idx)} style={({ pressed }) => [ft.slotInner, img ? ft.slotCaptured : ft.slotEmpty, isFirst && !img ? ft.slotPrimary : null, pressed && { opacity: 0.82 }]}>
                     {img ? (
                       <>
                         <Image source={{ uri: img.uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
                         <View style={ft.capturedBar}>
                           <MaterialIcons name="check-circle" size={10} color={BF.success} />
                           <Text style={ft.capturedLabel} numberOfLines={1}>Photo {idx + 1}</Text>
-                          <Pressable
-                            onPress={e => { e.stopPropagation(); onRemoveImage(idx); }}
-                            style={ft.removeBtn} hitSlop={8}
-                          >
+                          <Pressable onPress={e => { e.stopPropagation(); onRemoveImage(idx); }} style={ft.removeBtn} hitSlop={8}>
                             <MaterialIcons name="close" size={11} color="#fff" />
                           </Pressable>
                         </View>
@@ -492,18 +469,10 @@ function FindTab({
                     ) : (
                       <View style={ft.emptySlot}>
                         <View style={[ft.emptyIcon, isFirst && ft.emptyIconPrimary]}>
-                          <MaterialIcons
-                            name={isFirst ? 'add-a-photo' : 'add-photo-alternate'}
-                            size={isFirst ? 28 : 20}
-                            color={isFirst ? BF.green : BF.textMuted}
-                          />
+                          <MaterialIcons name={isFirst ? 'add-a-photo' : 'add-photo-alternate'} size={isFirst ? 28 : 20} color={isFirst ? BF.green : BF.textMuted} />
                         </View>
-                        <Text style={[ft.emptyLabel, isFirst && { color: BF.textPrimary }]} numberOfLines={1}>
-                          {isFirst ? 'Main Photo' : `Photo ${idx + 1}`}
-                        </Text>
-                        <Text style={[ft.optionalText, isFirst && { color: BF.green + 'BB' }]}>
-                          {isFirst ? 'Required' : 'Optional'}
-                        </Text>
+                        <Text style={[ft.emptyLabel, isFirst && { color: BF.textPrimary }]} numberOfLines={1}>{isFirst ? 'Main Photo' : `Photo ${idx + 1}`}</Text>
+                        <Text style={[ft.optionalText, isFirst && { color: BF.green + 'BB' }]}>{isFirst ? 'Required' : 'Optional'}</Text>
                       </View>
                     )}
                   </Pressable>
@@ -514,9 +483,7 @@ function FindTab({
 
           <View style={ft.tip}>
             <MaterialIcons name="lightbulb-outline" size={13} color={BF.green} />
-            <Text style={ft.tipText}>
-              Full side profile, head badge, and drivetrain shots give the best identification. Add a detail shot of the frame number or groupset markings.
-            </Text>
+            <Text style={ft.tipText}>Full side profile, head badge, and drivetrain shots give the best identification. Add a detail shot of the frame number or groupset markings.</Text>
           </View>
 
           <Text style={ft.sectionLabel}>WHAT THE AI IDENTIFIES</Text>
@@ -539,41 +506,23 @@ function FindTab({
               </View>
             ))}
           </View>
-
           <View style={{ height: 100 }} />
         </ScrollView>
 
         <View style={ft.actionBar}>
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={ft.actionCount}>{capturedImages.length} of 4 photos added</Text>
-            <Text style={ft.actionHint}>
-              {capturedImages.length === 0 ? 'Add at least 1 photo to identify' : 'Ready — tap Identify to analyse'}
-            </Text>
+            <Text style={ft.actionHint}>{capturedImages.length === 0 ? 'Add at least 1 photo to identify' : 'Ready — tap Identify to analyse'}</Text>
           </View>
-          <Pressable
-            onPress={onIdentify}
-            disabled={!canIdentify || identifying}
-            style={({ pressed }) => [
-              ft.identifyBtn,
-              !canIdentify && ft.identifyBtnDisabled,
-              pressed && canIdentify && { opacity: 0.88 },
-            ]}
-          >
-            {identifying ? (
-              <ActivityIndicator size="small" color={BF.black} />
-            ) : (
-              <MaterialIcons name="auto-awesome" size={18} color={canIdentify ? BF.black : BF.textMuted} />
-            )}
-            <Text style={[ft.identifyBtnText, !canIdentify && { color: BF.textMuted }]}>
-              {identifying ? (processingStatus || 'Identifying...') : 'Identify Bike'}
-            </Text>
+          <Pressable onPress={onIdentify} disabled={!canIdentify || identifying} style={({ pressed }) => [ft.identifyBtn, !canIdentify && ft.identifyBtnDisabled, pressed && canIdentify && { opacity: 0.88 }]}>
+            {identifying ? <ActivityIndicator size="small" color={BF.black} /> : <MaterialIcons name="auto-awesome" size={18} color={canIdentify ? BF.black : BF.textMuted} />}
+            <Text style={[ft.identifyBtnText, !canIdentify && { color: BF.textMuted }]}>{identifying ? (processingStatus || 'Identifying...') : 'Identify Bike'}</Text>
           </Pressable>
         </View>
       </View>
     );
   }
 
-  // ── Result view ───────────────────────────────────────────────────────────
   const bikeFields = getBikeFields(idResult);
   const flipScore = calculateBikeFlipScore(idResult);
   const rideableColor = getRideableColor(bikeFields.rideableStatus);
@@ -597,9 +546,7 @@ function FindTab({
           <Text style={ft.resultTitle} numberOfLines={3}>{idResult.canonicalTitle}</Text>
           <View style={ft.confRow}>
             <View style={[ft.confDot, { backgroundColor: confColor }]} />
-            <Text style={[ft.confText, { color: confColor }]}>
-              {Math.round(idResult.confidence * 100)}% confidence · {idResult.confidenceTier}
-            </Text>
+            <Text style={[ft.confText, { color: confColor }]}>{Math.round(idResult.confidence * 100)}% confidence · {idResult.confidenceTier}</Text>
           </View>
         </View>
       </View>
@@ -612,7 +559,6 @@ function FindTab({
         </ScrollView>
       ) : null}
 
-      {/* Rideability — key commercial signal */}
       <View style={[ft.rideableCard, { borderColor: rideableColor + '50', backgroundColor: rideableColor + '12' }]}>
         <MaterialIcons name="pedal-bike" size={18} color={rideableColor} />
         <View style={{ flex: 1 }}>
@@ -652,26 +598,12 @@ function FindTab({
       <View style={ft.condCard}>
         <Text style={ft.specsTitle}>CONDITION</Text>
         <Text style={ft.condOverall}>{idResult.condition}</Text>
-        {bikeFields.frameCond ? (
-          <View style={ft.condRow}>
-            <Text style={ft.condLabel}>Frame</Text>
-            <Text style={ft.condVal}>{bikeFields.frameCond}</Text>
-          </View>
-        ) : null}
-        {bikeFields.tyresCond ? (
-          <View style={ft.condRow}>
-            <Text style={ft.condLabel}>Tyres</Text>
-            <Text style={ft.condVal}>{bikeFields.tyresCond}</Text>
-          </View>
-        ) : null}
+        {bikeFields.frameCond ? <View style={ft.condRow}><Text style={ft.condLabel}>Frame</Text><Text style={ft.condVal}>{bikeFields.frameCond}</Text></View> : null}
+        {bikeFields.tyresCond ? <View style={ft.condRow}><Text style={ft.condLabel}>Tyres</Text><Text style={ft.condVal}>{bikeFields.tyresCond}</Text></View> : null}
         {bikeFields.prepEstimate ? (
           <View style={ft.condRow}>
             <Text style={ft.condLabel}>Work Needed</Text>
-            <Text style={[ft.condVal, {
-              color: bikeFields.prepEstimate.toLowerCase().includes('none') ? BF.success
-                : bikeFields.prepEstimate.toLowerCase().includes('major') ? BF.danger
-                : BF.warning,
-            }]}>{bikeFields.prepEstimate}</Text>
+            <Text style={[ft.condVal, { color: bikeFields.prepEstimate.toLowerCase().includes('none') ? BF.success : bikeFields.prepEstimate.toLowerCase().includes('major') ? BF.danger : BF.warning }]}>{bikeFields.prepEstimate}</Text>
           </View>
         ) : null}
       </View>
@@ -715,10 +647,7 @@ function FindTab({
           <Text style={ft.resetText}>New Scan</Text>
         </Pressable>
         {savedItemId ? (
-          <Pressable
-            onPress={() => router.push(`/create-listing?id=${savedItemId}` as any)}
-            style={ft.primaryBtn}
-          >
+          <Pressable onPress={() => router.push(`/create-listing?id=${savedItemId}` as any)} style={ft.primaryBtn}>
             {isUploading ? <ActivityIndicator size="small" color={BF.black} /> : <MaterialIcons name="sell" size={16} color={BF.black} />}
             <Text style={ft.primaryBtnText}>{isUploading ? 'Uploading...' : 'List on eBay'}</Text>
           </Pressable>
@@ -731,10 +660,7 @@ function FindTab({
       </View>
 
       {savedItemId ? (
-        <Pressable
-          onPress={() => router.push(`/item/${savedItemId}` as any)}
-          style={({ pressed }) => [ft.viewItemBtn, pressed && { opacity: 0.85 }]}
-        >
+        <Pressable onPress={() => router.push(`/item/${savedItemId}` as any)} style={({ pressed }) => [ft.viewItemBtn, pressed && { opacity: 0.85 }]}>
           <MaterialIcons name="inventory-2" size={15} color={BF.green} />
           <Text style={ft.viewItemText}>View in Inventory</Text>
           <MaterialIcons name="chevron-right" size={15} color={BF.textMuted} />
@@ -752,12 +678,10 @@ const ft = StyleSheet.create({
   hero: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, backgroundColor: BF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: BF.green + '30' },
   heroTitle: { fontSize: Typography.size.xl, fontWeight: Typography.weight.extrabold, color: BF.white },
   heroSub: { fontSize: Typography.size.xs, color: BF.textSub, lineHeight: 17, marginTop: 3 },
-
   errorBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: BF.greenDim, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: BF.danger + '40' },
   errorText: { flex: 1, fontSize: Typography.size.xs, color: BF.danger, lineHeight: 17 },
   quotaBtn: { backgroundColor: BF.greenDim, borderRadius: Radius.md, paddingHorizontal: Spacing.sm, paddingVertical: 4, borderWidth: 1, borderColor: BF.green + '40' },
   quotaBtnText: { fontSize: 10, fontWeight: Typography.weight.bold, color: BF.green },
-
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   slotLarge: { width: '100%', aspectRatio: 1.7 },
   slotSmall: { width: '31%', aspectRatio: 1 },
@@ -773,65 +697,51 @@ const ft = StyleSheet.create({
   capturedBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.62)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 5, gap: 4 },
   capturedLabel: { flex: 1, fontSize: 9, color: '#fff', fontWeight: Typography.weight.semibold },
   removeBtn: { backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 10, width: 20, height: 20, alignItems: 'center', justifyContent: 'center' },
-
   tip: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: BF.greenDim, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: BF.green + '25' },
   tipText: { flex: 1, fontSize: 11, color: BF.green, lineHeight: 16 },
-
   aiCard: { backgroundColor: BF.surface, borderRadius: Radius.xl, padding: Spacing.base, gap: Spacing.sm, borderWidth: 1, borderColor: BF.border },
   aiRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm },
   aiText: { flex: 1, fontSize: Typography.size.xs, color: BF.textSub, lineHeight: 17 },
-
   actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: BF.surface, borderTopWidth: 1, borderTopColor: BF.border, padding: Spacing.base, flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   actionCount: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: BF.textPrimary },
   actionHint: { fontSize: Typography.size.xs, color: BF.textSub },
   identifyBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, backgroundColor: BF.green, borderRadius: Radius.md, padding: Spacing.md, shadowColor: BF.green, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.45, shadowRadius: 10, elevation: 6 },
   identifyBtnDisabled: { backgroundColor: BF.surfaceHigh, shadowOpacity: 0 },
   identifyBtnText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: BF.black },
-
   savedBanner: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: '#0A2010', borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: BF.success + '40' },
   savedText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: BF.success },
   savedSub: { fontSize: 10, color: BF.success + 'BB', marginTop: 2 },
-
   resultHero: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md, backgroundColor: BF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: BF.green + '40' },
   resultTitle: { fontSize: Typography.size.base, fontWeight: Typography.weight.bold, color: BF.white, lineHeight: 22 },
   confRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   confDot: { width: 7, height: 7, borderRadius: 4 },
   confText: { fontSize: Typography.size.xs, fontWeight: Typography.weight.semibold },
-
   thumb: { width: 80, height: 80, borderRadius: Radius.md },
-
   rideableCard: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1 },
   rideableLabel: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: BF.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
   rideableStatus: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, lineHeight: 18, marginTop: 2 },
-
   specsCard: { backgroundColor: BF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: BF.border, gap: 2 },
   specsTitle: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: BF.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.sm },
   specRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: BF.border + '60' },
   specKey: { flex: 1, fontSize: Typography.size.xs, color: BF.textSub },
   specValue: { fontSize: Typography.size.xs, fontWeight: Typography.weight.semibold, color: BF.textPrimary, maxWidth: '55%', textAlign: 'right' },
-
   condCard: { backgroundColor: BF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: BF.border },
   condOverall: { fontSize: Typography.size.sm, color: BF.textPrimary, lineHeight: 18, marginBottom: Spacing.sm },
   condRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderTopWidth: 1, borderTopColor: BF.border + '50' },
   condLabel: { fontSize: Typography.size.xs, color: BF.textSub },
   condVal: { fontSize: Typography.size.xs, fontWeight: Typography.weight.semibold, color: BF.textPrimary, maxWidth: '60%', textAlign: 'right' },
-
   modsCard: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: BF.greenDim, borderRadius: Radius.lg, padding: Spacing.md, borderWidth: 1, borderColor: BF.green + '30' },
   modsLabel: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: BF.green, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 },
   modsText: { fontSize: Typography.size.xs, color: BF.textSub, lineHeight: 17 },
-
   warningsCard: { backgroundColor: BF.surfaceHigh, borderRadius: Radius.lg, padding: Spacing.md, gap: Spacing.sm, borderWidth: 1, borderColor: BF.warning + '30' },
   warningRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
   warningText: { flex: 1, fontSize: Typography.size.xs, color: BF.warning, lineHeight: 16 },
-
   flipScoreGuide: { backgroundColor: BF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: BF.border },
-
   actions: { flexDirection: 'row', gap: Spacing.sm },
   resetBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, padding: Spacing.md, borderRadius: Radius.md, backgroundColor: BF.surface, borderWidth: 1, borderColor: BF.border },
   resetText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: BF.textSub },
   primaryBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, backgroundColor: BF.green, borderRadius: Radius.md, padding: Spacing.md, shadowColor: BF.green, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 5 },
   primaryBtnText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: BF.black },
-
   viewItemBtn: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: BF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: BF.green + '30' },
   viewItemText: { flex: 1, fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: BF.green },
 });
@@ -892,17 +802,188 @@ const as = StyleSheet.create({
   infoText: { flex: 1, fontSize: Typography.size.xs, color: BF.green, lineHeight: 17 },
 });
 
+// ── Upgrade category detail data ──────────────────────────────────────────────
+const UPGRADE_DETAIL: Record<string, {
+  icon: string;
+  description: string;
+  items: Array<{ name: string; cost: string; addedValue: string; roi: string; worth: boolean; note?: string }>;
+  tips: string[];
+}> = {
+  'Wheels & Tyres': {
+    icon: 'radio-button-unchecked',
+    description: 'Wheels and tyres are the highest-impact visual upgrade. Buyers notice immediately.',
+    items: [
+      { name: 'New tyres (pair)', cost: '£30–60', addedValue: '+£60–100', roi: '100–200%', worth: true, note: 'Clean knobblies on MTB are a strong buyer signal' },
+      { name: 'Tyre sealant (tubeless)', cost: '£15', addedValue: '+£40–60', roi: '200%+', worth: true },
+      { name: 'New inner tubes', cost: '£8', addedValue: '+£20–30', roi: '200%+', worth: true },
+      { name: 'Wheel true & tension', cost: '£20–30', addedValue: '+£40–70', roi: '100–200%', worth: true },
+      { name: 'New wheelset (budget)', cost: '£80–150', addedValue: '+£60–120', roi: '0–50%', worth: false, note: 'Rarely worth it unless original wheels are buckled' },
+    ],
+    tips: [
+      'Clean rims to remove brake dust — instantly looks newer',
+      'Re-inflate tyres to correct PSI before photos',
+      'Original Schwalbe or Continental tyres add perceived quality',
+    ],
+  },
+  'Drivetrain': {
+    icon: 'settings',
+    description: 'A clean, shifting drivetrain is a top buyer concern. Noise and skipping cost sales.',
+    items: [
+      { name: 'Chain replacement', cost: '£10–25', addedValue: '+£40–80', roi: '200%+', worth: true, note: 'Check wear with a chain checker first' },
+      { name: 'Cassette replacement', cost: '£15–50', addedValue: '+£40–70', roi: '80–200%', worth: true },
+      { name: 'Derailleur adjustment', cost: '£5–15', addedValue: '+£30–60', roi: '300%+', worth: true },
+      { name: 'Full groupset upgrade', cost: '£150–400', addedValue: '+£80–200', roi: 'Negative', worth: false, note: 'Almost never profitable on sub-£800 bikes' },
+      { name: 'Cable and housing replace', cost: '£15–30', addedValue: '+£30–50', roi: '50–100%', worth: true },
+    ],
+    tips: [
+      'Degrease and lube chain — eliminates noise complaints',
+      'Adjust indexing — buyers test gear shifting',
+      'Shimano groupsets are most recognised by buyers',
+    ],
+  },
+  'Suspension': {
+    icon: 'unfold-more',
+    description: 'Working suspension is non-negotiable for trail/enduro buyers. Seized forks are a deal-breaker.',
+    items: [
+      { name: 'Fork service (basic)', cost: '£30–50', addedValue: '+£60–120', roi: '100–300%', worth: true },
+      { name: 'Fork seals replace', cost: '£20–40', addedValue: '+£50–100', roi: '100–300%', worth: true },
+      { name: 'Shock service', cost: '£40–80', addedValue: '+£60–100', roi: '25–150%', worth: true },
+      { name: 'Fork replacement (budget)', cost: '£80–200', addedValue: '+£40–100', roi: 'Negative', worth: false, note: 'Only worth it if original forks are cracked or broken' },
+    ],
+    tips: [
+      'Lube lower legs with suspension oil — removes dry/sticky feel',
+      'Rock test forks in photos to show they move freely',
+      'Buyers pay premium for Fox, RockShox, Marzocchi forks',
+    ],
+  },
+  'Brakes': {
+    icon: 'stop-circle',
+    description: 'Braking performance is a safety issue — buyers will test this immediately.',
+    items: [
+      { name: 'Brake bleed (hydraulic)', cost: '£20–40', addedValue: '+£50–100', roi: '150–400%', worth: true, note: 'Highest ROI maintenance on hydraulic bikes' },
+      { name: 'Brake pads replacement', cost: '£8–20', addedValue: '+£30–60', roi: '200%+', worth: true },
+      { name: 'Rotor replace (pair)', cost: '£20–50', addedValue: '+£30–60', roi: '20–100%', worth: true },
+      { name: 'Upgrade to hydraulic', cost: '£60–150', addedValue: '+£40–80', roi: 'Negative', worth: false },
+    ],
+    tips: [
+      'Clean rotors with isopropyl — eliminates squealing',
+      'Bed in new pads before selling to prevent noise complaints',
+      'Shimano BR-MT200 is a well-regarded budget hydraulic upgrade',
+    ],
+  },
+  'Cockpit': {
+    icon: 'horizontal-rule',
+    description: 'Bars, stem and grips are cheap to replace and visually impactful.',
+    items: [
+      { name: 'New grips', cost: '£5–15', addedValue: '+£20–40', roi: '200%+', worth: true, note: 'Worn grips look neglected — instant visual improvement' },
+      { name: 'Handlebar tape (road)', cost: '£5–12', addedValue: '+£20–40', roi: '200%+', worth: true },
+      { name: 'Bar end plugs', cost: '£2–5', addedValue: '+£10–20', roi: '200%+', worth: true },
+      { name: 'New stem', cost: '£15–40', addedValue: '+£10–25', roi: 'Variable', worth: false, note: 'Only replace if damaged or wrong length' },
+    ],
+    tips: [
+      'Lock-on grips are 5-min replacement — huge visual impact',
+      'Cut bars to width for MTB buyers who want 760mm+',
+      'Clean bar tape on road bikes if not replacing',
+    ],
+  },
+  'Saddle & Post': {
+    icon: 'airline-seat-recline-normal',
+    description: 'Dropper posts are a high-value MTB upgrade. Saddle condition affects perceived care.',
+    items: [
+      { name: 'Dropper post add (MTB)', cost: '£80–200', addedValue: '+£100–200', roi: '0–100%', worth: true, note: 'Only add to trail/enduro bikes where buyer expects one' },
+      { name: 'Dropper service', cost: '£20–40', addedValue: '+£40–80', roi: '100–300%', worth: true },
+      { name: 'Saddle replacement', cost: '£10–30', addedValue: '+£20–40', roi: '50–100%', worth: true },
+      { name: 'Seatpost clamp', cost: '£5–15', addedValue: '+£10–20', roi: '50–100%', worth: true },
+    ],
+    tips: [
+      'A dropper post can add £100–200 to a trail bike sale price',
+      'Wipe saddle with leather conditioner if not replacing',
+      'Set saddle to neutral height for sale photos',
+    ],
+  },
+};
+
+// ── Upgrade Category Detail ───────────────────────────────────────────────────
+function UpgradeCategoryDetail({ categoryLabel, onBack }: { categoryLabel: string; onBack: () => void }) {
+  const detail = UPGRADE_DETAIL[categoryLabel];
+  if (!detail) return null;
+
+  return (
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={up.content}>
+      <Pressable onPress={onBack} style={up.backRow} hitSlop={8}>
+        <MaterialIcons name="arrow-back" size={15} color={BF.green} />
+        <Text style={up.backRowText}>Parts and Upgrades</Text>
+      </Pressable>
+
+      <View style={up.hero}>
+        <View style={[up.catIcon, { backgroundColor: BF.greenDim, width: 48, height: 48, borderRadius: Radius.md }]}>
+          <MaterialIcons name={detail.icon as any} size={24} color={BF.green} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={up.heroTitle}>{categoryLabel}</Text>
+          <Text style={up.heroSub}>{detail.description}</Text>
+        </View>
+      </View>
+
+      <Text style={up.sectionLabel}>UPGRADE OPTIONS</Text>
+      <View style={up.roiTableCard}>
+        <View style={up.roiTableHeader}>
+          <Text style={[up.roiHeaderCell, { flex: 2 }]}>Upgrade</Text>
+          <Text style={up.roiHeaderCell}>Cost</Text>
+          <Text style={up.roiHeaderCell}>+Value</Text>
+          <Text style={up.roiHeaderCell}>ROI</Text>
+        </View>
+        {detail.items.map((item, i) => (
+          <View key={i}>
+            <View style={[up.roiTableRow, !item.worth && { opacity: 0.6 }]}>
+              <View style={up.roiDotWrap}>
+                <View style={[up.roiDot, { backgroundColor: item.worth ? BF.green : BF.danger }]} />
+              </View>
+              <Text style={[up.roiRowLabel, { flex: 2 }]} numberOfLines={2}>{item.name}</Text>
+              <Text style={up.roiRowCell}>{item.cost}</Text>
+              <Text style={[up.roiRowCell, { color: item.worth ? BF.green : BF.danger }]}>{item.addedValue}</Text>
+              <Text style={[up.roiRowCell, { color: item.worth ? BF.green : BF.danger, fontWeight: Typography.weight.bold }]}>{item.roi}</Text>
+            </View>
+            {item.note ? <Text style={up.roiNote}>{item.note}</Text> : null}
+          </View>
+        ))}
+      </View>
+
+      <Text style={up.sectionLabel}>PRO TIPS</Text>
+      <View style={up.tipsCard}>
+        {detail.tips.map((tip, i) => (
+          <View key={i} style={up.tipRow}>
+            <MaterialIcons name="lightbulb" size={12} color={BF.green} />
+            <Text style={up.tipText}>{tip}</Text>
+          </View>
+        ))}
+      </View>
+
+      <Pressable onPress={onBack} style={({ pressed }) => [up.backBtn, pressed && { opacity: 0.85 }]}>
+        <MaterialIcons name="arrow-back" size={15} color={BF.black} />
+        <Text style={up.backBtnText}>Back to Categories</Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
 // ── Upgrade Tab ───────────────────────────────────────────────────────────────
 function UpgradeTab() {
-  const router = useRouter();
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
   const UPGRADE_CATEGORIES = [
-    { label: 'Wheels & Tyres', icon: 'radio-button-unchecked', sub: 'Rims, hubs, rubber — high ROI upgrades' },
-    { label: 'Drivetrain', icon: 'settings', sub: 'Groupsets, cassettes, chains — cost vs value' },
-    { label: 'Suspension', icon: 'unfold-more', sub: 'Forks, shocks — buyer appeal' },
-    { label: 'Brakes', icon: 'stop-circle', sub: 'Hydraulic vs mechanical — safety & price' },
-    { label: 'Cockpit', icon: 'horizontal-rule', sub: 'Bars, stem, grips — cheap improvements' },
-    { label: 'Saddle & Post', icon: 'airline-seat-recline-normal', sub: 'Dropper posts add value to MTBs' },
+    { label: 'Wheels & Tyres',  icon: 'radio-button-unchecked',        sub: 'Rims, hubs, rubber — high ROI upgrades'         },
+    { label: 'Drivetrain',      icon: 'settings',                      sub: 'Groupsets, cassettes, chains — cost vs value'    },
+    { label: 'Suspension',      icon: 'unfold-more',                   sub: 'Forks, shocks — buyer appeal'                   },
+    { label: 'Brakes',          icon: 'stop-circle',                   sub: 'Hydraulic vs mechanical — safety & price'        },
+    { label: 'Cockpit',         icon: 'horizontal-rule',               sub: 'Bars, stem, grips — cheap improvements'         },
+    { label: 'Saddle & Post',   icon: 'airline-seat-recline-normal',   sub: 'Dropper posts add value to MTBs'                },
   ];
+
+  if (selectedCategory) {
+    return <UpgradeCategoryDetail categoryLabel={selectedCategory} onBack={() => setSelectedCategory(null)} />;
+  }
+
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={up.content}>
       <View style={up.hero}>
@@ -914,30 +995,41 @@ function UpgradeTab() {
       </View>
       <Text style={up.sectionLabel}>UPGRADE CATEGORIES</Text>
       {UPGRADE_CATEGORIES.map(cat => (
-        <View key={cat.label} style={up.catCard}>
-          <View style={[up.catIcon, { backgroundColor: BF.greenDim }]}><MaterialIcons name={cat.icon as any} size={20} color={BF.green} /></View>
+        <Pressable
+          key={cat.label}
+          onPress={() => setSelectedCategory(cat.label)}
+          style={({ pressed }) => [up.catCard, pressed && { opacity: 0.85, transform: [{ scale: 0.99 }] }]}
+        >
+          <View style={[up.catIcon, { backgroundColor: BF.greenDim }]}>
+            <MaterialIcons name={cat.icon as any} size={20} color={BF.green} />
+          </View>
           <View style={{ flex: 1 }}>
             <Text style={up.catLabel}>{cat.label}</Text>
             <Text style={up.catSub}>{cat.sub}</Text>
           </View>
           <MaterialIcons name="chevron-right" size={16} color={BF.textMuted} />
-        </View>
+        </Pressable>
       ))}
       <View style={up.roiCard}>
-        <Text style={up.sectionLabel}>UPGRADE ROI GUIDE</Text>
+        <Text style={up.sectionLabel}>QUICK ROI GUIDE</Text>
         {[
-          { upgrade: 'New tyres (£40)', addedValue: '+£60–80', roi: '50–100%', worth: true },
-          { upgrade: 'Hydraulic brake bleed (£15)', addedValue: '+£50–80', roi: '200%+', worth: true },
-          { upgrade: 'Full paint job (£200)', addedValue: '+£50', roi: 'Negative', worth: false },
-          { upgrade: 'Clean & polish (£5)', addedValue: '+£30–50', roi: '500%+', worth: true },
+          { upgrade: 'Clean & polish',          cost: '£5',   addedValue: '+£30–50', roi: '500%+',     worth: true  },
+          { upgrade: 'New tyres',               cost: '£40',  addedValue: '+£60–80', roi: '50–100%',   worth: true  },
+          { upgrade: 'Hydraulic brake bleed',   cost: '£15',  addedValue: '+£50–80', roi: '200%+',     worth: true  },
+          { upgrade: 'Chain + cassette',        cost: '£35',  addedValue: '+£50–80', roi: '80–130%',   worth: true  },
+          { upgrade: 'Full groupset upgrade',   cost: '£250', addedValue: '+£60',    roi: 'Negative',  worth: false },
+          { upgrade: 'Full paint job',          cost: '£200', addedValue: '+£50',    roi: 'Negative',  worth: false },
         ].map(row => (
           <View key={row.upgrade} style={up.roiRow}>
             <View style={[up.roiDot, { backgroundColor: row.worth ? BF.green : BF.danger }]} />
             <View style={{ flex: 1 }}>
               <Text style={up.roiLabel}>{row.upgrade}</Text>
-              <Text style={up.roiSub}>{row.addedValue}</Text>
+              <Text style={up.roiSub}>{row.cost} cost</Text>
             </View>
-            <Text style={[up.roiValue, { color: row.worth ? BF.green : BF.danger }]}>{row.roi}</Text>
+            <View style={{ alignItems: 'flex-end', gap: 1 }}>
+              <Text style={[up.roiValue, { color: row.worth ? BF.green : BF.danger }]}>{row.roi}</Text>
+              <Text style={{ fontSize: 9, color: BF.textMuted }}>{row.addedValue}</Text>
+            </View>
           </View>
         ))}
       </View>
@@ -950,6 +1042,8 @@ const up = StyleSheet.create({
   hero: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, backgroundColor: BF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: BF.green + '30' },
   heroTitle: { fontSize: Typography.size.xl, fontWeight: Typography.weight.extrabold, color: BF.white },
   heroSub: { fontSize: Typography.size.xs, color: BF.textSub, marginTop: 2 },
+  backRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.xs },
+  backRowText: { fontSize: Typography.size.sm, color: BF.green, fontWeight: Typography.weight.medium },
   catCard: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, backgroundColor: BF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: BF.border },
   catIcon: { width: 44, height: 44, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
   catLabel: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: BF.white },
@@ -957,9 +1051,23 @@ const up = StyleSheet.create({
   roiCard: { backgroundColor: BF.surface, borderRadius: Radius.xl, padding: Spacing.base, gap: Spacing.sm, borderWidth: 1, borderColor: BF.border },
   roiRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: BF.border + '60' },
   roiDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
+  roiDotWrap: { width: 14, alignItems: 'center', justifyContent: 'center' },
   roiLabel: { fontSize: Typography.size.sm, color: BF.textPrimary },
   roiSub: { fontSize: Typography.size.xs, color: BF.textSub },
   roiValue: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, minWidth: 60, textAlign: 'right' },
+  // Detail view styles
+  roiTableCard: { backgroundColor: BF.surface, borderRadius: Radius.xl, borderWidth: 1, borderColor: BF.border, overflow: 'hidden' },
+  roiTableHeader: { flexDirection: 'row', alignItems: 'center', backgroundColor: BF.surfaceHigh, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, gap: 4 },
+  roiHeaderCell: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: BF.textMuted, textTransform: 'uppercase', letterSpacing: 0.3, textAlign: 'right', minWidth: 44 },
+  roiTableRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, gap: 4, borderBottomWidth: 1, borderBottomColor: BF.border + '60' },
+  roiRowLabel: { fontSize: Typography.size.xs, color: BF.textPrimary, lineHeight: 15 },
+  roiRowCell: { fontSize: Typography.size.xs, color: BF.textSub, minWidth: 44, textAlign: 'right' },
+  roiNote: { fontSize: 9, color: BF.textMuted, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xs, lineHeight: 13, fontStyle: 'italic' },
+  tipsCard: { backgroundColor: BF.surface, borderRadius: Radius.xl, padding: Spacing.base, gap: Spacing.sm, borderWidth: 1, borderColor: BF.green + '30' },
+  tipRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm },
+  tipText: { flex: 1, fontSize: Typography.size.xs, color: BF.textSub, lineHeight: 17 },
+  backBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, backgroundColor: BF.green, borderRadius: Radius.md, paddingVertical: Spacing.md },
+  backBtnText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: BF.black },
 });
 
 // ── Profits Tab ───────────────────────────────────────────────────────────────
@@ -1039,9 +1147,9 @@ function InsightsTab() {
         </View>
       </View>
       {[
-        { icon: 'trending-up', label: 'Market Trends', sub: 'Which bikes are hot on eBay right now', route: '/money' as any },
-        { icon: 'auto-awesome', label: 'AI Recommendations', sub: 'What to buy, fix, and list this week', route: '/command-centre' as any },
-        { icon: 'receipt', label: 'All Orders', sub: 'Track sales and buyer feedback', route: '/orders' as any },
+        { icon: 'trending-up',  label: 'Market Trends',      sub: 'Which bikes are hot on eBay right now', route: '/money' as any         },
+        { icon: 'auto-awesome', label: 'AI Recommendations', sub: 'What to buy, fix, and list this week',  route: '/command-centre' as any },
+        { icon: 'receipt',      label: 'All Orders',          sub: 'Track sales and buyer feedback',        route: '/orders' as any         },
       ].map(item => (
         <Pressable key={item.label} onPress={() => router.push(item.route)} style={({ pressed }) => [ins.card, pressed && { opacity: 0.85 }]}>
           <View style={[ins.cardIcon, { backgroundColor: BF.green + '20' }]}><MaterialIcons name={item.icon as any} size={20} color={BF.green} /></View>
@@ -1097,7 +1205,6 @@ export default function BikeFlipper({ isHomeTab = false }: { isHomeTab?: boolean
   const [activeTab, setActiveTab] = useState<BFTab>('home');
   const [showPaywall, setShowPaywall] = useState(false);
 
-  // ── Find Tab capture & AI state ────────────────────────────────────────────
   const [capturedImages, setCapturedImages] = useState<CapturedImage[]>([]);
   const [identifying, setIdentifying] = useState(false);
   const [processingStatus, setProcessingStatus] = useState('');

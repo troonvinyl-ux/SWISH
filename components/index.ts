@@ -8,6 +8,7 @@ export { SectionHeader } from './ui/SectionHeader';
 export { ConfidenceBar, EvidenceBadge } from './ui/ConfidenceIndicator';
 
 // Feature
+export { default as NicheValuationPanel } from './feature/NicheValuationPanel';
 export { InsightCard } from './feature/InsightCard';
 export { AcquisitionCard } from './feature/AcquisitionCard';
 export { ItemCard } from './feature/ItemCard';
