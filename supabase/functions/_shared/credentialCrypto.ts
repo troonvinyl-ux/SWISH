@@ -6,8 +6,17 @@
 // Key: SWISH_CREDENTIAL_KEY env var — base64-encoded 32-byte random value.
 // Format: "enc:v1:<base64-iv>:<base64-ciphertext>"
 //
-// Migration: decrypt() accepts both encrypted format AND legacy plaintext JSON.
-// Once re-encrypted, credentials are opaque to any client-side query.
+// Migration path:
+//   decryptCredentials() detects legacy plaintext JSON and transparently
+//   returns the parsed object so existing connectors continue to work.
+//   After a successful plaintext decode, the caller MUST re-encrypt via
+//   encryptCredentials() and persist the encrypted value back to the DB.
+//   Once all rows are migrated, legacy plaintext acceptance can be removed.
+//
+// SECURITY INVARIANTS:
+//   - credential_ref is NEVER returned to the client (SELECT columns exclude it).
+//   - Credential contents are NEVER logged — only structural metadata (length, format).
+//   - tenant_id is always validated via membership check before credential access.
 
 const ENC_PREFIX = 'enc:v1:';
 
@@ -62,12 +71,27 @@ export async function encryptCredentials(credentials: Record<string, unknown>): 
   return `${ENC_PREFIX}${ivB64}:${ctB64}`;
 }
 
-/** Decrypt a credential string. Handles both encrypted format and legacy plaintext JSON. */
+/** Decrypt a credential string. Handles both encrypted format and legacy plaintext JSON.
+ *
+ * MIGRATION BEHAVIOUR:
+ *   If the stored value is not encrypted (legacy plaintext JSON), the credential
+ *   is decoded and returned. The caller is responsible for re-encrypting and
+ *   persisting the encrypted form back to the database. This transparent fallback
+ *   allows existing connectors to keep working while a migration is in progress.
+ *
+ * DO NOT LOG the returned credential object or any of its fields.
+ */
 export async function decryptCredentials(stored: string): Promise<Record<string, unknown>> {
   if (!stored) throw new Error('[CredentialCrypto] Empty credential_ref');
 
-  // Legacy plaintext JSON — migrate transparently
+  // Legacy plaintext JSON — transparent migration path.
+  // Log the structural fact (not the content) so operators can track migration progress.
   if (!stored.startsWith(ENC_PREFIX)) {
+    console.warn(
+      '[CredentialCrypto] MIGRATION REQUIRED: credential_ref is unencrypted plaintext. ' +
+      'Re-encrypt this record and persist the encrypted value to eliminate this warning. ' +
+      'credential_ref length=' + stored.length,
+    );
     try {
       const parsed = JSON.parse(stored);
       if (typeof parsed === 'object' && parsed !== null) return parsed as Record<string, unknown>;
@@ -101,4 +125,24 @@ export async function decryptCredentials(stored: string): Promise<Record<string,
 /** Returns true if the stored value is already encrypted (not plaintext) */
 export function isEncrypted(stored: string): boolean {
   return stored.startsWith(ENC_PREFIX);
+}
+
+/**
+ * Migrate a single plaintext credential_ref to encrypted format.
+ *
+ * USAGE: Call this server-side (Edge Function) for any connector where
+ * isEncrypted(credential_ref) returns false. Persist the returned value
+ * back to marketplace_connectors.credential_ref.
+ *
+ * Returns null if the stored value is already encrypted — no migration needed.
+ * Throws if the stored value cannot be parsed as credential JSON.
+ *
+ * DO NOT log the parsed credentials object.
+ */
+export async function migrateToEncrypted(stored: string): Promise<string | null> {
+  if (!stored || isEncrypted(stored)) return null; // already encrypted
+  const credentials = await decryptCredentials(stored); // will throw if not valid JSON
+  const encrypted = await encryptCredentials(credentials);
+  console.log('[CredentialCrypto] Migrated plaintext credential_ref to encrypted format. Length before=' + stored.length + ' after=' + encrypted.length);
+  return encrypted;
 }

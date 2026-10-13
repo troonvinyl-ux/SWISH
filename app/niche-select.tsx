@@ -12,7 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
-import { NICHE_LIST, NicheId, NicheConfig } from '@/constants/niches';
+import { PRODUCTION_NICHES, NICHE_LIST, NicheId, NicheConfig } from '@/constants/niches';
 
 function NicheCard({
   niche,
@@ -149,7 +149,7 @@ export default function NicheSelectScreen() {
         contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 90 }]}
         showsVerticalScrollIndicator={false}
       >
-        {NICHE_LIST.map(niche => (
+        {PRODUCTION_NICHES.map(niche => (
           <NicheCard
             key={niche.id}
             niche={niche}
@@ -188,7 +188,7 @@ export default function NicheSelectScreen() {
           style={({ pressed }) => [s.doneBtn, pressed && { opacity: 0.85 }]}
         >
           <MaterialIcons name="check" size={18} color={Colors.background} />
-          <Text style={s.doneBtnText}>Done — Using {NICHE_LIST.find(n => n.id === activeNicheId)?.shortName ?? 'SWISH'}</Text>
+          <Text style={s.doneBtnText}>Done — Using {PRODUCTION_NICHES.find(n => n.id === activeNicheId)?.shortName ?? 'SWISH'}</Text>
         </Pressable>
       </View>
     </View>

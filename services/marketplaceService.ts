@@ -281,6 +281,15 @@ function mapConnector(row: any): MarketplaceConnector {
   };
 }
 
+// Safe column list — credential_ref, access tokens, and refresh tokens are
+// NEVER returned to the client. All credential access is server-side only.
+const SAFE_CONNECTOR_COLUMNS =
+  'id, tenant_id, marketplace_id, display_name, status, ' +
+  'can_list, can_publish, can_reprice, can_read_orders, can_fulfil, ' +
+  'can_buy, can_bid, can_make_offer, can_search_opportunities, ' +
+  'seller_account_id, last_sync_at, last_error, connected_at, ' +
+  'access_token_expires_at, updated_at';
+
 export async function listConnectors(tenantId: string): Promise<{
   connectors: MarketplaceConnector[];
   error: string | null;
@@ -288,7 +297,7 @@ export async function listConnectors(tenantId: string): Promise<{
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from('marketplace_connectors')
-    .select('*')
+    .select(SAFE_CONNECTOR_COLUMNS)
     .eq('tenant_id', tenantId)
     .order('marketplace_id');
 
@@ -311,14 +320,14 @@ export async function getOrCreateConnector(
       display_name: definition?.name ?? marketplaceId,
       status: 'disconnected',
     }, { onConflict: 'tenant_id,marketplace_id', ignoreDuplicates: true })
-    .select()
+    .select(SAFE_CONNECTOR_COLUMNS)
     .maybeSingle();
 
   // Fetch after upsert
   if (!data) {
     const { data: fetched, error: fetchErr } = await supabase
       .from('marketplace_connectors')
-      .select('*')
+      .select(SAFE_CONNECTOR_COLUMNS)
       .eq('tenant_id', tenantId)
       .eq('marketplace_id', marketplaceId)
       .single();
@@ -445,7 +454,7 @@ export async function updateConnector(
     .update(dbUpdates)
     .eq('tenant_id', tenantId)
     .eq('marketplace_id', marketplaceId)
-    .select()
+    .select(SAFE_CONNECTOR_COLUMNS)
     .single();
 
   if (error) return { connector: null, error: error.message };

@@ -434,14 +434,48 @@ export const NICHES: Record<NicheId, NicheConfig> = {
 
 export const NICHE_LIST = Object.values(NICHES);
 
-// Get niches a user has enabled (defaults to general if none set)
-export function getActiveNiches(enabledIds: NicheId[]): NicheConfig[] {
-  if (!enabledIds || enabledIds.length === 0) return [NICHES.general];
-  return enabledIds.map(id => NICHES[id]).filter(Boolean);
+// ── Production niche gate ─────────────────────────────────────────────────────
+// Only these four niches are active in the production application.
+// All other niches (fossils, beauty, antiques, trading_cards, general) exist
+// in the data model for historical records but are NOT selectable by subscribers
+// and do NOT appear in navigation, onboarding, or niche selection screens.
+// Historical inventory records belonging to inactive niches are preserved as-is
+// but are hidden from the active niche views.
+
+export const PRODUCTION_NICHE_IDS: readonly NicheId[] = [
+  'coins',
+  'motocross',
+  'bicycles',
+  'clothing',
+] as const;
+
+export type ProductionNicheId = typeof PRODUCTION_NICHE_IDS[number];
+
+/** Returns true only if the niche is one of the four active production niches. */
+export function isProductionNiche(nicheId: NicheId | string | null | undefined): nicheId is ProductionNicheId {
+  return PRODUCTION_NICHE_IDS.includes(nicheId as NicheId);
 }
 
-// Get the primary/first niche
+/** List of the four production NicheConfig objects. */
+export const PRODUCTION_NICHES: NicheConfig[] = PRODUCTION_NICHE_IDS.map(id => NICHES[id]);
+
+// Get niches a user has enabled — restricted to production niches only.
+// If no enabled IDs are provided or none are production niches, defaults
+// to the coins niche (the primary SWISH niche).
+// Legacy NicheIds that are no longer in production are silently filtered out;
+// their inventory records remain untouched in the database.
+export function getActiveNiches(enabledIds: NicheId[]): NicheConfig[] {
+  if (!enabledIds || enabledIds.length === 0) return [NICHES.coins];
+  const active = enabledIds
+    .filter(id => isProductionNiche(id))
+    .map(id => NICHES[id])
+    .filter(Boolean);
+  return active.length > 0 ? active : [NICHES.coins];
+}
+
+// Get the primary/first active production niche.
 export function getPrimaryNiche(enabledIds: NicheId[]): NicheConfig {
-  if (!enabledIds || enabledIds.length === 0) return NICHES.general;
-  return NICHES[enabledIds[0]] ?? NICHES.general;
+  if (!enabledIds || enabledIds.length === 0) return NICHES.coins;
+  const first = enabledIds.find(id => isProductionNiche(id));
+  return first ? NICHES[first] : NICHES.coins;
 }

@@ -1,4 +1,33 @@
-name: Build signed SWISH APK (CI-generated keystore)
+name: Build signed SWISH APK (persistent keystore)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# REQUIRED GITHUB SECRETS:
+#
+#   SWISH_RELEASE_KEYSTORE_BASE64
+#     Base64-encoded release keystore file.
+#     Generate once locally:
+#       keytool -genkeypair -v \
+#         -keystore swish-release.keystore \
+#         -alias swish \
+#         -keyalg RSA -keysize 2048 -validity 10000 \
+#         -storepass <YOUR_STORE_PASS> \
+#         -keypass <YOUR_KEY_PASS> \
+#         -dname "CN=SWISH, OU=Mobile, O=SWISH, L=London, S=London, C=GB"
+#       base64 -w 0 swish-release.keystore > keystore.b64
+#     Then store the contents of keystore.b64 as this secret.
+#     KEEP THE KEYSTORE FILE SAFE — losing it means you cannot update the app.
+#
+#   SWISH_KEYSTORE_STORE_PASSWORD
+#     The -storepass value chosen when the keystore was generated.
+#
+#   SWISH_KEYSTORE_KEY_PASSWORD
+#     The -keypass value chosen when the keystore was generated.
+#     (Usually the same as store password for a single-key keystore.)
+#
+#   SWISH_KEYSTORE_KEY_ALIAS
+#     The -alias value (e.g. "swish").
+#
+# ──────────────────────────────────────────────────────────────────────────────
 
 on:
   workflow_dispatch:
@@ -53,42 +82,63 @@ jobs:
       - name: Generate Android project
         run: pnpm exec expo prebuild --platform android --clean
 
-      - name: Create release keystore
+      - name: Restore persistent release keystore from secret
+        # Decodes the base64 keystore stored in GitHub Secrets.
+        # The keystore is NOT generated fresh each build — it is the same
+        # persistent key that was registered with the Play Store.
+        env:
+          KEYSTORE_B64: ${{ secrets.SWISH_RELEASE_KEYSTORE_BASE64 }}
         run: |
-          keytool -genkeypair \
-            -v \
-            -keystore android/app/swish-release.keystore \
-            -alias swish \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass "swish123" \
-            -keypass "swish123" \
-            -dname "CN=SWISH, OU=Mobile, O=SWISH, L=London, S=London, C=GB"
+          set -eux
+          if [ -z "${KEYSTORE_B64}" ]; then
+            echo "ERROR: SWISH_RELEASE_KEYSTORE_BASE64 secret is not set."
+            echo "Generate a keystore once, base64-encode it, and store the result as this secret."
+            exit 1
+          fi
+          echo "${KEYSTORE_B64}" | base64 --decode > android/app/swish-release.keystore
+          echo "Keystore restored ($(wc -c < android/app/swish-release.keystore) bytes)"
 
-      - name: Patch Android app build.gradle for release signing (robust idempotent)
+      - name: Validate keystore secrets are present
+        env:
+          STORE_PASS: ${{ secrets.SWISH_KEYSTORE_STORE_PASSWORD }}
+          KEY_PASS:   ${{ secrets.SWISH_KEYSTORE_KEY_PASSWORD }}
+          KEY_ALIAS:  ${{ secrets.SWISH_KEYSTORE_KEY_ALIAS }}
+        run: |
+          set -eux
+          if [ -z "${STORE_PASS}" ] || [ -z "${KEY_PASS}" ] || [ -z "${KEY_ALIAS}" ]; then
+            echo "ERROR: One or more keystore secrets are missing."
+            echo "Required: SWISH_KEYSTORE_STORE_PASSWORD, SWISH_KEYSTORE_KEY_PASSWORD, SWISH_KEYSTORE_KEY_ALIAS"
+            exit 1
+          fi
+          echo "All keystore secrets present."
+
+      - name: Patch Android app build.gradle for release signing (idempotent)
         working-directory: ${{ github.workspace }}
+        env:
+          KEY_ALIAS:  ${{ secrets.SWISH_KEYSTORE_KEY_ALIAS }}
+          STORE_PASS: ${{ secrets.SWISH_KEYSTORE_STORE_PASSWORD }}
+          KEY_PASS:   ${{ secrets.SWISH_KEYSTORE_KEY_PASSWORD }}
         run: |
           python - <<'PY'
           import sys
+          import os
           import re
           from pathlib import Path
 
           GRADLE_PATH = Path('android/app/build.gradle')
           if not GRADLE_PATH.exists():
               print('ERROR: android/app/build.gradle not found')
-              sys.exit(0)
+              sys.exit(1)
 
           KEYS = {
               'keystore': 'swish-release.keystore',
-              'alias': 'swish',
-              'password': 'swish123'
+              'alias':    os.environ['KEY_ALIAS'],
+              'storepass': os.environ['STORE_PASS'],
+              'keypass':   os.environ['KEY_PASS'],
           }
 
           def find_block(text, start_idx):
-              i = start_idx
-              depth = 0
-              n = len(text)
+              i, depth, n = start_idx, 0, len(text)
               while i < n:
                   if text[i] == '{':
                       depth += 1
@@ -109,6 +159,15 @@ jobs:
                   return None
               return (m.start(), open_brace_idx, close_brace_idx)
 
+          RELEASE_BLOCK = (
+              'release {\n'
+              '            storeFile file("{keystore}")\n'
+              '            storePassword "{storepass}"\n'
+              '            keyAlias "{alias}"\n'
+              '            keyPassword "{keypass}"\n'
+              '        }'
+          ).format(**KEYS)
+
           def ensure_signing_configs(text):
               loc = locate_keyword_block(text, 'signingConfigs')
               if loc:
@@ -120,53 +179,32 @@ jobs:
                       rel_open_idx = s_open + 1 + rel_open_in_block
                       rel_close_idx = find_block(text, rel_open_idx)
                       if rel_close_idx == -1:
-                          return None, False, 'Malformed release block in signingConfigs (unbalanced braces)'
-                      release_inner = text[rel_open_idx+1:rel_close_idx]
-                      if (re.search(r'storeFile\s*file\(["\']{}["\']\)'.format(re.escape(KEYS['keystore'])), release_inner)
-                          and re.search(r'keyAlias\s*["\']{}["\']'.format(re.escape(KEYS['alias'])), release_inner)):
-                          return text, False, 'Existing signingConfigs.release correct'
-                      new_release = (
-                          'release {\n'
-                          '            storeFile file("%s")\n'
-                          '            storePassword "%s"\n'
-                          '            keyAlias "%s"\n'
-                          '            keyPassword "%s"\n'
-                          '        }') % (KEYS['keystore'], KEYS['password'], KEYS['alias'], KEYS['password'])
+                          return None, False, 'Malformed release block in signingConfigs'
                       sb_before = text[s_open+1:rel_open_idx]
-                      sb_after = text[rel_close_idx+1:s_close]
-                      new_signing = sb_before + new_release + sb_after
+                      sb_after  = text[rel_close_idx+1:s_close]
+                      new_signing = sb_before + RELEASE_BLOCK + sb_after
                       new_text = text[:s_open+1] + new_signing + text[s_close:]
                       return new_text, True, 'Updated existing signingConfigs.release'
-                  insert = (
-                      '\n        release {\n'
-                      '            storeFile file("%s")\n'
-                      '            storePassword "%s"\n'
-                      '            keyAlias "%s"\n'
-                      '            keyPassword "%s"\n'
-                      '        }\n') % (KEYS['keystore'], KEYS['password'], KEYS['alias'], KEYS['password'])
+                  insert = '\n        ' + RELEASE_BLOCK + '\n'
                   new_text = text[:s_close] + insert + text[s_close:]
                   return new_text, True, 'Inserted release block into signingConfigs'
 
               bt_loc = text.find('    buildTypes {')
               if bt_loc != -1:
                   insert = (
-                      '    signingConfigs {\n'
-                      '        release {\n'
-                      '            storeFile file("%s")\n'
-                      '            storePassword "%s"\n'
-                      '            keyAlias "%s"\n'
-                      '            keyPassword "%s"\n'
-                      '        }\n'
-                      '    }\n\n') % (KEYS['keystore'], KEYS['password'], KEYS['alias'], KEYS['password'])
+                      '    signingConfigs {{\n'
+                      '        {block}\n'
+                      '    }}\n\n'
+                  ).format(block=RELEASE_BLOCK.replace('\n', '\n        '))
                   new_text = text.replace('    buildTypes {', insert + '    buildTypes {', 1)
                   return new_text, True, 'Inserted signingConfigs before buildTypes'
 
-              return None, False, "Could not find 'buildTypes {' marker to insert signingConfigs"
+              return None, False, "Could not find 'buildTypes {' marker"
 
           def ensure_release_buildtype(text):
               bt_loc = locate_keyword_block(text, 'buildTypes')
               if not bt_loc:
-                  return None, False, "Could not locate buildTypes block"
+                  return None, False, 'Could not locate buildTypes block'
               _, bt_open, bt_close = bt_loc
               bt_text = text[bt_open+1:bt_close]
               m = re.search(r'release\s*\{', bt_text)
@@ -176,7 +214,7 @@ jobs:
               rel_open_idx = bt_open + 1 + rel_open_in_bt
               rel_close_idx = find_block(text, rel_open_idx)
               if rel_close_idx == -1:
-                  return None, False, 'Malformed release block (unbalanced braces)'
+                  return None, False, 'Malformed release block'
               release_inner = text[rel_open_idx+1:rel_close_idx]
               if 'signingConfig signingConfigs.release' in release_inner:
                   return text, False, 'release buildType already uses signingConfigs.release'
@@ -187,7 +225,7 @@ jobs:
               new_text = text[:rel_open_idx+1] + new_inner + text[rel_close_idx:]
               return new_text, True, 'Updated release buildType to use signingConfigs.release'
 
-          for i in range(2):
+          for pass_num in range(2):
               text = GRADLE_PATH.read_text()
               new_text, changed, msg = ensure_signing_configs(text)
               if new_text is None:
@@ -195,9 +233,7 @@ jobs:
                   raise SystemExit(1)
               if changed:
                   GRADLE_PATH.write_text(new_text)
-                  print('INFO:', msg)
-              else:
-                  print('INFO:', msg)
+              print('INFO (signing_configs pass {}):'.format(pass_num + 1), msg)
 
               text = GRADLE_PATH.read_text()
               final_text, changed2, msg2 = ensure_release_buildtype(text)
@@ -206,16 +242,17 @@ jobs:
                   raise SystemExit(1)
               if changed2:
                   GRADLE_PATH.write_text(final_text)
-                  print('INFO:', msg2)
-              else:
-                  print('INFO:', msg2)
+              print('INFO (release_buildtype pass {}):'.format(pass_num + 1), msg2)
 
-          print('Patch completed successfully (idempotent verification done).')
+          print('Patch completed successfully.')
           raise SystemExit(0)
           PY
 
       - name: Build release APK
         working-directory: android
+        env:
+          ANDROID_HOME: ${{ github.workspace }}/android-sdk
+          ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
         run: ./gradlew assembleRelease --no-daemon -x lint
 
       - name: Upload signed APK artifact
@@ -225,9 +262,7 @@ jobs:
           path: android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
-      - name: Upload generated keystore
-        uses: actions/upload-artifact@v4
-        with:
-          name: swish-keystore
-          path: android/app/swish-release.keystore
-          if-no-files-found: error
+      # NOTE: The keystore is NOT uploaded as a build artifact.
+      # The keystore lives exclusively in GitHub Secrets (SWISH_RELEASE_KEYSTORE_BASE64)
+      # and is restored from there on each build run.
+      # Never commit the keystore file to the repository.
