@@ -141,34 +141,86 @@ function buildSearchQueries(title: string, attributes: Record<string, any>, spec
     .replace(/\s+/g, ' ').trim().slice(0, 100);
   queries.push(cleanTitle);
 
-  // MX: build query from confirmed attributes for better eBay match
+  // ── MX / Motocross ────────────────────────────────────────────────────────
   if (isMXSpecialist(specialistId)) {
-    const parts: string[] = [];
-    const make = attributes?.manufacturer ?? attributes?.brand ?? attributes?.make;
-    const model = attributes?.model ?? attributes?.model_family;
-    const yearRange = attributes?.year_range ?? attributes?.model_year;
-    const engine = attributes?.engine_size;
-    const stroke = attributes?.stroke_type;
-    if (make) parts.push(String(make));
-    if (model) parts.push(String(model));
-    if (yearRange) parts.push(String(yearRange).split('-')[0]); // Use start year for search
-    if (engine) parts.push(String(engine).replace(/[^0-9]/g, '') + 'cc');
-    if (stroke) parts.push(stroke === '2-stroke' ? '2 stroke' : stroke === '4-stroke' ? '4 stroke' : '');
-    if (parts.length >= 2) queries.push(parts.filter(Boolean).join(' ').slice(0, 100));
+    const make = String(attributes?.manufacturer ?? attributes?.brand ?? attributes?.make ?? '').trim();
+    const model = String(attributes?.model ?? attributes?.model_family ?? attributes?.model_name ?? '').trim();
+    const yearRange = String(attributes?.year_range ?? attributes?.model_year ?? attributes?.year ?? '').trim();
+    const engine = String(attributes?.engine_size ?? attributes?.displacement ?? '').trim();
+    const stroke = String(attributes?.stroke_type ?? '').trim();
+    const bikeType = String(attributes?.bike_type ?? attributes?.vehicle_type ?? '').trim();
+
+    const startYear = yearRange ? yearRange.split('-')[0].trim() : '';
+    const engineCC = engine ? engine.replace(/[^0-9]/g, '') + 'cc' : '';
+    const strokeLabel = stroke.includes('2') ? '2 stroke' : stroke.includes('4') ? '4 stroke' : '';
+
+    // Primary structured query: Make + Model + Year + Engine
+    const primaryParts = [make, model, startYear, engineCC].filter(Boolean);
+    if (primaryParts.length >= 2) queries.push(primaryParts.join(' ').slice(0, 100));
+
+    // Fallback 1: Make + Engine + stroke (broader)
+    const fallback1 = [make, engineCC, strokeLabel, bikeType || 'motocross'].filter(Boolean);
+    if (fallback1.length >= 2) queries.push(fallback1.join(' ').slice(0, 100));
+
+    // Fallback 2: Make + Model only (broadest)
+    if (make && model) queries.push(`${make} ${model} motocross`.slice(0, 100));
   }
 
-  // Clothing: brand + garment type + era for precise matching
+  // ── Bicycles ──────────────────────────────────────────────────────────────
+  if (specialistId === 'bicycles' || specialistId === 'cycling') {
+    const brand = String(attributes?.manufacturer ?? attributes?.brand ?? '').trim();
+    const model = String(attributes?.model ?? attributes?.model_name ?? '').trim();
+    const frameType = String(attributes?.bike_type ?? attributes?.frame_type ?? '').trim();
+    const frameSize = String(attributes?.frame_size ?? '').trim();
+    const year = String(attributes?.year_range ?? attributes?.year_made ?? '').trim();
+    const groupset = String(attributes?.groupset ?? attributes?.drivetrain ?? '').trim();
+
+    // Primary: brand + model + year
+    const primaryParts = [brand, model, year ? year.split('-')[0] : ''].filter(Boolean);
+    if (primaryParts.length >= 2) queries.push(primaryParts.join(' ').slice(0, 100));
+
+    // Fallback 1: brand + frameType + frameSize
+    const fallback1 = [brand, frameType, frameSize].filter(Boolean);
+    if (fallback1.length >= 2) queries.push(fallback1.join(' ').slice(0, 100));
+
+    // Fallback 2: brand only (broadest for rare bikes)
+    if (brand && frameType) queries.push(`${brand} ${frameType} bike`.slice(0, 100));
+  }
+
+  // ── Clothing ──────────────────────────────────────────────────────────────
   if (isClothingSpecialist(specialistId)) {
-    const brand = attributes?.brand ?? attributes?.Brand;
-    const garmentType = attributes?.garment_type ?? attributes?.garmentType;
-    const era = attributes?.era ?? attributes?.era_estimate;
-    const size = attributes?.size ?? attributes?.labelledSize;
+    const brand = String(attributes?.brand ?? attributes?.Brand ?? attributes?.manufacturer ?? '').trim();
+    const garmentType = String(attributes?.garment_type ?? attributes?.item_type ?? '').trim();
+    const era = String(attributes?.era ?? attributes?.era_estimate ?? '').trim();
+    const size = String(attributes?.size ?? attributes?.labelled_size ?? '').trim();
+    const colour = String(attributes?.colour ?? attributes?.color ?? '').trim();
+    const composition = String(attributes?.composition ?? attributes?.material ?? '').trim();
+    const countryMade = String(attributes?.country_of_origin ?? attributes?.made_in ?? '').trim();
+
+    // Primary: brand + garmentType + era
     if (brand && garmentType) {
-      const clothingQuery = [brand, garmentType, era, size].filter(Boolean).join(' ').slice(0, 100);
+      const clothingQuery = [brand, garmentType, era].filter(Boolean).join(' ').slice(0, 100);
       if (clothingQuery !== cleanTitle) queries.push(clothingQuery);
+    }
+
+    // Fallback 1: brand + garmentType + size
+    if (brand && garmentType && size) {
+      queries.push([brand, garmentType, size].join(' ').slice(0, 100));
+    }
+
+    // Fallback 2: brand + garmentType only (broadest)
+    if (brand && garmentType) {
+      const broad = `vintage ${brand} ${garmentType}`.slice(0, 100);
+      if (!queries.includes(broad)) queries.push(broad);
+    }
+
+    // Fallback 3: brand only for rare/luxury items
+    if (brand && composition && composition.toLowerCase().includes('silk')) {
+      queries.push(`${brand} vintage clothing`.slice(0, 100));
     }
   }
 
+  // ── Coins ──────────────────────────────────────────────────────────────────
   if (isCoinSpecialist(specialistId)) {
     const parts: string[] = [];
     if (attributes?.ruler) parts.push(String(attributes.ruler));
@@ -186,7 +238,7 @@ function buildSearchQueries(title: string, attributes: Record<string, any>, spec
     if (catNum) queries.push(String(catNum).slice(0, 50));
   }
 
-  return queries.filter((q, i, a) => q.length >= 3 && a.indexOf(q) === i).slice(0, 4);
+  return queries.filter((q, i, a) => q.length >= 3 && a.indexOf(q) === i).slice(0, 5);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -459,7 +511,7 @@ function scoreComparableRelevance(
   numistaTypeId?: number,
 ): { score: number; factors: string[]; exclusionReason?: string } {
   const factors: string[] = [];
-  let score = 0.50;
+  let score = 0.45; // Slightly lower base — force positive signals to lift
 
   // Numista-sourced sales get a head start if type matches
   if (comparable.source === 'numista' && comparable.numistaTypeId === numistaTypeId) {
@@ -470,14 +522,16 @@ function scoreComparableRelevance(
 
   const compLower = comparable.title.toLowerCase();
   const targetLower = targetTitle.toLowerCase();
-  const targetWords = targetLower.split(/\s+/).filter(w => w.length > 3);
+  const targetWords = targetLower.split(/\s+/).filter(w => w.length > 2);
   const matchedWords = targetWords.filter(w => compLower.includes(w));
   const titleOverlap = targetWords.length > 0 ? matchedWords.length / targetWords.length : 0;
 
-  if (titleOverlap >= 0.7) { score += 0.20; factors.push(`High title match (${Math.round(titleOverlap * 100)}%)`); }
-  else if (titleOverlap >= 0.4) { score += 0.05; factors.push(`Partial title match (${Math.round(titleOverlap * 100)}%)`); }
-  else if (titleOverlap < 0.2) { score -= 0.25; factors.push(`Poor title match (${Math.round(titleOverlap * 100)}%)`); }
+  if (titleOverlap >= 0.7) { score += 0.22; factors.push(`High title match (${Math.round(titleOverlap * 100)}%)`); }
+  else if (titleOverlap >= 0.5) { score += 0.12; factors.push(`Good title match (${Math.round(titleOverlap * 100)}%)`); }
+  else if (titleOverlap >= 0.35) { score += 0.04; factors.push(`Partial title match (${Math.round(titleOverlap * 100)}%)`); }
+  else if (titleOverlap < 0.15) { score -= 0.22; factors.push(`Poor title match (${Math.round(titleOverlap * 100)}%)`); }
 
+  // ── Niche-specific attribute matching ─────────────────────────────────────
   if (isCoinSpecialist(specialistId)) {
     const denom = String(targetAttrs?.denomination ?? targetAttrs?.Denomination ?? '').toLowerCase();
     if (denom && denom.length > 1) {
@@ -491,7 +545,6 @@ function scoreComparableRelevance(
       if (compLower.includes(rulerLast)) { score += 0.15; factors.push(`Ruler match: ${ruler}`); }
       else { score -= 0.10; factors.push(`Ruler mismatch: target=${ruler}`); }
 
-      // Penalise if a different ruler appears
       const knownRulers = ['victoria', 'george', 'edward', 'elizabeth', 'william', 'henry', 'richard', 'augustus', 'tiberius', 'nero', 'claudius', 'vespasian', 'hadrian', 'constantine'];
       for (const kr of knownRulers) {
         if (!ruler.includes(kr) && compLower.includes(kr)) { score -= 0.15; factors.push(`Different ruler in comparable: ${kr}`); break; }
@@ -502,7 +555,99 @@ function scoreComparableRelevance(
     if (year && year.length >= 4 && compLower.includes(year)) { score += 0.10; factors.push(`Year match: ${year}`); }
   }
 
-  if (comparable.price > 500) { score -= 0.05; factors.push('High-value — may be exceptional grade'); }
+  if (isMXSpecialist(specialistId)) {
+    const make = String(targetAttrs?.manufacturer ?? targetAttrs?.brand ?? targetAttrs?.make ?? '').toLowerCase();
+    const model = String(targetAttrs?.model ?? targetAttrs?.model_family ?? '').toLowerCase();
+    const engine = String(targetAttrs?.engine_size ?? targetAttrs?.displacement ?? '').toLowerCase();
+    const stroke = String(targetAttrs?.stroke_type ?? '').toLowerCase();
+    const year = String(targetAttrs?.year_range ?? targetAttrs?.year ?? '').toLowerCase();
+
+    if (make && compLower.includes(make)) { score += 0.18; factors.push(`Make match: ${make}`); }
+    else if (make) { score -= 0.15; factors.push(`Make mismatch (target: ${make})`); }
+
+    if (model && model.length > 2 && compLower.includes(model.split(' ')[0])) { score += 0.15; factors.push(`Model match: ${model}`); }
+
+    const engineCC = engine.replace(/[^0-9]/g, '');
+    if (engineCC && compLower.includes(engineCC)) { score += 0.12; factors.push(`Engine match: ${engineCC}cc`); }
+    else if (engineCC && !compLower.includes(engineCC)) {
+      // Check for close engine sizes (e.g. 450 vs 400)
+      const targetCC = parseInt(engineCC);
+      const compNumbers = compLower.match(/\d{2,4}(?:cc)?/g);
+      const hasNearCC = compNumbers?.some(n => { const nn = parseInt(n); return Math.abs(nn - targetCC) <= 25; });
+      if (!hasNearCC) { score -= 0.08; factors.push('Engine size mismatch'); }
+    }
+
+    if (stroke && stroke !== 'unknown') {
+      const strokeDigit = stroke.includes('2') ? '2' : stroke.includes('4') ? '4' : '';
+      if (strokeDigit && compLower.includes(strokeDigit + '-stroke') || compLower.includes(strokeDigit + ' stroke')) {
+        score += 0.06; factors.push(`Stroke match: ${stroke}`);
+      }
+    }
+
+    const startYear = year ? year.split('-')[0].trim() : '';
+    if (startYear && startYear.length === 4 && compLower.includes(startYear)) { score += 0.08; factors.push(`Year match: ${startYear}`); }
+
+    // Exclude clearly wrong category items
+    const mxKeywords = ['motocross', 'mx', 'enduro', 'supermoto', 'dirt bike', 'trail bike', 'off road'];
+    const hasMXKeyword = mxKeywords.some(k => compLower.includes(k));
+    if (!hasMXKeyword && !make) { score -= 0.12; factors.push('No MX category signals in title'); }
+  }
+
+  if (specialistId === 'bicycles' || specialistId === 'cycling') {
+    const brand = String(targetAttrs?.manufacturer ?? targetAttrs?.brand ?? '').toLowerCase();
+    const model = String(targetAttrs?.model ?? targetAttrs?.model_name ?? '').toLowerCase();
+    const frameType = String(targetAttrs?.bike_type ?? targetAttrs?.frame_type ?? '').toLowerCase();
+    const frameSize = String(targetAttrs?.frame_size ?? '').toLowerCase();
+    const year = String(targetAttrs?.year_range ?? targetAttrs?.year_made ?? '').toLowerCase();
+    const groupset = String(targetAttrs?.groupset ?? targetAttrs?.drivetrain ?? '').toLowerCase();
+
+    if (brand && compLower.includes(brand)) { score += 0.18; factors.push(`Brand match: ${brand}`); }
+    else if (brand) { score -= 0.12; factors.push(`Brand mismatch (target: ${brand})`); }
+
+    if (model && model.length > 2 && compLower.includes(model.split(' ')[0])) { score += 0.15; factors.push(`Model match: ${model}`); }
+
+    if (frameType && frameType.length > 3) {
+      const ftWords = frameType.split(/\s+/);
+      if (ftWords.some(w => w.length > 3 && compLower.includes(w))) { score += 0.08; factors.push(`Frame type match: ${frameType}`); }
+    }
+
+    if (frameSize && compLower.includes(frameSize.toLowerCase())) { score += 0.06; factors.push(`Frame size match: ${frameSize}`); }
+
+    const startYear = year ? year.split('-')[0].trim() : '';
+    if (startYear && startYear.length === 4 && compLower.includes(startYear)) { score += 0.06; factors.push(`Year match: ${startYear}`); }
+
+    // Bike category keywords boost relevance
+    const bikeKeywords = ['mountain bike', 'road bike', 'mtb', 'gravel', 'enduro', 'downhill', 'hardtail', 'full suspension', 'bmx', 'hybrid'];
+    const hasBikeKeyword = bikeKeywords.some(k => compLower.includes(k));
+    if (hasBikeKeyword) { score += 0.05; factors.push('Bike category keyword present'); }
+  }
+
+  if (isClothingSpecialist(specialistId)) {
+    const brand = String(targetAttrs?.brand ?? targetAttrs?.Brand ?? targetAttrs?.manufacturer ?? '').toLowerCase();
+    const garmentType = String(targetAttrs?.garment_type ?? targetAttrs?.item_type ?? '').toLowerCase();
+    const era = String(targetAttrs?.era ?? targetAttrs?.era_estimate ?? '').toLowerCase();
+    const size = String(targetAttrs?.size ?? targetAttrs?.labelled_size ?? '').toLowerCase();
+
+    if (brand && compLower.includes(brand)) { score += 0.20; factors.push(`Brand match: ${brand}`); }
+    else if (brand) { score -= 0.15; factors.push(`Brand mismatch (target: ${brand})`); }
+
+    if (garmentType && garmentType.length > 2) {
+      const gtWords = garmentType.split(/\s+/);
+      if (gtWords.some(w => w.length > 3 && compLower.includes(w))) { score += 0.12; factors.push(`Garment type match: ${garmentType}`); }
+    }
+
+    const eraKeywords = era ? era.split(/[\s,]+/).filter(w => w.length >= 4) : [];
+    if (eraKeywords.some(k => compLower.includes(k))) { score += 0.08; factors.push(`Era match: ${era}`); }
+
+    if (size && size.length >= 1 && compLower.includes(size)) { score += 0.05; factors.push(`Size match: ${size}`); }
+
+    // Vintage/deadstock signal boosts
+    if (compLower.includes('vintage') || compLower.includes('deadstock') || compLower.includes('distressed')) {
+      score += 0.04; factors.push('Vintage/deadstock signal');
+    }
+  }
+
+  if (comparable.price > 2000) { score -= 0.08; factors.push('Unusually high-value — may be exceptional specimen'); }
   if (comparable.saleStatus === 'active') { score -= 0.30; factors.push('Asking price — not a verified sale'); }
 
   return { score: Math.max(0, Math.min(1, score)), factors };
@@ -991,16 +1136,21 @@ Deno.serve(async (req: Request) => {
       : Promise.resolve(null),
   ]);
 
-  // Additional eBay search queries if few results
+  // Additional eBay search queries — run fallback queries in parallel for non-coin niches
   let additionalSold: ComparableItem[] = [];
-  if (primarySold.listings.length < 10 && searchQueries.length > 1) {
-    const secondary = await searchVerifiedSoldListings(clientId, searchQueries[1], 30);
-    additionalSold = secondary.listings;
+  const needsMore = primarySold.listings.length < 15;
+  const fallbackQueries = searchQueries.slice(1);
+
+  if (needsMore && fallbackQueries.length > 0) {
+    const fallbackSearches = await Promise.all(
+      fallbackQueries.map(q => searchVerifiedSoldListings(clientId, q, 30))
+    );
+    for (const r of fallbackSearches) additionalSold = [...additionalSold, ...r.listings];
   }
 
-  // Numista title search for coins (if we have a verified type)
-  if (isCoin && numistaTitle && searchQueries[2] && primarySold.listings.length < 15) {
-    const numistaSearch = await searchVerifiedSoldListings(clientId, searchQueries[2], 30);
+  // For coins: Numista title search for even more precision
+  if (isCoin && numistaTitle && primarySold.listings.length < 15) {
+    const numistaSearch = await searchVerifiedSoldListings(clientId, numistaTitle.slice(0, 80), 30);
     additionalSold = [...additionalSold, ...numistaSearch.listings];
   }
 
@@ -1054,9 +1204,9 @@ Deno.serve(async (req: Request) => {
     };
   }
 
-  // Auto-apply to item
+  // Auto-apply to item — always apply when explicitly requested (not just autonomous mode)
   let applied = false;
-  if (applyToItem && itemId && autonomousMode && combined.dataQuality !== 'insufficient') {
+  if (applyToItem && itemId && combined.dataQuality !== 'insufficient') {
     try {
       await supabase.from('items').update({
         valuation_low: valuation.valuationLow,

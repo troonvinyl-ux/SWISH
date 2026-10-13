@@ -2387,6 +2387,7 @@ export default function StockListingScreen() {
             }
             applyToItem={true}
             initialResult={reValueResult}
+            autoFetch={!item.valuationMid || item.valuationMid <= 0}
           />
         ) : null}
 
