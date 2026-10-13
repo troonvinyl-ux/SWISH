@@ -28,6 +28,7 @@ import { getLearningStats, LearningStats } from '@/services/aiLearningService';
 import { getPartialImageItems } from '@/services/ebayImageService';
 import { getSupabaseClient } from '@/template';
 import { NICHES, NICHE_LIST, NicheId } from '@/constants/niches';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -2278,6 +2279,254 @@ const syncStyles = StyleSheet.create({
   partialCheckRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
 });
 
+// ── Credential Migration Card ────────────────────────────────────────────────
+// One-time admin action: re-encrypts any plaintext credential_ref rows to
+// AES-256-GCM.  Only visible to owners/admins.  Safe to run multiple times
+// (already-encrypted rows are skipped automatically by the edge function).
+
+type MigrateState = 'idle' | 'running' | 'done' | 'error';
+
+interface MigrateResult {
+  totalRows: number;
+  migrated: number;
+  alreadyEncrypted: number;
+  failed: number;
+  errors: string[];
+}
+
+function CredentialMigrationCard({
+  tenantId, isOwner,
+}: {
+  tenantId: string | null;
+  isOwner: boolean;
+}) {
+  const { showAlert } = useAlert();
+  const supabase = getSupabaseClient();
+  const [state, setState] = useState<MigrateState>('idle');
+  const [result, setResult] = useState<MigrateResult | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const handleMigrate = useCallback(async () => {
+    if (!isOwner) {
+      showAlert(
+        'Owner Required',
+        'Only the tenant owner or admin can run the credential migration.',
+      );
+      return;
+    }
+    if (!tenantId) {
+      showAlert('Not Ready', 'Tenant not loaded yet. Please try again.');
+      return;
+    }
+
+    showAlert(
+      'Encrypt eBay Credentials',
+      'This will migrate any unencrypted eBay credentials stored for this account to AES-256-GCM encryption. ' +
+      'Already-encrypted credentials are skipped. The operation is safe to run multiple times. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Run Migration',
+          onPress: async () => {
+            setState('running');
+            setResult(null);
+            setErrorMsg(null);
+
+            try {
+              const { data, error: fnErr } = await supabase.functions.invoke(
+                'swish-migrate-credentials',
+                { body: { tenantId } },
+              );
+
+              if (fnErr) {
+                let msg = fnErr.message ?? 'Unknown error';
+                if (fnErr instanceof FunctionsHttpError) {
+                  try {
+                    const statusCode = fnErr.context?.status ?? 500;
+                    const text = await fnErr.context?.text();
+                    if (text) {
+                      try { const p = JSON.parse(text); msg = p.error ?? text; } catch { msg = text; }
+                    }
+                    msg = `[${statusCode}] ${msg}`;
+                  } catch { /* use existing msg */ }
+                }
+                setState('error');
+                setErrorMsg(msg);
+                return;
+              }
+
+              setResult(data as MigrateResult);
+              setState('done');
+            } catch (e: any) {
+              setState('error');
+              setErrorMsg(e?.message ?? 'Migration failed');
+            }
+          },
+        },
+      ],
+    );
+  }, [isOwner, tenantId, supabase, showAlert]);
+
+  const reset = useCallback(() => {
+    setState('idle');
+    setResult(null);
+    setErrorMsg(null);
+  }, []);
+
+  // Compute status colour and label
+  const needsMigration = result ? result.migrated > 0 : null;
+  const allOk = result ? result.migrated === 0 && result.failed === 0 : null;
+
+  return (
+    <View style={migStyles.card}>
+      {/* Header */}
+      <View style={migStyles.header}>
+        <View style={[migStyles.iconWrap, { backgroundColor: Colors.warning + '20' }]}>
+          <MaterialIcons name="lock" size={18} color={Colors.warning} />
+        </View>
+        <View style={migStyles.flex}>
+          <Text style={migStyles.title}>Credential Encryption Migration</Text>
+          <Text style={migStyles.desc}>
+            Re-encrypts any stored eBay credentials that pre-date AES-256-GCM encryption.
+            Already-encrypted credentials are skipped automatically.
+          </Text>
+        </View>
+      </View>
+
+      {/* Result */}
+      {state === 'done' && result ? (
+        <View style={migStyles.resultWrap}>
+          <View style={migStyles.resultRow}>
+            {[
+              { icon: 'lock' as const,          color: result.migrated > 0 ? Colors.success : Colors.textTertiary, label: 'Migrated',       value: result.migrated },
+              { icon: 'check-circle' as const,  color: Colors.success,                                              label: 'Already Enc.',   value: result.alreadyEncrypted },
+              { icon: 'error-outline' as const, color: result.failed > 0 ? Colors.danger : Colors.textTertiary,    label: 'Failed',         value: result.failed },
+            ].map(m => (
+              <View key={m.label} style={migStyles.metric}>
+                <MaterialIcons name={m.icon} size={16} color={m.color} />
+                <Text style={[migStyles.metricValue, { color: m.color }]}>{m.value}</Text>
+                <Text style={migStyles.metricLabel}>{m.label}</Text>
+              </View>
+            ))}
+          </View>
+          {allOk ? (
+            <View style={migStyles.successBanner}>
+              <MaterialIcons name="verified-user" size={13} color={Colors.success} />
+              <Text style={migStyles.successText}>
+                All credentials are already encrypted — no migration needed.
+              </Text>
+            </View>
+          ) : needsMigration ? (
+            <View style={migStyles.successBanner}>
+              <MaterialIcons name="lock" size={13} color={Colors.success} />
+              <Text style={migStyles.successText}>
+                {result.migrated} credential{result.migrated !== 1 ? 's' : ''} successfully encrypted.
+              </Text>
+            </View>
+          ) : null}
+          {result.errors.length > 0 ? (
+            <View style={migStyles.errorBanner}>
+              <MaterialIcons name="error" size={13} color={Colors.danger} />
+              <Text style={migStyles.errorText} numberOfLines={3}>
+                {result.errors.slice(0, 2).join('\n')}
+                {result.errors.length > 2 ? `\n...and ${result.errors.length - 2} more` : ''}
+              </Text>
+            </View>
+          ) : null}
+          <Pressable onPress={reset} style={migStyles.resetBtn} hitSlop={8}>
+            <Text style={migStyles.resetBtnText}>Dismiss</Text>
+          </Pressable>
+        </View>
+      ) : state === 'error' ? (
+        <View style={migStyles.errorBanner}>
+          <MaterialIcons name="error" size={13} color={Colors.danger} />
+          <Text style={migStyles.errorText} numberOfLines={3}>{errorMsg}</Text>
+          <Pressable onPress={reset} hitSlop={8}>
+            <Text style={[migStyles.resetBtnText, { color: Colors.primary }]}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {/* CTA button */}
+      {(state === 'idle' || state === 'error') ? (
+        <Pressable
+          onPress={handleMigrate}
+          disabled={!isOwner || !tenantId}
+          style={({ pressed }) => [
+            migStyles.btn,
+            (!isOwner || !tenantId) && { opacity: 0.4 },
+            pressed && { opacity: 0.82 },
+          ]}
+        >
+          <MaterialIcons name="lock" size={15} color={Colors.background} />
+          <Text style={migStyles.btnText}>Encrypt Credentials Now</Text>
+        </Pressable>
+      ) : state === 'running' ? (
+        <View style={[migStyles.btn, { opacity: 0.7 }]}>
+          <ActivityIndicator size="small" color={Colors.background} style={{ width: 15, height: 15 }} />
+          <Text style={migStyles.btnText}>Encrypting...</Text>
+        </View>
+      ) : null}
+
+      {!isOwner ? (
+        <View style={migStyles.ownerNote}>
+          <MaterialIcons name="info-outline" size={11} color={Colors.textTertiary} />
+          <Text style={migStyles.ownerNoteText}>Owner or admin role required.</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+const migStyles = StyleSheet.create({
+  card: {
+    backgroundColor: Colors.surface, borderRadius: Radius.xl,
+    borderWidth: 1, borderColor: Colors.surfaceBorder,
+    padding: Spacing.base, gap: Spacing.md, ...Shadow.sm,
+  },
+  header: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md },
+  iconWrap: { width: 36, height: 36, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  flex: { flex: 1 },
+  title: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: Colors.textPrimary },
+  desc: { fontSize: Typography.size.xs, color: Colors.textTertiary, marginTop: 2, lineHeight: 16 },
+
+  resultWrap: { gap: Spacing.sm },
+  resultRow: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: Spacing.xs },
+  metric: { alignItems: 'center', gap: 4 },
+  metricValue: { fontSize: Typography.size.lg, fontWeight: Typography.weight.bold },
+  metricLabel: { fontSize: 9, color: Colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.4 },
+
+  successBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    backgroundColor: Colors.successDim, borderRadius: Radius.md, padding: Spacing.sm,
+    borderWidth: 1, borderColor: Colors.success + '30',
+  },
+  successText: { flex: 1, fontSize: Typography.size.xs, color: Colors.success, lineHeight: 16 },
+
+  errorBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm,
+    backgroundColor: Colors.dangerDim, borderRadius: Radius.md, padding: Spacing.sm,
+    borderWidth: 1, borderColor: Colors.danger + '30',
+  },
+  errorText: { flex: 1, fontSize: Typography.size.xs, color: Colors.danger, lineHeight: 16 },
+
+  btn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm,
+    backgroundColor: Colors.warning, borderRadius: Radius.md, paddingVertical: Spacing.md,
+  },
+  btnText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: Colors.background },
+
+  resetBtn: { alignSelf: 'center' },
+  resetBtnText: { fontSize: Typography.size.xs, color: Colors.textTertiary, textDecorationLine: 'underline' },
+
+  ownerNote: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: Colors.surfaceHighlight, borderRadius: Radius.sm, padding: Spacing.sm,
+    borderWidth: 1, borderColor: Colors.surfaceBorder,
+  },
+  ownerNoteText: { flex: 1, fontSize: 10, color: Colors.textTertiary },
+});
+
 // ── Advanced Section ───────────────────────────────────────────────────────
 
 function AdvancedSection({
@@ -2459,6 +2708,12 @@ function AdvancedSection({
                 color={Colors.success}
               />
             </CardGroup>
+          </View>
+
+          {/* Security — Credential Migration */}
+          <View style={advStyles.subSection}>
+            <Text style={advStyles.subTitle}>SECURITY</Text>
+            <CredentialMigrationCard tenantId={tenant?.id ?? null} isOwner={isOwner} />
           </View>
 
         </View>

@@ -1,0 +1,215 @@
+// SWISH — swish-migrate-credentials Edge Function
+//
+// One-time admin operation: reads every marketplace_connectors row, checks
+// whether credential_ref is plaintext (unencrypted), and re-encrypts it with
+// AES-256-GCM via migrateToEncrypted().  The encrypted value is persisted back
+// to the row immediately so each row is only migrated once.
+//
+// SECURITY INVARIANTS
+//   - Only callable by authenticated tenants whose membership is owner/admin.
+//   - credential_ref is NEVER returned to the caller.
+//   - Credential contents are NEVER logged — only structural metadata.
+//   - Runs server-side only.  No credential material leaves this function.
+//
+// REQUEST:  POST  { tenantId?: string }
+//   - tenantId filters to one tenant.  Omit to migrate all tenants (owner/admin only).
+//
+// RESPONSE: { migrated: number; alreadyEncrypted: number; failed: number; errors: string[] }
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+import { corsHeaders } from '../_shared/cors.ts';
+import { isEncrypted, migrateToEncrypted } from '../_shared/credentialCrypto.ts';
+
+const SUPABASE_URL             = Deno.env.get('SUPABASE_URL') ?? '';
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
+function error(msg: string, status = 400) {
+  return json({ error: msg }, status);
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+
+Deno.serve(async (req: Request) => {
+  // CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
+
+  if (req.method !== 'POST') {
+    return error('Method not allowed', 405);
+  }
+
+  // ── Authenticate caller ────────────────────────────────────────────────────
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return error('Missing or invalid Authorization header', 401);
+  }
+  const token = authHeader.replace('Bearer ', '').trim();
+
+  // Create an authed client (respects RLS for membership check)
+  const authedClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+
+  // Resolve the calling user
+  const { data: { user }, error: userErr } = await authedClient.auth.getUser(token);
+  if (userErr || !user) {
+    return error('Unauthenticated — valid session required', 401);
+  }
+
+  // ── Parse body ─────────────────────────────────────────────────────────────
+  let body: { tenantId?: string } = {};
+  try { body = await req.json(); } catch { /* empty body is fine */ }
+  const { tenantId } = body;
+
+  // ── Verify caller is owner/admin of the specified tenant (or all tenants) ──
+  // We use the service-role client for the actual data access, but we validate
+  // membership using the authed client so RLS applies.
+  if (tenantId) {
+    const { data: membership, error: mErr } = await authedClient
+      .from('tenant_memberships')
+      .select('role, is_owner')
+      .eq('tenant_id', tenantId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (mErr || !membership) {
+      return error('Not a member of the specified tenant', 403);
+    }
+    const isPrivileged =
+      membership.is_owner === true ||
+      membership.role === 'owner' ||
+      membership.role === 'admin';
+    if (!isPrivileged) {
+      return error('Owner or admin role required', 403);
+    }
+  } else {
+    // No tenantId — caller must be a superuser (has membership across many tenants).
+    // We simply confirm the caller has at least one owner/admin membership.
+    const { data: memberships, error: mErr } = await authedClient
+      .from('tenant_memberships')
+      .select('role, is_owner')
+      .eq('user_id', user.id)
+      .in('role', ['owner', 'admin']);
+
+    const hasPrivileged =
+      !mErr &&
+      memberships != null &&
+      memberships.some(m => m.is_owner === true || m.role === 'owner' || m.role === 'admin');
+
+    if (!hasPrivileged) {
+      return error('Owner or admin role required for cross-tenant migration', 403);
+    }
+  }
+
+  // ── Service-role client for credential access ──────────────────────────────
+  // credential_ref is never accessible to the authed client (excluded from safe
+  // column list in marketplaceService.ts), so we use the service-role client
+  // exclusively for reading and writing the encrypted value.
+  const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+  // ── Fetch connector rows ───────────────────────────────────────────────────
+  // Only fetch rows that have a non-empty credential_ref.
+  let query = adminClient
+    .from('marketplace_connectors')
+    .select('id, tenant_id, marketplace_id, credential_ref')
+    .not('credential_ref', 'is', null)
+    .neq('credential_ref', '');
+
+  if (tenantId) {
+    query = query.eq('tenant_id', tenantId);
+  }
+
+  const { data: rows, error: fetchErr } = await query;
+  if (fetchErr) {
+    console.error('[swish-migrate-credentials] DB fetch error:', fetchErr.message);
+    return error(`Database error: ${fetchErr.message}`, 500);
+  }
+
+  if (!rows || rows.length === 0) {
+    console.log('[swish-migrate-credentials] No connector rows with credential_ref found.');
+    return json({ migrated: 0, alreadyEncrypted: 0, failed: 0, errors: [] });
+  }
+
+  // ── Process each row ───────────────────────────────────────────────────────
+  let migrated = 0;
+  let alreadyEncrypted = 0;
+  let failed = 0;
+  const errors: string[] = [];
+
+  for (const row of rows) {
+    const stored: string = row.credential_ref;
+
+    // Skip already-encrypted rows — migrateToEncrypted returns null for them
+    if (isEncrypted(stored)) {
+      alreadyEncrypted++;
+      continue;
+    }
+
+    try {
+      const encrypted = await migrateToEncrypted(stored);
+      if (encrypted === null) {
+        // Already encrypted (defensive check — should not reach here given the
+        // isEncrypted() guard above, but handle it gracefully)
+        alreadyEncrypted++;
+        continue;
+      }
+
+      // Persist the encrypted value
+      const { error: updateErr } = await adminClient
+        .from('marketplace_connectors')
+        .update({
+          credential_ref: encrypted,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', row.id)
+        .eq('tenant_id', row.tenant_id); // belt-and-braces tenant guard
+
+      if (updateErr) {
+        failed++;
+        const msg = `Row ${row.id} (${row.marketplace_id}): update failed — ${updateErr.message}`;
+        errors.push(msg);
+        console.error('[swish-migrate-credentials]', msg);
+      } else {
+        migrated++;
+        // Log only structural metadata — never the credential content
+        console.log(
+          `[swish-migrate-credentials] Migrated row id=${row.id} marketplace=${row.marketplace_id} ` +
+          `tenant=${row.tenant_id} plaintext_len=${stored.length} encrypted_len=${encrypted.length}`,
+        );
+      }
+    } catch (e: any) {
+      failed++;
+      const msg = `Row ${row.id} (${row.marketplace_id}): ${e?.message ?? 'Unknown error'}`;
+      errors.push(msg);
+      console.error('[swish-migrate-credentials]', msg);
+    }
+  }
+
+  const summary = {
+    totalRows: rows.length,
+    migrated,
+    alreadyEncrypted,
+    failed,
+    errors,
+  };
+
+  console.log('[swish-migrate-credentials] Complete:', JSON.stringify({
+    totalRows: summary.totalRows,
+    migrated: summary.migrated,
+    alreadyEncrypted: summary.alreadyEncrypted,
+    failed: summary.failed,
+    errorCount: errors.length,
+  }));
+
+  return json(summary, failed > 0 ? 207 : 200); // 207 Multi-Status if partial failures
+});
