@@ -29,6 +29,68 @@ const statusConfig: Record<string, { color: string; label: string; variant: 'suc
   hold: { color: Colors.warning, label: 'Hold', variant: 'warning' },
 };
 
+// ── Market range badge with confidence colour ───────────────────────────────
+function getConfidenceColor(confidence: string | undefined | null): string {
+  const c = (confidence ?? '').toLowerCase();
+  if (c === 'high') return Colors.success;
+  if (c === 'medium') return Colors.warning;
+  if (c === 'low') return Colors.warning;
+  if (c === 'very_low') return Colors.danger;
+  return Colors.textTertiary; // no data
+}
+
+function MarketRangeBadge({ low, high, confidence }: { low: number; high: number; confidence: string | undefined | null }) {
+  const hasRange = low > 0 || high > 0;
+  const color = getConfidenceColor(confidence);
+  const isNoData = !hasRange || !confidence || confidence === 'insufficient_data' || confidence === 'unknown';
+
+  if (isNoData) {
+    return (
+      <View style={mrb.badge}>
+        <View style={[mrb.dot, { backgroundColor: Colors.textTertiary }]} />
+        <Text style={[mrb.rangeText, { color: Colors.textTertiary }]}>No market data</Text>
+      </View>
+    );
+  }
+
+  const lowStr = low > 0 ? `£${low.toFixed(0)}` : '?';
+  const highStr = high > 0 ? `£${high.toFixed(0)}` : '?';
+  const confLabel = (confidence ?? '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+  return (
+    <View style={[mrb.badge, { borderColor: color + '35', backgroundColor: color + '12' }]}>
+      <View style={[mrb.dot, { backgroundColor: color }]} />
+      <Text style={[mrb.rangeText, { color }]}>{lowStr}–{highStr}</Text>
+    </View>
+  );
+}
+
+const mrb = StyleSheet.create({
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: Radius.pill,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    backgroundColor: Colors.surfaceHighlight,
+    alignSelf: 'flex-end',
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  rangeText: {
+    fontSize: 10,
+    fontWeight: Typography.weight.semibold,
+    color: Colors.textTertiary,
+    letterSpacing: 0.1,
+  },
+});
+
 export const ItemCard = memo(({ item, onPress, onReprice, compact = false, showReprice = false }: ItemCardProps) => {
   const router = useRouter();
   const specialist = SPECIALISTS[item.specialistId];
@@ -112,11 +174,20 @@ export const ItemCard = memo(({ item, onPress, onReprice, compact = false, showR
         {/* Right: Valuation */}
         <View style={styles.valuations}>
           <Text style={styles.valuationLabel}>Est. Value</Text>
-          <Text style={styles.valuationMid}>£{item.valuationMid.toLocaleString()}</Text>
-          <Text style={styles.valuationRange}>
-            £{item.valuationLow}–£{item.valuationHigh}
-          </Text>
-          {!compact ? (
+          {item.valuationMid > 0 ? (
+            <Text style={styles.valuationMid}>£{item.valuationMid.toLocaleString()}</Text>
+          ) : (
+            <Text style={styles.valuationNoData}>Not valued</Text>
+          )}
+
+          {/* Market value range badge with confidence colour */}
+          <MarketRangeBadge
+            low={item.valuationLow}
+            high={item.valuationHigh}
+            confidence={item.valuationConfidence as string}
+          />
+
+          {!compact && item.saleProb30d > 0 ? (
             <Text style={[styles.saleProb, { color: item.saleProb30d >= 0.7 ? Colors.success : Colors.warning }]}>
               {Math.round(item.saleProb30d * 100)}% / 30d
             </Text>
@@ -229,9 +300,11 @@ const styles = StyleSheet.create({
     fontWeight: Typography.weight.bold,
     color: Colors.textPrimary,
   },
-  valuationRange: {
-    fontSize: Typography.size.xs - 1,
+  valuationNoData: {
+    fontSize: Typography.size.sm,
+    fontWeight: Typography.weight.semibold,
     color: Colors.textTertiary,
+    fontStyle: 'italic',
   },
   saleProb: {
     fontSize: Typography.size.xs,
