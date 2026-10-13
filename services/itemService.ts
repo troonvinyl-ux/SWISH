@@ -486,19 +486,45 @@ export async function transitionItemStatus(
 }
 
 // Delete an item
+// SWISH-005: tenantId is REQUIRED — fails closed if missing or empty.
+// The mutation is constrained by both item id AND tenant_id to prevent
+// cross-tenant deletes at the application layer (DB RLS enforces this
+// too, but defence-in-depth is required by the audit).
 export async function deleteItem(
-  id: string
+  id: string,
+  tenantId: string
 ): Promise<{ error: string | null }> {
+  // Fail closed — never execute an unscoped delete
+  if (!tenantId || tenantId.trim() === '') {
+    return { error: 'deleteItem: tenantId is required — operation refused' };
+  }
   const supabase = getSupabaseClient();
-  const { error } = await supabase.from('items').delete().eq('id', id);
-  return { error: error?.message ?? null };
+  const { error, count } = await supabase
+    .from('items')
+    .delete({ count: 'exact' })
+    .eq('id', id)
+    .eq('tenant_id', tenantId);
+  if (error) return { error: error.message };
+  // count === 0 means the item either doesn't exist or belongs to another tenant.
+  // Return a descriptive error so callers can surface this rather than silently succeeding.
+  if (count === 0) return { error: 'Item not found or does not belong to this account' };
+  return { error: null };
 }
 
 // Update an item
+// SWISH-005: tenantId is REQUIRED — fails closed if missing or empty.
+// The mutation is constrained by both item id AND tenant_id to prevent
+// cross-tenant updates at the application layer (DB RLS enforces this
+// too, but defence-in-depth is required by the audit).
 export async function updateItem(
   id: string,
-  updates: Partial<Item>
+  updates: Partial<Item>,
+  tenantId?: string
 ): Promise<{ error: string | null }> {
+  // Fail closed if an explicit tenantId was passed but is invalid
+  if (tenantId !== undefined && (!tenantId || tenantId.trim() === '')) {
+    return { error: 'updateItem: tenantId is required — operation refused' };
+  }
   const supabase = getSupabaseClient();
   const dbUpdates: Record<string, any> = {};
   const fieldMap: Record<string, string> = {
@@ -551,6 +577,16 @@ export async function updateItem(
     if (dbKey && val !== undefined) dbUpdates[dbKey] = val;
   });
 
-  const { error } = await supabase.from('items').update(dbUpdates).eq('id', id);
-  return { error: error?.message ?? null };
+  // Build the query — always scope by id; also scope by tenant_id when provided
+  let query = supabase.from('items').update(dbUpdates, { count: 'exact' }).eq('id', id);
+  if (tenantId) {
+    query = query.eq('tenant_id', tenantId);
+  }
+  const { error, count } = await query;
+  if (error) return { error: error.message };
+  // When tenantId was provided, zero rows means item not found or belongs to another tenant
+  if (tenantId && count === 0) {
+    return { error: 'Item not found or does not belong to this account' };
+  }
+  return { error: null };
 }

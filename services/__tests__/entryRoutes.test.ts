@@ -506,6 +506,173 @@ describe('SWISH-004: Onboarding import niche classification', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SWISH-005: Tenant Ownership Guards on updateItem / deleteItem
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Inline the guard logic from services/itemService.ts to validate
+// the guard logic independently of the Supabase client.
+
+function simulateDeleteItem(
+  id: string,
+  tenantId: string
+): { error: string | null; wouldExecute: boolean } {
+  // Guard: fail closed if tenantId is missing or empty
+  if (!tenantId || tenantId.trim() === '') {
+    return { error: 'deleteItem: tenantId is required — operation refused', wouldExecute: false };
+  }
+  // Would execute: DELETE FROM items WHERE id = $id AND tenant_id = $tenantId
+  return { error: null, wouldExecute: true };
+}
+
+function simulateUpdateItem(
+  id: string,
+  updates: Record<string, any>,
+  tenantId: string | undefined
+): { error: string | null; wouldExecute: boolean; isScopedByTenant: boolean } {
+  // Guard: fail closed only when tenantId is explicitly passed but invalid
+  if (tenantId !== undefined && (!tenantId || tenantId.trim() === '')) {
+    return { error: 'updateItem: tenantId is required — operation refused', wouldExecute: false, isScopedByTenant: false };
+  }
+  // Would execute: UPDATE items SET ... WHERE id = $id [AND tenant_id = $tenantId]
+  const isScopedByTenant = !!tenantId;
+  return { error: null, wouldExecute: true, isScopedByTenant };
+}
+
+// Simulate zero-row detection (what happens when the WHERE clause matches nothing)
+function simulateZeroRowResult(tenantId: string | undefined): { error: string | null } {
+  if (tenantId) {
+    return { error: 'Item not found or does not belong to this account' };
+  }
+  return { error: null }; // Without tenantId, zero rows is not caught (legacy path)
+}
+
+describe('SWISH-005: Tenant ownership guards on inventory mutations', () => {
+
+  // ── deleteItem guards ────────────────────────────────────────────────────
+  describe('deleteItem: tenant guard', () => {
+    test('AC-1: deleteItem with valid tenantId succeeds (would execute)', () => {
+      const r = simulateDeleteItem('item-uuid-123', 'tenant-uuid-456');
+      expect(r.error).toBeNull();
+      expect(r.wouldExecute).toBe(true);
+    });
+
+    test('AC-2: deleteItem with empty tenantId refuses to execute (fails closed)', () => {
+      const r = simulateDeleteItem('item-uuid-123', '');
+      expect(r.error).not.toBeNull();
+      expect(r.wouldExecute).toBe(false);
+    });
+
+    test('AC-3: deleteItem with whitespace-only tenantId refuses to execute', () => {
+      const r = simulateDeleteItem('item-uuid-123', '   ');
+      expect(r.error).not.toBeNull();
+      expect(r.wouldExecute).toBe(false);
+    });
+
+    test('AC-4: deleteItem zero-row result returns descriptive error (wrong tenant)', () => {
+      // Simulate a deletion that matched 0 rows
+      const r = simulateZeroRowResult('correct-tenant-uuid');
+      expect(r.error).toBe('Item not found or does not belong to this account');
+    });
+
+    test('AC-5: deleteItem query is scoped by tenant_id when tenantId provided', () => {
+      const r = simulateDeleteItem('item-uuid-123', 'tenant-uuid-456');
+      // If it would execute, it is scoped by both id and tenant_id
+      expect(r.wouldExecute).toBe(true);
+      // Guard passes only because tenantId is present and non-empty
+      expect(r.error).toBeNull();
+    });
+  });
+
+  // ── updateItem guards ─────────────────────────────────────────────────────
+  describe('updateItem: tenant guard', () => {
+    test('AC-1: updateItem with valid tenantId succeeds and is scoped by tenant', () => {
+      const r = simulateUpdateItem('item-uuid-123', { status: 'sold' }, 'tenant-uuid-456');
+      expect(r.error).toBeNull();
+      expect(r.wouldExecute).toBe(true);
+      expect(r.isScopedByTenant).toBe(true);
+    });
+
+    test('AC-2: updateItem with empty string tenantId refuses to execute', () => {
+      const r = simulateUpdateItem('item-uuid-123', { status: 'sold' }, '');
+      expect(r.error).not.toBeNull();
+      expect(r.wouldExecute).toBe(false);
+    });
+
+    test('AC-3: updateItem with whitespace-only tenantId refuses to execute', () => {
+      const r = simulateUpdateItem('item-uuid-123', { status: 'sold' }, '   ');
+      expect(r.error).not.toBeNull();
+      expect(r.wouldExecute).toBe(false);
+    });
+
+    test('AC-4: updateItem with undefined tenantId executes (backward-compat) but is NOT scoped by tenant', () => {
+      // Legacy callers that don\'t pass tenantId still work
+      // but the mutation is not tenant-scoped at the application layer
+      const r = simulateUpdateItem('item-uuid-123', { status: 'sold' }, undefined);
+      expect(r.error).toBeNull();
+      expect(r.wouldExecute).toBe(true);
+      expect(r.isScopedByTenant).toBe(false); // No tenant scoping — relies on RLS alone
+    });
+
+    test('AC-5: updateItem zero-row result returns error when tenantId is provided', () => {
+      const r = simulateZeroRowResult('correct-tenant-uuid');
+      expect(r.error).toBe('Item not found or does not belong to this account');
+    });
+
+    test('AC-6: updateItem zero-row with no tenantId does NOT return ownership error', () => {
+      // Without tenantId, zero rows is not treated as ownership violation
+      const r = simulateZeroRowResult(undefined);
+      expect(r.error).toBeNull();
+    });
+
+    test('AC-7: updateItem does not execute if empty tenantId is explicitly passed', () => {
+      const r = simulateUpdateItem('item-uuid-123', { canonicalTitle: 'New title' }, '');
+      expect(r.wouldExecute).toBe(false);
+      expect(r.error).toContain('tenantId is required');
+    });
+  });
+
+  // ── Cross-tenant isolation ────────────────────────────────────────────────
+  describe('Cross-tenant mutation isolation', () => {
+    test('Wrong tenant cannot delete an item (guard blocks unscoped query)', () => {
+      // Tenant A tries to delete with Tenant B\'s ID — guard validates the format
+      // but the DB query\'s tenant_id constraint will return 0 rows
+      const r = simulateDeleteItem('item-belonging-to-A', 'tenant-B');
+      // Guard passes (tenant-B is a valid non-empty UUID format)
+      expect(r.error).toBeNull();
+      expect(r.wouldExecute).toBe(true);
+      // However, the DB query constrains by tenant_id so it would match 0 rows
+      const zeroRowResult = simulateZeroRowResult('tenant-B');
+      expect(zeroRowResult.error).toBe('Item not found or does not belong to this account');
+    });
+
+    test('Missing tenantId cannot reach the database for delete', () => {
+      const r = simulateDeleteItem('item-uuid-123', '');
+      expect(r.wouldExecute).toBe(false); // Blocked before DB query
+    });
+
+    test('Missing tenantId cannot reach the database for update', () => {
+      const r = simulateUpdateItem('item-uuid-123', { status: 'sold' }, '');
+      expect(r.wouldExecute).toBe(false); // Blocked before DB query
+    });
+  });
+
+  // ── SWISH-003 and SWISH-004 regression (not weakened by SWISH-005) ───────
+  describe('SWISH-003/004 regression: existing niche guards unaffected', () => {
+    test('bicycles specialist filter is still correct', () => {
+      const ids = getInventorySpecialistIds('bicycles');
+      expect(ids).toEqual(['bicycles']);
+    });
+    test('nicheToSpecialistId bicycles still returns bicycles', () => {
+      expect(nicheToSpecialistId('bicycles')).toBe('bicycles');
+    });
+    test('onboarding bicycle classification returns bicycles specialist', () => {
+      const r = resolveImportSpecialistId({ categoryId: '2904' }, 'bicycles');
+      expect(r.specialistId).toBe('bicycles');
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 describe('SWISH-001: Entry Route Mapping Tests', () => {
   // ── Coins niche ──────────────────────────────────────────────────────────

@@ -863,7 +863,7 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
       saleProb30d: r.saleProb30d ?? item.saleProb30d,
       attributes: { ...item.attributes, ...r.attributes }, warnings: r.warnings ?? item.warnings, media: permanentUrls,
     };
-    await updateItem(item.id, updates);
+    await updateItem(item.id, updates, tenantId);
     setSaving(false); onComplete(updates, permanentUrls);
   }, [result, capturedImages, item, tenantId, onComplete]);
 
@@ -1262,7 +1262,7 @@ function MarketValuePanel({
       expectedNet: listPrice * 0.8725, expectedProfit: listPrice * 0.8725 - (item.acquiredCost ?? 0),
       saleProb30d: val.saleProb30d ?? item.saleProb30d,
     };
-    await updateItem(item.id, updates);
+    await updateItem(item.id, updates, tenantId);
     onUpdated(updates, mv);
   }, [item, tenantId, onUpdated]);
 
@@ -1846,7 +1846,7 @@ export default function StockListingScreen() {
       expectedNet: listPrice * 0.8725, expectedProfit: listPrice * 0.8725 - (item.acquiredCost ?? 0),
       saleProb30d: val.saleProb30d ?? item.saleProb30d,
     };
-    await updateItem(item.id, updates);
+    await updateItem(item.id, updates, tenant?.id);
     setItem(prev => prev ? { ...prev, ...updates } : prev);
     showAlert('Re-Value Complete', `Market value: £${val.valuationLow.toFixed(0)}–£${val.valuationHigh.toFixed(0)} · ${val.valuationConfidence} confidence`);
   }, [item, tenant, showAlert]);
@@ -1896,7 +1896,7 @@ export default function StockListingScreen() {
       const ruler = findSpec(['Ruler', 'Monarch', 'Emperor']); if (ruler && !item.ruler) updates.ruler = ruler;
       const denomination = findSpec(['Denomination', 'Face Value']); if (denomination && !item.denomination) updates.denomination = denomination;
       const yearMade = findSpec(['Year', 'Date']); if (yearMade && !item.yearMade) updates.yearMade = yearMade;
-      await updateItem(item.id, updates);
+      await updateItem(item.id, updates, tenant?.id);
       setItem(prev => prev ? { ...prev, ...updates } : prev);
       showAlert('Synced from eBay', `Updated item data from live eBay listing.`);
     } catch (e: any) { showAlert('Sync Failed', e?.message ?? 'Unknown error'); }
@@ -1948,7 +1948,7 @@ export default function StockListingScreen() {
     const updates: Partial<Item> = { [field]: value };
     if (field === 'expectedSellingPrice') { const price = parseFloat(editValue) || 0; updates.expectedNet = price * 0.8725; updates.expectedProfit = price * 0.8725 - (item.acquiredCost ?? 0); }
     if (field === 'acquiredCost') { const cost = parseFloat(editValue) || 0; updates.expectedProfit = item.expectedNet - cost; }
-    const { error } = await updateItem(item.id, updates);
+    const { error } = await updateItem(item.id, updates, tenant?.id);
     setSaving(false);
     if (error) { showAlert('Save Failed', error); return; }
     setItem(prev => prev ? { ...prev, ...updates } : prev);
@@ -2079,7 +2079,7 @@ export default function StockListingScreen() {
     showAlert('Mark as Sold', 'This will move the item to your History. Continue?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Mark Sold', onPress: async () => {
-        await updateItem(item.id, { status: 'sold', soldPrice: item.expectedSellingPrice, soldAt: new Date().toISOString() });
+        await updateItem(item.id, { status: 'sold', soldPrice: item.expectedSellingPrice, soldAt: new Date().toISOString() }, tenant?.id);
         setItem(prev => prev ? { ...prev, status: 'sold', soldPrice: item.expectedSellingPrice, soldAt: new Date().toISOString() } : prev);
       }},
     ]);
@@ -2092,7 +2092,7 @@ export default function StockListingScreen() {
   const handleMXGradeSelect = useCallback(async (grade: string) => {
     if (!item) return;
     setSavingMXGrade(true);
-    const { error } = await updateItem(item.id, { conditionGrade: grade, condition: grade });
+    const { error } = await updateItem(item.id, { conditionGrade: grade, condition: grade }, tenant?.id);
     setSavingMXGrade(false);
     if (error) { showAlert('Save Failed', error); return; }
     setItem(prev => prev ? { ...prev, conditionGrade: grade, condition: grade } : prev);
@@ -2402,7 +2402,7 @@ export default function StockListingScreen() {
                 acquiredCost: cost,
                 expectedProfit: item.expectedNet - cost,
               };
-              await updateItem(item.id, updates);
+              await updateItem(item.id, updates, tenant?.id);
               setItem(prev => prev ? { ...prev, ...updates } : prev);
               // Recompute intel with new cost
               const updatedIntel = computeItemCommercialIntelligence({
