@@ -131,7 +131,7 @@ function getNicheTheme(activeNicheId: string | null | undefined): NicheTheme {
       label: 'Bike Inventory',
       itemLabel: 'Bike',
       itemsLabel: 'Bikes',
-      specialistIds: ['bicycles', 'cycling'],
+      specialistIds: ['bicycles'],
       subFilters: [
         { label: 'All Bikes', value: 'all', search: '' },
         { label: 'Mountain', value: 'mtb', search: 'mountain' },

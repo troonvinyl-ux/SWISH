@@ -196,8 +196,8 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     icon: 'pedal-bike',
     color: '#22C55E',
     accentColor: '#16A34A',
-    specialists: ['curiosities_collectibles'],
-    defaultSpecialist: 'curiosities_collectibles',
+    specialists: ['bicycles'],
+    defaultSpecialist: 'bicycles',
     terms: {
       item: 'Bike',
       items: 'Bikes',

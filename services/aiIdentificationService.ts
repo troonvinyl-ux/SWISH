@@ -333,9 +333,29 @@ export async function identifyItemWithAI(
     const id = data.identification;
     const numistaV = data.numistaVerification ?? null;
 
+    // ── Niche-context guard ────────────────────────────────────────────────
+    // Prevent the AI edge function from silently overriding a caller-specified
+    // niche-specific specialistId with a generic fallback (e.g. returning
+    // 'curiosities_collectibles' for a bicycle identification request).
+    // Rule: if the caller passed a niche-specific specialist and the AI returns
+    // a generic specialist, retain the caller's niche specialist.
+    const GENERIC_SPECIALISTS = new Set(['curiosities_collectibles', 'antiques']);
+    const NICHE_SPECIFIC_SPECIALISTS = new Set([
+      'bicycles', 'motocross', 'clothing', 'trainers_sneakers',
+      'coins', 'islamic_silver', 'banknotes', 'gold', 'silver',
+      'pokemon_cards', 'trading_cards', 'stamps', 'vinyl_records',
+      'books', 'retro_games', 'retro_consoles',
+    ]);
+    const aiSpecialist = id.specialistId as SpecialistId | undefined;
+    const resolvedSpecialistId: SpecialistId =
+      NICHE_SPECIFIC_SPECIALISTS.has(specialistId) &&
+      (!aiSpecialist || GENERIC_SPECIALISTS.has(aiSpecialist))
+        ? specialistId                            // keep caller's niche specialist
+        : (aiSpecialist ?? specialistId) as SpecialistId; // accept AI's specific value
+
     const result: AIIdentificationResult = {
       canonicalTitle: id.canonicalTitle ?? 'Unknown Item',
-      specialistId: (id.specialistId ?? specialistId) as SpecialistId,
+      specialistId: resolvedSpecialistId,
       // v4 fields
       objectType: id.objectType ?? undefined,
       identificationState: id.identificationState ?? undefined,

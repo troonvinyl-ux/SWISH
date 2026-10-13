@@ -975,7 +975,7 @@ export default function ListingsTabScreen() {
   const nicheSpecialistIds = useMemo((): string[] => {
     const id = (activeNicheId ?? '').toLowerCase();
     if (id === 'motocross' || id === 'mx') return ['motocross'];
-    if (id === 'bicycles' || id === 'cycling' || id === 'bikes') return ['bicycles', 'cycling'];
+    if (id === 'bicycles' || id === 'cycling' || id === 'bikes') return ['bicycles'];
     if (id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers' || id === 'trainers') return ['clothing', 'trainers_sneakers'];
     // Coins: strict specialist list — excludes curiosities_collectibles (eBay import default)
     // to prevent non-coin eBay-imported items leaking into the coin listings view

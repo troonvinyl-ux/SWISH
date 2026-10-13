@@ -22,6 +22,7 @@ export type SpecialistId =
   | 'jewellery_precious_metals'
   | 'cryptocurrency'
   | 'motocross'
+  | 'bicycles'
   | 'curiosities_collectibles';
 
 export interface CaptureRequirement {
@@ -682,6 +683,57 @@ export const SPECIALISTS: Record<SpecialistId, SpecialistConfig> = {
       'honda cr', 'honda crf', 'kawasaki kx', 'suzuki rm', 'beta', 'sherco',
       'gas gas', 'two stroke', 'four stroke', '2t', '4t', 'dirt bike', 'scrambler',
       'supermoto', 'pit bike', 'minibike', 'off road', 'wr', 'exc', 'xc',
+    ],
+    version: '1.0.0',
+  },
+
+  bicycles: {
+    id: 'bicycles',
+    name: 'Bicycles & Cycling',
+    shortName: 'Bicycles',
+    description: 'Identification, condition assessment, and valuation of road, mountain, gravel, hybrid, BMX, e-bikes, and cycling components for resale.',
+    icon: 'pedal-bike',
+    iconFamily: 'MaterialIcons',
+    color: '#6ED020',
+    category: 'physical_goods',
+    captureRequirements: [
+      { id: 'drive_side', label: 'Drive Side', description: 'Right side showing chainset, derailleur and cassette', required: true, hint: 'Most identifying components are on the drive side — fill the frame' },
+      { id: 'non_drive_side', label: 'Non-Drive Side', description: 'Left side showing frame profile and fork', required: true, hint: 'Shows frame shape, geometry, and any frame-side branding' },
+      { id: 'head_badge', label: 'Head Badge / Decal', description: 'Brand decal on head tube or down tube', required: false, hint: 'Critical for brand identification — photograph clearly without glare' },
+      { id: 'components', label: 'Groupset / Components', description: 'Close-up of derailleurs, brakes and shifters', required: false, hint: 'Shimano, SRAM, Campagnolo groupset can be identified from logos on derailleurs' },
+      { id: 'damage_wear', label: 'Damage / Wear', description: 'Any cracks, dents, rust, worn components', required: false, hint: 'Photograph all damage — undisclosed faults cause returns' },
+      { id: 'frame_number', label: 'Frame Number / Size Stamp', description: 'Bottom bracket shell or head tube size stamp', required: false, hint: 'Frame number can reveal year of manufacture on some brands' },
+    ],
+    capabilities: {
+      identify: true, classify: true, research: true, authenticate: false,
+      assessCondition: true, value: true, predictDemand: true,
+      recommendDisposition: true, generateListing: true, validateListing: true,
+      detectRisk: true, suggestAcquisitionStrategy: true,
+    },
+    keyAttributes: [
+      'brand', 'model', 'bike_type', 'frame_size', 'frame_material',
+      'year_range', 'groupset', 'wheel_size', 'brake_type',
+      'suspension_type', 'rideable_status', 'frame_condition',
+      'drivetrain_condition', 'tyres_condition', 'modifications',
+    ],
+    conditionScale: 'Rideable / Needs Service / Non-Rideable / Parts Only',
+    valuationInputs: [
+      'brand', 'model', 'frame_size', 'groupset', 'condition',
+      'rideable_status', 'year', 'modifications', 'completeness',
+      'current_market_demand',
+    ],
+    riskFactors: [
+      'cracked_frame', 'bent_forks', 'seized_bottom_bracket', 'corrosion',
+      'non_matching_components', 'damaged_dropouts', 'carbon_damage',
+      'incorrect_brand_claimed', 'missing_components', 'non_rideable',
+    ],
+    typicalMarketplaces: ['ebay', 'facebook_marketplace', 'gumtree', 'bike_exchange'],
+    autoDetectKeywords: [
+      'bicycle', 'bike', 'mountain bike', 'road bike', 'gravel bike', 'bmx',
+      'e-bike', 'electric bike', 'hybrid bike', 'folding bike', 'shimano',
+      'sram', 'campagnolo', 'specialized', 'trek', 'giant', 'cannondale',
+      'scott', 'cube', 'genesis', 'kona', 'marin', 'carrera', 'halfords',
+      'full suspension', 'hardtail', 'carbon frame', 'aluminium frame',
     ],
     version: '1.0.0',
   },

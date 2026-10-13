@@ -305,7 +305,7 @@ export function nicheToSpecialistId(niche: NicheClassification): string {
   switch (niche) {
     case 'coins':         return 'coins'; // coins specialist
     case 'motocross':     return 'motocross';
-    case 'bicycles':      return 'curiosities_collectibles'; // bicycles niche uses curiosities_collectibles specialist (no dedicated bicycle specialist in SPECIALISTS config)
+    case 'bicycles':      return 'bicycles';
     case 'clothing':      return 'clothing';
     case 'trading_cards': return 'pokemon_cards';
     case 'antiques':      return 'curiosities_collectibles';
