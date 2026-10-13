@@ -1,9 +1,16 @@
 // SWISH V1 Onboarding — Subscriber Journey
-// 2-step journey: Store Details → Connect eBay
+// 3-step journey: Choose Niche → Store Details → Connect eBay
+//
+// Step 0 (new): Niche selection — subscriber chooses their primary trading niche.
+//   This determines which application shell they enter after login.
+//   The choice is persisted to AsyncStorage immediately so the entry route works
+//   even before onboarding is completed.
+//
+// Step 1: Store Details (previously Step 0)
+// Step 2: Connect eBay (previously Step 1)
 //
 // IMPORTANT: Subscribers connect their own eBay seller account via normal
-// eBay OAuth. They are NEVER asked for developer credentials (App ID, Cert ID,
-// RuName). Those are SWISH application credentials stored server-side only.
+// eBay OAuth. They are NEVER asked for developer credentials.
 //
 // After eBay connects, fetches live listing count and offers import CTA.
 
@@ -24,9 +31,62 @@ import { useApp } from '@/hooks/useApp';
 import { upsertBusinessConfig } from '@/services/businessConfigService';
 import { getSupabaseClient } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
+import type { NicheId } from '@/constants/niches';
 
-const TOTAL_STEPS = 2;
-const STEP_LABELS = ['Your Store', 'Connect eBay'];
+const TOTAL_STEPS = 3;
+const STEP_LABELS = ['Your Niche', 'Your Store', 'Connect eBay'];
+
+// Niche → entry route mapping (mirrors app/index.tsx)
+function nicheToEntryRoute(nicheId: NicheId): string {
+  const id = nicheId.toLowerCase();
+  if (id === 'motocross') return '/entry/motocross';
+  if (id === 'bicycles' || id === 'cycling') return '/entry/bicycles';
+  if (id === 'clothing' || id === 'fashion') return '/entry/clothing';
+  return '/entry/coins';
+}
+
+// The four primary subscriber niches available at onboarding
+const ONBOARDING_NICHES: Array<{
+  id: NicheId;
+  name: string;
+  tagline: string;
+  icon: string;
+  color: string;
+  description: string;
+}> = [
+  {
+    id: 'coins',
+    name: 'Coin Flipper',
+    tagline: 'Identify, value and flip coins & collectibles',
+    icon: 'toll',
+    color: '#F5C842',
+    description: 'AI coin identification, Numista verification, eBay valuation, full order management.',
+  },
+  {
+    id: 'motocross',
+    name: 'Flipper MX',
+    tagline: 'Buy, prep and flip motocross & off-road bikes',
+    icon: 'two-wheeler',
+    color: '#EF4444',
+    description: 'MX bike AI identification, running-status valuation, eBay listing and profit tracking.',
+  },
+  {
+    id: 'bicycles',
+    name: 'Bike Flipper',
+    tagline: 'Identify, value and flip bicycles',
+    icon: 'pedal-bike',
+    color: '#22C55E',
+    description: 'Road, MTB, gravel and hybrid bike AI identification, parts & upgrade ROI, eBay listing.',
+  },
+  {
+    id: 'clothing',
+    name: 'Threads Flip',
+    tagline: 'Source, identify and flip vintage & designer clothing',
+    icon: 'checkroom',
+    color: '#EC4899',
+    description: 'Brand & era identification, Depop/eBay valuation, authentication risk, eBay listing.',
+  },
+];
 
 type eBayConnectionStatus = 'idle' | 'authorizing' | 'polling' | 'connected' | 'error';
 
@@ -34,17 +94,22 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { showAlert } = useAlert();
-  const { tenant, tenantLoading, reloadTenant } = useApp();
+  const { tenant, tenantLoading, reloadTenant, setActiveNiche, activeNicheId } = useApp();
   const { user } = useAuth();
 
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
 
-  // Step 0: Business details
+  // Step 0: Niche selection
+  const [selectedNiche, setSelectedNiche] = useState<NicheId>(
+    (activeNicheId && activeNicheId !== 'general' ? activeNicheId : 'coins') as NicheId,
+  );
+
+  // Step 1: Business details
   const [businessName, setBusinessName] = useState('');
   const [currency, setCurrency] = useState('GBP');
 
-  // Step 1: eBay connection
+  // Step 2: eBay connection
   const [ebayStatus, setEbayStatus] = useState<eBayConnectionStatus>('idle');
   const [ebayError, setEbayError] = useState<string | null>(null);
   const [pollCount, setPollCount] = useState(0);
@@ -80,10 +145,6 @@ export default function OnboardingScreen() {
     }).start();
   }, [step]);
 
-  // NOTE: We intentionally do NOT auto-check eBay status on step 1.
-  // The subscriber must always tap "Connect eBay" explicitly to go through the OAuth flow.
-  // Auto-detection was removed to prevent silently picking up a previous connection during testing.
-
   const stopPolling = useCallback(() => {
     if (pollTimer.current) {
       clearInterval(pollTimer.current);
@@ -93,8 +154,6 @@ export default function OnboardingScreen() {
 
   useEffect(() => () => stopPolling(), [stopPolling]);
 
-  // checkEbayStatus is only used by the polling loop (after user taps Connect eBay)
-  // and the manual "Check Now" button — NOT called on mount.
   const checkEbayStatus = useCallback(async () => {
     if (!tenant?.id) return;
     const supabase = getSupabaseClient();
@@ -145,9 +204,17 @@ export default function OnboardingScreen() {
     }, 3000);
   }, [checkEbayStatus]);
 
-  // ── Step 0 → Step 1: save business details ────────────────────────────────
+  // ── Step 0 → Step 1: save niche selection ────────────────────────────────
 
-  const handleSaveStep0 = useCallback(async () => {
+  const handleSaveStep0 = useCallback(() => {
+    // Immediately commit the niche to AppContext (persists to AsyncStorage)
+    setActiveNiche(selectedNiche);
+    setStep(1);
+  }, [selectedNiche, setActiveNiche]);
+
+  // ── Step 1 → Step 2: save business details ────────────────────────────────
+
+  const handleSaveStep1 = useCallback(async () => {
     if (!businessName.trim()) {
       showAlert('Store Name Required', 'Please enter a name for your store.');
       return;
@@ -193,7 +260,7 @@ export default function OnboardingScreen() {
         currency,
         geography: currency === 'GBP' ? 'GB' : currency === 'USD' ? 'US' : 'EU',
         onboardingComplete: false,
-        setupStep: 1,
+        setupStep: 2,
       });
       const supabase = getSupabaseClient();
       await supabase.from('tenants').update({ name: businessName.trim() }).eq('id', activeTenant.id);
@@ -205,10 +272,10 @@ export default function OnboardingScreen() {
     }
 
     setSaving(false);
-    setStep(1);
+    setStep(2);
   }, [businessName, currency, tenant, user?.id, showAlert, reloadTenant]);
 
-  // ── Step 1: Connect eBay (subscriber flow — no dev credentials needed) ────
+  // ── Step 2: Connect eBay ──────────────────────────────────────────────────
 
   const handleConnectEbay = useCallback(async () => {
     if (!tenant?.id) return;
@@ -347,7 +414,7 @@ export default function OnboardingScreen() {
     }
   }, [tenant?.id, showAlert]);
 
-  // ── Complete onboarding ───────────────────────────────────────────────────
+  // ── Complete onboarding — route to correct niche entry point ──────────────
 
   const handleFinish = useCallback(async () => {
     if (!tenant) return;
@@ -357,8 +424,10 @@ export default function OnboardingScreen() {
       setupStep: TOTAL_STEPS,
     });
     setSaving(false);
-    router.replace('/(tabs)');
-  }, [tenant, router]);
+    // Route via the explicit niche entry route, not directly to /(tabs)
+    const entryRoute = nicheToEntryRoute(selectedNiche);
+    router.replace(entryRoute as any);
+  }, [tenant, router, selectedNiche]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -425,8 +494,61 @@ export default function OnboardingScreen() {
           keyboardShouldPersistTaps="handled"
         >
 
-          {/* ── Step 0: Store Details ──────────────────────────────── */}
+          {/* ── Step 0: Niche Selection ──────────────────────────────── */}
           {step === 0 ? (
+            <View style={s.stepContent}>
+              <View style={[s.stepIcon, { backgroundColor: Colors.primaryDim }]}>
+                <MaterialIcons name="category" size={32} color={Colors.primary} />
+              </View>
+              <Text style={s.stepTitle}>Choose Your Trading Niche</Text>
+              <Text style={s.stepDesc}>
+                Select the type of items you buy and sell. This determines your app experience — SWISH will show you the right identification, valuation, and listing tools for your niche.
+              </Text>
+
+              <View style={s.nicheGrid}>
+                {ONBOARDING_NICHES.map(niche => {
+                  const isSelected = selectedNiche === niche.id;
+                  return (
+                    <Pressable
+                      key={niche.id}
+                      onPress={() => setSelectedNiche(niche.id)}
+                      style={({ pressed }) => [
+                        s.nicheCard,
+                        isSelected && { borderColor: niche.color, borderWidth: 2, backgroundColor: niche.color + '10' },
+                        pressed && { opacity: 0.88, transform: [{ scale: 0.98 }] },
+                      ]}
+                    >
+                      <View style={[s.nicheIcon, { backgroundColor: niche.color + '20' }]}>
+                        <MaterialIcons name={niche.icon as any} size={28} color={niche.color} />
+                      </View>
+                      <View style={s.nicheInfo}>
+                        <Text style={[s.nicheName, isSelected && { color: niche.color }]}>
+                          {niche.name}
+                        </Text>
+                        <Text style={s.nicheTagline}>{niche.tagline}</Text>
+                        <Text style={s.nicheDesc} numberOfLines={2}>{niche.description}</Text>
+                      </View>
+                      {isSelected ? (
+                        <MaterialIcons name="check-circle" size={22} color={niche.color} />
+                      ) : (
+                        <MaterialIcons name="radio-button-unchecked" size={22} color={Colors.textTertiary} />
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <View style={s.infoCard}>
+                <MaterialIcons name="info-outline" size={14} color={Colors.info} />
+                <Text style={s.infoText}>
+                  You can switch niche at any time from Settings. Your inventory, eBay integration, and data are shared across all niches.
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
+          {/* ── Step 1: Store Details ──────────────────────────────── */}
+          {step === 1 ? (
             <View style={s.stepContent}>
               <View style={[s.stepIcon, { backgroundColor: Colors.primaryDim }]}>
                 <MaterialIcons name="business" size={32} color={Colors.primary} />
@@ -483,8 +605,8 @@ export default function OnboardingScreen() {
             </View>
           ) : null}
 
-          {/* ── Step 1: Connect eBay ───────────────────────────────── */}
-          {step === 1 ? (
+          {/* ── Step 2: Connect eBay ───────────────────────────────── */}
+          {step === 2 ? (
             <View style={s.stepContent}>
               <View style={[s.stepIcon, { backgroundColor: '#E5323815' }]}>
                 <MaterialIcons name="storefront" size={32} color="#E53238" />
@@ -630,7 +752,6 @@ export default function OnboardingScreen() {
               {/* Idle: show Connect eBay button */}
               {(ebayStatus === 'idle' || ebayStatus === 'authorizing') ? (
                 <>
-                  {/* What SWISH will access — no developer info */}
                   <View style={s.permCard}>
                     <Text style={s.permCardTitle}>SWISH will be able to</Text>
                     {[
@@ -699,6 +820,14 @@ export default function OnboardingScreen() {
         {step === 0 ? (
           <Pressable
             onPress={handleSaveStep0}
+            style={s.nextBtn}
+          >
+            <Text style={s.nextBtnText}>Continue</Text>
+            <MaterialIcons name="arrow-forward" size={18} color={Colors.background} />
+          </Pressable>
+        ) : step === 1 ? (
+          <Pressable
+            onPress={handleSaveStep1}
             disabled={saving || tenantLoading}
             style={[s.nextBtn, (saving || tenantLoading) && { opacity: 0.7 }]}
           >
@@ -791,6 +920,23 @@ const s = StyleSheet.create({
   stepTitle: { fontSize: Typography.size.xl, fontWeight: Typography.weight.bold, color: Colors.textPrimary },
   stepDesc: { fontSize: Typography.size.sm, color: Colors.textSecondary, lineHeight: 22 },
 
+  // Niche selection grid
+  nicheGrid: { gap: Spacing.sm },
+  nicheCard: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+    backgroundColor: Colors.surface, borderRadius: Radius.xl,
+    borderWidth: 1.5, borderColor: Colors.surfaceBorder,
+    padding: Spacing.md, ...Shadow.sm,
+  },
+  nicheIcon: {
+    width: 52, height: 52, borderRadius: Radius.lg,
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  nicheInfo: { flex: 1, gap: 2 },
+  nicheName: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: Colors.textPrimary },
+  nicheTagline: { fontSize: Typography.size.xs, color: Colors.textTertiary, lineHeight: 15 },
+  nicheDesc: { fontSize: 10, color: Colors.textTertiary, lineHeight: 14, marginTop: 2 },
+
   field: { gap: Spacing.sm },
   fieldLabel: { fontSize: Typography.size.xs, fontWeight: Typography.weight.semibold, color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
   fieldHint: { fontSize: Typography.size.xs, color: Colors.textTertiary, lineHeight: 16 },
@@ -820,7 +966,6 @@ const s = StyleSheet.create({
   },
   infoText: { flex: 1, fontSize: Typography.size.xs, color: Colors.textSecondary, lineHeight: 17 },
 
-  // Permissions card — replaces developer credentials form
   permCard: {
     backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.base,
     borderWidth: 1, borderColor: Colors.surfaceBorder, gap: Spacing.sm,
@@ -847,7 +992,6 @@ const s = StyleSheet.create({
   },
   privacyNoteText: { flex: 1, fontSize: 11, color: Colors.textTertiary, lineHeight: 16 },
 
-  // Connected state
   connectedCard: {
     backgroundColor: Colors.successDim, borderRadius: Radius.xxl, padding: Spacing.xl,
     borderWidth: 1, borderColor: Colors.success + '40',
@@ -867,7 +1011,6 @@ const s = StyleSheet.create({
   },
   capLabel: { fontSize: 10, color: Colors.success, fontWeight: Typography.weight.semibold },
 
-  // Import
   importCard: {
     backgroundColor: Colors.surface, borderRadius: Radius.xxl,
     borderWidth: 1, borderColor: Colors.surfaceBorder,
@@ -905,7 +1048,6 @@ const s = StyleSheet.create({
   importSuccessTitle: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: Colors.success },
   importSuccessSub: { fontSize: Typography.size.xs, color: Colors.textSecondary, marginTop: 2 },
 
-  // Polling
   pollingCard: {
     backgroundColor: Colors.surface, borderRadius: Radius.xxl, padding: Spacing.xl,
     borderWidth: 1, borderColor: '#E5323830',
@@ -921,7 +1063,6 @@ const s = StyleSheet.create({
   },
   checkNowText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: Colors.primary },
 
-  // Error
   errorCard: {
     backgroundColor: Colors.dangerDim, borderRadius: Radius.xl, padding: Spacing.md,
     borderWidth: 1, borderColor: Colors.danger + '30',
@@ -935,7 +1076,6 @@ const s = StyleSheet.create({
   skipBtn: { paddingVertical: Spacing.md, alignItems: 'center' },
   skipBtnText: { fontSize: Typography.size.sm, color: Colors.textTertiary, textDecorationLine: 'underline' },
 
-  // Nav
   navBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: Spacing.base, paddingTop: Spacing.md,

@@ -120,6 +120,11 @@ export default function RootLayout() {
                 <Stack.Screen name="bike-flipper" />
                 <Stack.Screen name="threads-flip" />
                 <Stack.Screen name="subscription" />
+                {/* ── Niche entry routes — one per subscriber application ── */}
+                <Stack.Screen name="entry/coins" />
+                <Stack.Screen name="entry/motocross" />
+                <Stack.Screen name="entry/bicycles" />
+                <Stack.Screen name="entry/clothing" />
               </Stack>
             </TVBackHandlerProvider>
           </AppProvider>
