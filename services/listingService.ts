@@ -301,7 +301,10 @@ export async function endListing(
   return { error: listingResult.error?.message ?? itemResult.error?.message ?? null };
 }
 
-// ── Get all listings across items (for the Listings management screen) ────────
+// Get all listings across items (for the Listings management screen)
+// NICHE-ISOLATION: accepts optional specialistIds to scope the query to the
+// active niche at the DB level rather than filtering client-side. This prevents
+// cross-niche listings from appearing when all niches share one eBay account.
 
 export interface ListingWithItem extends SavedListing {
   itemTitle: string;
@@ -313,17 +316,24 @@ export interface ListingWithItem extends SavedListing {
 export async function getAllListings(
   tenantId: string,
   statusFilter?: string,
+  specialistIds?: string[],
 ): Promise<{ listings: ListingWithItem[]; error: string | null }> {
   const supabase = getSupabaseClient();
 
   let query = supabase
     .from('listings')
-    .select('*, items(canonical_title, specialist_id, acquired_cost)')
+    .select('*, items!inner(canonical_title, specialist_id, acquired_cost)')
     .eq('tenant_id', tenantId)
     .order('updated_at', { ascending: false });
 
   if (statusFilter && statusFilter !== 'all') {
     query = query.eq('status', statusFilter);
+  }
+
+  // Niche isolation: filter by specialist_id at the DB level.
+  // Using items!inner join allows filtering on the joined table.
+  if (specialistIds && specialistIds.length > 0) {
+    query = query.in('items.specialist_id', specialistIds);
   }
 
   const { data, error } = await query;

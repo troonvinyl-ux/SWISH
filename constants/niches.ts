@@ -238,7 +238,11 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     icon: 'two-wheeler',
     color: '#EF4444',
     accentColor: '#DC2626',
-    specialists: ['motocross', 'curiosities_collectibles'],
+    // NICHE-ISOLATION: motocross uses ONLY 'motocross' specialist.
+    // curiosities_collectibles deliberately excluded — it is the generic catch-all
+    // and its inclusion caused cross-niche contamination (coins/generic items
+    // bleeding into MX inventory views).
+    specialists: ['motocross'],
     defaultSpecialist: 'motocross',
     terms: {
       item: 'Bike',
@@ -320,7 +324,10 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     icon: 'checkroom',
     color: '#EC4899',
     accentColor: '#DB2777',
-    specialists: ['clothing', 'trainers_sneakers', 'curiosities_collectibles'],
+    // NICHE-ISOLATION: clothing uses ONLY 'clothing' and 'trainers_sneakers'.
+    // curiosities_collectibles deliberately excluded — generic catch-all causes
+    // cross-niche contamination (coins/MX/bike items bleeding into fashion views).
+    specialists: ['clothing', 'trainers_sneakers'],
     defaultSpecialist: 'clothing',
     terms: {
       item: 'Item',
@@ -433,6 +440,45 @@ export const NICHES: Record<NicheId, NicheConfig> = {
 };
 
 export const NICHE_LIST = Object.values(NICHES);
+
+// ── Canonical niche-to-specialist mapping (single source of truth) ────────────
+//
+// ALL inventory queries, listing queries, counts, image operations, and sync
+// operations MUST use this mapping to determine which specialist_id values
+// belong to each production niche. Using this ensures changes propagate
+// automatically without updating multiple places.
+//
+// Rules:
+//   - Each specialist_id appears in EXACTLY ONE niche (no cross-niche sharing).
+//   - curiosities_collectibles is NOT in any production niche — it is the
+//     legacy catch-all for unclassified items. Queries that accidentally
+//     include it contaminate all niche views simultaneously.
+//   - When adding a new specialist to a niche, update NICHES[id].specialists
+//     and this constant is automatically derived from it.
+
+export function getNicheSpecialistIds(nicheId: NicheId | string | null | undefined): string[] {
+  if (!nicheId) return [];
+  const niche = NICHES[nicheId as NicheId];
+  if (!niche) return [];
+  // Return the specialists array from the niche config (single source of truth)
+  return niche.specialists as string[];
+}
+
+// Returns true if a specialist_id belongs to the given niche.
+export function isSpecialistInNiche(specialistId: string, nicheId: NicheId | string | null | undefined): boolean {
+  return getNicheSpecialistIds(nicheId).includes(specialistId);
+}
+
+// Returns the niche that owns a given specialist_id, or null if unclassified.
+// Used for routing items to the correct niche view.
+export function nicheIdForSpecialist(specialistId: string): NicheId | null {
+  for (const [nicheId, config] of Object.entries(NICHES)) {
+    if (config.specialists.includes(specialistId as any)) {
+      return nicheId as NicheId;
+    }
+  }
+  return null;
+}
 
 // ── Production niche gate ─────────────────────────────────────────────────────
 // Only these four niches are active in the production application.

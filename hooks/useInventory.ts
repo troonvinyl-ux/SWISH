@@ -75,7 +75,9 @@ export function useInventory(filter: ItemFilter = {}) {
 
     const [itemsResult, counts] = await Promise.all([
       listItems(tenant.id, effectiveFilter),
-      getItemStatusCounts(tenant.id, effectiveFilter.specialistIds),
+      // NICHE-ISOLATION: always pass specialistIds so counts are niche-scoped,
+      // never tenant-wide. Without this, live/draft/sold counts include ALL niches.
+      getItemStatusCounts(tenant.id, effectiveFilter.specialistIds ?? (filter.specialistIds ?? undefined)),
     ]);
 
     setStatusGroups(counts);

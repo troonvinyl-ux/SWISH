@@ -2,7 +2,7 @@
 
 // UI
 export { Badge } from './ui/Badge';
-export { ItemImage } from './ui/ItemImage';
+export { ItemImage, getNichePlaceholderIcon } from './ui/ItemImage';
 export { MetricCard } from './ui/MetricCard';
 export { SectionHeader } from './ui/SectionHeader';
 export { ConfidenceBar, EvidenceBadge } from './ui/ConfidenceIndicator';

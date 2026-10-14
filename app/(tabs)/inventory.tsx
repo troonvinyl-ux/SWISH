@@ -500,16 +500,19 @@ export default function MasterInventoryScreen() {
   const loadListings = useCallback(async (statusFilter?: string) => {
     if (!tenant?.id) return;
     setListingsLoading(true);
-    const { listings: all } = await getAllListings(tenant.id, statusFilter);
-    // Filter by niche specialist IDs
-    const nicheListings = theme.specialistIds.length > 0
-      ? all.filter(l => theme.specialistIds.includes(l.itemSpecialistId))
-      : all;
-    setListings(nicheListings);
+    // NICHE-ISOLATION: pass specialistIds so the listings query is scoped
+    // to the active niche at the DB level (not just filtered client-side).
+    // This prevents cross-niche listings from appearing or inflating counts.
+    const { listings: all } = await getAllListings(
+      tenant.id,
+      statusFilter,
+      theme.specialistIds.length > 0 ? theme.specialistIds : undefined,
+    );
+    setListings(all);
 
-    // Update counts
-    const draftCount = nicheListings.filter(l => l.status === 'draft' || l.status === 'pending').length;
-    const liveCount = nicheListings.filter(l => l.status === 'active').length;
+    // Update counts from already-filtered results
+    const draftCount = all.filter(l => l.status === 'draft' || l.status === 'pending').length;
+    const liveCount = all.filter(l => l.status === 'active').length;
     setTabCounts(prev => ({ ...prev, draft: draftCount, live: liveCount }));
     setListingsLoading(false);
   }, [tenant?.id, theme.specialistIds]);
@@ -519,7 +522,17 @@ export default function MasterInventoryScreen() {
     setSoldLoading(true);
     const f: any = { statuses: ITEM_LIFECYCLE.SOLD_STATUSES };
     if (search.trim()) f.search = search.trim();
-    if (theme.specialistIds.length > 0) f.specialistIds = theme.specialistIds;
+    // NICHE-ISOLATION: always scope sold items to the active niche specialist IDs
+    if (theme.specialistIds.length > 0) {
+      f.specialistIds = theme.specialistIds;
+    } else {
+      // Fail closed: if somehow no specialist IDs are configured, return nothing
+      // rather than accidentally showing all-niche sold history.
+      setSoldItems([]);
+      setTabCounts(prev => ({ ...prev, sold: 0 }));
+      setSoldLoading(false);
+      return;
+    }
     const { items: sold } = await listItems(tenant.id, f);
     setSoldItems(sold);
     setTabCounts(prev => ({ ...prev, sold: sold.length }));
@@ -531,7 +544,7 @@ export default function MasterInventoryScreen() {
     if (activeTab === 'draft' || activeTab === 'live') loadListings();
     if (activeTab === 'sold') loadSold();
     if (activeTab === 'stock') {
-      // Also load listings to know which items are already listed (for exclusion)
+      // Also load listings (niche-scoped) to know which items are already listed
       loadListings();
     }
   }, [activeTab]);
@@ -694,8 +707,14 @@ export default function MasterInventoryScreen() {
     setSyncBanner('Syncing sold orders from eBay...');
     try {
       const supabase = getSupabaseClient();
+      // NICHE-ISOLATION: pass specialistIds so only the active niche's orders
+      // are synced into the sold view — prevents MX orders appearing in Coins etc.
       const { data, error } = await supabase.functions.invoke('swish-ebay-orders', {
-        body: { tenantId: tenant.id, action: 'sync_sold' },
+        body: {
+          tenantId: tenant.id,
+          action: 'sync_sold',
+          specialistIds: theme.specialistIds.length > 0 ? theme.specialistIds : undefined,
+        },
       });
       if (!error && data?.synced > 0) {
         setSyncBanner(`Synced ${data.synced} sold order${data.synced === 1 ? '' : 's'}`);
