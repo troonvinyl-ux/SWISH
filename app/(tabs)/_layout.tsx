@@ -12,6 +12,7 @@ import { useApp } from '@/hooks/useApp';
 import { getLiveListingCount } from '@/services/listingService';
 import { IS_TV } from '@/hooks/useTVNavigation';
 import { NICHES } from '@/constants/niches';
+import { SPECIALISTS } from '@/constants/specialists';
 
 // Derive the home tab icon and label from the active niche
 function useNicheHomeTab() {
@@ -29,14 +30,21 @@ function useNicheHomeTab() {
 // ── Live listings count ───────────────────────────────────────────────────────
 
 function useLiveListingCount() {
-  const { tenant } = useApp();
+  const { tenant, activeNicheId } = useApp();
   const [count, setCount] = useState(0);
+
+  // Derive specialist IDs for the active niche so badge only shows niche-relevant listings
+  const nicheSpecialistIds = (() => {
+    if (!activeNicheId) return [];
+    const niche = NICHES[activeNicheId as keyof typeof NICHES];
+    return niche?.specialists ?? [];
+  })();
 
   const refresh = useCallback(async () => {
     if (!tenant?.id) return;
-    const n = await getLiveListingCount(tenant.id);
+    const n = await getLiveListingCount(tenant.id, nicheSpecialistIds);
     setCount(n);
-  }, [tenant?.id]);
+  }, [tenant?.id, activeNicheId]);
 
   useEffect(() => {
     refresh();

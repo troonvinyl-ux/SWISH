@@ -2087,6 +2087,38 @@ export default function StockListingScreen() {
     ]);
   }, [item, showAlert]);
 
+  // ── Facebook Marketplace export ─────────────────────────────────────────────
+
+  const handleExportFacebook = useCallback(async () => {
+    if (!item) return;
+    const price = activeListings[0]?.price ?? item.expectedSellingPrice ?? 0;
+    const specialist = item.specialistId ?? '';
+    const niche = specialist === 'motocross' ? 'MX' : specialist === 'bicycles' ? 'Bikes' : specialist === 'clothing' || specialist === 'trainers_sneakers' ? 'Fashion' : 'Coins';
+    const condition = [item.condition, item.conditionGrade].filter(Boolean).join(' ');
+    const attrs = item.attributes ?? {};
+    const keyAttrs: string[] = [];
+    if (attrs.manufacturer || attrs.brand) keyAttrs.push(String(attrs.manufacturer ?? attrs.brand));
+    if (attrs.engine_size) keyAttrs.push(String(attrs.engine_size));
+    if (attrs.frame_size) keyAttrs.push(`Frame: ${attrs.frame_size}`);
+    if (attrs.garment_type) keyAttrs.push(String(attrs.garment_type));
+    if (attrs.era) keyAttrs.push(`Era: ${attrs.era}`);
+    if (item.yearMade) keyAttrs.push(item.yearMade);
+    if (item.material) keyAttrs.push(item.material);
+    const lines = [
+      `${item.canonicalTitle}`,
+      '',
+      condition ? `Condition: ${condition}` : '',
+      keyAttrs.length > 0 ? keyAttrs.join(' | ') : '',
+      item.description ? item.description.slice(0, 200) : '',
+      '',
+      price > 0 ? `£${price.toFixed(2)} ono` : 'Price on application',
+      '',
+      '📦 Can post | Collection available',
+      `#${niche} #ForSale #SWISH`,
+    ].filter(Boolean).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+    await Share.share({ message: lines, title: item.canonicalTitle });
+  }, [item, activeListings]);
+
   // ── Computed values ─────────────────────────────────────────────────────────
 
   const isMXItem = item?.specialistId === 'motocross';
@@ -2804,6 +2836,10 @@ export default function StockListingScreen() {
             <Text style={s.actionBtnSecondaryText}>Mark Sold</Text>
           </Pressable>
         ) : null}
+        <Pressable onPress={handleExportFacebook} style={[s.actionBtn, { flex: 0, paddingHorizontal: Spacing.md, backgroundColor: '#1877F2' }]}>
+          <MaterialIcons name="share" size={15} color="#fff" />
+          <Text style={[s.actionBtnText, { color: '#fff', fontSize: 10 }]}>FB</Text>
+        </Pressable>
       </View>
 
       {saving ? (

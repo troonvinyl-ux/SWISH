@@ -365,17 +365,32 @@ export async function refreshListingStats(
 }
 
 // ── Live listing count (for tab badge) ──────────────────────────────────────────
+// Filtered by niche specialist IDs so the badge only shows listings for the
+// active niche — prevents cross-niche count bleed (e.g. MX listings showing
+// in the Coins tab badge).
 
 export async function getLiveListingCount(
   tenantId: string,
+  specialistIds?: string[],
 ): Promise<number> {
   const supabase = getSupabaseClient();
-  const { count, error } = await supabase
+  // If no specialist filter, count all active listings for the tenant
+  if (!specialistIds || specialistIds.length === 0) {
+    const { count, error } = await supabase
+      .from('listings')
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', tenantId)
+      .eq('status', 'active');
+    return error ? 0 : (count ?? 0);
+  }
+  // Filter by niche via items join
+  const { data, error } = await supabase
     .from('listings')
-    .select('id', { count: 'exact', head: true })
+    .select('id, items!inner(specialist_id)')
     .eq('tenant_id', tenantId)
-    .in('status', ['active']);
-  return error ? 0 : (count ?? 0);
+    .eq('status', 'active')
+    .in('items.specialist_id', specialistIds);
+  return error ? 0 : (data?.length ?? 0);
 }
 
 // ── One-step verify + publish ──────────────────────────────────────────────────

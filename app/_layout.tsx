@@ -125,6 +125,7 @@ export default function RootLayout() {
                 <Stack.Screen name="entry/motocross" />
                 <Stack.Screen name="entry/bicycles" />
                 <Stack.Screen name="entry/clothing" />
+                <Stack.Screen name="buy-decision" />
               </Stack>
             </TVBackHandlerProvider>
           </AppProvider>

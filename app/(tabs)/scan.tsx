@@ -270,6 +270,7 @@ export default function ScanScreen() {
           {[
             { icon: 'inventory-2', label: 'My Inventory', route: '/(tabs)/inventory' },
             { icon: 'receipt-long', label: 'My Listings', route: '/(tabs)/listings' },
+            { icon: 'savings', label: 'Should I Buy This?', route: '/buy-decision' },
             { icon: 'storefront', label: 'eBay Hub', route: '/ebay-hub' },
             { icon: 'cloud-download', label: 'Import eBay', route: '/ebay-import' },
           ].map(link => (
