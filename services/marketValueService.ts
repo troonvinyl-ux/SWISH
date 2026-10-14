@@ -157,6 +157,8 @@ export async function getMarketValue(params: {
   numistaMatchScore?: number;
   numistaMatchTier?: string;
   applyToItem?: boolean;
+  /** Stored item image URLs to pass for Gemini vision + eBay visual search */
+  imageUrls?: string[];
 }): Promise<{ result: MarketValueResult | null; error: string | null }> {
   try {
     const supabase = getSupabaseClient();

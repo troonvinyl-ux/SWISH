@@ -1,10 +1,5 @@
 // NicheValuationPanel — Shared valuation agent for all 4 niches
-// Calls swish-market-value with the correct specialistId and displays
-// niche-specific evidence labels (eBay sold comps for bikes/MX/clothing,
-// Numista + eBay for coins).
-//
-// v2: Improved — better no-result UI, MX multiplier explanation,
-//     richer audit trail, query display, and retry with fallback strategy.
+// v5: Image-driven Gemini vision + eBay visual search + 418 retry backoff
 
 import React, { useState, useCallback, useEffect } from 'react';
 import {
@@ -18,7 +13,6 @@ import {
   applyValuationGuardrails,
   getEvidenceSummaryLabel,
   type ValuationGuardrailResult,
-  type EvidenceClass,
 } from '@/services/valuationGuardrailService';
 
 // ── Niche config ──────────────────────────────────────────────────────────────
@@ -41,7 +35,7 @@ const NICHE_CONFIGS: Record<string, NicheValuationConfig> = {
     evidenceLabel: 'MTB & road bike eBay sold comps',
     evidenceIcon: 'pedal-bike',
     showNumista: false,
-    searchHint: 'Searches: brand + model + year, brand + frame type, broad fallback',
+    searchHint: 'Gemini vision + eBay: brand + model + year, frame type, broad fallback',
   },
   cycling: {
     specialistId: 'bicycles',
@@ -58,7 +52,7 @@ const NICHE_CONFIGS: Record<string, NicheValuationConfig> = {
     evidenceLabel: 'Motocross / off-road eBay sold comps',
     evidenceIcon: 'two-wheeler',
     showNumista: false,
-    searchHint: 'Searches: make + model + year + cc, make + cc + stroke, broad fallback',
+    searchHint: 'Gemini vision + eBay: make + model + year + cc, broad fallback',
   },
   clothing: {
     specialistId: 'clothing',
@@ -67,7 +61,7 @@ const NICHE_CONFIGS: Record<string, NicheValuationConfig> = {
     evidenceLabel: 'Vintage & streetwear eBay sold comps',
     evidenceIcon: 'checkroom',
     showNumista: false,
-    searchHint: 'Searches: brand + garment + era, brand + size, vintage broad fallback',
+    searchHint: 'Gemini vision + eBay: brand + garment + era, vintage broad fallback',
   },
   trainers_sneakers: {
     specialistId: 'clothing',
@@ -93,46 +87,12 @@ const NICHE_CONFIGS: Record<string, NicheValuationConfig> = {
     evidenceIcon: 'toll',
     showNumista: true,
   },
-  gold: {
-    specialistId: 'gold',
-    accent: '#FFD700',
-    accentDim: '#2A2000',
-    evidenceLabel: 'Gold bullion eBay sold comps',
-    evidenceIcon: 'toll',
-    showNumista: false,
-  },
-  silver: {
-    specialistId: 'silver',
-    accent: '#C0C0C0',
-    accentDim: '#1A1A1A',
-    evidenceLabel: 'Silver coin eBay sold comps',
-    evidenceIcon: 'toll',
-    showNumista: false,
-  },
-  banknotes: {
-    specialistId: 'banknotes',
-    accent: '#4CAF50',
-    accentDim: '#0A1A0A',
-    evidenceLabel: 'Banknote eBay sold comps',
-    evidenceIcon: 'payments',
-    showNumista: false,
-  },
-  ancient_artefacts: {
-    specialistId: 'ancient_artefacts',
-    accent: '#B8860B',
-    accentDim: '#1A1200',
-    evidenceLabel: 'Ancient artefacts eBay sold comps',
-    evidenceIcon: 'history',
-    showNumista: false,
-  },
-  curiosities_collectibles: {
-    specialistId: 'curiosities_collectibles',
-    accent: Colors.primary,
-    accentDim: Colors.primaryDim,
-    evidenceLabel: 'Collectibles eBay sold comps',
-    evidenceIcon: 'bar-chart',
-    showNumista: false,
-  },
+  gold: { specialistId: 'gold', accent: '#FFD700', accentDim: '#2A2000', evidenceLabel: 'Gold bullion eBay sold comps', evidenceIcon: 'toll', showNumista: false },
+  silver: { specialistId: 'silver', accent: '#C0C0C0', accentDim: '#1A1A1A', evidenceLabel: 'Silver coin eBay sold comps', evidenceIcon: 'toll', showNumista: false },
+  banknotes: { specialistId: 'banknotes', accent: '#4CAF50', accentDim: '#0A1A0A', evidenceLabel: 'Banknote eBay sold comps', evidenceIcon: 'payments', showNumista: false },
+  ancient_artefacts: { specialistId: 'ancient_artefacts', accent: '#B8860B', accentDim: '#1A1200', evidenceLabel: 'Ancient artefacts eBay sold comps', evidenceIcon: 'history', showNumista: false },
+  islamic_silver: { specialistId: 'islamic_silver', accent: '#B8860B', accentDim: '#1A1200', evidenceLabel: 'Islamic silver coin eBay sold comps', evidenceIcon: 'toll', showNumista: false },
+  curiosities_collectibles: { specialistId: 'curiosities_collectibles', accent: Colors.primary, accentDim: Colors.primaryDim, evidenceLabel: 'Collectibles eBay sold comps', evidenceIcon: 'bar-chart', showNumista: false },
 };
 
 function getNicheConfig(specialistId: string): NicheValuationConfig {
@@ -146,7 +106,7 @@ function getNicheConfig(specialistId: string): NicheValuationConfig {
   };
 }
 
-function isMXNiche(specialistId: string) { return specialistId === 'motocross'; }
+function isMXNiche(sid: string) { return sid === 'motocross'; }
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -165,11 +125,12 @@ export interface NicheValuationPanelProps {
   applyToItem?: boolean;
   initialResult?: MarketValueResult | null;
   accentOverride?: string;
-  /** If true, auto-fetches on mount (useful when embedded in stock-listing) */
   autoFetch?: boolean;
+  /** Stored item image URLs — passed to Gemini vision & eBay visual search */
+  imageUrls?: string[];
 }
 
-// ── Stat Row ─────────────────────────────────────────────────────────────────
+// ── Stat Row ──────────────────────────────────────────────────────────────────
 function StatRow({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
     <View style={sr.row}>
@@ -184,25 +145,25 @@ const sr = StyleSheet.create({
   value: { fontSize: Typography.size.xs, fontWeight: Typography.weight.semibold, color: Colors.textPrimary },
 });
 
-// ── Comparable Sale Row ───────────────────────────────────────────────────────
+// ── Comparable Row ────────────────────────────────────────────────────────────
 function ComparableRow({ title, price, listingType, date, url }: { title: string; price: number; listingType: string; date?: string; url?: string }) {
   const dateStr = date ? new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }) : '';
   return (
     <Pressable
       onPress={() => url ? Linking.openURL(url) : undefined}
-      style={({ pressed }) => [cr2.row, pressed && url && { opacity: 0.75 }]}
+      style={({ pressed }) => [cr.row, pressed && url && { opacity: 0.75 }]}
       disabled={!url}
     >
-      <View style={cr2.info}>
-        <Text style={cr2.title} numberOfLines={2}>{title}</Text>
-        {dateStr ? <Text style={cr2.date}>{dateStr} · {listingType === 'Auction' ? 'Auction' : 'BIN'}</Text> : null}
+      <View style={cr.info}>
+        <Text style={cr.title} numberOfLines={2}>{title}</Text>
+        {dateStr ? <Text style={cr.date}>{dateStr} · {listingType === 'Auction' ? 'Auction' : 'BIN'}</Text> : null}
       </View>
-      <Text style={cr2.price}>£{price.toFixed(2)}</Text>
+      <Text style={cr.price}>£{price.toFixed(2)}</Text>
       {url ? <MaterialIcons name="open-in-new" size={11} color={Colors.textTertiary} style={{ flexShrink: 0 }} /> : null}
     </Pressable>
   );
 }
-const cr2 = StyleSheet.create({
+const cr = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder + '50' },
   info: { flex: 1, gap: 2 },
   title: { fontSize: Typography.size.xs, color: Colors.textPrimary, lineHeight: 16 },
@@ -228,6 +189,7 @@ export default function NicheValuationPanel({
   initialResult = null,
   accentOverride,
   autoFetch = false,
+  imageUrls,
 }: NicheValuationPanelProps) {
   const config = getNicheConfig(specialistId);
   const accent = accentOverride ?? config.accent;
@@ -245,27 +207,25 @@ export default function NicheValuationPanel({
   const [queriesExpanded, setQueriesExpanded] = useState(false);
   const [provenanceExpanded, setProvenanceExpanded] = useState(false);
 
+  // v5: Gemini vision market research (from result)
+  const geminiData = (result as any)?.geminiMarketResearch;
+  const hasGeminiEstimate = geminiData?.available === true && (geminiData?.estimatedRange?.mid ?? 0) > 0;
+
   const handleFetch = useCallback(async () => {
-    if (!title || title.length < 3) {
-      setError('A title is required to search for comparable sales.');
-      return;
-    }
-    setLoading(true);
-    setError(null);
+    if (!title || title.length < 3) { setError('A title is required.'); return; }
+    setLoading(true); setError(null);
 
     const { result: r, error: e } = await getMarketValue({
-      tenantId,
-      itemId,
-      title,
+      tenantId, itemId, title,
       specialistId: config.specialistId,
       attributes: attributes ?? {},
       condition: condition ?? '',
-      identificationConfidence,
-      identificationTier,
+      identificationConfidence, identificationTier,
       numistaTypeId: config.showNumista ? numistaTypeId : null,
       numistaMatchScore: config.showNumista ? numistaMatchScore : 0,
       numistaMatchTier: config.showNumista ? numistaMatchTier : 'unavailable',
       applyToItem,
+      imageUrls,
     });
 
     setLoading(false);
@@ -273,22 +233,17 @@ export default function NicheValuationPanel({
       setError(e ?? 'Valuation unavailable — try again');
     } else {
       setResult(r);
-      // Apply guardrails immediately after receiving the result
       const guarded = applyValuationGuardrails(r, { identificationConfidence, specialistId: config.specialistId });
       setGuardrailResult(guarded);
       if (applyToItem) setApplied(true);
       setExpanded(true);
     }
-  }, [tenantId, itemId, title, config.specialistId, attributes, condition, identificationConfidence, identificationTier, numistaTypeId, numistaMatchScore, numistaMatchTier, applyToItem]);
+  }, [tenantId, itemId, title, config.specialistId, attributes, condition, identificationConfidence, identificationTier, numistaTypeId, numistaMatchScore, numistaMatchTier, applyToItem, imageUrls]);
 
-  // Auto-fetch on mount if requested and no initial result
   useEffect(() => {
-    if (autoFetch && !initialResult && !result) {
-      handleFetch();
-    }
+    if (autoFetch && !initialResult && !result) handleFetch();
   }, [autoFetch]);
 
-  // Sync initialResult when parent updates it (e.g. Re-Value from action bar)
   useEffect(() => {
     if (initialResult && initialResult !== result) {
       setResult(initialResult);
@@ -299,7 +254,6 @@ export default function NicheValuationPanel({
     }
   }, [initialResult]);
 
-  // Use guarded valuation if available, else fall back to raw
   const v = guardrailResult?.guardedValuation ?? result?.valuation;
   const sold = result?.soldMarket;
   const asking = result?.activeAskingPrices;
@@ -313,7 +267,7 @@ export default function NicheValuationPanel({
     v.valuationConfidence === 'low' ? Colors.warning :
     Colors.danger;
 
-  // ── No result yet ─────────────────────────────────────────────────────────
+  // ── No result ─────────────────────────────────────────────────────────────
   if (!result && !loading) {
     return (
       <View style={[s.card, { borderColor: accent + '30' }]}>
@@ -326,21 +280,18 @@ export default function NicheValuationPanel({
             <Text style={s.headerSub}>{config.evidenceLabel}</Text>
           </View>
         </View>
-
         {config.searchHint ? (
           <View style={s.hintRow}>
-            <MaterialIcons name="info-outline" size={11} color={Colors.textTertiary} />
+            <MaterialIcons name="auto-awesome" size={11} color={Colors.accent} />
             <Text style={s.hintText}>{config.searchHint}</Text>
           </View>
         ) : null}
-
         {error ? (
           <View style={s.errorBanner}>
             <MaterialIcons name="warning" size={12} color={Colors.warning} />
             <Text style={s.errorText}>{error}</Text>
           </View>
         ) : null}
-
         <Pressable
           onPress={handleFetch}
           style={({ pressed }) => [s.fetchBtn, { backgroundColor: accent }, pressed && { opacity: 0.85 }]}
@@ -368,8 +319,10 @@ export default function NicheValuationPanel({
         <View style={s.loadingRow}>
           <ActivityIndicator size="small" color={accent} />
           <View style={{ flex: 1 }}>
-            <Text style={[s.loadingText, { color: accent }]}>Checking eBay sold listings{config.showNumista ? ' and Numista catalogue' : ''}…</Text>
-            <Text style={s.loadingSub}>Running up to 4 parallel searches with niche-specific query strategies</Text>
+            <Text style={[s.loadingText, { color: accent }]}>
+              Analysing images with Gemini Vision + eBay sold listings…
+            </Text>
+            <Text style={s.loadingSub}>Image-first search: AI identifies item, then searches eBay for comparable sold prices</Text>
           </View>
         </View>
       </View>
@@ -382,6 +335,7 @@ export default function NicheValuationPanel({
     const searchQueriesUsed = (result as any).searchQueriesUsed ?? [(result as any).searchQuery].filter(Boolean);
     const foundTotal = result.dataSource?.findingApiTotal ?? 0;
     const foundRelevant = sold?.relevantSoldCount ?? 0;
+    const rateLimited = (result.dataSource as any)?.apiConnectionStatus?.rateLimited === true;
 
     return (
       <View style={[s.card, { borderColor: accent + '30' }]}>
@@ -400,18 +354,22 @@ export default function NicheValuationPanel({
         </View>
 
         <View style={s.noResultCard}>
-          <MaterialIcons name="search-off" size={24} color={Colors.textTertiary} />
-          <Text style={s.noResultTitle}>No comparable sales found</Text>
+          <MaterialIcons name={rateLimited ? 'schedule' : 'search-off'} size={24} color={rateLimited ? Colors.warning : Colors.textTertiary} />
+          <Text style={s.noResultTitle}>
+            {rateLimited ? 'eBay Temporarily Rate-Limited' : 'No comparable sales found'}
+          </Text>
           <Text style={s.noResultSub}>
-            {foundTotal > 0
-              ? `Found ${foundTotal} eBay sold listings but ${foundRelevant === 0 ? 'none were relevant' : `only ${foundRelevant} relevant`} after scoring. The item may be unusual, mislabelled or very niche.`
-              : 'No eBay sold listings matched. The item may be very rare, recently released, or need a more specific title.'}
+            {rateLimited
+              ? 'eBay search rate-limited (HTTP 418). Please wait 30-60 seconds then tap Try Again.'
+              : foundTotal > 0
+                ? `Found ${foundTotal} eBay sold listings but ${foundRelevant === 0 ? 'none were relevant' : `only ${foundRelevant} relevant`} after scoring.`
+                : 'No eBay sold listings found. Try Re-ID for a better title, then Re-Value again.'}
           </Text>
         </View>
 
         {warnings.length > 0 ? (
           <View style={s.warningsList}>
-            {warnings.map((w, i) => (
+            {warnings.slice(0, 3).map((w, i) => (
               <View key={i} style={s.warningRow}>
                 <MaterialIcons name="info-outline" size={11} color={Colors.warning} />
                 <Text style={s.warningText}>{w}</Text>
@@ -421,7 +379,7 @@ export default function NicheValuationPanel({
         ) : null}
 
         {searchQueriesUsed.length > 0 ? (
-          <Pressable onPress={() => setQueriesExpanded(v => !v)} style={s.queriesToggle}>
+          <Pressable onPress={() => setQueriesExpanded(q => !q)} style={s.queriesToggle}>
             <MaterialIcons name="manage-search" size={12} color={Colors.textTertiary} />
             <Text style={s.queriesToggleText}>Queries used ({searchQueriesUsed.length})</Text>
             <MaterialIcons name={queriesExpanded ? 'expand-less' : 'expand-more'} size={14} color={Colors.textTertiary} />
@@ -435,7 +393,7 @@ export default function NicheValuationPanel({
                 <Text style={s.queryText} numberOfLines={1}>&quot;{q}&quot;</Text>
               </View>
             ))}
-            <Text style={s.queryTip}>Tip: Re-ID the item to improve the title with more specific attributes (brand, model, year, size) — then Re-Value again.</Text>
+            <Text style={s.queryTip}>{rateLimited ? 'Wait 30-60 seconds then tap Try Again.' : 'Tip: Re-ID the item for better attributes, then Re-Value.'}</Text>
           </View>
         ) : null}
 
@@ -451,10 +409,10 @@ export default function NicheValuationPanel({
 
   // ── Result — value found ──────────────────────────────────────────────────
   const searchQueriesUsed = (result as any)?.searchQueriesUsed ?? [(result as any)?.searchQuery].filter(Boolean);
-  const mxRunningRationale = isMX && v?.listingPriceRationale?.includes('Running status multiplier') ? v.listingPriceRationale : null;
-
-  // Extract top comparables from audit trail
-  const topComparables: Array<{ title: string; price: number; date: string; listingType: string }> = (result as any)?.auditTrail?.topComparables ?? [];
+  const mxRunningRationale = isMX && v?.listingPriceRationale?.includes('Running status') ? v.listingPriceRationale : null;
+  const topComparables: Array<{ title: string; price: number; date: string; listingType: string; url?: string }> = (result as any)?.auditTrail?.topComparables ?? [];
+  const valuationMethod = (result as any)?.valuation?.valuationMethod ?? '';
+  const isAIEstimate = valuationMethod.includes('gemini') || valuationMethod.includes('ai_');
 
   return (
     <View style={[s.card, { borderColor: accent + '30' }]}>
@@ -465,7 +423,9 @@ export default function NicheValuationPanel({
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[s.headerTitle, { color: accent }]}>Live Market Value</Text>
-          <Text style={s.headerSub}>{config.evidenceLabel}</Text>
+          <Text style={s.headerSub}>
+            {isAIEstimate ? 'AI estimate — no eBay sold data found' : config.evidenceLabel}
+          </Text>
         </View>
         <View style={s.headerRight}>
           {applied ? (
@@ -481,7 +441,17 @@ export default function NicheValuationPanel({
         </View>
       </Pressable>
 
-      {/* Price hero — always visible */}
+      {/* AI estimate warning banner */}
+      {isAIEstimate ? (
+        <View style={s.aiEstimateBanner}>
+          <MaterialIcons name="auto-awesome" size={12} color={Colors.accent} />
+          <Text style={s.aiEstimateBannerText}>
+            AI market estimate (Gemini Vision) — not verified eBay sold data. Try Re-Value in 30s for eBay prices.
+          </Text>
+        </View>
+      ) : null}
+
+      {/* Price hero */}
       {hasValue ? (
         <View style={[s.priceHero, { backgroundColor: accentDim, borderColor: accent + '25' }]}>
           <View style={s.priceRow}>
@@ -490,7 +460,7 @@ export default function NicheValuationPanel({
               <Text style={s.priceSmall}>£{(v!.valuationLow ?? 0).toFixed(0)}</Text>
             </View>
             <View style={[s.priceBlock, s.priceMidBlock]}>
-              <Text style={s.priceTinyLabel}>FAIR MARKET VALUE</Text>
+              <Text style={s.priceTinyLabel}>{isAIEstimate ? 'AI ESTIMATE' : 'FAIR MARKET VALUE'}</Text>
               <Text style={[s.priceBig, { color: accent }]}>£{(v!.valuationMid ?? 0).toFixed(2)}</Text>
               <View style={[s.confidencePill, { backgroundColor: confColor + '20', borderColor: confColor + '40' }]}>
                 <Text style={[s.confidenceText, { color: confColor }]}>{(v!.valuationConfidence ?? 'unknown').replace(/_/g, ' ').toUpperCase()}</Text>
@@ -506,31 +476,27 @@ export default function NicheValuationPanel({
             <View style={s.recommendRow}>
               <MaterialIcons name={v!.recommendedListingFormat === 'Auction' ? 'gavel' : 'sell'} size={12} color={accent} />
               <Text style={[s.recommendText, { color: accent }]}>
-                List at £{v!.recommendedListingPrice.toFixed(2)} · {v!.recommendedListingFormat === 'Auction' ? 'Auction' : v!.recommendedListingFormat === 'BuyItNow_WithBestOffer' ? 'BIN + Best Offer' : 'Buy It Now'}
+                {isAIEstimate ? 'Indicative: ' : ''}List at £{v!.recommendedListingPrice.toFixed(2)} · {v!.recommendedListingFormat === 'Auction' ? 'Auction' : v!.recommendedListingFormat === 'BuyItNow_WithBestOffer' ? 'BIN + Best Offer' : 'Buy It Now'}
               </Text>
             </View>
           ) : null}
         </View>
       ) : null}
 
-      {/* Guardrail decision banner — shown when confidence is downgraded */}
+      {/* Guardrail banner */}
       {isDowngraded && guardrailResult ? (
         <View style={s.guardrailBanner}>
           <MaterialIcons name="info-outline" size={11} color={Colors.warning} />
           <View style={{ flex: 1 }}>
             <Text style={s.guardrailBannerTitle}>
-              {guardrailDecision === 'identification_conflict'
-                ? 'Low ID Confidence — Indicative Only'
-                : 'Evidence Guardrail Applied'}
+              {guardrailDecision === 'identification_conflict' ? 'Low ID Confidence — Indicative Only' : 'Evidence Guardrail Applied'}
             </Text>
-            <Text style={s.guardrailBannerText}>
-              {getEvidenceSummaryLabel(guardrailResult.evidenceProvenance)}
-            </Text>
+            <Text style={s.guardrailBannerText}>{getEvidenceSummaryLabel(guardrailResult.evidenceProvenance)}</Text>
           </View>
         </View>
       ) : null}
 
-      {/* Evidence summary — always visible */}
+      {/* Evidence chips */}
       <View style={s.evidenceRow}>
         {sold && sold.relevantSoldCount > 0 ? (
           <View style={s.evidenceChip}>
@@ -538,10 +504,16 @@ export default function NicheValuationPanel({
             <Text style={s.evidenceChipText}>{sold.relevantSoldCount} sold</Text>
           </View>
         ) : null}
-        {sold && sold.medianPrice > 0 ? (
+        {sold && (sold.medianPrice ?? 0) > 0 ? (
           <View style={s.evidenceChip}>
             <MaterialIcons name="bar-chart" size={10} color={Colors.textTertiary} />
             <Text style={s.evidenceChipText}>Median £{sold.medianPrice.toFixed(0)}</Text>
+          </View>
+        ) : null}
+        {hasGeminiEstimate && (sold?.relevantSoldCount ?? 0) === 0 ? (
+          <View style={[s.evidenceChip, { backgroundColor: Colors.accentDim }]}>
+            <MaterialIcons name="auto-awesome" size={10} color={Colors.accent} />
+            <Text style={[s.evidenceChipText, { color: Colors.accent }]}>AI estimate</Text>
           </View>
         ) : null}
         {config.showNumista && result?.numistaSales?.available && (result.numistaSales.relevantCount ?? 0) > 0 ? (
@@ -568,7 +540,7 @@ export default function NicheValuationPanel({
       {expanded ? (
         <View style={s.expandedContent}>
 
-          {/* MX running status multiplier explanation */}
+          {/* MX running status */}
           {isMX && mxRunningRationale ? (
             <View style={s.mxMultiplierCard}>
               <View style={s.mxMultiplierHeader}>
@@ -576,20 +548,62 @@ export default function NicheValuationPanel({
                 <Text style={s.mxMultiplierTitle}>RUNNING STATUS MULTIPLIER</Text>
               </View>
               <Text style={s.mxMultiplierText}>
-                {mxRunningRationale.includes('Project') || mxRunningRationale.includes('Non-running')
-                  ? 'Non-running / project bikes command significantly lower prices. Valuation adjusted down from full-running comparable sales.'
+                {mxRunningRationale.includes('Non-running') || mxRunningRationale.includes('Project')
+                  ? 'Non-running / project bikes command significantly lower prices.'
                   : mxRunningRationale.includes('Unknown')
-                  ? 'Running status unknown from images. Applied conservative 70% multiplier — confirm running status to get accurate valuation.'
+                  ? 'Running status unknown. Applied conservative 70% multiplier.'
                   : 'Running bike multiplier applied — using full comparable prices.'}
               </Text>
-              <Text style={s.mxMultiplierNote} numberOfLines={3}>{mxRunningRationale.slice(mxRunningRationale.indexOf('['))}</Text>
+            </View>
+          ) : null}
+
+          {/* Gemini AI market estimate — shown when no/weak eBay sold data */}
+          {hasGeminiEstimate ? (
+            <View style={s.geminiCard}>
+              <View style={s.geminiHeader}>
+                <MaterialIcons name="auto-awesome" size={11} color={Colors.accent} />
+                <Text style={s.geminiTitle}>AI MARKET ESTIMATE</Text>
+                <View style={s.geminiNotSoldBadge}>
+                  <Text style={s.geminiNotSoldText}>NOT SOLD DATA</Text>
+                </View>
+              </View>
+              <Text style={s.geminiNote}>
+                Gemini Vision analysed item images to estimate market value. This is AI inference — not verified eBay sold prices.
+                {(sold?.relevantSoldCount ?? 0) === 0 ? ' No eBay sold comps were found — try Re-Value again in 30-60 seconds.' : ''}
+              </Text>
+              {geminiData.itemDescription ? (
+                <Text style={s.geminiDesc} numberOfLines={3}>{geminiData.itemDescription}</Text>
+              ) : null}
+              {geminiData.marketContext ? (
+                <Text style={s.geminiContext} numberOfLines={3}>{geminiData.marketContext}</Text>
+              ) : null}
+              <View style={s.geminiRangeRow}>
+                <View style={s.geminiRangeItem}>
+                  <Text style={s.geminiRangeLabel}>Low</Text>
+                  <Text style={s.geminiRangeValue}>£{geminiData.estimatedRange.low}</Text>
+                </View>
+                <View style={[s.geminiRangeItem, { backgroundColor: Colors.accentDim, borderRadius: Radius.sm }]}>
+                  <Text style={s.geminiRangeLabel}>Mid</Text>
+                  <Text style={[s.geminiRangeValue, { color: Colors.accent, fontSize: Typography.size.base }]}>£{geminiData.estimatedRange.mid}</Text>
+                </View>
+                <View style={s.geminiRangeItem}>
+                  <Text style={s.geminiRangeLabel}>High</Text>
+                  <Text style={s.geminiRangeValue}>£{geminiData.estimatedRange.high}</Text>
+                </View>
+              </View>
+              <View style={s.geminiFooter}>
+                <MaterialIcons name="info-outline" size={9} color={Colors.textTertiary} />
+                <Text style={s.geminiFooterText}>
+                  AI confidence: {geminiData.confidence} · eBay sold found: {sold?.verifiedSoldCount ?? 0} · Relevant: {sold?.relevantSoldCount ?? 0}
+                </Text>
+              </View>
             </View>
           ) : null}
 
           {/* Sold stats */}
           {sold && sold.relevantSoldCount > 0 ? (
             <View style={s.statsSection}>
-              <Text style={s.sectionLabel}>VERIFIED SOLD DATA</Text>
+              <Text style={s.sectionLabel}>VERIFIED SOLD DATA (EBAY UK)</Text>
               <View style={s.statsGrid}>
                 <StatRow label="eBay sold found" value={String(sold.verifiedSoldCount ?? 0)} />
                 <StatRow label="Relevant after scoring" value={String(sold.relevantSoldCount)} accent={sold.relevantSoldCount >= 5 ? Colors.success : Colors.warning} />
@@ -602,7 +616,7 @@ export default function NicheValuationPanel({
             </View>
           ) : null}
 
-          {/* Asking prices note */}
+          {/* Asking prices */}
           {asking && asking.count > 0 && asking.medianAskingPrice > 0 ? (
             <View style={s.askingCard}>
               <MaterialIcons name="info-outline" size={11} color={Colors.warning} />
@@ -612,7 +626,7 @@ export default function NicheValuationPanel({
             </View>
           ) : null}
 
-          {/* Numista (coins only) */}
+          {/* Numista */}
           {config.showNumista && result?.numistaSales ? (
             <View style={s.statsSection}>
               <Text style={s.sectionLabel}>NUMISTA CATALOGUE</Text>
@@ -624,10 +638,7 @@ export default function NicheValuationPanel({
                     <StatRow label="Range" value={`£${result.numistaSales.low.toFixed(2)} – £${result.numistaSales.high.toFixed(2)}`} />
                   </View>
                   {result.numistaSales.numistaN ? (
-                    <Pressable
-                      onPress={() => Linking.openURL(result.numistaSales!.numistaUrl)}
-                      style={({ pressed }) => [s.numistaLink, pressed && { opacity: 0.75 }]}
-                    >
+                    <Pressable onPress={() => Linking.openURL(result.numistaSales!.numistaUrl)} style={({ pressed }) => [s.numistaLink, pressed && { opacity: 0.75 }]}>
                       <MaterialIcons name="open-in-new" size={11} color={Colors.info} />
                       <Text style={s.numistaLinkText}>{result.numistaSales.numistaN} · View on Numista</Text>
                     </Pressable>
@@ -636,17 +647,13 @@ export default function NicheValuationPanel({
               ) : (
                 <View style={s.noNumistaRow}>
                   <MaterialIcons name="info-outline" size={11} color={Colors.textTertiary} />
-                  <Text style={s.noNumistaText}>
-                    {result.numistaSales.error
-                      ? result.numistaSales.error
-                      : 'No Numista sales records available for this type'}
-                  </Text>
+                  <Text style={s.noNumistaText}>{result.numistaSales.error ?? 'No Numista sales records available for this type'}</Text>
                 </View>
               )}
             </View>
           ) : null}
 
-          {/* Evidence provenance — collapsible audit trail */}
+          {/* Evidence provenance */}
           {guardrailResult ? (
             <>
               <Pressable onPress={() => setProvenanceExpanded(p => !p)} style={s.provenanceToggle}>
@@ -659,19 +666,12 @@ export default function NicheValuationPanel({
                   {guardrailResult.evidenceProvenance.sources.map((src, i) => (
                     <View key={i} style={s.provenanceRow}>
                       <View style={[s.provenanceClassDot, {
-                        backgroundColor:
-                          src.class === 'verified_sold' ? Colors.success :
-                          src.class === 'active_asking' ? Colors.warning :
-                          src.class === 'reference_data' ? Colors.info :
-                          src.class === 'ai_inference' ? Colors.textTertiary :
-                          Colors.textTertiary,
+                        backgroundColor: src.class === 'verified_sold' ? Colors.success : src.class === 'active_asking' ? Colors.warning : src.class === 'reference_data' ? Colors.info : Colors.textTertiary,
                       }]} />
                       <View style={{ flex: 1 }}>
                         <View style={s.provenanceLabelRow}>
                           <Text style={s.provenanceLabel}>{src.label}</Text>
-                          <Text style={[s.provenanceClassTag, {
-                            color: src.usedInValuation ? Colors.success : Colors.textTertiary,
-                          }]}>
+                          <Text style={[s.provenanceClassTag, { color: src.usedInValuation ? Colors.success : Colors.textTertiary }]}>
                             {src.usedInValuation ? 'USED' : 'EXCLUDED'}
                           </Text>
                         </View>
@@ -682,9 +682,7 @@ export default function NicheValuationPanel({
                   {guardrailResult.guardrailReasons.length > 0 ? (
                     <View style={s.guardrailReasonsCard}>
                       <Text style={s.guardrailReasonsTitle}>GUARDRAIL DECISIONS</Text>
-                      {guardrailResult.guardrailReasons.map((r, i) => (
-                        <Text key={i} style={s.guardrailReason}>{r}</Text>
-                      ))}
+                      {guardrailResult.guardrailReasons.map((r, i) => <Text key={i} style={s.guardrailReason}>{r}</Text>)}
                     </View>
                   ) : null}
                 </View>
@@ -692,7 +690,7 @@ export default function NicheValuationPanel({
             </>
           ) : null}
 
-          {/* Valuation warnings */}
+          {/* Warnings */}
           {v?.valuationWarnings && v.valuationWarnings.length > 0 ? (
             <View style={s.warningsList}>
               {v.valuationWarnings.slice(0, 3).map((w, i) => (
@@ -723,14 +721,14 @@ export default function NicheValuationPanel({
               {comparablesExpanded ? (
                 <View style={s.comparablesList}>
                   {topComparables.slice(0, 8).map((c, i) => (
-                    <ComparableRow key={i} title={c.title} price={c.price} listingType={c.listingType} date={c.date} />
+                    <ComparableRow key={i} title={c.title} price={c.price} listingType={c.listingType} date={c.date} url={(c as any).url} />
                   ))}
                 </View>
               ) : null}
             </>
           ) : null}
 
-          {/* Search queries used */}
+          {/* Queries */}
           {searchQueriesUsed.length > 0 ? (
             <>
               <Pressable onPress={() => setQueriesExpanded(v => !v)} style={s.queriesToggle}>
@@ -757,15 +755,15 @@ export default function NicheValuationPanel({
               <MaterialIcons name="storage" size={10} color={Colors.textTertiary} />
               <Text style={s.footerText}>
                 eBay sold: {result.dataSource.findingApiTotal} · Active: {result.dataSource.browseApiActive}
-                {config.showNumista ? ` · Numista: ${(result.dataSource as any).numistaSalesFound ?? 0}` : ''}
-                {result.dataSource.currencyConversions?.length > 0 ? ` · Converted: ${result.dataSource.currencyConversions.join(', ')}` : ''}
+                {(result.dataSource as any).imageUrlsUsed > 0 ? ` · Images: ${(result.dataSource as any).imageUrlsUsed}` : ''}
+                {(result.dataSource as any).geminiVisionUsed ? ' · Gemini Vision: on' : ''}
               </Text>
             </View>
           ) : null}
         </View>
       ) : null}
 
-      {/* Error retry */}
+      {/* Error */}
       {error ? (
         <View style={s.errorBanner}>
           <MaterialIcons name="warning" size={12} color={Colors.warning} />
@@ -782,14 +780,7 @@ export default function NicheValuationPanel({
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    padding: Spacing.base,
-    gap: Spacing.sm,
-    ...Shadow.sm,
-  },
+  card: { backgroundColor: Colors.surface, borderRadius: Radius.xl, borderWidth: 1, padding: Spacing.base, gap: Spacing.sm, ...Shadow.sm },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   headerIcon: { width: 36, height: 36, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   headerTitle: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold },
@@ -810,6 +801,10 @@ const s = StyleSheet.create({
   loadingText: { fontSize: Typography.size.xs, fontWeight: Typography.weight.medium },
   loadingSub: { fontSize: 10, color: Colors.textTertiary, marginTop: 2, lineHeight: 14 },
 
+  // AI estimate banner
+  aiEstimateBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 5, backgroundColor: Colors.accentDim, borderRadius: Radius.sm, padding: Spacing.sm, borderWidth: 1, borderColor: Colors.accent + '40' },
+  aiEstimateBannerText: { flex: 1, fontSize: 10, color: Colors.accent + 'CC', lineHeight: 14 },
+
   priceHero: { borderRadius: Radius.lg, padding: Spacing.md, gap: Spacing.sm, borderWidth: 1 },
   priceRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-around' },
   priceBlock: { alignItems: 'center', gap: 3 },
@@ -828,43 +823,52 @@ const s = StyleSheet.create({
 
   expandedContent: { gap: Spacing.md, borderTopWidth: 1, borderTopColor: Colors.surfaceBorder, paddingTop: Spacing.md },
 
-  // MX multiplier
+  // MX
   mxMultiplierCard: { backgroundColor: Colors.warningDim, borderRadius: Radius.lg, padding: Spacing.md, gap: Spacing.xs, borderWidth: 1, borderColor: Colors.warning + '30' },
   mxMultiplierHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   mxMultiplierTitle: { fontSize: 9, fontWeight: Typography.weight.bold, color: Colors.warning, textTransform: 'uppercase', letterSpacing: 0.5 },
   mxMultiplierText: { fontSize: Typography.size.xs, color: Colors.warning, lineHeight: 16 },
-  mxMultiplierNote: { fontSize: 10, color: Colors.warning + '99', lineHeight: 14, fontStyle: 'italic' },
+
+  // Gemini AI estimate card
+  geminiCard: { backgroundColor: Colors.accentDim + '60', borderRadius: Radius.lg, padding: Spacing.md, gap: Spacing.sm, borderWidth: 1, borderColor: Colors.accent + '40' },
+  geminiHeader: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  geminiTitle: { flex: 1, fontSize: 9, fontWeight: Typography.weight.bold, color: Colors.accent, textTransform: 'uppercase', letterSpacing: 0.5 },
+  geminiNotSoldBadge: { backgroundColor: Colors.danger + '20', borderRadius: Radius.pill, paddingHorizontal: 6, paddingVertical: 2 },
+  geminiNotSoldText: { fontSize: 8, fontWeight: Typography.weight.bold, color: Colors.danger, letterSpacing: 0.3 },
+  geminiNote: { fontSize: 10, color: Colors.accent + 'AA', lineHeight: 14 },
+  geminiDesc: { fontSize: Typography.size.xs, color: Colors.textSecondary, lineHeight: 16, fontStyle: 'italic' },
+  geminiContext: { fontSize: Typography.size.xs, color: Colors.textTertiary, lineHeight: 15 },
+  geminiRangeRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-around', paddingVertical: Spacing.xs },
+  geminiRangeItem: { alignItems: 'center', gap: 3, flex: 1, padding: Spacing.xs },
+  geminiRangeLabel: { fontSize: 8, color: Colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.3 },
+  geminiRangeValue: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: Colors.textPrimary },
+  geminiFooter: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  geminiFooterText: { flex: 1, fontSize: 9, color: Colors.textTertiary, lineHeight: 13 },
 
   // Stats
   statsSection: { gap: Spacing.xs },
   sectionLabel: { fontSize: 9, fontWeight: Typography.weight.bold, color: Colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
   statsGrid: { backgroundColor: Colors.surfaceHighlight, borderRadius: Radius.md, paddingHorizontal: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceBorder },
 
-  // Asking prices
   askingCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, backgroundColor: Colors.warningDim, borderRadius: Radius.sm, padding: Spacing.sm, borderWidth: 1, borderColor: Colors.warning + '25' },
   askingText: { flex: 1, fontSize: 10, color: Colors.warning + 'CC', lineHeight: 14 },
 
-  // Numista
   noNumistaRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
   noNumistaText: { flex: 1, fontSize: Typography.size.xs, color: Colors.textTertiary, lineHeight: 15, fontStyle: 'italic' },
   numistaLink: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.info + '15', borderRadius: Radius.sm, paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1, borderColor: Colors.info + '30', alignSelf: 'flex-start' },
   numistaLinkText: { fontSize: 10, color: Colors.info, fontWeight: Typography.weight.semibold },
 
-  // Warnings
   warningsList: { gap: Spacing.xs },
   warningRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
   warningText: { flex: 1, fontSize: 10, color: Colors.warning + 'CC', lineHeight: 14 },
 
-  // Rationale
   rationaleCard: { gap: Spacing.xs, backgroundColor: Colors.surfaceHighlight, borderRadius: Radius.md, padding: Spacing.md },
   rationaleText: { fontSize: Typography.size.xs, color: Colors.textSecondary, lineHeight: 17, fontStyle: 'italic' },
 
-  // Comparables
   comparablesToggle: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   comparablesToggleText: { flex: 1, fontSize: Typography.size.xs, color: Colors.textTertiary },
   comparablesList: { backgroundColor: Colors.surfaceHighlight, borderRadius: Radius.md, paddingHorizontal: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceBorder },
 
-  // Queries
   queriesToggle: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   queriesToggleText: { flex: 1, fontSize: Typography.size.xs, color: Colors.textTertiary },
   queriesList: { backgroundColor: Colors.surfaceHighlight, borderRadius: Radius.md, padding: Spacing.md, gap: Spacing.xs, borderWidth: 1, borderColor: Colors.surfaceBorder },
@@ -873,16 +877,13 @@ const s = StyleSheet.create({
   queryText: { flex: 1, fontSize: 10, color: Colors.textSecondary, lineHeight: 14, fontFamily: 'monospace' },
   queryTip: { fontSize: 10, color: Colors.textTertiary, lineHeight: 14, fontStyle: 'italic', marginTop: 4 },
 
-  // Footer
   footerRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   footerText: { flex: 1, fontSize: 10, color: Colors.textTertiary, lineHeight: 14 },
 
-  // Guardrail
   guardrailBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, backgroundColor: Colors.warningDim, borderRadius: Radius.sm, padding: Spacing.sm, borderWidth: 1, borderColor: Colors.warning + '25' },
   guardrailBannerTitle: { fontSize: 10, fontWeight: Typography.weight.bold, color: Colors.warning, marginBottom: 2 },
   guardrailBannerText: { fontSize: 9, color: Colors.warning + 'CC', lineHeight: 13 },
 
-  // Provenance
   provenanceToggle: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   provenanceToggleText: { flex: 1, fontSize: Typography.size.xs, color: Colors.textTertiary },
   provenanceCard: { backgroundColor: Colors.surfaceHighlight, borderRadius: Radius.md, padding: Spacing.md, gap: Spacing.sm, borderWidth: 1, borderColor: Colors.surfaceBorder },
@@ -896,13 +897,11 @@ const s = StyleSheet.create({
   guardrailReasonsTitle: { fontSize: 9, fontWeight: Typography.weight.bold, color: Colors.danger, textTransform: 'uppercase', letterSpacing: 0.4 },
   guardrailReason: { fontSize: 9, color: Colors.danger + 'CC', lineHeight: 13 },
 
-  // No result
   noResultCard: { alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.surfaceHighlight, borderRadius: Radius.lg, padding: Spacing.xl, borderWidth: 1, borderColor: Colors.surfaceBorder },
   noResultTitle: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: Colors.textSecondary, textAlign: 'center' },
   noResultSub: { fontSize: Typography.size.xs, color: Colors.textTertiary, lineHeight: 17, textAlign: 'center' },
   noResultActions: { flexDirection: 'row', gap: Spacing.sm },
 
-  // Error
   errorBanner: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, backgroundColor: Colors.warningDim, borderRadius: Radius.sm, padding: Spacing.sm, borderWidth: 1, borderColor: Colors.warning + '30' },
   errorText: { flex: 1, fontSize: Typography.size.xs, color: Colors.warning, lineHeight: 15 },
 });

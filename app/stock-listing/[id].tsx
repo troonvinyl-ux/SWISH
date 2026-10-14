@@ -1250,6 +1250,7 @@ function MarketValuePanel({
       condition: item.condition, identificationConfidence: item.identificationConfidence,
       identificationTier: item.valuationConfidence as string ?? 'medium',
       numistaTypeId, numistaMatchScore, numistaMatchTier, applyToItem: true,
+      imageUrls: (item.media ?? []).filter((u: string) => typeof u === 'string' && u.startsWith('https://')),
     });
     setLoading(false);
     if (mvErr || !mv) { setError(mvErr ?? 'Market value lookup failed'); return; }
@@ -1834,6 +1835,7 @@ export default function StockListingScreen() {
       condition: item.condition, identificationConfidence: item.identificationConfidence,
       identificationTier: item.valuationConfidence as string ?? 'medium',
       numistaTypeId, numistaMatchScore: 0, numistaMatchTier, applyToItem: true,
+      imageUrls: (item.media ?? []).filter((u: string) => typeof u === 'string' && u.startsWith('https://')),
     });
     setReValuing(false);
     if (mvErr || !mv) { showAlert('Re-Value Failed', mvErr ?? 'Market value lookup failed'); return; }
@@ -2388,6 +2390,7 @@ export default function StockListingScreen() {
             applyToItem={true}
             initialResult={reValueResult}
             autoFetch={!item.valuationMid || item.valuationMid <= 0}
+            imageUrls={(item.media ?? []).filter((u: string) => typeof u === 'string' && u.startsWith('https://'))}
           />
         ) : null}
 
