@@ -142,27 +142,14 @@ export default function TabLayout() {
         }}
       />
 
-      {/* ── Tab 3: Stock / Inventory ── */}
+      {/* ── Tab 3: Master Inventory + Listings ── */}
       <Tabs.Screen
         name="inventory"
         options={{
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.tabItem, focused && styles.tabItemActive]}>
-              <MaterialIcons name="toll" size={22} color={color} />
-              <TabLabel label="Stock" focused={focused} />
-            </View>
-          ),
-        }}
-      />
-
-      {/* ── Tab 4: Listings ── */}
-      <Tabs.Screen
-        name="listings"
-        options={{
-          tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.tabItem, focused && styles.tabItemActive]}>
               <View style={styles.iconWrap}>
-                <MaterialIcons name="receipt-long" size={22} color={color} />
+                <MaterialIcons name="inventory" size={22} color={color} />
                 {liveCount > 0 ? (
                   <View style={styles.liveBadge}>
                     <Text style={styles.liveBadgeText}>
@@ -171,7 +158,20 @@ export default function TabLayout() {
                   </View>
                 ) : null}
               </View>
-              <TabLabel label="Listings" focused={focused} />
+              <TabLabel label="Stock" focused={focused} />
+            </View>
+          ),
+        }}
+      />
+
+      {/* ── Tab 4: eBay Hub ── */}
+      <Tabs.Screen
+        name="listings"
+        options={{
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.tabItem, focused && styles.tabItemActive]}>
+              <MaterialIcons name="storefront" size={22} color={color} />
+              <TabLabel label="eBay" focused={focused} />
             </View>
           ),
         }}
