@@ -431,6 +431,32 @@ async function getCategorySuggestions(
   const q = query.trim().slice(0, 100);
   if (q.length < 2) return { suggestions: [], source: 'empty_query' };
 
+  // 0. LOCAL DB FIRST — the seeded EBAY_GB catalogue has correct category IDs
+  //    (e.g. 3365 for Roman Imperial, not 4740 which is the eBay.com/US ID).
+  //    seed_priority_branches syncs the Coins branch 6 levels deep with MARKETPLACE_ID=EBAY_GB,
+  //    so the DB is the authoritative source of truth for EBAY_GB leaf IDs.
+  try {
+    const { data: dbFirst } = await supabase.from('ebay_categories')
+      .select('category_id, category_name, is_leaf, category_path, tree_id, tree_version')
+      .eq('marketplace_id', MARKETPLACE_ID)
+      .eq('active', true)
+      .eq('is_leaf', true)
+      .or(`category_name.ilike.%${q}%,category_path.ilike.%${q}%`)
+      .order('category_name')
+      .limit(8);
+    if (dbFirst && dbFirst.length > 0) {
+      console.log(`[cat-svc] DB-first match: ${dbFirst.length} results for "${q}"`);
+      return {
+        suggestions: dbFirst.map((r: any, i: number) => ({
+          id: r.category_id, name: r.category_name, isLeaf: true,
+          confidence: i === 0 ? 'high' : 'medium',
+          categoryPath: r.category_path, treeId: r.tree_id ?? treeId, treeVersion: r.tree_version ?? treeVersion,
+        })).slice(0, 8),
+        source: 'db_cache',
+      };
+    }
+  } catch {}
+
   // 1. Live eBay Taxonomy API — leafCategoryTreeNode is authoritative
   try {
     const res = await fetch(
@@ -906,12 +932,18 @@ const CURATED_LEAF_CATEGORIES: Omit<CuratedCat, 'treeId'>[] = [
   { id: '4726',   name: 'British Coins',                    isLeaf: true,  childCount: 0 },
   { id: '4738',   name: 'Ancient Coins: Greek',             isLeaf: true,  childCount: 0 },
   { id: '4159',   name: 'Ancient Coins: Byzantine',         isLeaf: true,  childCount: 0 },
-  { id: '4740',   name: 'Ancient Coins: Roman Imperial',    isLeaf: true,  childCount: 0 },
-  { id: '4741',   name: 'Ancient Coins: Roman Republic',    isLeaf: true,  childCount: 0 },
-  { id: '4742',   name: 'Ancient Coins: Celtic',            isLeaf: true,  childCount: 0 },
-  { id: '4743',   name: 'Ancient Coins: Judean',            isLeaf: true,  childCount: 0 },
-  { id: '4744',   name: 'Ancient Coins: Other',             isLeaf: true,  childCount: 0 },
-  { id: '40714',  name: 'Ancient Coins',                    isLeaf: true,  childCount: 0 },
+  // Roman Imperial sub-periods — correct EBAY_GB leaf IDs (confirmed via admin validate tool)
+  // These are more specific than the generic 4740 returned by the live Taxonomy API
+  { id: '3365',   name: 'Roman Imperial (96-235AD)',        isLeaf: true,  childCount: 0 },
+  { id: '3366',   name: 'Roman Imperial (235-285AD)',       isLeaf: true,  childCount: 0 },
+  { id: '3367',   name: 'Roman Imperial (285-400AD)',       isLeaf: true,  childCount: 0 },
+  { id: '3368',   name: 'Roman Imperial (400-476AD)',       isLeaf: true,  childCount: 0 },
+  { id: '4740',   name: 'Ancient Coins: Roman Imperial',   isLeaf: true,  childCount: 0 },
+  { id: '4741',   name: 'Ancient Coins: Roman Republic',   isLeaf: true,  childCount: 0 },
+  { id: '4742',   name: 'Ancient Coins: Celtic',           isLeaf: true,  childCount: 0 },
+  { id: '4743',   name: 'Ancient Coins: Judean',           isLeaf: true,  childCount: 0 },
+  { id: '4744',   name: 'Ancient Coins: Other',            isLeaf: true,  childCount: 0 },
+  { id: '40714',  name: 'Ancient Coins',                   isLeaf: true,  childCount: 0 },
   { id: '18594',  name: 'Medieval Coins',                   isLeaf: true,  childCount: 0 },
   { id: '18593',  name: 'Hammered Coins',                   isLeaf: true,  childCount: 0 },
   { id: '527',    name: 'Coin Collections & Lots',          isLeaf: true,  childCount: 0 },
