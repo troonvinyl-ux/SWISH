@@ -207,6 +207,11 @@ export default function NicheValuationPanel({
   const [queriesExpanded, setQueriesExpanded] = useState(false);
   const [provenanceExpanded, setProvenanceExpanded] = useState(false);
 
+  // v7: Terapeak Product Research (class A — verified sold data)
+  const teapeakData = (result as any)?.teapeakProductResearch;
+  const hasTeapeakSold = teapeakData?.available === true && (teapeakData?.soldQuantity ?? 0) > 0;
+  const teapeakNeedsReauth = teapeakData?.needsReauth === true;
+
   // v5: Gemini vision market research (from result)
   const geminiData = (result as any)?.geminiMarketResearch;
   const hasGeminiEstimate = geminiData?.available === true && (geminiData?.estimatedRange?.mid ?? 0) > 0;
@@ -424,7 +429,7 @@ export default function NicheValuationPanel({
         <View style={{ flex: 1 }}>
           <Text style={[s.headerTitle, { color: accent }]}>Live Market Value</Text>
           <Text style={s.headerSub}>
-            {isAIEstimate ? 'AI estimate — no eBay sold data found' : config.evidenceLabel}
+            {hasTeapeakSold ? `Terapeak: ${teapeakData.soldQuantity} verified sold · EBAY_GB` : isAIEstimate ? 'AI estimate — no eBay sold data found' : config.evidenceLabel}
           </Text>
         </View>
         <View style={s.headerRight}>
@@ -498,7 +503,12 @@ export default function NicheValuationPanel({
 
       {/* Evidence chips */}
       <View style={s.evidenceRow}>
-        {sold && sold.relevantSoldCount > 0 ? (
+        {hasTeapeakSold ? (
+          <View style={[s.evidenceChip, { backgroundColor: Colors.successDim, borderColor: Colors.success + '50' }]}>
+            <MaterialIcons name="verified" size={10} color={Colors.success} />
+            <Text style={[s.evidenceChipText, { color: Colors.success }]}>{teapeakData.soldQuantity} sold · Terapeak ✓</Text>
+          </View>
+        ) : sold && sold.relevantSoldCount > 0 ? (
           <View style={s.evidenceChip}>
             <MaterialIcons name="shopping-bag" size={10} color={Colors.primary} />
             <Text style={s.evidenceChipText}>{sold.relevantSoldCount} sold</Text>
@@ -600,8 +610,53 @@ export default function NicheValuationPanel({
             </View>
           ) : null}
 
-          {/* Sold stats */}
-          {sold && sold.relevantSoldCount > 0 ? (
+          {/* Terapeak re-auth prompt */}
+          {teapeakNeedsReauth ? (
+            <View style={s.teapeakReauthBanner}>
+              <MaterialIcons name="verified-user" size={13} color={Colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={s.teapeakReauthTitle}>Unlock Genuine Sold Data via Terapeak</Text>
+                <Text style={s.teapeakReauthText}>
+                  Reconnect eBay in Marketplaces to authorise the sell.analytics.readonly scope. This enables eBay Seller Hub Product Research data — the same verified sold history you see in Research tab.
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
+          {/* Terapeak sold stats — class A verified sold data */}
+          {hasTeapeakSold ? (
+            <View style={s.statsSection}>
+              <Text style={[s.sectionLabel, { color: Colors.success }]}>TERAPEAK — VERIFIED SOLD DATA (EBAY GB, LAST 3 MONTHS)</Text>
+              <View style={s.statsGrid}>
+                <StatRow label="Verified sold" value={String(teapeakData.soldQuantity)} accent={Colors.success} />
+                <StatRow label="Average sold price" value={`£${(teapeakData.averageSoldPrice ?? 0).toFixed(2)}`} accent={accent} />
+                <StatRow label="Price range" value={teapeakData.priceRange ?? 'N/A'} />
+                {teapeakData.medianConditionPrice > 0 && teapeakData.medianConditionPrice !== teapeakData.averageSoldPrice ? (
+                  <StatRow label="Median (by condition)" value={`£${teapeakData.medianConditionPrice.toFixed(2)}`} accent={accent} />
+                ) : null}
+                {teapeakData.sellThroughRate != null ? (
+                  <StatRow label="Sell-through rate" value={`${Math.round(teapeakData.sellThroughRate * 100)}%`} accent={teapeakData.sellThroughRate > 0.5 ? Colors.success : Colors.warning} />
+                ) : null}
+                {teapeakData.liveListings > 0 ? <StatRow label="Active listings" value={String(teapeakData.liveListings)} /> : null}
+                {sold?.dateRange && sold.dateRange !== 'unknown' ? <StatRow label="Period" value={sold.dateRange} /> : null}
+              </View>
+              {teapeakData.conditionDistributions?.length > 0 ? (
+                <View style={s.condDistCard}>
+                  <Text style={s.sectionLabel}>CONDITION BREAKDOWN</Text>
+                  {(teapeakData.conditionDistributions as Array<{ conditionName: string; soldQuantity: number; averageSoldPrice: number }>).map((c, i) => (
+                    <View key={i} style={s.condDistRow}>
+                      <Text style={s.condDistLabel}>{c.conditionName}</Text>
+                      <Text style={s.condDistSold}>{c.soldQuantity} sold</Text>
+                      <Text style={s.condDistPrice}>avg £{c.averageSoldPrice.toFixed(0)}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* Legacy sold stats — shown only when Terapeak is not available */}
+          {!hasTeapeakSold && sold && sold.relevantSoldCount > 0 ? (
             <View style={s.statsSection}>
               <Text style={s.sectionLabel}>VERIFIED SOLD DATA (EBAY UK)</Text>
               <View style={s.statsGrid}>
@@ -754,9 +809,10 @@ export default function NicheValuationPanel({
             <View style={s.footerRow}>
               <MaterialIcons name="storage" size={10} color={Colors.textTertiary} />
               <Text style={s.footerText}>
-                eBay sold: {result.dataSource.findingApiTotal} · Active: {result.dataSource.browseApiActive}
+                {(result.dataSource as any).teapeakActive ? `Terapeak: ${(result.dataSource as any).teapeakSold} sold` : (result.dataSource as any).teapeakNeedsReauth ? 'Terapeak: needs reauth' : 'Terapeak: no data'}
+                {` · Active listings: ${result.dataSource.browseApiActive}`}
                 {(result.dataSource as any).imageUrlsUsed > 0 ? ` · Images: ${(result.dataSource as any).imageUrlsUsed}` : ''}
-                {(result.dataSource as any).geminiVisionUsed ? ' · Gemini Vision: on' : ''}
+                {(result.dataSource as any).geminiVisionUsed ? ' · Gemini: on' : ''}
               </Text>
             </View>
           ) : null}
@@ -879,6 +935,16 @@ const s = StyleSheet.create({
 
   footerRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   footerText: { flex: 1, fontSize: 10, color: Colors.textTertiary, lineHeight: 14 },
+
+  // Terapeak
+  teapeakReauthBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: Colors.primaryDim, borderRadius: Radius.md, padding: Spacing.sm, borderWidth: 1, borderColor: Colors.primary + '40' },
+  teapeakReauthTitle: { fontSize: 10, fontWeight: Typography.weight.bold, color: Colors.primary, marginBottom: 3 },
+  teapeakReauthText: { fontSize: 9, color: Colors.primary + 'CC', lineHeight: 13 },
+  condDistCard: { backgroundColor: Colors.successDim, borderRadius: Radius.md, padding: Spacing.sm, gap: 3, borderWidth: 1, borderColor: Colors.success + '30', marginTop: 4 },
+  condDistRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: 3, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder + '50' },
+  condDistLabel: { flex: 1, fontSize: Typography.size.xs, color: Colors.textSecondary },
+  condDistSold: { fontSize: 10, color: Colors.textTertiary, minWidth: 52, textAlign: 'right' },
+  condDistPrice: { fontSize: 10, fontWeight: Typography.weight.bold, color: Colors.success, minWidth: 60, textAlign: 'right' },
 
   guardrailBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, backgroundColor: Colors.warningDim, borderRadius: Radius.sm, padding: Spacing.sm, borderWidth: 1, borderColor: Colors.warning + '25' },
   guardrailBannerTitle: { fontSize: 10, fontWeight: Typography.weight.bold, color: Colors.warning, marginBottom: 2 },

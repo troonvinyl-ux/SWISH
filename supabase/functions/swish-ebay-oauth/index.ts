@@ -41,6 +41,10 @@ const EBAY_SCOPES = [
   'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
   'https://api.ebay.com/oauth/api_scope/sell.account',
   'https://api.ebay.com/oauth/api_scope/commerce.identity.readonly',
+  // v7: Terapeak / Sell Analytics — enables GET /sell/analytics/v1/product_research/sell
+  // Provides genuine historical sold price data (same as eBay Seller Hub Product Research).
+  // Existing connected accounts will not have this scope until they re-authorise.
+  'https://api.ebay.com/oauth/api_scope/sell.analytics.readonly',
 ].join(' ');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
