@@ -932,12 +932,11 @@ const CURATED_LEAF_CATEGORIES: Omit<CuratedCat, 'treeId'>[] = [
   { id: '4726',   name: 'British Coins',                    isLeaf: true,  childCount: 0 },
   { id: '4738',   name: 'Ancient Coins: Greek',             isLeaf: true,  childCount: 0 },
   { id: '4159',   name: 'Ancient Coins: Byzantine',         isLeaf: true,  childCount: 0 },
-  // Roman Imperial sub-periods — correct EBAY_GB leaf IDs (confirmed via admin validate tool)
-  // These are more specific than the generic 4740 returned by the live Taxonomy API
+  // Roman Imperial — only 3365 confirmed valid EBAY_GB leaf via admin validate tool.
+  // 3366/3367/3368 were rejected by eBay Taxonomy API (not valid UK listing leaves).
+  // Use 4740 (Ancient Coins: Roman Imperial) as the general fallback.
   { id: '3365',   name: 'Roman Imperial (96-235AD)',        isLeaf: true,  childCount: 0 },
-  { id: '3366',   name: 'Roman Imperial (235-285AD)',       isLeaf: true,  childCount: 0 },
-  { id: '3367',   name: 'Roman Imperial (285-400AD)',       isLeaf: true,  childCount: 0 },
-  { id: '3368',   name: 'Roman Imperial (400-476AD)',       isLeaf: true,  childCount: 0 },
+  { id: '4157',   name: 'Roman Coins',                     isLeaf: true,  childCount: 0 },
   { id: '4740',   name: 'Ancient Coins: Roman Imperial',   isLeaf: true,  childCount: 0 },
   { id: '4741',   name: 'Ancient Coins: Roman Republic',   isLeaf: true,  childCount: 0 },
   { id: '4742',   name: 'Ancient Coins: Celtic',           isLeaf: true,  childCount: 0 },
