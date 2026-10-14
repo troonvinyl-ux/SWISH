@@ -1,32 +1,25 @@
-// SWISH Market Value & Pricing Intelligence Edge Function v3
+// SWISH Market Value & Pricing Intelligence Edge Function v4
 //
-// CRITICAL CHANGES v3 (Numista-First Architecture):
-//   1. Accepts numistaTypeId from swish-identify for sales record lookup
-//   2. Retrieves Numista sales records for VERIFIED types only
-//   3. Numista sales and eBay sold sales are kept SEPARATE in audit trail
-//   4. Combined valuation uses both sources with relevance weighting
-//   5. Active asking prices remain clearly separated — NEVER used as sold evidence
-//   6. Ancient coin protection: broad searches rejected without type verification
-//   7. Physical measurement contradictions from Numista cap valuation confidence
-//   8. Recommended listing price is evidence-derived, not median × 0.95
-//   9. Sale probability only from actual date-range data (never invented)
-//   10. Full audit trail: numistaSales + ebaySales + combined statistics
+// v4 FIXES (2026-10-14):
+//   1. isCoinSpecialist() — removed curiosities_collectibles (not a coin), added islamic_silver,
+//      ancient_artefacts, banknotes, gold, silver — all precious-metal/numismatic specialists
+//   2. searchVerifiedSoldListings() — added globalId=EBAY_GB parameter so searches run on
+//      eBay UK, not eBay US (was the primary cause of zero results for UK sellers)
+//   3. searchActivePrices() — already had EBAY_GB header; confirmed correct
+//   4. buildSearchQueries() — Islamic silver now gets coin-specific query building:
+//      dynasty/ruler/denomination/date attributes used for structured queries
+//   5. scoreComparableRelevance() — Islamic silver uses denomination-tolerant matching:
+//      "tanker" as a denomination type matches eBay titles containing coin type keywords
+//      rather than requiring exact denomination string match (Islamic denominations vary greatly)
+//   6. Added pagination support: fetchPage parameter allows retrieving pages 2+ for richer data
+//   7. Improved excluded-sale logging: logs why each sale was excluded to aid debugging
+//   8. Added raw eBay response logging when totalFound > 0 but relevantCount = 0
 //
-// POST body:
-//   {
-//     tenantId: string,
-//     itemId?: string,
-//     title: string,
-//     specialistId?: string,
-//     attributes?: object,
-//     condition?: string,
-//     identificationConfidence?: number,
-//     identificationTier?: string,
-//     numistaTypeId?: number,           // NEW: from swish-identify numistaVerification
-//     numistaMatchScore?: number,       // NEW: from swish-identify
-//     numistaMatchTier?: string,        // NEW: from swish-identify
-//     applyToItem?: boolean,
-//   }
+// INVARIANTS (unchanged):
+//   - Active asking prices never used as sold evidence
+//   - Numista specs (reference_data) never used as market prices
+//   - Identification and valuation confidence remain independent
+//   - Credentials never logged or exposed in responses
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
@@ -34,6 +27,10 @@ import { corsHeaders } from '../_shared/cors.ts';
 const EBAY_FINDING_API = 'https://svcs.ebay.com/services/search/FindingService/v1';
 const EBAY_TOKEN_URL   = 'https://api.ebay.com/identity/v1/oauth2/token';
 const NUMISTA_API      = 'https://api.numista.com/api/v3';
+
+// eBay UK Global ID — required for UK marketplace searches
+// Without this, the Finding API defaults to EBAY_US
+const EBAY_GLOBAL_ID = 'EBAY_GB';
 
 function adminClient() {
   return createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
@@ -43,11 +40,23 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 }
 
-// ── Coin specialist detector ──────────────────────────────────────────────────
+// ── Specialist category detectors ─────────────────────────────────────────────
+// FIX v4: removed curiosities_collectibles (generic, not a coin specialist)
+//         added islamic_silver, ancient_artefacts, banknotes, gold, silver
 function isCoinSpecialist(specialistId: string): boolean {
-  return specialistId === 'coins' || specialistId === 'coins_uk' ||
-    specialistId?.includes('coin') || specialistId?.includes('numismatic') ||
-    specialistId === 'curiosities_collectibles';
+  const COIN_SPECIALISTS = new Set([
+    'coins', 'coins_uk', 'coins_world', 'coins_ancient', 'coins_islamic',
+    'islamic_silver', 'ancient_artefacts', 'banknotes', 'gold', 'silver',
+    'numismatics',
+  ]);
+  return COIN_SPECIALISTS.has(specialistId) ||
+    specialistId?.includes('coin') ||
+    specialistId?.includes('numismatic');
+}
+
+// Islamic silver is a sub-category of coins — has specific search and scoring needs
+function isIslamicCoinSpecialist(specialistId: string): boolean {
+  return specialistId === 'islamic_silver' || specialistId === 'coins_islamic';
 }
 
 function isMXSpecialist(specialistId: string): boolean {
@@ -85,9 +94,21 @@ async function getEbayAppToken(clientId: string, clientSecret: string): Promise<
       body: new URLSearchParams({ grant_type: 'client_credentials', scope: 'https://api.ebay.com/oauth/api_scope' }).toString(),
       signal: AbortSignal.timeout(8000),
     });
+    if (!resp.ok) {
+      console.log(`[SWISH Market v4] App token failed: HTTP ${resp.status}`);
+      return null;
+    }
     const data = await resp.json();
-    return data.access_token ?? null;
-  } catch { return null; }
+    if (!data.access_token) {
+      console.log(`[SWISH Market v4] App token response missing access_token: ${data.error ?? data.error_description ?? 'unknown'}`);
+      return null;
+    }
+    console.log(`[SWISH Market v4] App token obtained successfully`);
+    return data.access_token;
+  } catch (e: any) {
+    console.log(`[SWISH Market v4] App token exception: ${e.message}`);
+    return null;
+  }
 }
 
 async function getConnectorCredentials(supabase: ReturnType<typeof adminClient>, tenantId: string) {
@@ -132,37 +153,25 @@ interface ComparableItem {
   exclusionReason?: string;
 }
 
-// ── eBay search query builder ─────────────────────────────────────────────────
-// ── Title sanitiser ─────────────────────────────────────────────────────────
-// Removes eBay listing noise before sending to the Finding API:
-//   - Price strings (£300, $150, €200, inc VAT, +P&P, etc.)
-//   - Condition / listing qualifiers (Spares/Repairs, For Parts, Not Working, etc.)
-//   - Special punctuation (–, —, |, +, #) that confuse eBay keyword matching
-//   - Seller-added suffixes ("see desc", "fast delivery", etc.)
+// ── Title sanitiser ───────────────────────────────────────────────────────────
 function sanitiseTitleForSearch(raw: string): string {
   return raw
-    // Remove price strings: £300, £299.99, $150, €200
     .replace(/[£\$€]\s*\d+(?:[.,]\d+)?/g, ' ')
-    // Remove condition qualifiers
     .replace(/\b(spares?\s*\/\s*repairs?|for parts?|not working|project bike?|parts only|see desc(?:ription)?|read desc(?:ription)?|fast delivery|free postage|inc(?:luding)?\s+p&p|\+p&p|collection only|buyer collects?)\b/gi, ' ')
-    // Remove em-dash/en-dash separators (common in eBay titles)
     .replace(/[–—]/g, ' ')
-    // Remove trailing pipe / hash / plus (common eBay suffix separators)
     .replace(/[|#+](?=\s|$)/g, ' ')
-    // Collapse multiple spaces
     .replace(/\s{2,}/g, ' ')
     .trim();
 }
 
+// ── Search query builder ──────────────────────────────────────────────────────
 function buildSearchQueries(title: string, attributes: Record<string, any>, specialistId: string, numistaTitle?: string): string[] {
   const queries: string[] = [];
-
   const sanitised = sanitiseTitleForSearch(title);
   const cleanTitle = sanitised
     .replace(/^(vintage|antique|old|rare|beautiful|stunning|amazing|lovely|nice|ex|extraordinary)\s+/gi, '')
     .replace(/\s+/g, ' ').trim().slice(0, 100);
 
-  // Only add the cleaned title if it's meaningfully different from the raw (i.e. we actually removed noise)
   if (cleanTitle.length >= 5) queries.push(cleanTitle);
 
   // ── MX / Motocross ────────────────────────────────────────────────────────
@@ -178,15 +187,12 @@ function buildSearchQueries(title: string, attributes: Record<string, any>, spec
     const engineCC = engine ? engine.replace(/[^0-9]/g, '') + 'cc' : '';
     const strokeLabel = stroke.includes('2') ? '2 stroke' : stroke.includes('4') ? '4 stroke' : '';
 
-    // Primary structured query: Make + Model + Year + Engine
     const primaryParts = [make, model, startYear, engineCC].filter(Boolean);
     if (primaryParts.length >= 2) queries.push(primaryParts.join(' ').slice(0, 100));
 
-    // Fallback 1: Make + Engine + stroke (broader)
     const fallback1 = [make, engineCC, strokeLabel, bikeType || 'motocross'].filter(Boolean);
     if (fallback1.length >= 2) queries.push(fallback1.join(' ').slice(0, 100));
 
-    // Fallback 2: Make + Model only (broadest)
     if (make && model) queries.push(`${make} ${model} motocross`.slice(0, 100));
   }
 
@@ -198,14 +204,11 @@ function buildSearchQueries(title: string, attributes: Record<string, any>, spec
     const frameSize = String(attributes?.frame_size ?? '').trim();
     const year = String(attributes?.year_range ?? attributes?.year_made ?? '').trim();
 
-    // If brand missing from attributes (common on eBay imports), extract from sanitised title
     if (!brand) {
       const knownBrands = ['on-one','trek','specialized','scott','giant','cannondale','cube','merida','orbea','bianchi','santa cruz','yeti','commencal','whyte','nukeproof','norco','marin','transition','kona','genesis','boardman','voodoo','carrera','raleigh','pinarello','cervelo','fuji','ghost','lapierre','ribble','vitus','colnago','canyon','focus','calibre','kinesis','cotic','singular','orange','ragley','salsa','surly','all-city','bombtrack','haibike','felt','diamondback'];
       const sanitisedLower = sanitised.toLowerCase();
       for (const kb of knownBrands) {
         if (sanitisedLower.startsWith(kb) || sanitisedLower.includes(' ' + kb + ' ') || sanitisedLower.startsWith(kb + ' ')) {
-          brand = sanitised.slice(0, kb.length + 1).trim().split(' ')[0] || kb;
-          // Preserve original casing from sanitised title
           const idx = sanitisedLower.indexOf(kb);
           brand = sanitised.slice(idx, idx + kb.length);
           break;
@@ -213,7 +216,6 @@ function buildSearchQueries(title: string, attributes: Record<string, any>, spec
       }
     }
 
-    // If model missing and brand found, extract next 1-2 words from sanitised title as model
     if (brand && !model) {
       const brandIdx = sanitised.toLowerCase().indexOf(brand.toLowerCase());
       if (brandIdx !== -1) {
@@ -224,24 +226,20 @@ function buildSearchQueries(title: string, attributes: Record<string, any>, spec
       }
     }
 
-    // Primary: brand + model + year
     const primaryParts = [brand, model, year ? year.split('-')[0] : ''].filter(Boolean);
     if (primaryParts.length >= 2) queries.push(primaryParts.join(' ').slice(0, 100));
 
-    // Fallback 1: brand + frame type keyword from title
     const frameKeyword = frameType || (sanitised.toLowerCase().includes('hardtail') ? 'hardtail mountain bike' : sanitised.toLowerCase().includes('full suspension') ? 'full suspension mountain bike' : 'mountain bike');
     if (brand) {
       const fb1 = [brand, frameKeyword, frameSize].filter(Boolean).join(' ').slice(0, 100);
       if (!queries.includes(fb1)) queries.push(fb1);
     }
 
-    // Fallback 2: brand + model (no extras)
     if (brand && model) {
       const fb2 = `${brand} ${model}`.slice(0, 80);
       if (!queries.includes(fb2)) queries.push(fb2);
     }
 
-    // Fallback 3: frame type with brand for max coverage
     if (brand) queries.push(`${brand} frame`.slice(0, 60));
   }
 
@@ -251,49 +249,70 @@ function buildSearchQueries(title: string, attributes: Record<string, any>, spec
     const garmentType = String(attributes?.garment_type ?? attributes?.item_type ?? '').trim();
     const era = String(attributes?.era ?? attributes?.era_estimate ?? '').trim();
     const size = String(attributes?.size ?? attributes?.labelled_size ?? '').trim();
-    const colour = String(attributes?.colour ?? attributes?.color ?? '').trim();
     const composition = String(attributes?.composition ?? attributes?.material ?? '').trim();
-    const countryMade = String(attributes?.country_of_origin ?? attributes?.made_in ?? '').trim();
 
-    // Primary: brand + garmentType + era
     if (brand && garmentType) {
       const clothingQuery = [brand, garmentType, era].filter(Boolean).join(' ').slice(0, 100);
       if (clothingQuery !== cleanTitle) queries.push(clothingQuery);
     }
-
-    // Fallback 1: brand + garmentType + size
     if (brand && garmentType && size) {
       queries.push([brand, garmentType, size].join(' ').slice(0, 100));
     }
-
-    // Fallback 2: brand + garmentType only (broadest)
     if (brand && garmentType) {
       const broad = `vintage ${brand} ${garmentType}`.slice(0, 100);
       if (!queries.includes(broad)) queries.push(broad);
     }
-
-    // Fallback 3: brand only for rare/luxury items
     if (brand && composition && composition.toLowerCase().includes('silk')) {
       queries.push(`${brand} vintage clothing`.slice(0, 100));
     }
   }
 
-  // ── Coins ──────────────────────────────────────────────────────────────────
+  // ── Coins (including Islamic silver, ancient artefacts, etc.) ────────────
   if (isCoinSpecialist(specialistId)) {
-    const parts: string[] = [];
-    if (attributes?.ruler) parts.push(String(attributes.ruler));
-    if (attributes?.denomination) parts.push(String(attributes.denomination));
-    const yr = attributes?.year_made ?? attributes?.yearMade;
-    if (yr) parts.push(String(yr));
-    if (parts.length >= 2) queries.push(parts.join(' ').slice(0, 100));
+    // For Islamic coins: use dynasty/dynasty_period, ruler, denomination, AH date
+    if (isIslamicCoinSpecialist(specialistId)) {
+      const dynasty = String(attributes?.dynasty ?? attributes?.period ?? attributes?.empire ?? '').trim();
+      const ruler = String(attributes?.ruler ?? attributes?.caliph ?? attributes?.sultan ?? '').trim();
+      const denomination = String(attributes?.denomination ?? attributes?.coin_type ?? '').trim();
+      const mint = String(attributes?.mint ?? attributes?.mint_city ?? '').trim();
+      const ahDate = String(attributes?.ah_date ?? attributes?.year_made ?? attributes?.date ?? '').trim();
 
-    // Use Numista title for more precise eBay search
-    if (numistaTitle && numistaTitle.length > 5 && numistaTitle !== cleanTitle) {
-      queries.push(numistaTitle.slice(0, 80));
+      // Primary: dynasty + ruler + denomination
+      const islamicPrimary = [dynasty, ruler, denomination].filter(Boolean);
+      if (islamicPrimary.length >= 2) {
+        queries.push(islamicPrimary.join(' ').slice(0, 100));
+      }
+
+      // Fallback 1: denomination + mint (common Islamic search pattern)
+      if (denomination && mint) {
+        queries.push(`${denomination} ${mint} Islamic silver coin`.slice(0, 100));
+      }
+
+      // Fallback 2: dynasty + denomination (broad)
+      if (dynasty && denomination) {
+        queries.push(`${dynasty} ${denomination} silver`.slice(0, 100));
+      }
+
+      // Fallback 3: denomination only + Islamic silver (for "tanker" or "dirham" etc.)
+      if (denomination) {
+        queries.push(`${denomination} Islamic silver coin`.slice(0, 100));
+      }
+    } else {
+      // Standard coin query: ruler + denomination + year + catalogue number
+      const parts: string[] = [];
+      if (attributes?.ruler) parts.push(String(attributes.ruler));
+      if (attributes?.denomination) parts.push(String(attributes.denomination));
+      const yr = attributes?.year_made ?? attributes?.yearMade;
+      if (yr) parts.push(String(yr));
+      if (parts.length >= 2) queries.push(parts.join(' ').slice(0, 100));
+
+      if (numistaTitle && numistaTitle.length > 5 && numistaTitle !== cleanTitle) {
+        queries.push(numistaTitle.slice(0, 80));
+      }
+
+      const catNum = attributes?.catalogue_number ?? attributes?.catalogueNumber;
+      if (catNum) queries.push(String(catNum).slice(0, 50));
     }
-
-    const catNum = attributes?.catalogue_number ?? attributes?.catalogueNumber;
-    if (catNum) queries.push(String(catNum).slice(0, 50));
   }
 
   return queries.filter((q, i, a) => q.length >= 3 && a.indexOf(q) === i).slice(0, 5);
@@ -304,7 +323,7 @@ function buildSearchQueries(title: string, attributes: Record<string, any>, spec
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface NumistaSaleRecord {
-  price: number;       // GBP
+  price: number;
   currency: string;
   originalPrice: number;
   date: string;
@@ -344,7 +363,6 @@ async function fetchNumistaSalesRecords(
   };
 
   try {
-    // Fetch type detail for title
     let typeTitle = '';
     try {
       const typeResp = await fetch(`${NUMISTA_API}/types/${typeId}`, {
@@ -356,18 +374,15 @@ async function fetchNumistaSalesRecords(
       }
     } catch { /* non-blocking */ }
 
-    // Fetch sales records
     const salesResp = await fetch(`${NUMISTA_API}/types/${typeId}/sales_records?count=50`, {
       headers: { 'Numista-API-Key': apiKey }, signal: AbortSignal.timeout(10000),
     });
 
     if (!salesResp.ok) {
-      // 402 = requires paid plan — graceful degradation
       if (salesResp.status === 402 || salesResp.status === 403) {
-        console.log(`[SWISH Market v3] Numista sales records require paid plan (${salesResp.status})`);
+        console.log(`[SWISH Market v4] Numista sales require paid plan (${salesResp.status})`);
         return { ...noResult, numistaTitle: typeTitle, error: `Sales records require Numista paid API plan (${salesResp.status})` };
       }
-      console.log(`[SWISH Market v3] Numista sales ${salesResp.status}`);
       return { ...noResult, numistaTitle: typeTitle, error: `Numista sales API returned ${salesResp.status}` };
     }
 
@@ -385,123 +400,165 @@ async function fetchNumistaSalesRecords(
       try {
         const rawPrice = parseFloat(raw.price ?? raw.amount ?? '0');
         if (rawPrice <= 0) continue;
-
         const currency = (raw.currency ?? 'EUR').toUpperCase();
         const gbpPrice = toGBP(rawPrice, currency);
         if (gbpPrice <= 0) continue;
-
         if (currency !== 'GBP') conversions.add(currency);
-
-        const grade = raw.grade ?? raw.condition_grade ?? '';
-        const cond = raw.condition ?? raw.quality ?? '';
-        const date = raw.date ?? raw.sold_date ?? raw.auction_date ?? '';
-        const marketplace = raw.marketplace ?? raw.source ?? raw.auction_house ?? 'Numista';
-
         sales.push({
           price: Math.round(gbpPrice * 100) / 100,
-          currency,
-          originalPrice: rawPrice,
-          date,
-          condition: cond,
-          grade,
-          marketplace,
+          currency, originalPrice: rawPrice,
+          date: raw.date ?? raw.sold_date ?? raw.auction_date ?? '',
+          condition: raw.condition ?? raw.quality ?? '',
+          grade: raw.grade ?? raw.condition_grade ?? '',
+          marketplace: raw.marketplace ?? raw.source ?? raw.auction_house ?? 'Numista',
           url: raw.url ?? raw.link ?? '',
           description: raw.description ?? raw.title ?? '',
         });
       } catch { /* skip malformed */ }
     }
 
-    // Filter by condition relevance
-    // Only heavily penalise if our coin is damaged and sales are high-grade (or vice versa)
     const conditionLower = condition.toLowerCase();
     const isDamaged = conditionLower.includes('damage') || conditionLower.includes('hole') ||
       conditionLower.includes('clean') || conditionLower.includes('poor') || conditionLower.includes('fair');
 
     const relevantSales = sales.filter(s => {
-      if (!isDamaged) return true; // Keep all if condition unknown
-      // Exclude obviously top-grade examples when coin is damaged
+      if (!isDamaged) return true;
       const saleCondLower = (s.condition + s.grade).toLowerCase();
-      const isTopGrade = saleCondLower.includes('ms') || saleCondLower.includes('unc') ||
-        saleCondLower.includes('pf') || saleCondLower.includes('gem');
-      return !isTopGrade;
+      return !(saleCondLower.includes('ms') || saleCondLower.includes('unc') ||
+        saleCondLower.includes('pf') || saleCondLower.includes('gem'));
     });
 
-    // Compute statistics on relevant sales
     const prices = relevantSales.map(s => s.price).sort((a, b) => a - b);
     const n = prices.length;
     const median = prices[Math.floor(n / 2)] ?? 0;
     const low = prices[Math.floor(n * 0.15)] ?? prices[0] ?? 0;
     const high = prices[Math.floor(n * 0.85)] ?? prices[n - 1] ?? 0;
 
-    console.log(`[SWISH Market v3] Numista type N#${typeId}: ${rawSales.length} sales fetched, ${relevantSales.length} relevant, median=£${median}`);
+    console.log(`[SWISH Market v4] Numista N#${typeId}: ${rawSales.length} sales, ${relevantSales.length} relevant, median=£${median}`);
 
     return {
-      typeId, numistaTitle: typeTitle,
-      numistaN: `N#${typeId}`,
+      typeId, numistaTitle: typeTitle, numistaN: `N#${typeId}`,
       numistaUrl: `https://en.numista.com/catalogue/index.php?r=${typeId}`,
       sales: relevantSales.slice(0, 30),
-      totalFetched: rawSales.length,
-      relevantCount: relevantSales.length,
+      totalFetched: rawSales.length, relevantCount: relevantSales.length,
       median: Math.round(median * 100) / 100,
       low: Math.round(low * 100) / 100,
       high: Math.round(high * 100) / 100,
       currencyConversions: [...conversions],
     };
   } catch (e: any) {
-    console.log(`[SWISH Market v3] Numista sales error: ${e.message}`);
     return { ...noResult, error: `Numista sales error: ${e.message}` };
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// eBay FINDING API — VERIFIED SOLD ONLY
+// eBay FINDING API — VERIFIED SOLD ONLY (EBAY UK)
 // ═══════════════════════════════════════════════════════════════════════════════
+//
+// FIX v4: Added 'GLOBAL-ID': 'EBAY_GB' to scope searches to eBay UK.
+// Previously this parameter was absent, causing the API to default to EBAY_US.
+// eBay UK has a much larger inventory of British, Islamic, and European coins.
+//
+// NOTE ON SELLER HUB PRODUCT RESEARCH:
+//   eBay Seller Hub Product Research is a private eBay feature NOT accessible
+//   via the public Finding API. It shows longer historical sold data (up to 90 days)
+//   via an authenticated session. This is NOT available through any public API.
+//
+//   The Finding API (findCompletedItems + SoldItemsOnly=true) is the authorised
+//   public equivalent — it returns up to 50 items per page of recently sold listings.
+//   This is what SWISH uses. The data is real eBay sold transactions, not estimates.
+//
+// NOTE ON SOLD PRICES vs BEST OFFER:
+//   findCompletedItems returns the final sold price for FixedPrice and Auction items.
+//   For Best Offer listings, the returned price is the ACCEPTED offer amount when
+//   the item sold with 'EndedWithSales' state — this IS the actual transacted price.
+//   We DO NOT infer Best Offer amounts from asking prices.
 
 async function searchVerifiedSoldListings(
-  clientId: string, query: string, maxResults = 50,
-): Promise<{ listings: ComparableItem[]; error?: string; totalFound: number }> {
+  clientId: string, query: string, maxResults = 50, pageNumber = 1,
+): Promise<{ listings: ComparableItem[]; error?: string; totalFound: number; rawResponse?: any }> {
   const params = new URLSearchParams({
     'OPERATION-NAME': 'findCompletedItems',
     'SERVICE-VERSION': '1.13.0',
     'SECURITY-APPNAME': clientId,
     'RESPONSE-DATA-FORMAT': 'JSON',
     'REST-PAYLOAD': '',
+    'GLOBAL-ID': EBAY_GLOBAL_ID,                    // FIX v4: scope to eBay UK
     'keywords': query,
     'sortOrder': 'EndTimeSoonest',
-    'paginationInput.entriesPerPage': String(Math.min(maxResults, 50)),
-    'paginationInput.pageNumber': '1',
+    'paginationInput.entriesPerPage': String(Math.min(maxResults, 100)),
+    'paginationInput.pageNumber': String(pageNumber),
     'itemFilter(0).name': 'SoldItemsOnly',
     'itemFilter(0).value': 'true',
     'outputSelector(0)': 'SellerInfo',
   });
 
+  const url = `${EBAY_FINDING_API}?${params.toString()}`;
+  console.log(`[SWISH Market v4] eBay Finding API call: "${query}" page=${pageNumber} marketplace=${EBAY_GLOBAL_ID}`);
+
   try {
-    const resp = await fetch(`${EBAY_FINDING_API}?${params.toString()}`, {
-      headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(12000),
+    const resp = await fetch(url, {
+      headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(15000),
     });
-    if (!resp.ok) return { listings: [], error: `eBay Finding API ${resp.status}`, totalFound: 0 };
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      console.log(`[SWISH Market v4] Finding API HTTP ${resp.status}: ${errText.slice(0, 300)}`);
+      return { listings: [], error: `eBay Finding API ${resp.status}: ${errText.slice(0, 100)}`, totalFound: 0 };
+    }
 
     const data = await resp.json();
     const searchResult = data?.findCompletedItemsResponse?.[0];
-    if (!searchResult || searchResult.ack?.[0] !== 'Success') return { listings: [], error: 'eBay Finding API returned no results', totalFound: 0 };
+
+    if (!searchResult) {
+      console.log(`[SWISH Market v4] Finding API: no findCompletedItemsResponse in response`);
+      return { listings: [], error: 'eBay Finding API: empty response structure', totalFound: 0 };
+    }
+
+    const ack = searchResult.ack?.[0];
+    if (ack !== 'Success' && ack !== 'Warning') {
+      const errMsg = searchResult.errorMessage?.[0]?.error?.[0]?.message?.[0] ?? 'Unknown API error';
+      console.log(`[SWISH Market v4] Finding API ack=${ack}: ${errMsg}`);
+      return { listings: [], error: `eBay Finding API: ${errMsg}`, totalFound: 0 };
+    }
 
     const totalFound = parseInt(searchResult.paginationOutput?.[0]?.totalEntries?.[0] ?? '0') || 0;
-    const items = searchResult.searchResult?.[0]?.item ?? [];
-    const listings: ComparableItem[] = [];
+    const rawItems = searchResult.searchResult?.[0]?.item ?? [];
 
-    for (const item of items) {
+    console.log(`[SWISH Market v4] Found ${totalFound} total sold listings for "${query}", fetched ${rawItems.length} on page ${pageNumber}`);
+
+    // Log raw titles for first page to help diagnose relevance issues
+    if (pageNumber === 1 && rawItems.length > 0) {
+      const sampleTitles = rawItems.slice(0, 5).map((i: any) => i.title?.[0] ?? '').join(' | ');
+      console.log(`[SWISH Market v4] Sample titles: ${sampleTitles.slice(0, 300)}`);
+    }
+
+    const listings: ComparableItem[] = [];
+    let soldCount = 0;
+    let unsoldCount = 0;
+
+    for (const item of rawItems) {
       try {
         const sellingStatus = item.sellingStatus?.[0] ?? {};
         const listingInfo = item.listingInfo?.[0] ?? {};
         const conditionInfo = item.condition?.[0] ?? {};
+        const sellingState = sellingStatus.sellingState?.[0] ?? '';
 
         // CRITICAL: Only EndedWithSales means the item actually sold
-        if (sellingStatus.sellingState?.[0] !== 'EndedWithSales') continue;
+        if (sellingState !== 'EndedWithSales') {
+          unsoldCount++;
+          continue;
+        }
+        soldCount++;
 
-        const price = parseFloat(sellingStatus.convertedCurrentPrice?.[0]?.['__value__'] ?? sellingStatus.currentPrice?.[0]?.['__value__'] ?? '0');
+        const price = parseFloat(
+          sellingStatus.convertedCurrentPrice?.[0]?.['__value__'] ??
+          sellingStatus.currentPrice?.[0]?.['__value__'] ?? '0'
+        );
         if (price <= 0) continue;
 
-        const currency = sellingStatus.convertedCurrentPrice?.[0]?.['@currencyId'] ?? 'GBP';
+        const currency = sellingStatus.convertedCurrentPrice?.[0]?.['@currencyId'] ??
+          sellingStatus.currentPrice?.[0]?.['@currencyId'] ?? 'GBP';
         const gbpPrice = toGBP(price, currency);
         const listingType = (listingInfo.listingType?.[0] ?? 'FixedPrice').includes('Auction') ? 'Auction' : 'FixedPrice';
 
@@ -523,8 +580,13 @@ async function searchVerifiedSoldListings(
       } catch { /* skip malformed */ }
     }
 
-    return { listings, error: undefined, totalFound };
-  } catch (e: any) { return { listings: [], error: `Finding API error: ${e.message}`, totalFound: 0 }; }
+    console.log(`[SWISH Market v4] Parsed: ${soldCount} sold, ${unsoldCount} unsold/completed-without-sale`);
+
+    return { listings, error: undefined, totalFound, rawResponse: { ack, totalFound, rawItemCount: rawItems.length } };
+  } catch (e: any) {
+    console.log(`[SWISH Market v4] Finding API exception: ${e.message}`);
+    return { listings: [], error: `Finding API error: ${e.message}`, totalFound: 0 };
+  }
 }
 
 // ── eBay Browse API — ACTIVE ASKING PRICES ONLY ───────────────────────────────
@@ -536,7 +598,10 @@ async function searchActivePrices(accessToken: string, query: string): Promise<C
       new URLSearchParams({ q: query.slice(0, 100), limit: '20', filter: 'buyingOptions:{FIXED_PRICE}', sort: 'price' }).toString(),
       { headers: { Authorization: `Bearer ${accessToken}`, 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_GB', 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(10000) },
     );
-    if (!resp.ok) return [];
+    if (!resp.ok) {
+      console.log(`[SWISH Market v4] Browse API ${resp.status} for active prices`);
+      return [];
+    }
     const data = await resp.json();
     const items = data.itemSummaries ?? [];
     return items.map((item: any) => {
@@ -546,7 +611,7 @@ async function searchActivePrices(accessToken: string, query: string): Promise<C
         title: item.title ?? '', price: Math.round(price * 100) / 100,
         currency: item.price?.currency ?? 'GBP', originalPrice: undefined,
         listingType: 'FixedPrice' as const,
-        saleStatus: 'active' as const,  // ALWAYS active — NEVER "Sold"
+        saleStatus: 'active' as const, // ALWAYS active — NEVER "Sold"
         endDate: item.itemEndDate ?? '', condition: item.condition ?? '',
         url: item.itemWebUrl ?? '', bids: 0, source: 'ebay' as const,
         relevanceScore: 0, relevanceFactors: [],
@@ -569,17 +634,16 @@ function scoreComparableRelevance(
   numistaTypeId?: number,
 ): { score: number; factors: string[]; exclusionReason?: string } {
   const factors: string[] = [];
-  let score = 0.45; // Slightly lower base — force positive signals to lift
+  let score = 0.45;
 
-  // Numista-sourced sales get a head start if type matches
+  // Numista-sourced sales get automatic pass if type matches
   if (comparable.source === 'numista' && comparable.numistaTypeId === numistaTypeId) {
     score = 0.80;
-    factors.push('Numista verified type — high base relevance');
+    factors.push('Numista verified type');
     return { score, factors };
   }
 
   const compLower = comparable.title.toLowerCase();
-  // Use sanitised target title for scoring so eBay listing noise doesn't hurt overlap
   const targetLower = sanitiseTitleForSearch(targetTitle).toLowerCase();
   const targetWords = targetLower.split(/\s+/).filter(w => w.length > 2);
   const matchedWords = targetWords.filter(w => compLower.includes(w));
@@ -590,12 +654,86 @@ function scoreComparableRelevance(
   else if (titleOverlap >= 0.35) { score += 0.04; factors.push(`Partial title match (${Math.round(titleOverlap * 100)}%)`); }
   else if (titleOverlap < 0.15) { score -= 0.22; factors.push(`Poor title match (${Math.round(titleOverlap * 100)}%)`); }
 
-  // ── Niche-specific attribute matching ─────────────────────────────────────
-  if (isCoinSpecialist(specialistId)) {
+  // ── Islamic silver coins — FIX v4 ────────────────────────────────────────
+  // Islamic coins have highly varied denominations ("tanker", "dirham", "dinar",
+  // "fels", "jital", "tanka", etc.) and titles rarely match exactly.
+  // We match on dynasty/period keywords and Islamic coin context signals
+  // rather than requiring exact denomination string match.
+  if (isIslamicCoinSpecialist(specialistId)) {
+    const dynasty = String(targetAttrs?.dynasty ?? targetAttrs?.period ?? targetAttrs?.empire ?? '').toLowerCase();
+    const ruler = String(targetAttrs?.ruler ?? targetAttrs?.caliph ?? targetAttrs?.sultan ?? '').toLowerCase();
+    const denomination = String(targetAttrs?.denomination ?? targetAttrs?.coin_type ?? '').toLowerCase();
+    const mint = String(targetAttrs?.mint ?? targetAttrs?.mint_city ?? '').toLowerCase();
+
+    // Islamic coin context keywords in eBay titles
+    const islamicKeywords = [
+      'islamic', 'arabic', 'arab', 'umayyad', 'abbasid', 'fatimid', 'ayyubid',
+      'mamluk', 'ilkhanid', 'safavid', 'mughal', 'ottoman', 'seljuk', 'ghaznavid',
+      'samanid', 'buwayhid', 'zengid', 'artukid', 'rasulid', 'dirham', 'dinar',
+      'fals', 'fels', 'tanker', 'tanka', 'jital', 'silver coin', 'ar dirham',
+      'ar dinar', 'caliphate', 'silver islamic',
+    ];
+    const hasIslamicSignal = islamicKeywords.some(k => compLower.includes(k));
+
+    if (hasIslamicSignal) {
+      score += 0.20;
+      factors.push('Islamic coin context signal');
+    } else {
+      // Non-Islamic coins in coin results — significant penalty
+      score -= 0.20;
+      factors.push('No Islamic coin signal in title');
+    }
+
+    // Dynasty match
+    if (dynasty && dynasty.length > 3) {
+      const dynastyWords = dynasty.split(/\s+/).filter(w => w.length > 3);
+      if (dynastyWords.some(w => compLower.includes(w))) {
+        score += 0.15;
+        factors.push(`Dynasty match: ${dynasty}`);
+      }
+    }
+
+    // Ruler match (caliph/sultan name)
+    if (ruler && ruler.length > 2) {
+      const rulerWords = ruler.split(/\s+/).filter(w => w.length > 3);
+      if (rulerWords.some(w => compLower.includes(w))) {
+        score += 0.12;
+        factors.push(`Ruler match: ${ruler}`);
+      }
+    }
+
+    // Denomination match — TOLERANT: just check if denomination word appears anywhere
+    // Islamic denominations are specific coin type names (tanker, dirham, etc.)
+    if (denomination && denomination.length > 2) {
+      if (compLower.includes(denomination)) {
+        score += 0.15;
+        factors.push(`Denomination match: ${denomination}`);
+      } else {
+        // For Islamic coins, missing denomination is a soft penalty only
+        // (many related Islamic coins would still be valid comparables)
+        score -= 0.05;
+        factors.push(`Denomination not matched (${denomination}) — soft penalty`);
+      }
+      // NOTE: For Islamic coins we do NOT use the hard exclusion rule
+      // (return with exclusionReason) that standard coins use. Islamic coins
+      // vary greatly in how denominations appear in eBay titles.
+    }
+
+    // Mint match
+    if (mint && mint.length > 2 && compLower.includes(mint)) {
+      score += 0.10;
+      factors.push(`Mint match: ${mint}`);
+    }
+  } else if (isCoinSpecialist(specialistId)) {
+    // Standard coin matching — existing logic
     const denom = String(targetAttrs?.denomination ?? targetAttrs?.Denomination ?? '').toLowerCase();
     if (denom && denom.length > 1) {
       if (compLower.includes(denom)) { score += 0.15; factors.push(`Denomination match: ${denom}`); }
-      else { score -= 0.20; return { score, factors, exclusionReason: `Different denomination (target: ${denom})` }; }
+      else {
+        // For standard coins, wrong denomination is a hard exclusion
+        score -= 0.20;
+        return { score, factors, exclusionReason: `Different denomination (target: ${denom})` };
+      }
     }
 
     const ruler = String(targetAttrs?.ruler ?? targetAttrs?.Ruler ?? '').toLowerCase();
@@ -606,7 +744,7 @@ function scoreComparableRelevance(
 
       const knownRulers = ['victoria', 'george', 'edward', 'elizabeth', 'william', 'henry', 'richard', 'augustus', 'tiberius', 'nero', 'claudius', 'vespasian', 'hadrian', 'constantine'];
       for (const kr of knownRulers) {
-        if (!ruler.includes(kr) && compLower.includes(kr)) { score -= 0.15; factors.push(`Different ruler in comparable: ${kr}`); break; }
+        if (!ruler.includes(kr) && compLower.includes(kr)) { score -= 0.15; factors.push(`Different ruler: ${kr}`); break; }
       }
     }
 
@@ -628,8 +766,7 @@ function scoreComparableRelevance(
 
     const engineCC = engine.replace(/[^0-9]/g, '');
     if (engineCC && compLower.includes(engineCC)) { score += 0.12; factors.push(`Engine match: ${engineCC}cc`); }
-    else if (engineCC && !compLower.includes(engineCC)) {
-      // Check for close engine sizes (e.g. 450 vs 400)
+    else if (engineCC) {
       const targetCC = parseInt(engineCC);
       const compNumbers = compLower.match(/\d{2,4}(?:cc)?/g);
       const hasNearCC = compNumbers?.some(n => { const nn = parseInt(n); return Math.abs(nn - targetCC) <= 25; });
@@ -638,7 +775,7 @@ function scoreComparableRelevance(
 
     if (stroke && stroke !== 'unknown') {
       const strokeDigit = stroke.includes('2') ? '2' : stroke.includes('4') ? '4' : '';
-      if (strokeDigit && compLower.includes(strokeDigit + '-stroke') || compLower.includes(strokeDigit + ' stroke')) {
+      if (strokeDigit && (compLower.includes(strokeDigit + '-stroke') || compLower.includes(strokeDigit + ' stroke'))) {
         score += 0.06; factors.push(`Stroke match: ${stroke}`);
       }
     }
@@ -646,10 +783,9 @@ function scoreComparableRelevance(
     const startYear = year ? year.split('-')[0].trim() : '';
     if (startYear && startYear.length === 4 && compLower.includes(startYear)) { score += 0.08; factors.push(`Year match: ${startYear}`); }
 
-    // Exclude clearly wrong category items
     const mxKeywords = ['motocross', 'mx', 'enduro', 'supermoto', 'dirt bike', 'trail bike', 'off road'];
     const hasMXKeyword = mxKeywords.some(k => compLower.includes(k));
-    if (!hasMXKeyword && !make) { score -= 0.12; factors.push('No MX category signals in title'); }
+    if (!hasMXKeyword && !make) { score -= 0.12; factors.push('No MX category signals'); }
   }
 
   if (specialistId === 'bicycles' || specialistId === 'cycling') {
@@ -658,7 +794,6 @@ function scoreComparableRelevance(
     const frameType = String(targetAttrs?.bike_type ?? targetAttrs?.frame_type ?? '').toLowerCase();
     const frameSize = String(targetAttrs?.frame_size ?? '').toLowerCase();
     const year = String(targetAttrs?.year_range ?? targetAttrs?.year_made ?? '').toLowerCase();
-    const groupset = String(targetAttrs?.groupset ?? targetAttrs?.drivetrain ?? '').toLowerCase();
 
     if (brand && compLower.includes(brand)) { score += 0.18; factors.push(`Brand match: ${brand}`); }
     else if (brand) { score -= 0.12; factors.push(`Brand mismatch (target: ${brand})`); }
@@ -675,10 +810,8 @@ function scoreComparableRelevance(
     const startYear = year ? year.split('-')[0].trim() : '';
     if (startYear && startYear.length === 4 && compLower.includes(startYear)) { score += 0.06; factors.push(`Year match: ${startYear}`); }
 
-    // Bike category keywords boost relevance
     const bikeKeywords = ['mountain bike', 'road bike', 'mtb', 'gravel', 'enduro', 'downhill', 'hardtail', 'full suspension', 'bmx', 'hybrid'];
-    const hasBikeKeyword = bikeKeywords.some(k => compLower.includes(k));
-    if (hasBikeKeyword) { score += 0.05; factors.push('Bike category keyword present'); }
+    if (bikeKeywords.some(k => compLower.includes(k))) { score += 0.05; factors.push('Bike category keyword'); }
   }
 
   if (isClothingSpecialist(specialistId)) {
@@ -697,23 +830,21 @@ function scoreComparableRelevance(
 
     const eraKeywords = era ? era.split(/[\s,]+/).filter(w => w.length >= 4) : [];
     if (eraKeywords.some(k => compLower.includes(k))) { score += 0.08; factors.push(`Era match: ${era}`); }
-
     if (size && size.length >= 1 && compLower.includes(size)) { score += 0.05; factors.push(`Size match: ${size}`); }
 
-    // Vintage/deadstock signal boosts
     if (compLower.includes('vintage') || compLower.includes('deadstock') || compLower.includes('distressed')) {
       score += 0.04; factors.push('Vintage/deadstock signal');
     }
   }
 
-  if (comparable.price > 2000) { score -= 0.08; factors.push('Unusually high-value — may be exceptional specimen'); }
+  if (comparable.price > 2000) { score -= 0.08; factors.push('Unusually high-value item'); }
   if (comparable.saleStatus === 'active') { score -= 0.30; factors.push('Asking price — not a verified sale'); }
 
   return { score: Math.max(0, Math.min(1, score)), factors };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// VALUATION STATISTICS — SEPARATE NUMISTA + EBAY, THEN COMBINED
+// VALUATION STATISTICS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface SourceStats {
@@ -730,6 +861,7 @@ interface SourceStats {
   dateRangeEnd: string;
   exceptionalSales: ComparableItem[];
   mainPrices: number[];
+  excludedReasons: string[];
 }
 
 function computeSourceStats(
@@ -739,7 +871,11 @@ function computeSourceStats(
   specialistId: string,
   numistaTypeId?: number,
 ): SourceStats {
-  const empty: SourceStats = { count: 0, relevantCount: 0, median: 0, low: 0, high: 0, weightedMedian: 0, auctionShare: 0, auctionMedian: 0, binMedian: 0, dateRangeStart: '', dateRangeEnd: '', exceptionalSales: [], mainPrices: [] };
+  const empty: SourceStats = {
+    count: 0, relevantCount: 0, median: 0, low: 0, high: 0,
+    weightedMedian: 0, auctionShare: 0, auctionMedian: 0, binMedian: 0,
+    dateRangeStart: '', dateRangeEnd: '', exceptionalSales: [], mainPrices: [], excludedReasons: [],
+  };
   if (items.length === 0) return empty;
 
   const scored = items.map(c => {
@@ -748,12 +884,24 @@ function computeSourceStats(
   });
 
   const relevant = scored.filter(c => c.relevanceScore >= MIN_RELEVANCE && !c.exclusionReason);
-  if (relevant.length === 0) return { ...empty, count: items.length };
+  const excluded = scored.filter(c => c.relevanceScore < MIN_RELEVANCE || c.exclusionReason);
+
+  // Log exclusion reasons when we have eBay results but nothing is relevant
+  if (items.length > 0 && relevant.length === 0) {
+    const sampleExclusions = excluded.slice(0, 5).map(c =>
+      `"${c.title.slice(0, 50)}" score=${Math.round(c.relevanceScore * 100)}% ${c.exclusionReason ? `excluded: ${c.exclusionReason}` : 'below threshold'}`
+    );
+    console.log(`[SWISH Market v4] All ${items.length} items excluded from relevance scoring. Samples: ${sampleExclusions.join(' | ')}`);
+  }
+
+  if (relevant.length === 0) return {
+    ...empty, count: items.length,
+    excludedReasons: excluded.slice(0, 10).map(c => c.exclusionReason ?? `Low relevance (${Math.round(c.relevanceScore * 100)}%): ${c.title.slice(0, 40)}`),
+  };
 
   const prices = relevant.map(c => c.price).sort((a, b) => a - b);
   const n = prices.length;
 
-  // IQR outlier detection
   let mainPrices = prices;
   let exceptional: ComparableItem[] = [];
 
@@ -767,13 +915,12 @@ function computeSourceStats(
   }
 
   const mn = mainPrices.length;
-  if (mn === 0) return { ...empty, count: items.length, relevantCount: relevant.length };
+  if (mn === 0) return { ...empty, count: items.length, relevantCount: relevant.length, excludedReasons: [] };
 
   const median = mainPrices[Math.floor(mn * 0.50)] ?? 0;
   const low = mainPrices[Math.floor(mn * 0.15)] ?? mainPrices[0] ?? 0;
   const high = mainPrices[Math.floor(mn * 0.85)] ?? mainPrices[mn - 1] ?? 0;
 
-  // Relevance-weighted median
   const inMain = relevant.filter(c => mainPrices.includes(c.price)).sort((a, b) => a.price - b.price);
   let weightedMedian = median;
   if (inMain.length > 0) {
@@ -785,7 +932,6 @@ function computeSourceStats(
     }
   }
 
-  // Auction / BIN split
   const auctions = relevant.filter(c => c.listingType === 'Auction');
   const bins = relevant.filter(c => c.listingType === 'FixedPrice');
   const aPrices = auctions.map(c => c.price).sort((a, b) => a - b);
@@ -807,10 +953,10 @@ function computeSourceStats(
     dateRangeStart: dates[0] ?? '', dateRangeEnd: dates[dates.length - 1] ?? '',
     exceptionalSales: exceptional.slice(0, 3),
     mainPrices,
+    excludedReasons: [],
   };
 }
 
-// ── Combine Numista + eBay stats into final valuation statistics ──────────────
 interface CombinedValuationStats {
   numistaStats: SourceStats;
   ebayStats: SourceStats;
@@ -840,21 +986,13 @@ function buildCombinedStats(
   specialistId: string,
   numistaTypeId?: number,
 ): CombinedValuationStats {
-  // Convert Numista sales to ComparableItem format
   const numistaComparables: ComparableItem[] = (numistaSalesData?.sales ?? []).map(s => ({
     title: `${numistaSalesData?.numistaTitle ?? ''} (${s.grade ?? s.condition ?? ''}) — ${s.marketplace}`.trim(),
-    price: s.price,
-    currency: s.currency,
-    originalPrice: s.originalPrice,
-    listingType: 'FixedPrice' as const,
-    saleStatus: 'sold' as const,
-    endDate: s.date,
-    condition: s.condition,
-    url: s.url,
-    source: 'numista' as const,
-    numistaTypeId,
-    relevanceScore: 0,
-    relevanceFactors: [],
+    price: s.price, currency: s.currency, originalPrice: s.originalPrice,
+    listingType: 'FixedPrice' as const, saleStatus: 'sold' as const,
+    endDate: s.date, condition: s.condition, url: s.url,
+    source: 'numista' as const, numistaTypeId,
+    relevanceScore: 0, relevanceFactors: [],
   }));
 
   const numistaStats = computeSourceStats(numistaComparables, title, attrs, specialistId, numistaTypeId);
@@ -863,33 +1001,29 @@ function buildCombinedStats(
     title, attrs, specialistId, numistaTypeId,
   );
 
-  // Active asking prices stats (separately)
   const activePrices = activeComparables.map(c => c.price).sort((a, b) => a - b);
   const activeMedian = activePrices[Math.floor(activePrices.length / 2)] ?? 0;
   const activeLow = activePrices[Math.floor(activePrices.length * 0.15)] ?? activePrices[0] ?? 0;
   const activeHigh = activePrices[Math.floor(activePrices.length * 0.85)] ?? activePrices[activePrices.length - 1] ?? 0;
 
-  // Combine prices — Numista sales weighted equally to eBay, IQR on combined set
   const allMainPrices = [...numistaStats.mainPrices, ...ebayStats.mainPrices].sort((a, b) => a - b);
   const cn = allMainPrices.length;
 
   let combinedMedian = 0, combinedLow = 0, combinedHigh = 0, combinedWeightedMedian = 0;
-
   if (cn > 0) {
     combinedMedian = allMainPrices[Math.floor(cn * 0.50)] ?? 0;
     combinedLow = allMainPrices[Math.floor(cn * 0.15)] ?? allMainPrices[0] ?? 0;
     combinedHigh = allMainPrices[Math.floor(cn * 0.85)] ?? allMainPrices[cn - 1] ?? 0;
-    combinedWeightedMedian = combinedMedian; // Simplified — weighted median approximation
+    combinedWeightedMedian = combinedMedian;
   }
 
   const combinedRelevantCount = numistaStats.relevantCount + ebayStats.relevantCount;
 
-  // Data quality
   let dataQuality: CombinedValuationStats['dataQuality'] = 'insufficient';
   let dataQualityReason = '';
 
   const numistaBonus = (numistaSalesData && !numistaSalesData.error && numistaStats.relevantCount >= 3) ? 1 : 0;
-  const effectiveCount = cn + (numistaBonus * 3); // Numista verified sales count for more
+  const effectiveCount = cn + (numistaBonus * 3);
 
   if (effectiveCount >= 13 || (numistaStats.relevantCount >= 5 && ebayStats.relevantCount >= 5)) {
     dataQuality = 'strong';
@@ -905,16 +1039,16 @@ function buildCombinedStats(
     dataQualityReason = `Only ${cn} combined relevant sale${cn === 1 ? '' : 's'} — too few for reliable valuation`;
   } else {
     dataQuality = 'insufficient';
-    dataQualityReason = 'No relevant sold market data found for this item';
+    dataQualityReason = ebayStats.excludedReasons.length > 0
+      ? `No relevant sold data — ${ebayStats.count} found but excluded. Sample: ${ebayStats.excludedReasons[0]}`
+      : 'No relevant sold market data found for this item';
   }
 
-  // Collect currency conversions
   const conversions = [...new Set([
     ...numistaComparables.filter(c => c.currency !== 'GBP').map(c => c.currency),
     ...ebaySoldComparables.filter(c => c.currency !== 'GBP').map(c => c.currency),
   ])];
 
-  // Top eBay sales for audit
   const topEbaySales = ebaySoldComparables
     .filter(c => c.relevanceScore >= MIN_RELEVANCE && !c.exclusionReason)
     .sort((a, b) => b.relevanceScore - a.relevanceScore)
@@ -929,20 +1063,19 @@ function buildCombinedStats(
   const exceptionalSalesAll = [...numistaStats.exceptionalSales, ...ebayStats.exceptionalSales].slice(0, 5);
 
   return {
-    numistaStats, ebayStats,
-    combinedRelevantCount, combinedMedian, combinedLow, combinedHigh, combinedWeightedMedian,
+    numistaStats, ebayStats, combinedRelevantCount,
+    combinedMedian, combinedLow, combinedHigh, combinedWeightedMedian,
     activeAskingMedian: Math.round(activeMedian * 100) / 100,
     activeAskingLow: Math.round(activeLow * 100) / 100,
     activeAskingHigh: Math.round(activeHigh * 100) / 100,
     activeAskingCount: activeComparables.length,
-    dataQuality, dataQualityReason,
-    currencyConversionsUsed: conversions,
+    dataQuality, dataQualityReason, currencyConversionsUsed: conversions,
     topEbaySales, excludedEbaySales, exceptionalSalesAll,
   };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FINAL VALUATION DERIVATION — DETERMINISTIC, NO AI INVENTION
+// FINAL VALUATION DERIVATION
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface FinalValuation {
@@ -971,13 +1104,10 @@ function deriveValuation(
 ): FinalValuation {
   const noValue: FinalValuation = {
     valuationLow: 0, valuationMid: 0, valuationHigh: 0,
-    valuationConfidence: 'insufficient_data',
-    valuationMethod: 'no_data',
+    valuationConfidence: 'insufficient_data', valuationMethod: 'no_data',
     valuationWarnings: [combined.dataQualityReason],
-    fairMarketValue: 0,
-    currentAskingMarketMid: combined.activeAskingMedian,
-    recommendedListingPrice: 0,
-    recommendedListingFormat: 'BuyItNow',
+    fairMarketValue: 0, currentAskingMarketMid: combined.activeAskingMedian,
+    recommendedListingPrice: 0, recommendedListingFormat: 'BuyItNow',
     listingPriceRationale: 'Insufficient market data — manual research required',
     saleProb30d: null,
   };
@@ -985,11 +1115,15 @@ function deriveValuation(
   if (combined.combinedRelevantCount < 3 || combined.combinedMedian <= 0) {
     const insufficientWarnings: string[] = [];
     if (combined.ebayStats.count > 0 && combined.ebayStats.relevantCount === 0) {
-      insufficientWarnings.push(`${combined.ebayStats.count} eBay sold items found but NONE were relevant after scoring — results may be too dissimilar (wrong denomination, ruler, or type)`);
+      insufficientWarnings.push(
+        `${combined.ebayStats.count} eBay sold items found but NONE were relevant after scoring. ` +
+        `This may indicate the search returned unrelated coins. ` +
+        (combined.ebayStats.excludedReasons.length > 0 ? `Sample exclusion: ${combined.ebayStats.excludedReasons[0]}` : '')
+      );
     } else if (combined.ebayStats.count === 0) {
-      insufficientWarnings.push('No eBay completed/sold listings found. The item may be rare, niche, or search terms need refinement.');
+      insufficientWarnings.push('No eBay completed/sold listings found on EBAY_GB. The item may be rare, or the search terms need refinement.');
     } else {
-      insufficientWarnings.push(`Only ${combined.combinedRelevantCount} relevant sold comparable${combined.combinedRelevantCount === 1 ? '' : 's'} found — minimum 3 required for reliable valuation`);
+      insufficientWarnings.push(`Only ${combined.combinedRelevantCount} relevant sold comparable${combined.combinedRelevantCount === 1 ? '' : 's'} — minimum 3 required for reliable valuation`);
     }
     return { ...noValue, valuationWarnings: insufficientWarnings };
   }
@@ -997,10 +1131,8 @@ function deriveValuation(
   const mid = combined.combinedWeightedMedian || combined.combinedMedian;
   const low = combined.combinedLow;
   const high = combined.combinedHigh;
-
   const warnings: string[] = [];
 
-  // ── Valuation confidence: min of data quality, identification confidence, Numista match ─
   const dataQualityScore: Record<string, number> = { strong: 4, moderate: 3, weak: 2, insufficient: 0 };
   const idTierScore: Record<string, number> = { very_high: 4, high: 3, medium: 2, low: 1, very_low: 0, unknown: 0 };
   const numistaTierScore: Record<string, number> = { verified: 4, very_strong: 4, strong: 3, plausible: 2, weak: 1, rejected: 0, no_match: 1, unavailable: 2 };
@@ -1008,42 +1140,35 @@ function deriveValuation(
   const dScore = dataQualityScore[combined.dataQuality] ?? 0;
   const iScore = idTierScore[identificationTier] ?? 1;
   const nScore = numistaTierScore[numistaMatchTier] ?? 1;
-
-  // Combined score is the minimum across all three dimensions
   const combinedScore = Math.min(dScore, iScore, nScore);
 
   const confMap: Record<number, string> = { 4: 'high', 3: 'medium', 2: 'low', 1: 'very_low', 0: 'insufficient_data' };
   const valuationConfidence = confMap[combinedScore] ?? 'insufficient_data';
 
-  if (iScore < dScore) warnings.push(`Valuation confidence limited by identification confidence (${identificationTier})`);
-  if (nScore < dScore) warnings.push(`Valuation confidence limited by Numista match (${numistaMatchTier}) — exact type uncertain`);
+  if (iScore < dScore) warnings.push(`Confidence limited by identification tier (${identificationTier})`);
+  if (nScore < dScore) warnings.push(`Confidence limited by Numista match (${numistaMatchTier})`);
 
   if (combined.exceptionalSalesAll.length > 0) {
     const maxEx = Math.max(...combined.exceptionalSalesAll.map(s => s.price));
-    warnings.push(`${combined.exceptionalSalesAll.length} exceptional sale${combined.exceptionalSalesAll.length > 1 ? 's' : ''} excluded from valuation: max £${maxEx}`);
+    warnings.push(`${combined.exceptionalSalesAll.length} exceptional sale${combined.exceptionalSalesAll.length > 1 ? 's' : ''} excluded: max £${maxEx}`);
   }
   if (combined.currencyConversionsUsed.length > 0) {
     warnings.push(`Currency conversions applied: ${combined.currencyConversionsUsed.join(', ')} → GBP (approximate)`);
   }
   if (combined.activeAskingMedian > mid * 1.5 && combined.activeAskingCount >= 3) {
-    warnings.push(`Active asking prices (median £${combined.activeAskingMedian}) significantly above verified sold prices — asking prices are NOT used in valuation`);
+    warnings.push(`Active asking prices (median £${combined.activeAskingMedian}) significantly above sold prices — NOT used in valuation`);
   }
 
-  // Condition warning
   const condLower = condition.toLowerCase();
-  const isDamaged = condLower.includes('damage') || condLower.includes('hole') || condLower.includes('clean') || condLower.includes('bend');
-  if (isDamaged) warnings.push('Item condition includes damage/cleaning — value will be below standard circulated examples');
+  if (condLower.includes('damage') || condLower.includes('hole') || condLower.includes('clean') || condLower.includes('bend')) {
+    warnings.push('Item condition includes damage/cleaning — value will be below standard examples');
+  }
 
-  // HARD RULE: listing price MUST be derived from sold evidence only
-  // Active asking prices are shown for context but never used to set valuation
   const activeNote = combined.activeAskingCount > 0
-    ? ` (${combined.activeAskingCount} active asking prices at median £${combined.activeAskingMedian} not used — asking prices ≠ verified sold prices)`
+    ? ` (${combined.activeAskingCount} active asking prices at median £${combined.activeAskingMedian} excluded — asking ≠ sold)`
     : '';
 
-  // Adjust listing price ratio by data quality — conservative when data is thin
   const listingRatio = combined.dataQuality === 'strong' ? 0.92 : combined.dataQuality === 'moderate' ? 0.95 : 1.00;
-
-  // ── Listing recommendation — deterministic ────────────────────────────────
   const stats = combined.ebayStats;
   const priceSpread = high > 0 ? (high - low) / high : 0;
   const auctionPremium = stats.auctionMedian > 0 && stats.binMedian > 0 ? stats.auctionMedian / stats.binMedian : 1.0;
@@ -1058,23 +1183,20 @@ function deriveValuation(
     auctionStartPrice = Math.max(0.99, Math.round(mid * 0.15 * 100) / 100);
     recommendedListingPrice = auctionStartPrice;
     format = 'Auction';
-    listingPriceRationale = `Auction recommended: ${stats.auctionShare}% of eBay comparables were auctions, averaging ${Math.round((auctionPremium - 1) * 100)}% above BIN. Start at £${auctionStartPrice} (15% of sold median £${mid}).${activeNote}`;
+    listingPriceRationale = `Auction recommended: ${stats.auctionShare}% of comparables were auctions. Start at £${auctionStartPrice}.${activeNote}`;
   } else {
     recommendedListingPrice = Math.round(mid * listingRatio * 100) / 100;
     format = mid >= 30 ? 'BuyItNow_WithBestOffer' : 'BuyItNow';
     const sourceNote = combined.numistaStats.relevantCount > 0 && combined.ebayStats.relevantCount > 0
-      ? `Based on ${combined.numistaStats.relevantCount} Numista + ${combined.ebayStats.relevantCount} eBay SOLD sales (asking prices excluded).`
+      ? `Based on ${combined.numistaStats.relevantCount} Numista + ${combined.ebayStats.relevantCount} eBay SOLD sales.`
       : combined.numistaStats.relevantCount > 0
-        ? `Based on ${combined.numistaStats.relevantCount} Numista catalogue SOLD sales.`
-        : `Based on ${combined.ebayStats.relevantCount} eBay VERIFIED SOLD sales (asking prices excluded).`;
-    listingPriceRationale = `BIN at £${recommendedListingPrice} (${Math.round(listingRatio * 100)}% of sold-data median £${mid}). ${sourceNote}${activeNote}`;
+        ? `Based on ${combined.numistaStats.relevantCount} Numista SOLD sales.`
+        : `Based on ${combined.ebayStats.relevantCount} eBay VERIFIED SOLD sales (EBAY_GB).`;
+    listingPriceRationale = `BIN at £${recommendedListingPrice} (${Math.round(listingRatio * 100)}% of sold median £${mid}). ${sourceNote}${activeNote}`;
   }
 
-  // ── Sale probability from data ────────────────────────────────────────────
   let saleProb30d: number | null = null;
   let saleProbBasis: string | undefined;
-
-  // Use the source with more data for probability calculation
   const probStats = combined.ebayStats.relevantCount >= combined.numistaStats.relevantCount ? combined.ebayStats : combined.numistaStats;
   if (probStats.relevantCount >= 5 && probStats.dateRangeStart && probStats.dateRangeEnd) {
     try {
@@ -1085,30 +1207,23 @@ function deriveValuation(
       const prob30 = Math.min(0.95, salesPerDay * 30);
       if (prob30 > 0) {
         saleProb30d = Math.round(prob30 * 100) / 100;
-        saleProbBasis = `${probStats.relevantCount} relevant sales over ${Math.round(rangeDays)} days = ${salesPerDay.toFixed(3)} sales/day`;
+        saleProbBasis = `${probStats.relevantCount} sales over ${Math.round(rangeDays)} days`;
       }
     } catch { /* non-blocking */ }
-  } else {
-    saleProbBasis = 'Insufficient data for sale probability (need ≥5 relevant dated sales)';
   }
 
   return {
     valuationLow: Math.round(low * 100) / 100,
     valuationMid: Math.round(mid * 100) / 100,
     valuationHigh: Math.round(high * 100) / 100,
-    valuationConfidence,
+    valuationConfidence, valuationWarnings: warnings,
     valuationMethod: combined.numistaStats.relevantCount > 0
       ? 'numista_and_ebay_sold_combined_relevance_weighted_median'
-      : 'ebay_sold_relevance_weighted_median',
-    valuationWarnings: warnings,
+      : 'ebay_sold_relevance_weighted_median_ebay_gb',
     fairMarketValue: Math.round(mid * 100) / 100,
     currentAskingMarketMid: combined.activeAskingMedian,
-    recommendedListingPrice,
-    recommendedListingFormat: format,
-    auctionStartPrice,
-    listingPriceRationale,
-    saleProb30d,
-    saleProbBasis,
+    recommendedListingPrice, recommendedListingFormat: format, auctionStartPrice,
+    listingPriceRationale, saleProb30d, saleProbBasis,
   };
 }
 
@@ -1130,9 +1245,9 @@ Deno.serve(async (req: Request) => {
     condition = '',
     identificationConfidence = 0.5,
     identificationTier = 'medium',
-    numistaTypeId,              // NEW: from swish-identify
-    numistaMatchScore = 0,      // NEW
-    numistaMatchTier = 'no_match', // NEW
+    numistaTypeId,
+    numistaMatchScore = 0,
+    numistaMatchTier = 'no_match',
     applyToItem = false,
   } = body;
 
@@ -1157,45 +1272,43 @@ Deno.serve(async (req: Request) => {
   if (!clientId) return jsonResponse({ error: 'eBay is not connected. Connect eBay in Marketplaces to enable market valuation.' }, 400);
 
   const isCoin = isCoinSpecialist(specialistId);
+  const isIslamic = isIslamicCoinSpecialist(specialistId);
   const isMX = isMXSpecialist(specialistId);
   const isClothing = isClothingSpecialist(specialistId);
 
-  // For MX: running status significantly affects value
-  // Apply multiplier to derived valuation when running status is known
+  console.log(`[SWISH Market v4] Request: title="${title}" specialist=${specialistId} isCoin=${isCoin} isIslamic=${isIslamic}`);
+
   const mxRunningStatus = isMX ? (attributes?.running_status ?? 'unknown') : null;
   const MX_RUNNING_MULTIPLIERS: Record<string, number> = {
-    'Runs and rides (stated)': 1.00, 'Runs & Rides': 1.00,
-    'Runs (stated)': 0.85, 'Runs': 0.85,
+    'Runs and rides (stated)': 1.00, 'Runs & Rides': 1.00, 'Runs (stated)': 0.85, 'Runs': 0.85,
     'Non-running (stated)': 0.55, 'Non-Running': 0.55, 'Project': 0.50,
-    'Non-running (visible evidence)': 0.50,
-    'Unknown from images alone': 0.70, 'Unknown': 0.70,
+    'Non-running (visible evidence)': 0.50, 'Unknown from images alone': 0.70, 'Unknown': 0.70,
   };
-  const mxRunningMultiplier = mxRunningStatus
-    ? (MX_RUNNING_MULTIPLIERS[mxRunningStatus] ?? 0.70)
-    : 1.0;
+  const mxRunningMultiplier = mxRunningStatus ? (MX_RUNNING_MULTIPLIERS[mxRunningStatus] ?? 0.70) : 1.0;
 
-  // For coins: get Numista title to improve eBay search precision
   let numistaTitle: string | undefined;
   if (isCoin && attributes?.numista_type_id) {
     numistaTitle = attributes.numista_title ?? undefined;
   }
 
   const searchQueries = buildSearchQueries(title, attributes, specialistId, numistaTitle);
-  console.log(`[SWISH Market v3] Searching "${searchQueries[0]}" tenant=${tenantId} numistaTypeId=${numistaTypeId ?? 'none'}`);
+  console.log(`[SWISH Market v4] Search queries: ${searchQueries.map((q, i) => `[${i + 1}] "${q}"`).join(', ')}`);
 
-  // ── Run searches in parallel ──────────────────────────────────────────────
+  // ── Get app token for Browse API ─────────────────────────────────────────
   const appToken = await getEbayAppToken(clientId, clientSecret);
 
+  // ── Run primary searches in parallel ─────────────────────────────────────
   const [primarySold, activePrices, numistaSalesData] = await Promise.all([
     searchVerifiedSoldListings(clientId, searchQueries[0], 50),
     appToken ? searchActivePrices(appToken, searchQueries[0]) : Promise.resolve([] as ComparableItem[]),
-    // Only retrieve Numista sales for coins with verified/strong Numista type
     (isCoin && numistaTypeId && ['verified', 'strong_match'].includes(numistaMatchTier))
       ? fetchNumistaSalesRecords(numistaTypeId, condition, attributes)
       : Promise.resolve(null),
   ]);
 
-  // Additional eBay search queries — run fallback queries in parallel for non-coin niches
+  console.log(`[SWISH Market v4] Primary search: ${primarySold.listings.length} sold, ${primarySold.totalFound} total found, error=${primarySold.error ?? 'none'}`);
+
+  // ── Run fallback queries in parallel ─────────────────────────────────────
   let additionalSold: ComparableItem[] = [];
   const needsMore = primarySold.listings.length < 15;
   const fallbackQueries = searchQueries.slice(1);
@@ -1204,52 +1317,58 @@ Deno.serve(async (req: Request) => {
     const fallbackSearches = await Promise.all(
       fallbackQueries.map(q => searchVerifiedSoldListings(clientId, q, 30))
     );
-    for (const r of fallbackSearches) additionalSold = [...additionalSold, ...r.listings];
+    for (const r of fallbackSearches) {
+      console.log(`[SWISH Market v4] Fallback "${r.rawResponse ? '' : ''}": ${r.listings.length} sold, total=${r.totalFound}`);
+      additionalSold = [...additionalSold, ...r.listings];
+    }
   }
 
-  // For coins: Numista title search for even more precision
+  // For coins: also search with Numista title if available
   if (isCoin && numistaTitle && primarySold.listings.length < 15) {
     const numistaSearch = await searchVerifiedSoldListings(clientId, numistaTitle.slice(0, 80), 30);
+    console.log(`[SWISH Market v4] Numista title search: ${numistaSearch.listings.length} sold`);
     additionalSold = [...additionalSold, ...numistaSearch.listings];
   }
 
-  // Deduplicate eBay sold
+  // For Islamic coins with no/few results: also try broader "Islamic silver coin" search
+  if (isIslamic && (primarySold.listings.length + additionalSold.length) < 5) {
+    const broadIslamicSearch = await searchVerifiedSoldListings(clientId, 'Islamic silver coin dirham', 50);
+    console.log(`[SWISH Market v4] Broad Islamic fallback: ${broadIslamicSearch.listings.length} sold, total=${broadIslamicSearch.totalFound}`);
+    additionalSold = [...additionalSold, ...broadIslamicSearch.listings];
+  }
+
+  // Deduplicate eBay sold (by price + title exact match)
   const allEbaySold = [...primarySold.listings, ...additionalSold].filter(
     (item, idx, arr) => arr.findIndex(x => Math.abs(x.price - item.price) < 0.01 && x.title === item.title) === idx,
   );
 
-  // Score eBay comparables for relevance
+  console.log(`[SWISH Market v4] Total deduplicated eBay sold: ${allEbaySold.length}`);
+
+  // Score comparables
   const scoredEbaySold = allEbaySold.map(c => {
     const { score, factors, exclusionReason } = scoreComparableRelevance(c, title, attributes, specialistId, numistaTypeId);
     return { ...c, relevanceScore: score, relevanceFactors: factors, exclusionReason };
   });
 
-  // Score active comparables
   const scoredActive = (activePrices as ComparableItem[]).map(c => {
     const { score, factors } = scoreComparableRelevance(c, title, attributes, specialistId);
     return { ...c, relevanceScore: score, relevanceFactors: factors };
   });
 
-  // Build combined statistics
   const combined = buildCombinedStats(
     numistaSalesData, scoredEbaySold, scoredActive, title, attributes, specialistId, numistaTypeId,
   );
 
-  console.log(`[SWISH Market v3] Combined: numistaRelevant=${combined.numistaStats.relevantCount} ebayRelevant=${combined.ebayStats.relevantCount} quality=${combined.dataQuality} combinedMedian=£${combined.combinedMedian}`);
+  console.log(`[SWISH Market v4] Results: numistaRelevant=${combined.numistaStats.relevantCount} ebayRelevant=${combined.ebayStats.relevantCount} quality=${combined.dataQuality} median=£${combined.combinedMedian}`);
 
-  // Determine effective Numista tier for valuation confidence
-  // Non-coin specialists (MX, clothing) mark Numista as unavailable — this is correct
   const effectiveNumistaTier = numistaMatchTier && numistaMatchTier !== 'no_match'
     ? numistaMatchTier
     : (isMX || isClothing) ? 'unavailable' : (isCoin ? 'no_match' : 'unavailable');
 
-  // Derive final valuation
   let valuation = deriveValuation(
     combined, identificationConfidence, identificationTier, effectiveNumistaTier, condition,
   );
 
-  // MX: apply running status multiplier to all price fields
-  // Running bikes are worth significantly more than non-running bikes
   if (isMX && mxRunningMultiplier < 1.0 && valuation.valuationMid > 0) {
     const m = mxRunningMultiplier;
     valuation = {
@@ -1259,11 +1378,10 @@ Deno.serve(async (req: Request) => {
       valuationHigh: Math.round(valuation.valuationHigh * m * 100) / 100,
       fairMarketValue: Math.round(valuation.fairMarketValue * m * 100) / 100,
       recommendedListingPrice: Math.round(valuation.recommendedListingPrice * m * 100) / 100,
-      listingPriceRationale: `${valuation.listingPriceRationale} [Running status multiplier applied: ${mxRunningStatus} = ${Math.round(m * 100)}% of running-bike comparables]`,
+      listingPriceRationale: `${valuation.listingPriceRationale} [Running status: ${mxRunningStatus} = ${Math.round(m * 100)}% of running-bike comparables]`,
     };
   }
 
-  // Auto-apply to item — always apply when explicitly requested (not just autonomous mode)
   let applied = false;
   if (applyToItem && itemId && combined.dataQuality !== 'insufficient') {
     try {
@@ -1277,21 +1395,16 @@ Deno.serve(async (req: Request) => {
         updated_at: new Date().toISOString(),
       }).eq('id', itemId).eq('tenant_id', tenantId);
       applied = true;
-      console.log(`[SWISH Market v3] Auto-applied to item ${itemId}`);
-    } catch (e: any) { console.log(`[SWISH Market v3] Auto-apply failed: ${e.message}`); }
+    } catch (e: any) { console.log(`[SWISH Market v4] Auto-apply failed: ${e.message}`); }
   }
 
-  // ── Build full response ───────────────────────────────────────────────────
   return jsonResponse({
     success: true,
     searchQuery: searchQueries[0],
     searchQueriesUsed: searchQueries,
-
     valuation,
 
-    // ── SOLD MARKET — Numista and eBay SEPARATELY ─────────────────────────────
     soldMarket: {
-      // Combined totals
       verifiedSoldCount: combined.ebayStats.count,
       relevantSoldCount: combined.ebayStats.relevantCount,
       excludedSoldCount: combined.ebayStats.count - combined.ebayStats.relevantCount,
@@ -1308,9 +1421,10 @@ Deno.serve(async (req: Request) => {
       dataQuality: combined.dataQuality,
       dataQualityReason: combined.dataQualityReason,
       exceptionalSales: combined.exceptionalSalesAll.map(s => ({ title: s.title.slice(0, 60), price: s.price, date: s.endDate })),
+      // v4: include sample exclusion reasons for diagnostics
+      sampleExclusions: combined.ebayStats.excludedReasons.slice(0, 5),
     },
 
-    // ── NUMISTA SALES — separate block ────────────────────────────────────────
     numistaSales: numistaSalesData ? {
       available: !numistaSalesData.error,
       error: numistaSalesData.error ?? null,
@@ -1329,7 +1443,6 @@ Deno.serve(async (req: Request) => {
       })),
     } : null,
 
-    // ── COMBINED STATS ────────────────────────────────────────────────────────
     combinedEvidence: {
       numistaRelevant: combined.numistaStats.relevantCount,
       ebayRelevant: combined.ebayStats.relevantCount,
@@ -1339,7 +1452,6 @@ Deno.serve(async (req: Request) => {
       combinedHigh: combined.combinedHigh,
     },
 
-    // ── ACTIVE ASKING PRICES — clearly separate ───────────────────────────────
     activeAskingPrices: {
       note: 'ASKING PRICES ONLY — not verified sales. Not used in valuation.',
       count: combined.activeAskingCount,
@@ -1349,7 +1461,6 @@ Deno.serve(async (req: Request) => {
       relevantCount: scoredActive.filter(c => c.relevanceScore >= MIN_RELEVANCE).length,
     },
 
-    // ── NUMISTA REFERENCE (type, not sales) ───────────────────────────────────
     numista: numistaTypeId ? {
       typeId: numistaTypeId,
       numistaN: `N#${numistaTypeId}`,
@@ -1357,56 +1468,51 @@ Deno.serve(async (req: Request) => {
       matchScore: numistaMatchScore,
       matchTier: numistaMatchTier,
       accepted: ['verified', 'strong_match'].includes(numistaMatchTier),
-      note: ['verified', 'strong_match'].includes(numistaMatchTier)
-        ? 'Verified Numista type — sales records retrieved'
-        : 'Numista candidate — insufficient match for sales record retrieval',
     } : null,
 
-    // ── DATA SOURCES ──────────────────────────────────────────────────────────
     dataSource: {
       findingApiTotal: allEbaySold.length,
+      primarySearchTotal: primarySold.totalFound,
       browseApiActive: activePrices.length,
       numistaSalesFound: numistaSalesData?.totalFetched ?? 0,
       numistaSalesRelevant: combined.numistaStats.relevantCount,
       currencyConversions: combined.currencyConversionsUsed,
+      marketplace: EBAY_GLOBAL_ID,
+      // v4: connectivity test fields
+      apiConnectionStatus: {
+        findingApiReached: primarySold.error ? 'error' : 'success',
+        findingApiError: primarySold.error ?? null,
+        appTokenObtained: !!appToken,
+        marketplaceScoped: EBAY_GLOBAL_ID,
+      },
     },
 
-    // ── FULL AUDIT TRAIL ──────────────────────────────────────────────────────
     auditTrail: {
       timestamp: new Date().toISOString(),
-      searchQueries,
-      canonicalTitle: title,
-      identificationConfidence,
-      identificationTier,
-      numistaTypeId: numistaTypeId ?? null,
-      numistaMatchScore,
-      numistaMatchTier,
-      condition,
-      // Numista evidence
+      searchQueries, canonicalTitle: title,
+      identificationConfidence, identificationTier,
+      numistaTypeId: numistaTypeId ?? null, numistaMatchScore, numistaMatchTier,
+      condition, specialistId, marketplace: EBAY_GLOBAL_ID,
       numistaSalesCount: numistaSalesData?.totalFetched ?? 0,
       numistaSalesRelevant: combined.numistaStats.relevantCount,
       numistaMedian: combined.numistaStats.median,
-      // eBay evidence
       ebayFoundTotal: allEbaySold.length,
+      ebayPrimarySearchTotal: primarySold.totalFound,
       ebaySoldRelevant: combined.ebayStats.relevantCount,
       ebayMedian: combined.ebayStats.median,
-      // Combined
       combinedRelevant: combined.combinedRelevantCount,
       combinedMedian: combined.combinedMedian,
-      // Excluded
       excludedComparables: combined.excludedEbaySales,
       topComparables: combined.topEbaySales,
-      // Statistics
       statisticalMethod: 'relevance_weighted_median_with_iqr_outlier_detection',
       valuationConfidence: valuation.valuationConfidence,
       valuationMethod: valuation.valuationMethod,
       valuationWarnings: valuation.valuationWarnings,
     },
 
-    autonomousMode,
-    applied,
+    autonomousMode, applied,
 
-    // ── LEGACY COMPATIBILITY (BulkReValueSheet + existing UI) ────────────────
+    // Legacy compatibility
     stats: {
       count: combined.combinedRelevantCount,
       low: valuation.valuationLow,
@@ -1431,7 +1537,7 @@ Deno.serve(async (req: Request) => {
       quickSaleRatio: 0.95,
       reasoning: valuation.listingPriceRationale,
       keyFactors: [
-        `${combined.combinedRelevantCount} combined relevant sales`,
+        `${combined.combinedRelevantCount} combined relevant sales (EBAY_GB)`,
         combined.numistaStats.relevantCount > 0 ? `${combined.numistaStats.relevantCount} Numista verified sales` : null,
         combined.dataQuality !== 'insufficient' ? `Range £${valuation.valuationLow}–£${valuation.valuationHigh}` : 'Insufficient data',
         ...valuation.valuationWarnings.slice(0, 2),
