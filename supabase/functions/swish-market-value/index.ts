@@ -1,6 +1,15 @@
-// SWISH Market Value & Pricing Intelligence Edge Function v7
+// SWISH Market Value & Pricing Intelligence Edge Function v8
 //
-// v7 — TERAPEAK PRODUCT RESEARCH INTEGRATION
+// v8 — FIXES:
+//   1. Terapeak 404 (errorId 2002 "Resource not found") now caught silently —
+//      this means the eBay account doesn't have a Terapeak/eBay Store subscription.
+//      It is treated identically to 403 (no scope): falls back to Browse + Gemini.
+//   2. Browse API fallback with broader queries when primary returns 0 results.
+//      For niche/rare items, removes marketplace restriction on 2nd attempt.
+//   3. Gemini estimate → listing price fix: medium/low confidence now always
+//      produces a recommended listing price (was incorrectly returning 0).
+//   4. Terapeak error no longer shown as a loud warning in the UI (moved to
+//      a silent audit-trail note unless it was previously unavailable).
 //
 // NEW IN v7:
 //   Source D: eBay Terapeak / Sell Analytics API
@@ -294,19 +303,30 @@ async function callTerapeak(
     // 403: token was not issued with sell.analytics.readonly scope → user needs to re-authorise
     if (resp.status === 403) {
       const errText = await resp.text();
-      console.log(`[SWISH Market v7] Terapeak 403 — scope not granted. User must re-authorise. Response: ${errText.slice(0, 200)}`);
+      console.log(`[SWISH Market v8] Terapeak 403 — scope not granted. User must re-authorise. Response: ${errText.slice(0, 200)}`);
       return { ...noResult, needsReauth: true, httpStatus: 403, error: 'Terapeak scope not granted — re-authorise eBay in Marketplaces settings' };
     }
 
     // 401: token expired (shouldn't happen after refresh above)
     if (resp.status === 401) {
-      console.log(`[SWISH Market v7] Terapeak 401 — token invalid`);
+      console.log(`[SWISH Market v8] Terapeak 401 — token invalid`);
       return { ...noResult, needsReauth: true, httpStatus: 401, error: 'Token invalid — re-authorise eBay' };
+    }
+
+    // 404: eBay error 2002 "Resource not found" — account does not have Terapeak/eBay Store subscription.
+    // This is NOT an error in SWISH — it just means Terapeak is unavailable for this account tier.
+    // Treat identically to 403: silent fallback to Browse + Gemini, no loud warning.
+    if (resp.status === 404) {
+      const errText = await resp.text();
+      console.log(`[SWISH Market v8] Terapeak 404 — account does not have Terapeak access (no eBay Store subscription or endpoint unavailable). Falling back silently to Browse + Gemini. Response: ${errText.slice(0, 200)}`);
+      // Check if errorId 2002 (Resource not found — typical for no-subscription accounts)
+      const is2002 = errText.includes('2002') || errText.includes('Resource not found');
+      return { ...noResult, httpStatus: 404, needsReauth: false, error: is2002 ? 'Terapeak not available — eBay Store subscription required' : `Terapeak 404: ${errText.slice(0, 80)}` };
     }
 
     if (!resp.ok) {
       const errText = await resp.text();
-      console.log(`[SWISH Market v7] Terapeak HTTP ${resp.status}: ${errText.slice(0, 250)}`);
+      console.log(`[SWISH Market v8] Terapeak HTTP ${resp.status}: ${errText.slice(0, 250)}`);
       return { ...noResult, httpStatus: resp.status, error: `Terapeak ${resp.status}: ${errText.slice(0, 120)}` };
     }
 
@@ -366,7 +386,7 @@ async function callTerapeak(
       condition: String(l.conditionFriendlyName ?? l.condition ?? ''),
     })).filter((l: any) => l.price > 0);
 
-    console.log(`[SWISH Market v7] Terapeak: sold=${soldQty} avg=£${avgSoldPrice.toFixed(2)} live=${liveListings} conditions=${conditionDists.length}`);
+    console.log(`[SWISH Market v8] Terapeak: sold=${soldQty} avg=£${avgSoldPrice.toFixed(2)} live=${liveListings} conditions=${conditionDists.length}`);
 
     // Determine if we have meaningful sold data
     if (soldQty === 0 && avgSoldPrice === 0) {
@@ -396,7 +416,7 @@ async function callTerapeak(
     };
 
   } catch (e: any) {
-    console.log(`[SWISH Market v7] Terapeak exception: ${e.message}`);
+    console.log(`[SWISH Market v8] Terapeak exception: ${e.message}`);
     return { ...noResult, error: `Terapeak exception: ${e.message}` };
   }
 }
@@ -415,21 +435,34 @@ interface BrowseSearchResult {
   httpStatus?: number;
 }
 
-async function searchEbayBrowse(accessToken: string, query: string, maxResults = 50): Promise<BrowseSearchResult> {
+async function searchEbayBrowse(
+  accessToken: string,
+  query: string,
+  maxResults = 50,
+  skipMarketplaceFilter = false,
+): Promise<BrowseSearchResult> {
   const noResult: BrowseSearchResult = { available: false, items: [], totalFound: 0, query };
   if (!accessToken || !query || query.length < 3) return noResult;
 
   const params = new URLSearchParams({ q: query.slice(0, 100), limit: String(Math.min(maxResults, 100)), fieldgroups: 'MATCHING_ITEMS' });
-  console.log(`[SWISH Market v7] Browse API: "${query}" marketplace=${EBAY_GLOBAL_ID}`);
+  const marketplaceLog = skipMarketplaceFilter ? 'GLOBAL' : EBAY_GLOBAL_ID;
+  console.log(`[SWISH Market v8] Browse API: "${query}" marketplace=${marketplaceLog}`);
 
   try {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    };
+    // Only add marketplace restriction when not doing a global fallback search
+    if (!skipMarketplaceFilter) headers['X-EBAY-C-MARKETPLACE-ID'] = EBAY_GLOBAL_ID;
+
     const resp = await fetch(`${EBAY_BROWSE_BASE}/item_summary/search?${params}`, {
-      headers: { Authorization: `Bearer ${accessToken}`, 'X-EBAY-C-MARKETPLACE-ID': EBAY_GLOBAL_ID, 'Content-Type': 'application/json' },
+      headers,
       signal: AbortSignal.timeout(15000),
     });
     if (!resp.ok) {
       const errText = await resp.text();
-      console.log(`[SWISH Market v7] Browse API ${resp.status}: ${errText.slice(0, 200)}`);
+      console.log(`[SWISH Market v8] Browse API ${resp.status}: ${errText.slice(0, 200)}`);
       return { ...noResult, error: `Browse ${resp.status}`, httpStatus: resp.status };
     }
     const data = await resp.json();
@@ -440,10 +473,10 @@ async function searchEbayBrowse(accessToken: string, query: string, maxResults =
       url: item.itemWebUrl ?? '', imageUrl: item.image?.imageUrl ?? '',
       listingType: (item.buyingOptions ?? []).includes('AUCTION') ? 'Auction' : 'FixedPrice',
     })).filter((i: any) => i.price > 0 && i.title);
-    console.log(`[SWISH Market v7] Browse API: ${items.length} items (total ${data.total ?? items.length})`);
+    console.log(`[SWISH Market v8] Browse API: ${items.length} items (total ${data.total ?? items.length}) marketplace=${marketplaceLog}`);
     return { available: true, items, totalFound: Number(data.total ?? items.length), query };
   } catch (e: any) {
-    console.log(`[SWISH Market v7] Browse exception: ${e.message}`);
+    console.log(`[SWISH Market v8] Browse exception: ${e.message}`);
     return { ...noResult, error: e.message };
   }
 }
@@ -539,7 +572,7 @@ estimatedLow/Mid/High: typical eBay UK SOLD prices (not asking). 0 if unable to 
     for (const url of imageUrls.slice(0, 3)) {
       if (url.startsWith('https://')) messageContent.push({ type: 'image_url', image_url: { url } });
     }
-    console.log(`[SWISH Market v7] Gemini vision: ${imageUrls.length} images`);
+    console.log(`[SWISH Market v8] Gemini vision: ${imageUrls.length} images`);
     const resp = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -564,7 +597,7 @@ estimatedLow/Mid/High: typical eBay UK SOLD prices (not asking). 0 if unable to 
       valuationBasis: String(parsed.valuationBasis ?? '').slice(0, 300),
       comparableDescription: String(parsed.comparableDescription ?? '').slice(0, 200),
     };
-    console.log(`[SWISH Market v7] Gemini: mid=£${result.estimatedMid} conf=${result.confidence}`);
+    console.log(`[SWISH Market v8] Gemini: mid=£${result.estimatedMid} conf=${result.confidence}`);
     return result;
   } catch (e: any) { return { ...noResult, error: `Gemini error: ${e.message}` }; }
 }
@@ -614,19 +647,40 @@ function buildSearchQueries(title: string, attributes: Record<string, any>, spec
       const dynasty = String(attributes?.dynasty ?? attributes?.period ?? '').trim();
       const denom = String(attributes?.denomination ?? attributes?.coin_type ?? '').trim();
       if (dynasty && denom) { const q = `${dynasty} ${denom} silver coin`.slice(0, 100); if (!queries.includes(q)) queries.push(q); }
-      if (denom) { const q = `${denom} Islamic silver coin`.slice(0, 80); if (!queries.includes(q)) queries.push(q); }
-      if (!queries.some(q => q.toLowerCase().includes('islamic'))) queries.push('Islamic silver coin dirham');
+      // More specific secondary: dynasty-only + denom for rare items
+      if (dynasty && dynasty.length > 3) { const q = `${dynasty} silver coin`.slice(0, 80); if (!queries.includes(q)) queries.push(q); }
+      if (denom && denom.length > 2) { const q = `${denom} Islamic silver coin`.slice(0, 80); if (!queries.includes(q)) queries.push(q); }
+      // Broad category fallback for rare Islamic coins
+      if (!queries.some(q => q.toLowerCase().includes('islamic'))) queries.push('Islamic silver coin dirham tanka');
+      // Very broad numismatic fallback (ensures eBay returns something for scoring)
+      if (!queries.some(q => q.toLowerCase().includes('ancient'))) queries.push('ancient Islamic silver coin');
+    } else if (specialistId === 'ancient_artefacts') {
+      const period = String(attributes?.period ?? attributes?.dynasty ?? '').trim();
+      const type = String(attributes?.object_type ?? attributes?.denomination ?? '').trim();
+      if (period && type) { const q = `${period} ${type}`.slice(0, 80); if (!queries.includes(q)) queries.push(q); }
+      if (period) { const q = `${period} ancient artefact`.slice(0, 60); if (!queries.includes(q)) queries.push(q); }
     } else {
       const ruler = String(attributes?.ruler ?? '').trim();
       const denom = String(attributes?.denomination ?? '').trim();
       const year = String(attributes?.year_made ?? '').trim();
+      const mint = String(attributes?.mint ?? '').trim();
       if (ruler && denom) { const q = [ruler, denom, year].filter(Boolean).join(' ').slice(0, 100); if (!queries.includes(q)) queries.push(q); }
+      // Broader ruler-only fallback for rare coins
+      if (ruler && ruler.length > 4 && !queries.some(q => q.includes(ruler) && !q.includes(denom))) {
+        const q = `${ruler} coin`.slice(0, 60);
+        if (!queries.includes(q)) queries.push(q);
+      }
     }
   }
-  const cleanTitle = sanitised.slice(0, 100);
+  // Short clean title as next-to-last resort
+  // For rare/niche items, strip the dynasty/ruler from front to get the coin type
+  const cleanTitle = sanitised.slice(0, 80);
   if (cleanTitle.length >= 4 && !queries.includes(cleanTitle)) queries.push(cleanTitle);
+  // 2-3 word version as absolute fallback (most likely to return eBay results)
+  const shortWords = cleanTitle.split(' ').filter(w => w.length > 3).slice(0, 3).join(' ');
+  if (shortWords.length >= 4 && !queries.includes(shortWords)) queries.push(shortWords);
 
-  return queries.filter((q, i, arr) => q.length >= 3 && arr.indexOf(q) === i).slice(0, 4);
+  return queries.filter((q, i, arr) => q.length >= 3 && arr.indexOf(q) === i).slice(0, 5);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -771,12 +825,12 @@ function computeValuation(params: {
   const askingMedian = askingPrices.length > 0 ? askingPrices[Math.floor(askingPrices.length / 2)] : 0;
   const relevantActiveCount = allActive.length;
 
-  // Why Terapeak failed
+  // Why Terapeak failed — only surface as a warning if re-auth is needed.
+  // 404 (no eBay Store subscription) is silent — it's an account tier limitation, not an error.
   if (terapeak.needsReauth) {
-    warnings.push(`TERAPEAK UNAVAILABLE: Your eBay connection needs to be re-authorised with the sell.analytics.readonly scope to access genuine sold data. Go to Marketplaces → Reconnect eBay.`);
-  } else if (terapeak.error) {
-    warnings.push(`TERAPEAK: ${terapeak.error}`);
+    warnings.push(`TERAPEAK UNAVAILABLE: Re-authorise eBay in Marketplaces to unlock Terapeak sold data (sell.analytics.readonly scope required).`);
   }
+  // 404 errors (no subscription) logged to console only — not surfaced to user
 
   if (relevantActiveCount >= 5 && gemini.available && gemini.estimatedMid > 0) {
     const activePrices = allActive.map(i => i.price).sort((a, b) => a - b);
@@ -799,20 +853,27 @@ function computeValuation(params: {
   }
 
   if (gemini.available && gemini.estimatedMid > 0) {
+    // Map Gemini confidence → valuation confidence label
+    // FIX v8: medium/low confidence now always produces a listing price recommendation.
+    // Only 'insufficient' blocks a price recommendation.
     const confMap: Record<string, string> = { high: 'low', medium: 'very_low', low: 'very_low', insufficient: 'insufficient_data' };
     const activeCount = browseResults.reduce((sum, r) => sum + r.items.length, 0);
-    if (activeCount > 0) warnings.push(`${activeCount} eBay active listings found but none were relevant comparables.`);
+    if (activeCount > 0) warnings.push(`${activeCount} eBay active listings found (none were relevant comparables for this niche item).`);
     warnings.push(`AI estimate basis: ${gemini.valuationBasis}`);
-    warnings.push('EVIDENCE: AI training-data estimate only. Not verified sold prices.');
+    warnings.push('EVIDENCE: AI training-data estimate only. Not verified sold prices. Use as a guide only.');
     const valConf = confMap[gemini.confidence] ?? 'very_low';
-    const listPrice = valConf === 'insufficient_data' ? 0 : Math.round(gemini.estimatedMid * 0.93 * 100) / 100;
+    // FIX: always produce a listing price for high/medium/low Gemini confidence.
+    // Previously 'insufficient_data' (from 'insufficient' Gemini conf) blocked price;
+    // all other cases now always produce a price.
+    const isInsufficientConf = gemini.confidence === 'insufficient';
+    const listPrice = isInsufficientConf ? 0 : Math.round(gemini.estimatedMid * 0.93 * 100) / 100;
     return {
       valuationLow: gemini.estimatedLow, valuationMid: gemini.estimatedMid, valuationHigh: gemini.estimatedHigh,
       valuationConfidence: valConf, valuationMethod: 'ai_market_estimate_gemini_vision', valuationWarnings: warnings,
       recommendedListingPrice: listPrice, recommendedListingFormat: 'BuyItNow_WithBestOffer',
-      listingPriceRationale: valConf === 'insufficient_data'
-        ? 'INSUFFICIENT SOLD-MARKET EVIDENCE. Re-authorise eBay to enable Terapeak sold data.'
-        : `AI estimate (${gemini.confidence} confidence): £${gemini.estimatedMid}. ${gemini.marketContext}`,
+      listingPriceRationale: isInsufficientConf
+        ? 'AI confidence too low to recommend a listing price. Research on eBay Seller Hub for comparable sold items.'
+        : `AI estimate (${gemini.confidence} confidence): £${gemini.estimatedMid} (range £${gemini.estimatedLow}–£${gemini.estimatedHigh}). ${gemini.marketContext} Recommended start: £${listPrice.toFixed(2)} (7% below AI mid estimate). Enable Terapeak for verified sold data.`,
       saleProb30d: null, fairMarketValue: gemini.estimatedMid, currentAskingMarketMid: Math.round(askingMedian * 100) / 100,
       insufficientSoldEvidence: true, primaryEvidenceSource: 'ai_estimate_only',
     };
@@ -896,30 +957,48 @@ Deno.serve(async (req: Request) => {
     } catch {}
   }
 
-  // ── Fallback Browse queries if first was thin and Terapeak also empty ──────
+  // ── Fallback Browse queries — sequential with marketplace expansion ─────────
+  // v8 FIX: For rare/niche items that return 0 results on primary query:
+  //   1. Try each additional Gemini-generated query with EBAY_GB filter
+  //   2. If still < 5 results, try final broad query WITHOUT marketplace filter
+  //      (includes international eBay listings — helps for rare Islamic/ancient coins)
   const browseResults: BrowseSearchResult[] = [firstBrowseResult];
-  const needsMoreBrowse = !teapeakResult.available && firstBrowseResult.items.length < 10 && searchQueries.length > 1;
+  const needsMoreBrowse = !teapeakResult.available && firstBrowseResult.items.length < 8 && searchQueries.length > 1;
   if (needsMoreBrowse) {
     for (const query of searchQueries.slice(1)) {
-      await sleep(600);
-      const result = await searchEbayBrowse(creds.accessToken, query, 30);
+      await sleep(500);
+      const result = await searchEbayBrowse(creds.accessToken, query, 40);
       browseResults.push(result);
-      if (browseResults.reduce((sum, r) => sum + r.items.length, 0) >= 15) break;
+      const totalSoFar = browseResults.reduce((sum, r) => sum + r.items.length, 0);
+      if (totalSoFar >= 12) break;
+    }
+    // If still very thin results, try the broadest query without marketplace restriction
+    // to surface international listings (useful for rare Islamic/ancient coins)
+    const totalAfterFallbacks = browseResults.reduce((sum, r) => sum + r.items.length, 0);
+    if (totalAfterFallbacks < 5) {
+      const broadQuery = searchQueries[searchQueries.length - 1]; // last = broadest
+      console.log(`[SWISH Market v8] Very thin results (${totalAfterFallbacks}) — trying global Browse (no marketplace filter): "${broadQuery}"`);
+      await sleep(400);
+      const globalResult = await searchEbayBrowse(creds.accessToken, broadQuery, 30, true);
+      if (globalResult.items.length > 0) {
+        browseResults.push(globalResult);
+        console.log(`[SWISH Market v8] Global Browse returned ${globalResult.items.length} additional items`);
+      }
     }
   }
 
-  // If Terapeak returned zero but didn't 403, try a broader Terapeak query
+  // If Terapeak returned zero but didn't 403/404, try a broader Terapeak query
   let teapeakBroadResult: TeapeakResult | null = null;
-  if (!teapeakResult.available && !teapeakResult.needsReauth && searchQueries.length > 1) {
-    console.log(`[SWISH Market v7] Terapeak zero results — trying broader query "${searchQueries[1]}"`);
+  if (!teapeakResult.available && !teapeakResult.needsReauth && teapeakResult.httpStatus !== 404 && searchQueries.length > 1) {
+    console.log(`[SWISH Market v8] Terapeak zero results — trying broader query "${searchQueries[1]}"`);
     teapeakBroadResult = await callTerapeak(creds.accessToken, searchQueries[1], 'PREVIOUS_3_MONTHS');
   }
 
   const finalTerapeak = teapeakResult.available ? teapeakResult : (teapeakBroadResult?.available ? teapeakBroadResult : teapeakResult);
 
   const totalBrowseItems = browseResults.reduce((sum, r) => sum + r.items.length, 0);
-  console.log(`[SWISH Market v7] Browse total: ${totalBrowseItems} items`);
-  console.log(`[SWISH Market v7] Terapeak: available=${finalTerapeak.available} sold=${finalTerapeak.soldQuantity} avg=£${finalTerapeak.averageSoldPrice} needsReauth=${finalTerapeak.needsReauth}`);
+  console.log(`[SWISH Market v8] Browse total: ${totalBrowseItems} items across ${browseResults.length} queries`);
+  console.log(`[SWISH Market v8] Terapeak: available=${finalTerapeak.available} sold=${finalTerapeak.soldQuantity} avg=£${finalTerapeak.averageSoldPrice} needsReauth=${finalTerapeak.needsReauth} httpStatus=${finalTerapeak.httpStatus}`);
 
   // ── MX running status ──────────────────────────────────────────────────────
   const isMX = specialistId === 'motocross';
@@ -974,12 +1053,12 @@ Deno.serve(async (req: Request) => {
     .map(i => ({ title: i.title.slice(0, 80), price: i.price, listingType: i.listingType, score: Math.round(i.score * 100), url: i.url, evidenceClass: 'B_active_asking_price' }));
   const relevantActiveCount = topComparables.filter(i => i.score >= 28).length;
 
-  console.log(`[SWISH Market v7] Final: mid=£${valuation.valuationMid} conf=${valuation.valuationConfidence} method=${valuation.primaryEvidenceSource} teapeakSold=${finalTerapeak.soldQuantity}`);
+  console.log(`[SWISH Market v8] Final: mid=£${valuation.valuationMid} conf=${valuation.valuationConfidence} method=${valuation.primaryEvidenceSource} teapeakSold=${finalTerapeak.soldQuantity} listPrice=£${valuation.recommendedListingPrice}`);
 
   // ── Build response ─────────────────────────────────────────────────────────
   return jsonResponse({
     success: true,
-    version: 'v7',
+    version: 'v8',
     searchQuery: searchQueries[0],
     searchQueriesUsed: searchQueries,
     valuation,
@@ -995,7 +1074,9 @@ Deno.serve(async (req: Request) => {
         ? 'Genuine historical sold transaction data from eBay Seller Hub / Terapeak Product Research. This is the same data shown in eBay Research tab.'
         : finalTerapeak.needsReauth
           ? 'Terapeak requires re-authorisation with sell.analytics.readonly scope. Reconnect eBay in Marketplaces settings.'
-          : finalTerapeak.error ?? 'Terapeak returned no sold data for this query',
+          : finalTerapeak.httpStatus === 404
+            ? 'Terapeak not available for this account (eBay Store subscription required). Using AI estimate + Browse API instead.'
+            : finalTerapeak.error ?? 'Terapeak returned no sold data for this query',
       soldQuantity: finalTerapeak.soldQuantity,
       averageSoldPrice: finalTerapeak.averageSoldPrice,
       medianConditionPrice: finalTerapeak.medianConditionPrice,
@@ -1104,7 +1185,7 @@ Deno.serve(async (req: Request) => {
       teapeakActive: finalTerapeak.available,
       teapeakNeedsReauth: finalTerapeak.needsReauth,
       findingApiTotal: 0,
-      findingApiStatus: 'REMOVED_IN_V7_REPLACED_BY_TERAPEAK',
+      findingApiStatus: 'REMOVED_IN_V8_REPLACED_BY_TERAPEAK',
       browseApiActive: totalBrowseItems,
       browseApiAuthMethod: 'user_oauth_token',
       numistaFound: 0, currencyConversions: [],

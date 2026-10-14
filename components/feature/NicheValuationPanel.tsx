@@ -207,10 +207,14 @@ export default function NicheValuationPanel({
   const [queriesExpanded, setQueriesExpanded] = useState(false);
   const [provenanceExpanded, setProvenanceExpanded] = useState(false);
 
-  // v7: Terapeak Product Research (class A — verified sold data)
+  // v8: Terapeak Product Research (class A — verified sold data)
   const teapeakData = (result as any)?.teapeakProductResearch;
   const hasTeapeakSold = teapeakData?.available === true && (teapeakData?.soldQuantity ?? 0) > 0;
   const teapeakNeedsReauth = teapeakData?.needsReauth === true;
+  // 404 = no eBay Store subscription — show a soft info note, not an error
+  const teapeakNoSubscription = !teapeakData?.available && !teapeakNeedsReauth &&
+    ((result as any)?.dataSource?.apiConnectionStatus?.teapeakStatus === 404 ||
+     (teapeakData?.evidenceNote ?? '').includes('Store subscription'));
 
   // v5: Gemini vision market research (from result)
   const geminiData = (result as any)?.geminiMarketResearch;
@@ -429,7 +433,7 @@ export default function NicheValuationPanel({
         <View style={{ flex: 1 }}>
           <Text style={[s.headerTitle, { color: accent }]}>Live Market Value</Text>
           <Text style={s.headerSub}>
-            {hasTeapeakSold ? `Terapeak: ${teapeakData.soldQuantity} verified sold · EBAY_GB` : isAIEstimate ? 'AI estimate — no eBay sold data found' : config.evidenceLabel}
+            {hasTeapeakSold ? `Terapeak: ${teapeakData.soldQuantity} verified sold · EBAY_GB` : isAIEstimate ? 'AI estimate (Gemini Vision) · no eBay sold data' : config.evidenceLabel}
           </Text>
         </View>
         <View style={s.headerRight}>
@@ -610,7 +614,7 @@ export default function NicheValuationPanel({
             </View>
           ) : null}
 
-          {/* Terapeak re-auth prompt */}
+          {/* Terapeak access banners */}
           {teapeakNeedsReauth ? (
             <View style={s.teapeakReauthBanner}>
               <MaterialIcons name="verified-user" size={13} color={Colors.primary} />
@@ -618,6 +622,16 @@ export default function NicheValuationPanel({
                 <Text style={s.teapeakReauthTitle}>Unlock Genuine Sold Data via Terapeak</Text>
                 <Text style={s.teapeakReauthText}>
                   Reconnect eBay in Marketplaces to authorise the sell.analytics.readonly scope. This enables eBay Seller Hub Product Research data — the same verified sold history you see in Research tab.
+                </Text>
+              </View>
+            </View>
+          ) : teapeakNoSubscription ? (
+            <View style={[s.teapeakReauthBanner, { backgroundColor: Colors.surfaceHighlight, borderColor: Colors.surfaceBorder }]}>
+              <MaterialIcons name="info-outline" size={13} color={Colors.textTertiary} />
+              <View style={{ flex: 1 }}>
+                <Text style={[s.teapeakReauthTitle, { color: Colors.textSecondary }]}>Terapeak Unavailable (Account Tier)</Text>
+                <Text style={[s.teapeakReauthText, { color: Colors.textTertiary }]}>
+                  eBay Terapeak / Product Research requires an eBay Store subscription. AI estimate + Browse listings used as fallback.
                 </Text>
               </View>
             </View>
