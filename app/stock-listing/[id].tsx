@@ -2063,18 +2063,58 @@ export default function StockListingScreen() {
   const handleEndListing = useCallback(async (listing: SavedListing) => {
     if (!item) return;
     const isLive = listing.status === 'active' && listing.externalListingId;
-    showAlert('End Listing', isLive ? `Remove listing #${listing.externalListingId} from eBay and delete from SWISH?` : `Delete this draft listing from SWISH?`, [
+    showAlert(
+      'End Listing',
+      isLive
+        ? `Remove listing #${listing.externalListingId} from eBay and mark as ended in SWISH?`
+        : `Remove this draft listing from SWISH? (No eBay action needed for drafts.)`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: isLive ? 'End on eBay' : 'Remove Draft',
+          style: 'destructive',
+          onPress: async () => {
+            setEndingId(listing.id);
+            const { error } = await endListing(listing.id, item.id, tenant?.id, listing.externalListingId);
+            setEndingId(null);
+            if (error) { showAlert('End Failed', error); return; }
+            setListings(prev => prev.map(l => l.id === listing.id ? { ...l, status: 'ended' } : l));
+            setItem(prev => prev ? { ...prev, status: 'identified' } : prev);
+          },
+        },
+      ],
+    );
+  }, [item, tenant?.id, showAlert]);
 
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'End', style: 'destructive', onPress: async () => {
-        setEndingId(listing.id);
-        const { error } = await endListing(listing.id, item.id, tenant?.id, listing.externalListingId);
-        setEndingId(null);
-        if (error) { showAlert('End Failed', error); return; }
-        setListings(prev => prev.map(l => l.id === listing.id ? { ...l, status: 'ended' } : l));
-        setItem(prev => prev ? { ...prev, status: 'identified' } : prev);
-      }},
-    ]);
+  const handleDeleteListing = useCallback((listing: SavedListing) => {
+    if (!item) return;
+    const isLive = listing.status === 'active' && listing.externalListingId;
+    showAlert(
+      'Delete Listing',
+      isLive
+        ? `This will end listing #${listing.externalListingId} on eBay AND permanently delete it from SWISH. This cannot be undone.`
+        : `Permanently delete this draft listing from SWISH? The item will remain in your inventory.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: isLive ? 'End on eBay & Delete' : 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setEndingId(listing.id);
+            const { error } = await deleteListing(
+              listing.id,
+              tenant?.id ?? '',
+              isLive ? listing.externalListingId ?? undefined : undefined,
+            );
+            setEndingId(null);
+            if (error) { showAlert('Delete Failed', error); return; }
+            setListings(prev => prev.filter(l => l.id !== listing.id));
+            setItem(prev => prev ? { ...prev, status: 'identified' } : prev);
+            showAlert('Deleted', isLive ? 'Listing ended on eBay and removed from SWISH.' : 'Draft listing deleted from SWISH.');
+          },
+        },
+      ],
+    );
   }, [item, tenant?.id, showAlert]);
 
   const handleMarkSold = useCallback(() => {
@@ -2211,6 +2251,10 @@ export default function StockListingScreen() {
             <Pressable onPress={() => handleEndListing(activeListings[0])} style={s.endBtn} hitSlop={4} disabled={endingId === activeListings[0].id}>
               {endingId === activeListings[0].id ? <ActivityIndicator size="small" color={Colors.danger} style={{ width: 11, height: 11 }} /> : <MaterialIcons name="stop" size={11} color={Colors.danger} />}
               <Text style={s.endBtnText}>End</Text>
+            </Pressable>
+            <Pressable onPress={() => handleDeleteListing(activeListings[0])} style={[s.endBtn, { backgroundColor: Colors.dangerDim + '80', borderColor: Colors.danger + '60' }]} hitSlop={4} disabled={endingId === activeListings[0].id}>
+              <MaterialIcons name="delete-outline" size={11} color={Colors.danger} />
+              <Text style={s.endBtnText}>Delete</Text>
             </Pressable>
           </View>
         ) : null}
@@ -2829,6 +2873,18 @@ export default function StockListingScreen() {
           >
             <MaterialIcons name="fact-check" size={15} color={Colors.background} />
             <Text style={s.actionBtnText}>Submit to eBay</Text>
+          </Pressable>
+        ) : null}
+        {(draftListings.length > 0 || activeListings.length > 0) ? (
+          <Pressable
+            onPress={() => handleDeleteListing(draftListings[0] ?? activeListings[0])}
+            disabled={endingId !== null}
+            style={[s.actionBtn, { flex: 0, paddingHorizontal: Spacing.md, backgroundColor: Colors.dangerDim, borderWidth: 1, borderColor: Colors.danger + '40' }]}
+            hitSlop={4}
+            accessibilityLabel={draftListings.length > 0 ? 'Delete draft listing' : 'Delete listing'}
+            accessibilityRole="button"
+          >
+            {endingId ? <ActivityIndicator size="small" color={Colors.danger} style={{ width: 15, height: 15 }} /> : <MaterialIcons name="delete-outline" size={15} color={Colors.danger} />}
           </Pressable>
         ) : null}
         {!isSold && activeListings.length === 0 && draftListings.length === 0 ? (
