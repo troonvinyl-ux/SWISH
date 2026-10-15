@@ -55,14 +55,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Run niche isolation tests (pre-build gate)
+      - name: Run niche isolation and Coin Flipper production tests (pre-build gate)
         # Fails the build before any Android toolchain setup if niche isolation
-        # regressions are detected. Keeps CI fast — tests run in ~15s.
+        # or Coin Flipper production regressions are detected.
+        # Keeps CI fast — tests run in ~20-30s total.
         run: |
           set -eux
-          npx jest --coverage --coverageDirectory=coverage/niche-isolation \
-            services/__tests__/nicheIsolation.test.ts 2>&1
-          echo "Niche isolation tests PASSED — proceeding to Android build."
+          npx jest --coverage --coverageDirectory=coverage/pre-build \
+            services/__tests__/nicheIsolation.test.ts \
+            services/__tests__/coinFlipperProduction.test.ts 2>&1
+          echo "Pre-build gate tests PASSED — proceeding to Android build."
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
