@@ -2844,6 +2844,15 @@ export default function StockListingScreen() {
           {reValuing ? <ActivityIndicator size="small" color={Colors.gold} style={{ width: 15, height: 15 }} /> : <MaterialIcons name="travel-explore" size={15} color={Colors.gold} />}
           <Text style={s.actionBtnReValueText}>{reValuing ? '...' : 'Re-Value'}</Text>
         </Pressable>
+        <Pressable
+          onPress={() => router.push(`/research?q=${encodeURIComponent(item.canonicalTitle ?? '')}` as any)}
+          style={[s.actionBtn, { flex: 0, paddingHorizontal: Spacing.md, backgroundColor: Colors.accentDim, borderWidth: 1, borderColor: Colors.accent + '40' }]}
+          hitSlop={4}
+          accessibilityLabel={`Research ${item.canonicalTitle} on eBay, Terapeak and Numista`}
+          accessibilityRole="button"
+        >
+          <MaterialIcons name="manage-search" size={15} color={Colors.accent} />
+        </Pressable>
         {listings.some(l => l.status === 'active' && l.externalListingId) ? (
           <Pressable onPress={handleSyncFromEbay} disabled={syncingEbay} style={[s.actionBtn, { backgroundColor: Colors.infoDim, borderWidth: 1, borderColor: Colors.info + '40', flex: 0, paddingHorizontal: Spacing.md }]}>
             {syncingEbay ? <ActivityIndicator size="small" color={Colors.info} style={{ width: 15, height: 15 }} /> : <MaterialIcons name="sync" size={15} color={Colors.info} />}
