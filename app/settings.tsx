@@ -2530,7 +2530,7 @@ const migStyles = StyleSheet.create({
 // ── Advanced Section ───────────────────────────────────────────────────────
 
 function AdvancedSection({
-  controls, onKillSwitch, onResume, onToggleCapability, onGoToBusinessConfig, businessConfig,
+  controls, onKillSwitch, onResume, onToggleCapability, onGoToBusinessConfig, businessConfig, tenantId, isOwner,
 }: {
   controls: AutonomyControls | null;
   onKillSwitch: (reason: string) => Promise<void>;
@@ -2538,6 +2538,8 @@ function AdvancedSection({
   onToggleCapability: (key: keyof AutonomyControls, value: boolean) => Promise<void>;
   onGoToBusinessConfig: () => void;
   businessConfig: any;
+  tenantId: string | null;
+  isOwner: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const { showAlert } = useAlert();
@@ -2713,7 +2715,7 @@ function AdvancedSection({
           {/* Security — Credential Migration */}
           <View style={advStyles.subSection}>
             <Text style={advStyles.subTitle}>SECURITY</Text>
-            <CredentialMigrationCard tenantId={tenant?.id ?? null} isOwner={isOwner} />
+            <CredentialMigrationCard tenantId={tenantId} isOwner={isOwner} />
           </View>
 
         </View>
@@ -3440,6 +3442,8 @@ export default function SettingsScreen() {
           onToggleCapability={handleToggleCapability}
           onGoToBusinessConfig={() => router.push('/onboarding' as any)}
           businessConfig={businessConfig}
+          tenantId={tenant?.id ?? null}
+          isOwner={isOwner}
         />
 
         {/* ── Legal ───────────────────────────────────────────────── */}

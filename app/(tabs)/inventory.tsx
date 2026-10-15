@@ -445,7 +445,7 @@ export default function MasterInventoryScreen() {
   const { showAlert } = useAlert();
   const theme = useMemo(() => getNicheTheme(activeNicheId), [activeNicheId]);
   const { config: bizConfig } = useBusinessConfig();
-  const autonomousMode = bizConfig?.auto_value === true || bizConfig?.automation_level === 'autonomous';
+  const autonomousMode = bizConfig?.autoValue === true || bizConfig?.automationLevel === 'autonomous';
 
   const [activeTab, setActiveTab] = useState<MasterTab>('stock');
   const [search, setSearch] = useState('');
