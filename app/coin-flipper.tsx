@@ -1,6 +1,12 @@
 // Coin Flipper — Production-hardened niche entry point
 //
-// PRODUCTION CHANGES (see final report at bottom of file):
+// V2 ADDITIONS (merged flows):
+//   1. Islamic specialist chip in Capture tab — sets specialistId='islamic_silver'
+//      and enables Zeno/Numista evidence pipeline in swish-identify
+//   2. Quick Mode — fires camera repeatedly without switching tabs (multi-capture)
+//   3. Specialist chips: General | Islamic | Roman | Greek (pre-filter specialist)
+//
+// PRODUCTION CHANGES (retained from v1):
 //   1. Double-tap protection — isInFlight ref prevents concurrent AI calls
 //   2. Save idempotency — savedItemId guard prevents duplicate inventory items
 //   3. Capture UX fix — camera launches, on cancel user is shown a picker modal
@@ -9,16 +15,12 @@
 //   6. Error states never display unconfirmed results
 //   7. Quota error clearly maps to upgrade flow with correct counts
 //   8. All loading states disable buttons (no double-submit possible)
-//
-// ARCHITECTURE NOTE:
-// This is a PRESENTATION LAYER screen wrapping the shared SWISH engine.
-// All AI, valuation, listing, and database calls go through identical
-// shared services — zero duplication of business logic.
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, Pressable, ScrollView,
-  ActivityIndicator, Linking, FlatList, Alert, AccessibilityInfo,
+  ActivityIndicator, Linking, Alert, AccessibilityInfo,
+  TextInput, Modal, FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -39,6 +41,15 @@ import {
   uploadItemImages,
   updateItemMedia,
 } from '@/services/aiIdentificationService';
+import {
+  IslamicBatchItem,
+  IslamicIdentificationResult,
+  processIslamicBatch,
+  saveIslamicBatchToInventory,
+  BatchSaveProgress,
+  getConfidenceColor,
+  getWorkflowLabel,
+} from '@/services/islamicIdentificationService';
 import { getMarketValue, MarketValueResult } from '@/services/marketValueService';
 import { startCheckout } from '@/services/subscriptionService';
 
@@ -60,7 +71,28 @@ const CF = {
   success:     '#4CAF50',
   danger:      '#E53935',
   info:        '#42A5F5',
+  islamic:     '#B8860B', // golden-brown for Islamic specialist
 };
+
+// ── Specialist definitions ────────────────────────────────────────────────────
+interface SpecialistChip {
+  id: string;
+  label: string;
+  icon: string;
+  color: string;
+  hint: string;
+  specialistId: string;
+  periodId?: string;
+}
+
+const SPECIALIST_CHIPS: SpecialistChip[] = [
+  { id: 'general',  label: 'General',  icon: 'toll',              color: CF.gold,    hint: 'All coins — AI chooses best specialist',            specialistId: 'coins' },
+  { id: 'islamic',  label: 'Islamic',  icon: 'toll',              color: CF.islamic, hint: 'Umayyad · Abbasid · Fatimid · Mughal · Tanka',       specialistId: 'islamic_silver', periodId: 'islamic' },
+  { id: 'roman',    label: 'Roman',    icon: 'local-fire-department', color: '#CD7F32', hint: 'Republic · Imperial · Provincial',               specialistId: 'coins', periodId: 'roman' },
+  { id: 'greek',    label: 'Greek',    icon: 'account-balance',   color: '#D4AF37', hint: 'Athens · Macedonian · Hellenistic',                  specialistId: 'coins', periodId: 'greek' },
+  { id: 'byzantine',label: 'Byzantine',icon: 'auto-awesome',      color: '#DAA520', hint: 'Gold · Follis · Emperors',                            specialistId: 'coins', periodId: 'byzantine' },
+  { id: 'ancient',  label: 'Ancient',  icon: 'brightness-7',      color: '#C8A028', hint: 'Lydian · Persian · Egyptian',                        specialistId: 'ancient_artefacts', periodId: 'persian' },
+];
 
 // ── Historical period catalogue ───────────────────────────────────────────────
 const PERIODS = [
@@ -80,6 +112,10 @@ const COIN_SLOTS = [
   { id: 'edge',    label: 'Edge',    hint: 'Milled / lettered',  required: false },
   { id: 'detail',  label: 'Detail',  hint: 'Inscription / date', required: false },
 ];
+
+// ── Islamic batch counter ─────────────────────────────────────────────────────
+let _islamicBatchCounter = 0;
+function newIslamicBatchId() { return `islamic_${++_islamicBatchCounter}_${Date.now()}`; }
 
 type CFTab = 'home' | 'capture' | 'identify' | 'reference' | 'value' | 'list_sell' | 'insights';
 
@@ -170,8 +206,8 @@ function CoinFlipperPaywall({ onBack }: { onBack: () => void }) {
     { icon: 'menu-book',      label: 'Numista catalogue & references' },
     { icon: 'analytics',      label: 'Advanced market valuations' },
     { icon: 'storefront',     label: 'eBay listing generation' },
-    { icon: 'toll',           label: 'Islamic specialist engine' },
-    { icon: 'photo-camera',   label: 'Quick Capture Station' },
+    { icon: 'toll',           label: 'Islamic specialist engine (Zeno + Numista)' },
+    { icon: 'burst-mode',     label: 'Quick Capture — rapid multi-coin scanning' },
     { icon: 'bar-chart',      label: 'Profit insights & analytics' },
     { icon: 'bolt',           label: 'Priority AI processing' },
   ];
@@ -406,126 +442,445 @@ const ht = StyleSheet.create({
   premiumConfirmedText: { fontSize: Typography.size.sm, color: CF.gold, fontWeight: Typography.weight.semibold },
 });
 
+// ── Islamic Batch Card (mini) for Quick Mode ──────────────────────────────────
+function IslamicBatchMiniCard({ item, onPress }: { item: IslamicBatchItem; onPress: () => void }) {
+  const r = item.result;
+  const confColor = r ? getConfidenceColor(r.confidenceTier) : Colors.textTertiary;
+  return (
+    <Pressable onPress={onPress} style={ibc.card}>
+      <View style={ibc.imgWrap}>
+        {item.images[0] ? (
+          <Image source={{ uri: item.images[0] }} style={ibc.img} contentFit="cover" />
+        ) : (
+          <MaterialIcons name="toll" size={16} color={Colors.textTertiary} />
+        )}
+        {item.status === 'processing' ? (
+          <View style={StyleSheet.absoluteFill}>
+            <ActivityIndicator size="small" color="#fff" style={{ flex: 1 }} />
+          </View>
+        ) : null}
+      </View>
+      <View style={{ flex: 1 }}>
+        {r ? (
+          <>
+            <Text style={ibc.title} numberOfLines={1}>{r.canonicalTitle}</Text>
+            <View style={[ibc.confPill, { backgroundColor: confColor + '20' }]}>
+              <Text style={[ibc.confTxt, { color: confColor }]}>{Math.round(r.confidence * 100)}%</Text>
+            </View>
+          </>
+        ) : item.status === 'error' ? (
+          <Text style={ibc.error} numberOfLines={1}>{item.error ?? 'Error'}</Text>
+        ) : (
+          <Text style={ibc.pending}>Pending</Text>
+        )}
+      </View>
+      <MaterialIcons name="chevron-right" size={14} color={Colors.textTertiary} />
+    </Pressable>
+  );
+}
+const ibc = StyleSheet.create({
+  card: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: CF.surface, borderRadius: Radius.md, padding: Spacing.sm, borderWidth: 1, borderColor: CF.border },
+  imgWrap: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: CF.surfaceHigh, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  img: { width: '100%', height: '100%' },
+  title: { fontSize: 11, fontWeight: Typography.weight.semibold, color: CF.textPrimary },
+  confPill: { borderRadius: Radius.pill, paddingHorizontal: 5, paddingVertical: 2, alignSelf: 'flex-start', marginTop: 2 },
+  confTxt: { fontSize: 9, fontWeight: Typography.weight.bold },
+  error: { fontSize: 10, color: Colors.danger },
+  pending: { fontSize: 10, color: CF.textMuted, fontStyle: 'italic' },
+});
+
 // ── Capture tab ───────────────────────────────────────────────────────────────
-function CaptureTab({ capturedImages, onCapture, onRemove, onIdentify, identifying, processingStatus, aiError, onTabSelect, isPremium }: {
+function CaptureTab({
+  capturedImages, onCapture, onRemove, onIdentify, identifying,
+  processingStatus, aiError, onTabSelect, isPremium,
+  // Specialist mode
+  selectedSpecialist, onSpecialistChange,
+  // Quick mode
+  quickMode, onToggleQuickMode, quickCaptures, onQuickCapture, onRunQuickBatch,
+  quickRunning, quickDone, onClearQuick,
+  // Islamic batch results
+  islamicBatchItems, onIslamicItemPress,
+}: {
   capturedImages: CapturedImage[]; onCapture: (slotId: string, slotLabel: string) => void;
   onRemove: (slotId: string) => void; onIdentify: () => void; identifying: boolean;
   processingStatus: string; aiError: string | null; onTabSelect: (t: CFTab) => void; isPremium: boolean;
+  selectedSpecialist: SpecialistChip; onSpecialistChange: (s: SpecialistChip) => void;
+  quickMode: boolean; onToggleQuickMode: () => void;
+  quickCaptures: Array<{ id: string; uri: string; label?: string }>;
+  onQuickCapture: () => void; onRunQuickBatch: () => void;
+  quickRunning: boolean; quickDone: boolean; onClearQuick: () => void;
+  islamicBatchItems: IslamicBatchItem[]; onIslamicItemPress: (item: IslamicBatchItem) => void;
 }) {
+  const router = useRouter();
+  const isIslamic = selectedSpecialist.id === 'islamic';
   const canIdentify = capturedImages.length > 0;
   const hasRequired = COIN_SLOTS.filter(s => s.required).every(s => capturedImages.some(i => i.slotId === s.id));
-  const router = useRouter();
+  const accentColor = selectedSpecialist.color;
 
   return (
     <View style={{ flex: 1 }}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ct.content}>
-        <View style={ct.progressBar}>
-          <View style={[ct.progressDot, { backgroundColor: capturedImages.length >= 2 ? CF.success : CF.gold }]} />
-          <Text style={ct.progressText}>
-            {capturedImages.length === 0 ? 'Tap a slot to photograph your coin'
-              : capturedImages.length === 1 ? 'Obverse captured — now photograph the reverse'
-              : `${capturedImages.length} / 4 photos captured`}
-          </Text>
-          <View style={[ct.countChip, capturedImages.length >= 2 && ct.countChipReady]}>
-            <Text style={[ct.countText, capturedImages.length >= 2 && { color: CF.success }]}>{capturedImages.length}/4</Text>
+
+        {/* ── Specialist chip selector ── */}
+        <View style={ct.specialistSection}>
+          <Text style={ct.specialistLabel}>SPECIALIST</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={ct.specialistChips}>
+            {SPECIALIST_CHIPS.map(chip => {
+              const active = selectedSpecialist.id === chip.id;
+              return (
+                <Pressable
+                  key={chip.id}
+                  onPress={() => onSpecialistChange(chip)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${chip.label} specialist: ${chip.hint}`}
+                  accessibilityState={{ selected: active }}
+                  style={({ pressed }) => [
+                    ct.specialistChip,
+                    active && { backgroundColor: chip.color + '20', borderColor: chip.color + '80' },
+                    pressed && { opacity: 0.82 },
+                  ]}
+                >
+                  <MaterialIcons name={chip.icon as any} size={13} color={active ? chip.color : CF.textMuted} />
+                  <Text style={[ct.specialistChipText, active && { color: chip.color, fontWeight: Typography.weight.bold }]}>
+                    {chip.label}
+                  </Text>
+                  {chip.id === 'islamic' ? (
+                    <View style={[ct.specialistChipBadge, { backgroundColor: CF.islamic + '30' }]}>
+                      <Text style={[ct.specialistChipBadgeText, { color: CF.islamic }]}>Zeno</Text>
+                    </View>
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          {/* Active specialist hint */}
+          <View style={ct.specialistHintRow}>
+            <MaterialIcons name="info-outline" size={10} color={accentColor} />
+            <Text style={[ct.specialistHintText, { color: accentColor }]}>{selectedSpecialist.hint}</Text>
           </View>
         </View>
 
-        {aiError ? (
-          <View style={ct.errorBanner} accessibilityRole="alert">
-            <MaterialIcons name={aiError.includes('quota') ? 'workspace-premium' : 'error-outline'} size={15} color={aiError.includes('quota') ? CF.gold : CF.danger} />
-            <Text style={[ct.errorText, aiError.includes('quota') && { color: CF.gold }]} numberOfLines={5}>{aiError}</Text>
-            {aiError.includes('quota') && !isPremium ? (
-              <Pressable onPress={() => router.push('/subscription' as any)} style={ct.quotaBtn} accessibilityRole="button" accessibilityLabel="Upgrade to Pro for unlimited identifications">
-                <Text style={ct.quotaBtnText}>Upgrade</Text>
+        {/* ── Mode toggle: Standard vs Quick ── */}
+        <View style={ct.modeRow}>
+          <Pressable
+            onPress={() => { if (quickMode) onToggleQuickMode(); }}
+            style={[ct.modeBtn, !quickMode && { backgroundColor: accentColor + '20', borderColor: accentColor + '60' }]}
+            accessibilityRole="button"
+            accessibilityLabel="Standard mode — photograph one coin at a time"
+            accessibilityState={{ selected: !quickMode }}
+          >
+            <MaterialIcons name="photo-camera" size={14} color={!quickMode ? accentColor : CF.textMuted} />
+            <Text style={[ct.modeBtnText, !quickMode && { color: accentColor, fontWeight: Typography.weight.bold }]}>Standard</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => { if (!quickMode) onToggleQuickMode(); }}
+            style={[ct.modeBtn, quickMode && { backgroundColor: accentColor + '20', borderColor: accentColor + '60' }]}
+            accessibilityRole="button"
+            accessibilityLabel="Quick mode — capture multiple coins rapidly without switching tabs"
+            accessibilityState={{ selected: quickMode }}
+          >
+            <MaterialIcons name="burst-mode" size={14} color={quickMode ? accentColor : CF.textMuted} />
+            <Text style={[ct.modeBtnText, quickMode && { color: accentColor, fontWeight: Typography.weight.bold }]}>Quick</Text>
+            <View style={ct.modeNewPip}><Text style={ct.modeNewPipText}>NEW</Text></View>
+          </Pressable>
+        </View>
+
+        {/* ── QUICK MODE ── */}
+        {quickMode ? (
+          <View style={ct.quickSection}>
+            {/* Info banner */}
+            <View style={[ct.quickInfoBanner, { borderColor: accentColor + '30', backgroundColor: accentColor + '10' }]}>
+              <MaterialIcons name="burst-mode" size={13} color={accentColor} />
+              <Text style={[ct.quickInfoText, { color: accentColor }]}>
+                Quick Mode — fire camera repeatedly. Each tap captures one coin and adds it to the batch. Tap Run Identification when done.
+              </Text>
+            </View>
+
+            {/* Capture button */}
+            <Pressable
+              onPress={onQuickCapture}
+              disabled={quickRunning}
+              accessibilityRole="button"
+              accessibilityLabel="Capture next coin photo"
+              style={({ pressed }) => [
+                ct.quickCaptureBtn,
+                { backgroundColor: accentColor, shadowColor: accentColor },
+                (pressed || quickRunning) && { opacity: 0.8 },
+              ]}
+            >
+              <MaterialIcons name="add-a-photo" size={22} color={CF.black} />
+              <Text style={ct.quickCaptureBtnText}>
+                {quickCaptures.length === 0 ? 'Capture First Coin' : `Capture Coin #${quickCaptures.length + 1}`}
+              </Text>
+            </Pressable>
+
+            {/* Quick capture thumbnails */}
+            {quickCaptures.length > 0 ? (
+              <View style={ct.quickThumbs}>
+                <View style={ct.quickThumbsHeader}>
+                  <Text style={ct.quickThumbsTitle}>{quickCaptures.length} coin{quickCaptures.length !== 1 ? 's' : ''} captured</Text>
+                  <Pressable onPress={onClearQuick} hitSlop={8} accessibilityLabel="Clear all quick captures">
+                    <Text style={ct.quickClearText}>Clear</Text>
+                  </Pressable>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm, paddingVertical: Spacing.xs }}>
+                  {quickCaptures.map((cap, i) => (
+                    <View key={cap.id} style={ct.quickThumb}>
+                      <Image source={{ uri: cap.uri }} style={ct.quickThumbImg} contentFit="cover" />
+                      <View style={ct.quickThumbNum}>
+                        <Text style={ct.quickThumbNumText}>{i + 1}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
+
+            {/* Islamic batch results */}
+            {isIslamic && islamicBatchItems.length > 0 ? (
+              <View style={ct.islamicBatchSection}>
+                <Text style={[ct.quickThumbsTitle, { color: CF.islamic }]}>ISLAMIC IDENTIFICATIONS</Text>
+                <View style={{ gap: Spacing.xs }}>
+                  {islamicBatchItems.map(item => (
+                    <IslamicBatchMiniCard key={item.id} item={item} onPress={() => onIslamicItemPress(item)} />
+                  ))}
+                </View>
+              </View>
+            ) : null}
+
+            {/* Run batch */}
+            {quickCaptures.length > 0 && !quickRunning && !quickDone ? (
+              <Pressable
+                onPress={onRunQuickBatch}
+                accessibilityRole="button"
+                accessibilityLabel={`Run AI identification on ${quickCaptures.length} captured coins`}
+                style={({ pressed }) => [ct.quickRunBtn, pressed && { opacity: 0.85 }]}
+              >
+                <MaterialIcons name="auto-awesome" size={18} color={CF.black} />
+                <Text style={ct.quickRunBtnText}>
+                  Identify {quickCaptures.length} Coin{quickCaptures.length !== 1 ? 's' : ''}
+                  {isIslamic ? ' · Islamic Engine' : ''}
+                </Text>
               </Pressable>
+            ) : quickRunning ? (
+              <View style={[ct.quickRunBtn, { opacity: 0.75 }]}>
+                <ActivityIndicator size="small" color={CF.black} />
+                <Text style={ct.quickRunBtnText}>Running Islamic pipeline...</Text>
+              </View>
+            ) : quickDone ? (
+              <View style={[ct.quickRunBtn, { backgroundColor: CF.success }]}>
+                <MaterialIcons name="check-circle" size={18} color={CF.black} />
+                <Text style={ct.quickRunBtnText}>Done! Tap coins above to review</Text>
+              </View>
             ) : null}
           </View>
-        ) : null}
-
-        <View style={ct.photoGrid}>
-          {COIN_SLOTS.map((slot, idx) => {
-            const img = capturedImages.find(i => i.slotId === slot.id);
-            const isFirst = idx === 0;
-            return (
-              <View key={slot.id} style={isFirst ? ct.slotLarge : ct.slotSmall}>
-                <Pressable
-                  onPress={() => onCapture(slot.id, slot.label)}
-                  accessibilityRole="button"
-                  accessibilityLabel={img ? `${slot.label} captured — tap to retake` : `Add ${slot.label} photo${slot.required ? ' (required)' : ' (optional)'}`}
-                  style={({ pressed }) => [ct.slotInner, img ? ct.slotCaptured : ct.slotEmpty, slot.required && !img ? ct.slotRequired : null, pressed && { opacity: 0.82 }]}
-                >
-                  {img ? (
-                    <>
-                      <Image source={{ uri: img.uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
-                      <View style={ct.capturedBar}>
-                        <MaterialIcons name="check-circle" size={10} color={CF.success} />
-                        <Text style={ct.capturedLabel} numberOfLines={1}>{slot.label}</Text>
-                        <Pressable
-                          onPress={e => { e.stopPropagation?.(); onCapture(slot.id, slot.label); }}
-                          style={ct.retakeBtn} hitSlop={6}
-                          accessibilityLabel={`Retake ${slot.label} photo`} accessibilityRole="button"
-                        >
-                          <MaterialIcons name="refresh" size={12} color="#fff" />
-                        </Pressable>
-                      </View>
-                      <Pressable
-                        onPress={e => { e.stopPropagation?.(); onRemove(slot.id); }}
-                        style={ct.removeBtn} hitSlop={6}
-                        accessibilityLabel={`Remove ${slot.label} photo`} accessibilityRole="button"
-                      >
-                        <MaterialIcons name="close" size={11} color="#fff" />
-                      </Pressable>
-                    </>
-                  ) : (
-                    <View style={ct.emptySlot}>
-                      <View style={[ct.emptyIcon, slot.required ? ct.emptyIconRequired : null]}>
-                        <MaterialIcons name="add-a-photo" size={isFirst ? 26 : 20} color={slot.required ? CF.gold : CF.textMuted} />
-                      </View>
-                      <Text style={[ct.emptyLabel, slot.required && { color: CF.textPrimary }]} numberOfLines={1}>{slot.label}</Text>
-                      {slot.required ? <View style={ct.requiredPill}><Text style={ct.requiredText}>Required</Text></View> : <Text style={ct.optionalText}>Optional</Text>}
-                      {slot.hint && isFirst ? <Text style={ct.slotHint} numberOfLines={2}>{slot.hint}</Text> : null}
-                    </View>
-                  )}
-                </Pressable>
+        ) : (
+          /* ── STANDARD MODE ── */
+          <>
+            {/* Islamic specialist banner */}
+            {isIslamic ? (
+              <View style={ct.islamicBanner}>
+                <MaterialIcons name="toll" size={14} color={CF.islamic} />
+                <View style={{ flex: 1 }}>
+                  <Text style={ct.islamicBannerTitle}>Islamic Silver Mode</Text>
+                  <Text style={ct.islamicBannerSub}>AI + Zeno.ru + Numista evidence pipeline · Countermark detection</Text>
+                </View>
+                <View style={ct.zenoChip}>
+                  <Text style={ct.zenoChipText}>Zeno</Text>
+                </View>
               </View>
-            );
-          })}
-        </View>
+            ) : null}
 
-        <View style={ct.tip}>
-          <MaterialIcons name="lightbulb-outline" size={13} color={CF.gold} />
-          <Text style={ct.tipText}>Obverse + Reverse gives the AI the most evidence. Edge and Detail boost confidence further.</Text>
-        </View>
-        <View style={{ height: 100 }} />
+            <View style={ct.progressBar}>
+              <View style={[ct.progressDot, { backgroundColor: capturedImages.length >= 2 ? CF.success : accentColor }]} />
+              <Text style={ct.progressText}>
+                {capturedImages.length === 0 ? 'Tap a slot to photograph your coin'
+                  : capturedImages.length === 1 ? 'Obverse captured — now photograph the reverse'
+                  : `${capturedImages.length} / 4 photos captured`}
+              </Text>
+              <View style={[ct.countChip, capturedImages.length >= 2 && ct.countChipReady]}>
+                <Text style={[ct.countText, capturedImages.length >= 2 && { color: CF.success }]}>{capturedImages.length}/4</Text>
+              </View>
+            </View>
+
+            {aiError ? (
+              <View style={ct.errorBanner} accessibilityRole="alert">
+                <MaterialIcons name={aiError.includes('quota') ? 'workspace-premium' : 'error-outline'} size={15} color={aiError.includes('quota') ? CF.gold : CF.danger} />
+                <Text style={[ct.errorText, aiError.includes('quota') && { color: CF.gold }]} numberOfLines={5}>{aiError}</Text>
+                {aiError.includes('quota') && !isPremium ? (
+                  <Pressable onPress={() => router.push('/subscription' as any)} style={ct.quotaBtn} accessibilityRole="button" accessibilityLabel="Upgrade to Pro for unlimited identifications">
+                    <Text style={ct.quotaBtnText}>Upgrade</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+
+            <View style={ct.photoGrid}>
+              {COIN_SLOTS.map((slot, idx) => {
+                const img = capturedImages.find(i => i.slotId === slot.id);
+                const isFirst = idx === 0;
+                return (
+                  <View key={slot.id} style={isFirst ? ct.slotLarge : ct.slotSmall}>
+                    <Pressable
+                      onPress={() => onCapture(slot.id, slot.label)}
+                      accessibilityRole="button"
+                      accessibilityLabel={img ? `${slot.label} captured — tap to retake` : `Add ${slot.label} photo${slot.required ? ' (required)' : ' (optional)'}`}
+                      style={({ pressed }) => [ct.slotInner, img ? ct.slotCaptured : ct.slotEmpty, slot.required && !img ? { ...ct.slotRequired, borderColor: accentColor + '50' } : null, pressed && { opacity: 0.82 }]}
+                    >
+                      {img ? (
+                        <>
+                          <Image source={{ uri: img.uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                          <View style={ct.capturedBar}>
+                            <MaterialIcons name="check-circle" size={10} color={CF.success} />
+                            <Text style={ct.capturedLabel} numberOfLines={1}>{slot.label}</Text>
+                            <Pressable onPress={e => { e.stopPropagation?.(); onCapture(slot.id, slot.label); }} style={ct.retakeBtn} hitSlop={6} accessibilityLabel={`Retake ${slot.label} photo`} accessibilityRole="button">
+                              <MaterialIcons name="refresh" size={12} color="#fff" />
+                            </Pressable>
+                          </View>
+                          <Pressable onPress={e => { e.stopPropagation?.(); onRemove(slot.id); }} style={ct.removeBtn} hitSlop={6} accessibilityLabel={`Remove ${slot.label} photo`} accessibilityRole="button">
+                            <MaterialIcons name="close" size={11} color="#fff" />
+                          </Pressable>
+                        </>
+                      ) : (
+                        <View style={ct.emptySlot}>
+                          <View style={[ct.emptyIcon, slot.required ? { ...ct.emptyIconRequired, backgroundColor: accentColor + '25' } : null]}>
+                            <MaterialIcons name="add-a-photo" size={isFirst ? 26 : 20} color={slot.required ? accentColor : CF.textMuted} />
+                          </View>
+                          <Text style={[ct.emptyLabel, slot.required && { color: CF.textPrimary }]} numberOfLines={1}>{slot.label}</Text>
+                          {slot.required ? <View style={[ct.requiredPill, { backgroundColor: accentColor + '20' }]}><Text style={[ct.requiredText, { color: accentColor }]}>Required</Text></View> : <Text style={ct.optionalText}>Optional</Text>}
+                          {slot.hint && isFirst ? <Text style={ct.slotHint} numberOfLines={2}>{slot.hint}</Text> : null}
+                        </View>
+                      )}
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </View>
+
+            <View style={ct.tip}>
+              <MaterialIcons name="lightbulb-outline" size={13} color={accentColor} />
+              <Text style={[ct.tipText, { color: accentColor }]}>
+                {isIslamic
+                  ? 'For Islamic coins: obverse + reverse required. Weight (g) and diameter (mm) significantly improve accuracy. Notes about seller description help too.'
+                  : 'Obverse + Reverse gives the AI the most evidence. Edge and Detail boost confidence further.'}
+              </Text>
+            </View>
+
+            {/* Weight / diameter fields for Islamic mode */}
+            {isIslamic ? (
+              <View style={ct.islamicMeasureCard}>
+                <Text style={ct.islamicMeasureTitle}>PHYSICAL MEASUREMENTS (optional but recommended)</Text>
+                <View style={ct.islamicMeasureRow}>
+                  <View style={ct.islamicMeasureField}>
+                    <Text style={ct.islamicMeasureLabel}>Weight (g)</Text>
+                    <TextInput
+                      style={ct.islamicMeasureInput}
+                      placeholder="e.g. 5.12"
+                      placeholderTextColor={CF.textMuted}
+                      keyboardType="decimal-pad"
+                      accessibilityLabel="Coin weight in grams"
+                    />
+                  </View>
+                  <View style={ct.islamicMeasureField}>
+                    <Text style={ct.islamicMeasureLabel}>Diameter (mm)</Text>
+                    <TextInput
+                      style={ct.islamicMeasureInput}
+                      placeholder="e.g. 20.5"
+                      placeholderTextColor={CF.textMuted}
+                      keyboardType="decimal-pad"
+                      accessibilityLabel="Coin diameter in millimetres"
+                    />
+                  </View>
+                </View>
+              </View>
+            ) : null}
+
+            <View style={{ height: 100 }} />
+          </>
+        )}
       </ScrollView>
 
-      <View style={ct.actionBar}>
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={ct.actionCount}>{capturedImages.length} photo{capturedImages.length === 1 ? '' : 's'} captured</Text>
-          {!hasRequired ? <Text style={ct.actionHint}>Obverse and Reverse required</Text> : <Text style={ct.actionReady}>Ready to identify</Text>}
+      {/* Standard mode action bar */}
+      {!quickMode ? (
+        <View style={ct.actionBar}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={ct.actionCount}>{capturedImages.length} photo{capturedImages.length === 1 ? '' : 's'} captured</Text>
+            {!hasRequired ? <Text style={ct.actionHint}>Obverse and Reverse required</Text> : <Text style={ct.actionReady}>Ready to identify</Text>}
+          </View>
+          <Pressable
+            onPress={onIdentify}
+            disabled={!canIdentify || identifying}
+            accessibilityRole="button"
+            accessibilityLabel={identifying ? processingStatus || 'Identifying coin, please wait' : canIdentify ? `Identify ${isIslamic ? 'Islamic silver' : ''} coin with AI` : 'Add at least one photo before identifying'}
+            accessibilityState={{ disabled: !canIdentify || identifying, busy: identifying }}
+            style={({ pressed }) => [ct.identifyBtn, { backgroundColor: accentColor, shadowColor: accentColor }, !canIdentify && ct.identifyBtnDisabled, pressed && canIdentify ? { opacity: 0.88 } : null]}
+          >
+            {identifying
+              ? <ActivityIndicator size="small" color={CF.black} accessibilityLabel="Identifying" />
+              : <MaterialIcons name={isIslamic ? 'toll' : 'auto-awesome'} size={18} color={canIdentify ? CF.black : CF.textMuted} />}
+            <Text style={[ct.identifyBtnText, !canIdentify && { color: CF.textMuted }]}>
+              {identifying ? processingStatus || 'Identifying...' : isIslamic ? 'Identify (Islamic Engine)' : 'Identify Coin'}
+            </Text>
+          </Pressable>
         </View>
-        <Pressable
-          onPress={onIdentify}
-          disabled={!canIdentify || identifying}
-          accessibilityRole="button"
-          accessibilityLabel={identifying ? processingStatus || 'Identifying coin, please wait' : canIdentify ? 'Identify coin with AI' : 'Add at least one photo before identifying'}
-          accessibilityState={{ disabled: !canIdentify || identifying, busy: identifying }}
-          style={({ pressed }) => [ct.identifyBtn, !canIdentify && ct.identifyBtnDisabled, pressed && canIdentify ? { opacity: 0.88 } : null]}
-        >
-          {identifying
-            ? <ActivityIndicator size="small" color={CF.black} accessibilityLabel="Identifying" />
-            : <MaterialIcons name="auto-awesome" size={18} color={canIdentify ? CF.black : CF.textMuted} />}
-          <Text style={[ct.identifyBtnText, !canIdentify && { color: CF.textMuted }]}>
-            {identifying ? processingStatus || 'Identifying...' : 'Identify Coin'}
-          </Text>
-        </Pressable>
-      </View>
+      ) : null}
     </View>
   );
 }
 const ct = StyleSheet.create({
   content: { padding: Spacing.base, gap: Spacing.md },
+
+  // Specialist chips
+  specialistSection: { gap: 6 },
+  specialistLabel: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: CF.textMuted, textTransform: 'uppercase', letterSpacing: 0.8 },
+  specialistChips: { flexDirection: 'row', gap: Spacing.xs, paddingVertical: 2 },
+  specialistChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: Radius.pill, backgroundColor: CF.surface, borderWidth: 1, borderColor: CF.border },
+  specialistChipText: { fontSize: 11, color: CF.textSub, fontWeight: Typography.weight.medium },
+  specialistChipBadge: { borderRadius: Radius.pill, paddingHorizontal: 5, paddingVertical: 2 },
+  specialistChipBadgeText: { fontSize: 8, fontWeight: Typography.weight.bold },
+  specialistHintRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
+  specialistHintText: { flex: 1, fontSize: 10, lineHeight: 14 },
+
+  // Mode toggle
+  modeRow: { flexDirection: 'row', gap: Spacing.sm, backgroundColor: CF.surfaceHigh, borderRadius: Radius.lg, padding: 4, borderWidth: 1, borderColor: CF.border },
+  modeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 8, borderRadius: Radius.md, borderWidth: 1, borderColor: 'transparent', position: 'relative' },
+  modeBtnText: { fontSize: 12, color: CF.textMuted, fontWeight: Typography.weight.medium },
+  modeNewPip: { position: 'absolute', top: 2, right: 6, backgroundColor: Colors.success, borderRadius: Radius.pill, paddingHorizontal: 3, paddingVertical: 1 },
+  modeNewPipText: { fontSize: 6, fontWeight: Typography.weight.extrabold, color: '#fff', letterSpacing: 0.3 },
+
+  // Quick mode
+  quickSection: { gap: Spacing.md },
+  quickInfoBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1 },
+  quickInfoText: { flex: 1, fontSize: Typography.size.xs, lineHeight: 16 },
+  quickCaptureBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, borderRadius: Radius.xl, paddingVertical: Spacing.lg, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 14, elevation: 8 },
+  quickCaptureBtnText: { fontSize: Typography.size.base, fontWeight: Typography.weight.extrabold, color: CF.black },
+  quickThumbs: { gap: Spacing.xs },
+  quickThumbsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  quickThumbsTitle: { fontSize: 10, fontWeight: Typography.weight.bold, color: CF.textSub, textTransform: 'uppercase', letterSpacing: 0.4 },
+  quickClearText: { fontSize: 10, color: Colors.danger, fontWeight: Typography.weight.semibold },
+  quickThumb: { width: 64, height: 64, borderRadius: Radius.md, overflow: 'hidden', position: 'relative' },
+  quickThumbImg: { width: '100%', height: '100%' },
+  quickThumbNum: { position: 'absolute', bottom: 2, right: 2, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 8, width: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
+  quickThumbNumText: { fontSize: 8, fontWeight: Typography.weight.bold, color: '#fff' },
+  islamicBatchSection: { gap: Spacing.xs },
+  quickRunBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, backgroundColor: CF.gold, borderRadius: Radius.xl, paddingVertical: Spacing.base, shadowColor: CF.gold, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 12, elevation: 6 },
+  quickRunBtnText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.extrabold, color: CF.black },
+
+  // Islamic standard mode
+  islamicBanner: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: CF.islamic + '15', borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: CF.islamic + '40' },
+  islamicBannerTitle: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: CF.islamic },
+  islamicBannerSub: { fontSize: 10, color: CF.islamic + 'BB', lineHeight: 14, marginTop: 2 },
+  zenoChip: { backgroundColor: CF.islamic + '25', borderRadius: Radius.pill, paddingHorizontal: 7, paddingVertical: 3, borderWidth: 1, borderColor: CF.islamic + '50' },
+  zenoChipText: { fontSize: 9, fontWeight: Typography.weight.bold, color: CF.islamic },
+
+  islamicMeasureCard: { backgroundColor: CF.surfaceHigh, borderRadius: Radius.lg, padding: Spacing.md, gap: Spacing.sm, borderWidth: 1, borderColor: CF.border },
+  islamicMeasureTitle: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: CF.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  islamicMeasureRow: { flexDirection: 'row', gap: Spacing.sm },
+  islamicMeasureField: { flex: 1, gap: 4 },
+  islamicMeasureLabel: { fontSize: 10, fontWeight: Typography.weight.semibold, color: CF.textSub },
+  islamicMeasureInput: { backgroundColor: CF.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: CF.border, paddingHorizontal: Spacing.sm, paddingVertical: 8, fontSize: Typography.size.xs, color: CF.textPrimary, includeFontPadding: false },
+
+  // Standard mode shared
   progressBar: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: CF.surface, borderRadius: Radius.lg, padding: Spacing.md, borderWidth: 1, borderColor: CF.border },
   progressDot: { width: 8, height: 8, borderRadius: 4 },
   progressText: { flex: 1, fontSize: Typography.size.sm, color: CF.textSub },
@@ -561,7 +916,7 @@ const ct = StyleSheet.create({
   actionCount: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: CF.textPrimary },
   actionHint: { fontSize: Typography.size.xs, color: Colors.warning },
   actionReady: { fontSize: Typography.size.xs, color: CF.success },
-  identifyBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, backgroundColor: CF.gold, borderRadius: Radius.md, padding: Spacing.md, shadowColor: CF.gold, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 6 },
+  identifyBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, backgroundColor: CF.gold, borderRadius: Radius.md, padding: Spacing.md, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 6 },
   identifyBtnDisabled: { backgroundColor: CF.surfaceHigh, shadowOpacity: 0 },
   identifyBtnText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: CF.black },
 });
@@ -575,13 +930,13 @@ function IdentifyTab({ result, capturedImages, onSave, saving, savedItemId, uplo
   const router = useRouter();
   if (!result) {
     return (
-      <View style={id.empty}>
+      <View style={idS.empty}>
         <MaterialIcons name="search" size={44} color={CF.textMuted} />
-        <Text style={id.emptyTitle}>No Identification Yet</Text>
-        <Text style={id.emptySub}>Go to Capture tab to photograph and identify a coin</Text>
-        <Pressable onPress={() => onTabSelect('capture')} style={id.emptyBtn} accessibilityRole="button" accessibilityLabel="Start capturing photos">
+        <Text style={idS.emptyTitle}>No Identification Yet</Text>
+        <Text style={idS.emptySub}>Go to Capture tab to photograph and identify a coin</Text>
+        <Pressable onPress={() => onTabSelect('capture')} style={idS.emptyBtn} accessibilityRole="button" accessibilityLabel="Start capturing photos">
           <MaterialIcons name="photo-camera" size={16} color={CF.black} />
-          <Text style={id.emptyBtnText}>Start Capture</Text>
+          <Text style={idS.emptyBtnText}>Start Capture</Text>
         </Pressable>
       </View>
     );
@@ -589,94 +944,81 @@ function IdentifyTab({ result, capturedImages, onSave, saving, savedItemId, uplo
   const conf = result.confidence;
   const confColor = CONFIDENCE_COLOR(conf);
   return (
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={id.content}>
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={idS.content}>
       {savedItemId ? (
-        <View style={id.savedBanner} accessibilityRole="alert" accessibilityLiveRegion="polite">
+        <View style={idS.savedBanner} accessibilityRole="alert" accessibilityLiveRegion="polite">
           <MaterialIcons name="check-circle" size={18} color={CF.success} />
           <View style={{ flex: 1 }}>
-            <Text style={id.savedText}>Saved to inventory</Text>
-            {uploadProgress ? <Text style={id.savedSub}>{uploadProgress}</Text> : null}
+            <Text style={idS.savedText}>Saved to inventory</Text>
+            {uploadProgress ? <Text style={idS.savedSub}>{uploadProgress}</Text> : null}
           </View>
         </View>
       ) : null}
-      <View style={id.resultCard}>
-        <View style={[id.confBadge, { borderColor: confColor }]}>
-          <Text style={[id.confPct, { color: confColor }]}>{Math.round(conf * 100)}%</Text>
-          <Text style={[id.confLabel, { color: confColor }]}>{conf >= 0.85 ? 'HIGH' : conf >= 0.65 ? 'MED' : 'LOW'}</Text>
+      <View style={idS.resultCard}>
+        <View style={[idS.confBadge, { borderColor: confColor }]}>
+          <Text style={[idS.confPct, { color: confColor }]}>{Math.round(conf * 100)}%</Text>
+          <Text style={[idS.confLabel, { color: confColor }]}>{conf >= 0.85 ? 'HIGH' : conf >= 0.65 ? 'MED' : 'LOW'}</Text>
         </View>
         <View style={{ flex: 1, gap: 4 }}>
-          <Text style={id.resultTitle}>{result.canonicalTitle}</Text>
-          <Text style={id.resultCondition}>{result.condition}{result.conditionGrade ? ` · ${result.conditionGrade}` : ''}</Text>
-          <View style={id.sourcRow}><MaterialIcons name="verified" size={11} color={CF.textMuted} /><Text style={id.sourceText}>{result.identificationSource}</Text></View>
+          <Text style={idS.resultTitle}>{result.canonicalTitle}</Text>
+          <Text style={idS.resultCondition}>{result.condition}{result.conditionGrade ? ` · ${result.conditionGrade}` : ''}</Text>
+          <View style={idS.sourcRow}><MaterialIcons name="verified" size={11} color={CF.textMuted} /><Text style={idS.sourceText}>{result.identificationSource}</Text></View>
         </View>
       </View>
       {capturedImages.length > 0 ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm }}>
-          {capturedImages.map(img => <Image key={img.slotId} source={{ uri: img.uri }} style={id.thumb} contentFit="cover" />)}
+          {capturedImages.map(img => <Image key={img.slotId} source={{ uri: img.uri }} style={idS.thumb} contentFit="cover" />)}
         </ScrollView>
       ) : null}
       {result.numistaStatus && result.numistaStatus !== 'unavailable' ? (
-        <View style={[id.numistaCard, { borderColor: (result.numistaStatus === 'verified' || result.numistaStatus === 'strong_match') ? CF.success + '40' : Colors.warning + '30' }]}>
+        <View style={[idS.numistaCard, { borderColor: (result.numistaStatus === 'verified' || result.numistaStatus === 'strong_match') ? CF.success + '40' : Colors.warning + '30' }]}>
           <MaterialIcons name={result.numistaStatus === 'verified' || result.numistaStatus === 'strong_match' ? 'verified' : 'help-outline'} size={13} color={result.numistaStatus === 'verified' || result.numistaStatus === 'strong_match' ? CF.success : Colors.warning} />
           <View style={{ flex: 1 }}>
-            <Text style={id.numistaStatus}>{String(result.numistaStatus).replace(/_/g, ' ').toUpperCase()}</Text>
-            {result.numistaTitle ? <Text style={id.numistaTitle} numberOfLines={2}>{result.numistaTitle}</Text> : null}
-            {result.numistaN ? <Text style={id.numistaRef}>{result.numistaN}</Text> : null}
+            <Text style={idS.numistaStatus}>{String(result.numistaStatus).replace(/_/g, ' ').toUpperCase()}</Text>
+            {result.numistaTitle ? <Text style={idS.numistaTitle} numberOfLines={2}>{result.numistaTitle}</Text> : null}
+            {result.numistaN ? <Text style={idS.numistaRef}>{result.numistaN}</Text> : null}
           </View>
-          {result.numistaMatchScore && result.numistaMatchScore > 0 ? <Text style={id.numistaScore}>{result.numistaMatchScore}/100</Text> : null}
+          {result.numistaMatchScore && result.numistaMatchScore > 0 ? <Text style={idS.numistaScore}>{result.numistaMatchScore}/100</Text> : null}
         </View>
       ) : null}
       {(result.evidenceSupporting.length > 0 || result.missingInformation.length > 0) ? (
-        <View style={id.evidenceCard}>
-          <Text style={id.evidenceTitle}>EVIDENCE</Text>
-          {result.evidenceSupporting.slice(0, 4).map((e, i) => (<View key={i} style={id.evidenceRow}><MaterialIcons name="check" size={11} color={CF.success} /><Text style={id.evidenceText}>{e}</Text></View>))}
-          {result.missingInformation.slice(0, 2).map((m, i) => (<View key={i} style={id.evidenceRow}><MaterialIcons name="help-outline" size={11} color={Colors.warning} /><Text style={[id.evidenceText, { color: Colors.warning }]}>{m}</Text></View>))}
+        <View style={idS.evidenceCard}>
+          <Text style={idS.evidenceTitle}>EVIDENCE</Text>
+          {result.evidenceSupporting.slice(0, 4).map((e, i) => (<View key={i} style={idS.evidenceRow}><MaterialIcons name="check" size={11} color={CF.success} /><Text style={idS.evidenceText}>{e}</Text></View>))}
+          {result.missingInformation.slice(0, 2).map((m, i) => (<View key={i} style={idS.evidenceRow}><MaterialIcons name="help-outline" size={11} color={Colors.warning} /><Text style={[idS.evidenceText, { color: Colors.warning }]}>{m}</Text></View>))}
         </View>
       ) : null}
       {Object.keys(result.attributes).length > 0 ? (
-        <View style={id.attrsCard}>
-          <Text style={id.evidenceTitle}>COIN ATTRIBUTES</Text>
+        <View style={idS.attrsCard}>
+          <Text style={idS.evidenceTitle}>COIN ATTRIBUTES</Text>
           {Object.entries(result.attributes).filter(([k]) => !k.startsWith('_') && !['object_type', 'identification_state', 'numista_url'].includes(k)).slice(0, 12).map(([k, v]) => (
-            <View key={k} style={id.attrRow}>
-              <Text style={id.attrKey}>{k.replace(/_/g, ' ')}</Text>
-              <Text style={id.attrValue}>{String(v)}</Text>
+            <View key={k} style={idS.attrRow}>
+              <Text style={idS.attrKey}>{k.replace(/_/g, ' ')}</Text>
+              <Text style={idS.attrValue}>{String(v)}</Text>
             </View>
           ))}
         </View>
       ) : null}
-      <View style={id.actions}>
-        <Pressable onPress={onReset} style={id.resetBtn} accessibilityRole="button" accessibilityLabel="Start a new scan">
-          <Text style={id.resetText}>New Scan</Text>
+      <View style={idS.actions}>
+        <Pressable onPress={onReset} style={idS.resetBtn} accessibilityRole="button" accessibilityLabel="Start a new scan">
+          <Text style={idS.resetText}>New Scan</Text>
         </Pressable>
         {savedItemId ? (
-          <Pressable
-            onPress={() => router.push(`/create-listing?id=${savedItemId}` as any)}
-            style={id.primaryBtn}
-            accessibilityRole="button"
-            accessibilityLabel={isUploading ? 'Uploading photos, please wait' : 'Create eBay listing for this coin'}
-            accessibilityState={{ busy: isUploading }}
-          >
+          <Pressable onPress={() => router.push(`/create-listing?id=${savedItemId}` as any)} style={idS.primaryBtn} accessibilityRole="button" accessibilityLabel={isUploading ? 'Uploading photos, please wait' : 'Create eBay listing for this coin'} accessibilityState={{ busy: isUploading }}>
             {isUploading ? <ActivityIndicator size="small" color={CF.black} /> : <MaterialIcons name="sell" size={18} color={CF.black} />}
-            <Text style={id.primaryBtnText}>{isUploading ? 'Uploading...' : 'List on eBay'}</Text>
+            <Text style={idS.primaryBtnText}>{isUploading ? 'Uploading...' : 'List on eBay'}</Text>
           </Pressable>
         ) : (
-          <Pressable
-            onPress={onSave}
-            disabled={saving}
-            accessibilityRole="button"
-            accessibilityLabel={saving ? 'Saving coin to inventory, please wait' : 'Save this coin to your inventory'}
-            accessibilityState={{ disabled: saving, busy: saving }}
-            style={id.primaryBtn}
-          >
+          <Pressable onPress={onSave} disabled={saving} accessibilityRole="button" accessibilityLabel={saving ? 'Saving coin to inventory, please wait' : 'Save this coin to your inventory'} accessibilityState={{ disabled: saving, busy: saving }} style={idS.primaryBtn}>
             {saving ? <ActivityIndicator size="small" color={CF.black} /> : <MaterialIcons name="add" size={18} color={CF.black} />}
-            <Text style={id.primaryBtnText}>{saving ? 'Saving...' : 'Save to Inventory'}</Text>
+            <Text style={idS.primaryBtnText}>{saving ? 'Saving...' : 'Save to Inventory'}</Text>
           </Pressable>
         )}
       </View>
     </ScrollView>
   );
 }
-const id = StyleSheet.create({
+const idS = StyleSheet.create({
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md, padding: Spacing.xl },
   emptyTitle: { fontSize: Typography.size.xl, fontWeight: Typography.weight.bold, color: CF.textPrimary },
   emptySub: { fontSize: Typography.size.sm, color: CF.textSub, textAlign: 'center', lineHeight: 20 },
@@ -719,10 +1061,10 @@ const id = StyleSheet.create({
 function ReferenceTab({ result, selectedPeriod, onPeriodSelect }: { result: AIIdentificationResult | null; selectedPeriod: string | null; onPeriodSelect: (id: string) => void }) {
   const catalogues = [
     { label: 'Numista', url: 'https://en.numista.com', color: '#4CAF50' },
-    { label: 'RSC',     url: 'https://www.wildwinds.com',  color: '#2196F3' },
-    { label: 'SNG',     url: 'https://sngenglish.com',     color: '#9C27B0' },
+    { label: 'Zeno.ru', url: 'https://zeno.ru',        color: '#F44336' },
+    { label: 'RSC',     url: 'https://www.wildwinds.com', color: '#2196F3' },
+    { label: 'SNG',     url: 'https://sngenglish.com',  color: '#9C27B0' },
     { label: 'RIC',     url: 'https://numismatica-classica.lamoneta.it', color: '#FF9800' },
-    { label: 'Zeno.ru', url: 'https://zeno.ru',            color: '#F44336' },
     { label: 'OCRE',    url: 'https://numismatics.org/ocre/', color: '#607D8B' },
   ];
   return (
@@ -957,29 +1299,15 @@ function InsightsTab({ tenant, onTabSelect }: { tenant: any; onTabSelect: (t: CF
   const [stats, setStats] = useState<{ items: number; listed: number; sold: number; totalValue: number } | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // PRODUCTION FIX: stats scoped to coins specialist only (was querying all tenant items)
   const COIN_SPECIALISTS = ['coins', 'coins_uk', 'coins_world', 'islamic_silver', 'banknotes', 'gold', 'silver', 'ancient_artefacts', 'curiosities_collectibles'];
 
   useEffect(() => {
     if (!tenant?.id) { setLoading(false); return; }
     const supabase = getSupabaseClient();
     Promise.all([
-      supabase
-        .from('items')
-        .select('id, status, expected_selling_price')
-        .eq('tenant_id', tenant.id)
-        .in('specialist_id', COIN_SPECIALISTS),
-      supabase
-        .from('listings')
-        .select('id, items!inner(specialist_id)')
-        .eq('tenant_id', tenant.id)
-        .eq('status', 'active')
-        .in('items.specialist_id', COIN_SPECIALISTS),
-      supabase
-        .from('sales')
-        .select('sale_price, items!inner(specialist_id)')
-        .eq('tenant_id', tenant.id)
-        .in('items.specialist_id', COIN_SPECIALISTS),
+      supabase.from('items').select('id, status, expected_selling_price').eq('tenant_id', tenant.id).in('specialist_id', COIN_SPECIALISTS),
+      supabase.from('listings').select('id, items!inner(specialist_id)').eq('tenant_id', tenant.id).eq('status', 'active').in('items.specialist_id', COIN_SPECIALISTS),
+      supabase.from('sales').select('sale_price, items!inner(specialist_id)').eq('tenant_id', tenant.id).in('items.specialist_id', COIN_SPECIALISTS),
     ]).then(([itemsRes, listingsRes, salesRes]) => {
       const items = itemsRes.data ?? [];
       const listed = listingsRes.data?.length ?? 0;
@@ -991,10 +1319,10 @@ function InsightsTab({ tenant, onTabSelect }: { tenant: any; onTabSelect: (t: CF
   }, [tenant?.id]);
 
   const INSIGHT_ACTIONS = [
-    { icon: 'inventory-2', label: 'Full Inventory',       sub: 'Browse all coins in stock',               color: CF.gold,     action: () => router.push('/(tabs)/inventory' as any) },
-    { icon: 'trending-up', label: 'Business Insights',   sub: 'Revenue, profit, and performance',         color: Colors.info, action: () => router.push('/money' as any) },
-    { icon: 'price-change', label: 'Repricing Engine',   sub: 'Automatically adjust listing prices',      color: Colors.warning, action: () => router.push('/repricing' as any) },
-    { icon: 'receipt',     label: 'Orders',               sub: 'Manage and fulfil orders',                 color: CF.success,  action: () => router.push('/orders' as any) },
+    { icon: 'inventory-2',  label: 'Full Inventory',    sub: 'Browse all coins in stock',           color: CF.gold,        action: () => router.push('/(tabs)/inventory' as any) },
+    { icon: 'trending-up',  label: 'Business Insights', sub: 'Revenue, profit, and performance',    color: Colors.info,    action: () => router.push('/money' as any) },
+    { icon: 'price-change', label: 'Repricing Engine',  sub: 'Automatically adjust listing prices', color: Colors.warning, action: () => router.push('/repricing' as any) },
+    { icon: 'receipt',      label: 'Orders',            sub: 'Manage and fulfil orders',            color: CF.success,     action: () => router.push('/orders' as any) },
   ];
 
   return (
@@ -1004,10 +1332,10 @@ function InsightsTab({ tenant, onTabSelect }: { tenant: any; onTabSelect: (t: CF
       ) : stats ? (
         <View style={ins.statsGrid}>
           {[
-            { label: 'Coins in Stock',   value: String(stats.items),              icon: 'toll',                    color: CF.gold     },
-            { label: 'Active Listings',  value: String(stats.listed),             icon: 'storefront',              color: Colors.info },
-            { label: 'Total Sold',       value: String(stats.sold),               icon: 'check-circle',            color: CF.success  },
-            { label: 'Portfolio Value',  value: `£${stats.totalValue.toFixed(0)}`, icon: 'account-balance-wallet', color: CF.bronze   },
+            { label: 'Coins in Stock',  value: String(stats.items),               icon: 'toll',                    color: CF.gold   },
+            { label: 'Active Listings', value: String(stats.listed),              icon: 'storefront',              color: Colors.info },
+            { label: 'Total Sold',      value: String(stats.sold),                icon: 'check-circle',            color: CF.success },
+            { label: 'Portfolio Value', value: `£${stats.totalValue.toFixed(0)}`, icon: 'account-balance-wallet',  color: CF.bronze },
           ].map(m => (
             <View key={m.label} style={[ins.statCard, { borderColor: m.color + '40' }]}>
               <View style={[ins.statIcon, { backgroundColor: m.color + '20' }]}><MaterialIcons name={m.icon as any} size={18} color={m.color} /></View>
@@ -1067,12 +1395,31 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
 
+  // ── Specialist selection ───────────────────────────────────────────────────
+  // Defaults to 'general'. Selecting 'islamic' changes the AI pipeline.
+  const [selectedSpecialist, setSelectedSpecialist] = useState<SpecialistChip>(SPECIALIST_CHIPS[0]);
+
+  const handleSpecialistChange = useCallback((chip: SpecialistChip) => {
+    setSelectedSpecialist(chip);
+    // Sync period browser with the specialist
+    if (chip.periodId) setSelectedPeriod(chip.periodId);
+  }, []);
+
   // ── Capture state ───────────────────────────────────────────────────────────
   const [capturedImages, setCapturedImages] = useState<CapturedImage[]>([]);
 
-  // ── In-flight lock — prevents double-tap creating duplicate AI calls ─────────
-  // Uses ref (not state) to avoid re-render race: ref is synchronously checked
-  // and set before any async work begins.
+  // ── Quick Mode ─────────────────────────────────────────────────────────────
+  // Multi-coin rapid-fire capture without leaving the Capture tab.
+  const [quickMode, setQuickMode] = useState(false);
+  const [quickCaptures, setQuickCaptures] = useState<Array<{ id: string; uri: string }>>([]);
+  const [quickRunning, setQuickRunning] = useState(false);
+  const [quickDone, setQuickDone] = useState(false);
+
+  // Islamic batch items produced by Quick Mode
+  const [islamicBatchItems, setIslamicBatchItems] = useState<IslamicBatchItem[]>([]);
+  const [selectedIslamicItem, setSelectedIslamicItem] = useState<IslamicBatchItem | null>(null);
+
+  // ── In-flight locks ─────────────────────────────────────────────────────────
   const isIdentifyInFlight = useRef(false);
   const isSaveInFlight = useRef(false);
 
@@ -1109,7 +1456,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
     getMarketValue({
       tenantId: tenant.id,
       title: idResult.canonicalTitle,
-      specialistId: 'coins',
+      specialistId: selectedSpecialist.specialistId,
       attributes: idResult.attributes ?? {},
       condition: idResult.condition ?? '',
       identificationConfidence: idResult.confidence ?? 0,
@@ -1123,13 +1470,10 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
       if (error || !result) setValuationError(error ?? 'Valuation unavailable');
       else setValuationResult(result);
     });
-  }, [activeTab, idResult, tenant]);
+  }, [activeTab, idResult, tenant, selectedSpecialist.specialistId]);
 
-  // ── PRODUCTION FIX: Capture — camera first, show explicit picker on cancel ──
-  // Previously: camera → fallback to library silently (confusing UX)
-  // Now: camera → on cancel, show alert asking user to pick from library or cancel
+  // ── Capture handler ─────────────────────────────────────────────────────────
   const handleCapture = useCallback(async (slotId: string, slotLabel: string) => {
-    // Try camera first
     const cameraImg = await captureFromCamera();
     if (cameraImg) {
       const image: CapturedImage = { ...cameraImg, slotId, slotLabel };
@@ -1140,7 +1484,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
       });
       return;
     }
-    // Camera cancelled — offer library picker explicitly (no silent fallback)
+    // Camera cancelled — offer library picker explicitly
     Alert.alert(
       'Add Photo',
       `Add ${slotLabel} photo from your library?`,
@@ -1151,7 +1495,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
             const libImg = await pickFromLibrary(slotId, slotLabel);
             if (!libImg) return;
             setCapturedImages(prev => {
-              const existing = prev.findIndex(i => i.slotId === slotId);
+              const existing = prev.findIndex(i => i.slotId !== slotId);
               if (existing >= 0) { const updated = [...prev]; updated[existing] = libImg; return updated; }
               return [...prev, libImg];
             });
@@ -1165,39 +1509,122 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
     setCapturedImages(prev => prev.filter(i => i.slotId !== slotId));
   }, []);
 
-  // ── PRODUCTION FIX: AI identification with double-tap lock ──────────────────
-  // isIdentifyInFlight ref prevents concurrent calls even under rapid taps.
-  // Quota is incremented server-side BEFORE AI call (server-side protection too).
+  // ── Quick Mode: single-shot capture (fire camera, add to batch) ─────────────
+  const handleQuickCapture = useCallback(async () => {
+    if (quickRunning) return;
+    const cameraImg = await captureFromCamera();
+    if (cameraImg) {
+      setQuickCaptures(prev => [...prev, { id: `qc_${Date.now()}`, uri: cameraImg.uri }]);
+      setQuickDone(false);
+      return;
+    }
+    // Fallback: library
+    Alert.alert('Capture Coin', 'Camera cancelled — choose from library?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Choose from Library', onPress: async () => {
+          const libImg = await pickFromLibrary('quick', 'Coin');
+          if (libImg) {
+            setQuickCaptures(prev => [...prev, { id: `qc_${Date.now()}`, uri: libImg.uri }]);
+            setQuickDone(false);
+          }
+        },
+      },
+    ]);
+  }, [quickRunning]);
+
+  const handleClearQuick = useCallback(() => {
+    setQuickCaptures([]);
+    setIslamicBatchItems([]);
+    setQuickDone(false);
+  }, []);
+
+  // ── Quick Mode: run batch identification ────────────────────────────────────
+  const handleRunQuickBatch = useCallback(async () => {
+    if (!tenant || quickCaptures.length === 0 || quickRunning) return;
+    setQuickRunning(true);
+    setQuickDone(false);
+    const isIslamic = selectedSpecialist.id === 'islamic';
+
+    if (isIslamic) {
+      // Islamic pipeline: use processIslamicBatch
+      const batchItems: IslamicBatchItem[] = quickCaptures.map(cap => ({
+        id: newIslamicBatchId(),
+        images: [cap.uri],
+        status: 'pending',
+        label: `Coin ${quickCaptures.indexOf(cap) + 1}`,
+      }));
+      setIslamicBatchItems(batchItems.map(i => ({ ...i })));
+
+      await processIslamicBatch(
+        batchItems,
+        tenant.id,
+        (_processed, _total, updatedItem) => {
+          setIslamicBatchItems(prev => prev.map(i => i.id === updatedItem.id ? updatedItem : i));
+        },
+      );
+
+      // Auto-save to inventory
+      const completed = batchItems.filter(i => i.status === 'complete');
+      if (completed.length > 0) {
+        await saveIslamicBatchToInventory(tenant.id, completed, () => {});
+      }
+    } else {
+      // General pipeline: identify each capture individually
+      for (const cap of quickCaptures) {
+        if (isIdentifyInFlight.current) { await new Promise(r => setTimeout(r, 300)); continue; }
+        isIdentifyInFlight.current = true;
+        const tempImg: CapturedImage = { uri: cap.uri, slotId: 'obverse', slotLabel: 'Obverse', base64: undefined as any };
+        const { result } = await identifyItemWithAI([tempImg], selectedSpecialist.specialistId, undefined, undefined, { tenantId: tenant.id });
+        isIdentifyInFlight.current = false;
+        if (result) {
+          const { item } = await saveIdentifiedItem(tenant.id, result, { mediaUris: [cap.uri] });
+          if (item && [cap.uri].length > 0) {
+            try {
+              const { urls } = await uploadItemImages(item.id, [tempImg]);
+              if (urls.length > 0) await updateItemMedia(tenant.id, item.id, urls);
+            } catch { /* non-blocking */ }
+          }
+        }
+        await new Promise(r => setTimeout(r, 400));
+      }
+    }
+
+    setQuickRunning(false);
+    setQuickDone(true);
+  }, [tenant, quickCaptures, quickRunning, selectedSpecialist]);
+
+  // ── AI identification (standard mode) ──────────────────────────────────────
   const handleIdentify = useCallback(async () => {
     if (capturedImages.length === 0) return;
-    // Synchronous lock check — prevents second tap from entering before state update
     if (isIdentifyInFlight.current) return;
     isIdentifyInFlight.current = true;
 
     setIdentifying(true);
     setScanMode('processing');
     setAiError(null);
+    const isIslamic = selectedSpecialist.id === 'islamic';
 
-    const statusMsgs = [
-      'Preparing coin images...',
-      'Routing to Numismatics specialist...',
-      'AI vision analysis...',
-      'Cross-referencing Numista...',
-      'Finalising identification...',
-    ];
+    const statusMsgs = isIslamic
+      ? ['Preparing coin images...', 'Islamic specialist routing...', 'AI vision analysis...', 'Searching Zeno.ru...', 'Cross-referencing Numista...']
+      : ['Preparing coin images...', 'Routing to Numismatics specialist...', 'AI vision analysis...', 'Cross-referencing Numista...', 'Finalising identification...'];
+
     for (const msg of statusMsgs) {
       setProcessingStatus(msg);
       await new Promise(r => setTimeout(r, 350));
     }
 
     const { result, error, quotaExceeded } = await identifyItemWithAI(
-      capturedImages, 'coins', undefined, undefined,
+      capturedImages,
+      selectedSpecialist.specialistId,
+      undefined,
+      undefined,
       { tenantId: tenant?.id },
     );
 
     setIdentifying(false);
     setScanMode('idle');
-    isIdentifyInFlight.current = false; // release lock after completion
+    isIdentifyInFlight.current = false;
 
     if (quotaExceeded) {
       setAiError(
@@ -1207,12 +1634,10 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
       return;
     }
     if (error || !result) {
-      // PRODUCTION: never display a partial/unconfirmed result on error
       setAiError(error ?? 'Identification failed — please try again');
       return;
     }
 
-    // Only set result after confirmed server response
     setIdResult(result);
     setValuationResult(null);
     setValuationLoading(false);
@@ -1220,30 +1645,20 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
     setSavedItemId(null);
     setActiveTab('identify');
 
-    // Announce result to screen readers
     AccessibilityInfo.announceForAccessibility(
       `Identification complete: ${result.canonicalTitle}, confidence ${Math.round(result.confidence * 100)}%`,
     );
-  }, [capturedImages, tenant?.id, setScanMode]);
+  }, [capturedImages, tenant?.id, setScanMode, selectedSpecialist]);
 
-  // ── PRODUCTION FIX: Save to inventory with duplicate guard ─────────────────
-  // isSaveInFlight ref prevents double-tap creating two DB items.
-  // savedItemId check prevents saving the same result twice across re-renders.
+  // ── Save to inventory ───────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
     if (!idResult || !tenant) return;
-    // Guard 1: idempotency — if already saved, do not save again
-    if (savedItemId) {
-      showAlert('Already Saved', 'This coin is already in your inventory.');
-      return;
-    }
-    // Guard 2: in-flight lock — prevents double-tap
+    if (savedItemId) { showAlert('Already Saved', 'This coin is already in your inventory.'); return; }
     if (isSaveInFlight.current) return;
     isSaveInFlight.current = true;
 
     setIsSaving(true);
-    const { item, error } = await saveIdentifiedItem(tenant.id, idResult, {
-      mediaUris: capturedImages.map(i => i.uri),
-    });
+    const { item, error } = await saveIdentifiedItem(tenant.id, idResult, { mediaUris: capturedImages.map(i => i.uri) });
     setIsSaving(false);
     isSaveInFlight.current = false;
 
@@ -1287,7 +1702,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
     setValuationError(null);
     setProcessingStatus('');
     setScanMode('idle');
-    // Reset in-flight locks
+    setSelectedSpecialist(SPECIALIST_CHIPS[0]);
     isIdentifyInFlight.current = false;
     isSaveInFlight.current = false;
     setActiveTab('capture');
@@ -1314,9 +1729,17 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
           </View>
           {isPremium ? <View style={main.proBadge}><Text style={main.proBadgeText}>PRO</Text></View> : null}
         </Pressable>
-        <Pressable onPress={() => router.push('/(tabs)/inventory' as any)} style={main.myCoinsBtn} hitSlop={6} accessibilityLabel="View my coin inventory" accessibilityRole="button">
-          <MaterialIcons name="inventory-2" size={16} color={CF.gold} />
-        </Pressable>
+        {/* Specialist indicator in header */}
+        {activeTab === 'capture' && selectedSpecialist.id !== 'general' ? (
+          <View style={[main.specialistIndicator, { backgroundColor: selectedSpecialist.color + '20', borderColor: selectedSpecialist.color + '50' }]}>
+            <MaterialIcons name={selectedSpecialist.icon as any} size={11} color={selectedSpecialist.color} />
+            <Text style={[main.specialistIndicatorText, { color: selectedSpecialist.color }]}>{selectedSpecialist.label}</Text>
+          </View>
+        ) : (
+          <Pressable onPress={() => router.push('/(tabs)/inventory' as any)} style={main.myCoinsBtn} hitSlop={6} accessibilityLabel="View my coin inventory" accessibilityRole="button">
+            <MaterialIcons name="inventory-2" size={16} color={CF.gold} />
+          </Pressable>
+        )}
       </View>
 
       {/* ── Tab bar ── */}
@@ -1337,6 +1760,10 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
                 <MaterialIcons name={(locked ? 'lock' : tab.icon) as any} size={14} color={active ? CF.gold : locked ? CF.textMuted : CF.textSub} />
                 <Text style={[main.tabLabel, active && main.tabLabelActive, locked && { color: CF.textMuted }]}>{tab.label}</Text>
                 {locked ? <View style={main.tabProPip} /> : null}
+                {/* Quick mode indicator on Capture tab */}
+                {tab.id === 'capture' && quickMode ? (
+                  <View style={main.quickPip}><MaterialIcons name="burst-mode" size={8} color={CF.gold} /></View>
+                ) : null}
               </Pressable>
             );
           })}
@@ -1346,9 +1773,31 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
       {/* ── Tab content ── */}
       <View style={{ flex: 1 }}>
         {activeTab === 'home' ? (
-          <HomeTab onTabSelect={handleTabSelect} isPremium={isPremium} tenant={tenant} onUpgrade={() => setShowPaywall(true)} onPeriodSelect={setSelectedPeriod} selectedPeriod={selectedPeriod} />
+          <HomeTab onTabSelect={handleTabSelect} isPremium={isPremium} tenant={tenant} onUpgrade={() => setShowPaywall(true)} onPeriodSelect={p => { setSelectedPeriod(p); const chip = SPECIALIST_CHIPS.find(c => c.periodId === p); if (chip) setSelectedSpecialist(chip); }} selectedPeriod={selectedPeriod} />
         ) : activeTab === 'capture' ? (
-          <CaptureTab capturedImages={capturedImages} onCapture={handleCapture} onRemove={handleRemoveImage} onIdentify={handleIdentify} identifying={identifying} processingStatus={processingStatus} aiError={aiError} onTabSelect={handleTabSelect} isPremium={isPremium} />
+          <CaptureTab
+            capturedImages={capturedImages}
+            onCapture={handleCapture}
+            onRemove={handleRemoveImage}
+            onIdentify={handleIdentify}
+            identifying={identifying}
+            processingStatus={processingStatus}
+            aiError={aiError}
+            onTabSelect={handleTabSelect}
+            isPremium={isPremium}
+            selectedSpecialist={selectedSpecialist}
+            onSpecialistChange={handleSpecialistChange}
+            quickMode={quickMode}
+            onToggleQuickMode={() => { setQuickMode(v => !v); setQuickDone(false); }}
+            quickCaptures={quickCaptures}
+            onQuickCapture={handleQuickCapture}
+            onRunQuickBatch={handleRunQuickBatch}
+            quickRunning={quickRunning}
+            quickDone={quickDone}
+            onClearQuick={handleClearQuick}
+            islamicBatchItems={islamicBatchItems}
+            onIslamicItemPress={setSelectedIslamicItem}
+          />
         ) : activeTab === 'identify' ? (
           <IdentifyTab result={idResult} capturedImages={capturedImages} onSave={handleSave} saving={isSaving} savedItemId={savedItemId} uploadProgress={uploadProgress} isUploading={isUploading} onReset={handleReset} onTabSelect={handleTabSelect} />
         ) : activeTab === 'reference' ? (
@@ -1372,6 +1821,62 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
           </Pressable>
         </View>
       ) : <View style={{ height: insets.bottom }} />}
+
+      {/* Islamic batch item detail modal (mini) */}
+      {selectedIslamicItem ? (
+        <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSelectedIslamicItem(null)}>
+          <View style={{ flex: 1, backgroundColor: Colors.background }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, padding: Spacing.base, paddingTop: Spacing.lg, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder }}>
+              <Pressable onPress={() => setSelectedIslamicItem(null)} hitSlop={8} style={{ width: 36, height: 36, borderRadius: Radius.md, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialIcons name="close" size={18} color={Colors.textSecondary} />
+              </Pressable>
+              <Text style={{ flex: 1, fontSize: Typography.size.base, fontWeight: Typography.weight.bold, color: Colors.textPrimary }} numberOfLines={1}>
+                {selectedIslamicItem.result?.canonicalTitle ?? 'Islamic Coin'}
+              </Text>
+            </View>
+            <ScrollView contentContainerStyle={{ padding: Spacing.base, gap: Spacing.md }}>
+              {selectedIslamicItem.result ? (
+                <>
+                  <View style={{ backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.base, gap: Spacing.sm, borderWidth: 1, borderColor: Colors.surfaceBorder }}>
+                    <Text style={{ fontSize: Typography.size.lg, fontWeight: Typography.weight.bold, color: Colors.textPrimary }}>{selectedIslamicItem.result.canonicalTitle}</Text>
+                    <Text style={{ fontSize: Typography.size.sm, color: Colors.textSecondary }}>{selectedIslamicItem.result.coinFamily}</Text>
+                    <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+                      <View style={{ backgroundColor: getConfidenceColor(selectedIslamicItem.result.confidenceTier) + '20', borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 4 }}>
+                        <Text style={{ fontSize: 11, fontWeight: Typography.weight.bold, color: getConfidenceColor(selectedIslamicItem.result.confidenceTier) }}>
+                          {Math.round(selectedIslamicItem.result.confidence * 100)}% confidence
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                  {selectedIslamicItem.result.observations?.obverse ? (
+                    <View style={{ backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: Spacing.md, gap: 4, borderWidth: 1, borderColor: Colors.surfaceBorder }}>
+                      <Text style={{ fontSize: 9, fontWeight: Typography.weight.bold, color: Colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5 }}>OBSERVATIONS</Text>
+                      {selectedIslamicItem.result.observations.obverse ? <Text style={{ fontSize: Typography.size.xs, color: Colors.textSecondary }}>Obverse: {selectedIslamicItem.result.observations.obverse}</Text> : null}
+                      {selectedIslamicItem.result.observations.reverse ? <Text style={{ fontSize: Typography.size.xs, color: Colors.textSecondary }}>Reverse: {selectedIslamicItem.result.observations.reverse}</Text> : null}
+                      {selectedIslamicItem.result.observations.condition ? <Text style={{ fontSize: Typography.size.xs, color: Colors.textSecondary }}>Condition: {selectedIslamicItem.result.observations.condition}</Text> : null}
+                    </View>
+                  ) : null}
+                  {selectedIslamicItem.result.warnings.length > 0 ? (
+                    <View style={{ backgroundColor: Colors.warning + '10', borderRadius: Radius.md, padding: Spacing.md, gap: 4, borderWidth: 1, borderColor: Colors.warning + '30' }}>
+                      {selectedIslamicItem.result.warnings.map((w, i) => (
+                        <Text key={i} style={{ fontSize: Typography.size.xs, color: Colors.warning, lineHeight: 16 }}>⚠ {w}</Text>
+                      ))}
+                    </View>
+                  ) : null}
+                  <Text style={{ fontSize: Typography.size.xs, color: Colors.textTertiary, textAlign: 'center', fontStyle: 'italic', lineHeight: 16 }}>
+                    {selectedIslamicItem.result.marketEvidenceNote}
+                  </Text>
+                </>
+              ) : (
+                <View style={{ alignItems: 'center', paddingVertical: 40, gap: Spacing.md }}>
+                  <ActivityIndicator color={CF.islamic} />
+                  <Text style={{ color: Colors.textTertiary }}>Identifying...</Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </Modal>
+      ) : null}
     </View>
   );
 }
@@ -1387,6 +1892,8 @@ const main = StyleSheet.create({
   proBadge: { backgroundColor: CF.gold, borderRadius: Radius.pill, paddingHorizontal: 6, paddingVertical: 2 },
   proBadgeText: { fontSize: 7, fontWeight: Typography.weight.extrabold, color: CF.black, letterSpacing: 1 },
   myCoinsBtn: { width: 36, height: 36, borderRadius: Radius.md, backgroundColor: CF.goldDim, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: CF.gold + '30' },
+  specialistIndicator: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1 },
+  specialistIndicatorText: { fontSize: 10, fontWeight: Typography.weight.bold },
   tabBar: { backgroundColor: CF.surface, borderBottomWidth: 1, borderBottomColor: CF.border },
   tabBarContent: { paddingHorizontal: Spacing.sm, gap: 2, paddingVertical: 6 },
   tabItem: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: Spacing.md, paddingVertical: 7, borderRadius: Radius.md, position: 'relative' },
@@ -1394,103 +1901,9 @@ const main = StyleSheet.create({
   tabLabel: { fontSize: 10, fontWeight: Typography.weight.semibold, color: CF.textMuted },
   tabLabelActive: { color: CF.gold },
   tabProPip: { width: 4, height: 4, borderRadius: 2, backgroundColor: CF.goldMid, position: 'absolute', top: 4, right: 4 },
+  quickPip: { position: 'absolute', top: 2, right: 2, width: 12, height: 12, borderRadius: 6, backgroundColor: CF.gold + '30', alignItems: 'center', justifyContent: 'center' },
   upgradeBar: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: CF.gold, paddingHorizontal: Spacing.base, paddingTop: Spacing.sm },
   upgradeBarText: { flex: 1, fontSize: Typography.size.xs, fontWeight: Typography.weight.bold, color: CF.black },
   upgradeBarBtn: { backgroundColor: CF.black + '30', borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
   upgradeBarBtnText: { fontSize: Typography.size.xs, fontWeight: Typography.weight.extrabold, color: CF.black },
 });
-
-/*
-═══════════════════════════════════════════════════════════════════════════════
-PRODUCTION READINESS REPORT — COIN FLIPPER
-═══════════════════════════════════════════════════════════════════════════════
-
-AUDIT FINDINGS
-──────────────
-CONFIRMED PRODUCTION-SAFE (unchanged):
-✅ Outcome is entirely server-side — swish-identify edge function generates all
-   AI results via OnSpace AI (Gemini). Client receives the server-confirmed
-   result and cannot fabricate or alter it.
-✅ Authentication enforced server-side — JWT validated, user identity derived
-   from Supabase auth session. Client-supplied tenantId cross-checked against
-   tenant_memberships to prevent cross-tenant spoofing.
-✅ Quota enforced server-side — upsert_ai_usage() DB function with unique
-   constraint (tenant_id, user_id, feature, month_key) prevents quota bypass.
-   Usage is incremented BEFORE the expensive AI call. On AI failure, the
-   increment is reversed server-side.
-✅ DB unique constraint confirmed — ai_usage_tenant_user_feature_month_key
-   ensures concurrent requests cannot double-count.
-✅ All items have tenant_id (confirmed by DB check — 0 items without tenant).
-✅ RLS policies enforce tenant isolation on all tables.
-✅ No secrets exposed in client — all Stripe/eBay credentials server-side only.
-✅ Premium status is server-authoritative — PREMIUM_TIERS checked from tenant
-   subscription_tier (DB value, RLS-protected), Stripe is secondary.
-✅ Subscription tier checked from DB on every identify call — cannot be spoofed.
-
-PRODUCTION FIXES APPLIED IN THIS VERSION:
-──────────────────────────────────────────
-1. DOUBLE-TAP / CONCURRENT REQUEST LOCK (isIdentifyInFlight ref)
-   Root cause: rapid double-tap could fire two simultaneous AI calls before
-   React state could disable the button. Two calls both read quota < limit,
-   both pass the free-quota check, consuming 2 quota slots and potentially
-   creating 2 results.
-   Fix: synchronous isIdentifyInFlight ref checked and set before async work
-   begins. No re-render race — ref is set in the same JS event loop turn.
-
-2. SAVE IDEMPOTENCY (isSaveInFlight ref + savedItemId guard)
-   Root cause: double-tap on "Save to Inventory" created two DB items for the
-   same identification result. Rapid saves within one session bypassed the
-   isSaving state (which updates asynchronously).
-   Fix: dual guard — (a) savedItemId check (if already saved, reject), (b)
-   isSaveInFlight synchronous ref prevents second call entering.
-
-3. CAPTURE UX FIX — explicit picker modal on camera cancel
-   Root cause: previous code called captureFromCamera() then silently fell
-   through to pickFromLibrary() on camera cancel. This launched the photo
-   library unexpectedly without user intent.
-   Fix: camera → on cancel, explicit Alert asking if user wants library access.
-   No silent fallback.
-
-4. INSIGHTS STATS NICHE-SCOPED
-   Root cause: InsightsTab queried all tenant items (no specialist_id filter),
-   so counts included MX/bike/clothing items in the coin stats display.
-   Fix: queries now filter by COIN_SPECIALISTS (coins, islamic_silver,
-   banknotes, gold, silver, ancient_artefacts, curiosities_collectibles).
-   Same filter applied to listings and sales queries.
-
-5. ACCESSIBILITY LABELS
-   Added accessibilityRole, accessibilityLabel, accessibilityState, and
-   accessibilityLiveRegion to all interactive elements and status areas.
-   AI completion and save success announced via AccessibilityInfo.announceForAccessibility.
-
-6. ERROR STATES NEVER SHOW UNCONFIRMED RESULTS
-   On identification error, idResult is NOT set. UI shows error banner only.
-   On save error, savedItemId is NOT set. Save button remains available to retry.
-   Loading states disable all action buttons synchronously.
-
-REMAINING LIMITATIONS (cannot be resolved without external service changes):
-────────────────────────────────────────────────────────────────────────────
-• eBay Terapeak (Product Research) requires an eBay Shop subscription and
-  authenticated browser session — not available via public API. Currently
-  returns 404 for accounts without Shop subscription.
-• eBay Finding API blocked from OnSpace Cloud server IP (HTTP 418). Market
-  value falls back to Gemini Vision estimates (labelled as AI inference).
-• Rate limiting is currently per-user-per-month at the DB level (5 free).
-  No per-minute or per-session rate limiting is implemented. Rapid calls
-  within the same minute consume quota normally but concurrent quota checks
-  are protected by the upsert_ai_usage atomic RPC.
-
-DEPLOYMENT STEPS:
-─────────────────
-1. Deploy app update (this file) via OnSpace App Builder.
-2. No DB migration required — existing schema is sufficient.
-3. No new environment variables required.
-
-ROLLBACK:
-─────────
-Revert to previous app/_layout.tsx commit if any regression is observed.
-The backend (swish-identify edge function) is unchanged and compatible with
-both the previous and current client code.
-
-═══════════════════════════════════════════════════════════════════════════════
-*/
