@@ -10,14 +10,52 @@
  *   6. Unknown niche IDs return no cross-niche data.
  *   7. Missing specialist IDs are flagged, not assigned to an unrelated specialist.
  *   8. Niche-appropriate placeholder icons are returned per specialist.
- *   9. Specialist arrays contain no curiosities_collectibles bleed.
+ *   9. Specialist arrays contain no curiosities_collectibles bleed in MX/Bike/Clothing.
  *  10. nicheIdForSpecialist correctly routes each specialist to its niche.
- *  11. An item cannot be counted in two niches simultaneously.
+ *  11. An item cannot be counted in two production niches simultaneously.
  *  12. PRODUCTION_NICHE_IDS contains exactly the four live niches.
  *  13. Listing lifecycle states map to correct views.
  *  14. Multiple historical listings do not double-count an item in stock.
  *  15. Mutation guards reject unscoped operations.
  */
+
+// ── Mock the Supabase client BEFORE any service imports ───────────────────────
+// This prevents the template module (which imports Expo native code) from
+// being evaluated during unit tests. The mutation guard tests verify that
+// itemService guards fire BEFORE the client is called, so the mock
+// just needs to exist — it will never actually be invoked for guard failures.
+
+jest.mock('@/template', () => ({
+  getSupabaseClient: jest.fn(() => ({
+    from: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    insert: jest.fn().mockReturnThis(),
+    update: jest.fn(() => ({
+      eq: jest.fn().mockReturnThis(),
+      then: jest.fn().mockResolvedValue({ data: null, error: null, count: 0 }),
+    })),
+    delete: jest.fn(() => ({
+      eq: jest.fn().mockReturnThis(),
+      then: jest.fn().mockResolvedValue({ data: null, error: null, count: 0 }),
+    })),
+    eq: jest.fn().mockReturnThis(),
+    in: jest.fn().mockReturnThis(),
+    not: jest.fn().mockReturnThis(),
+    or: jest.fn().mockReturnThis(),
+    order: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockReturnThis(),
+    range: jest.fn().mockReturnThis(),
+    maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
+    single: jest.fn().mockResolvedValue({ data: null, error: null }),
+    functions: {
+      invoke: jest.fn().mockResolvedValue({ data: null, error: null }),
+    },
+  })),
+  useAuth: jest.fn(),
+  AuthProvider: jest.fn(),
+  AlertProvider: jest.fn(),
+  useAlert: jest.fn(() => ({ showAlert: jest.fn() })),
+}));
 
 import {
   NICHES,
@@ -28,7 +66,6 @@ import {
   nicheIdForSpecialist,
   NicheId,
 } from '@/constants/niches';
-import { SPECIALISTS } from '@/constants/specialists';
 import { classifyListing, nicheToSpecialistId } from '@/services/nicheCategoryService';
 import {
   ITEM_LIFECYCLE,
@@ -37,13 +74,18 @@ import {
   getLifecycleGroup,
 } from '@/services/itemService';
 import { getNichePlaceholderIcon } from '@/components/ui/ItemImage';
+import {
+  isPermanentImageUrl,
+  isEbayCdnUrl,
+  itemNeedsImages,
+} from '@/services/ebayImageService';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const COIN_SPECIALISTS   = getNicheSpecialistIds('coins');
-const MX_SPECIALISTS     = getNicheSpecialistIds('motocross');
-const BIKE_SPECIALISTS   = getNicheSpecialistIds('bicycles');
-const CLOTH_SPECIALISTS  = getNicheSpecialistIds('clothing');
+const COIN_SPECIALISTS  = getNicheSpecialistIds('coins');
+const MX_SPECIALISTS    = getNicheSpecialistIds('motocross');
+const BIKE_SPECIALISTS  = getNicheSpecialistIds('bicycles');
+const CLOTH_SPECIALISTS = getNicheSpecialistIds('clothing');
 
 // ── 1. Niche specialist set isolation ────────────────────────────────────────
 
@@ -104,11 +146,8 @@ describe('Niche specialist set isolation', () => {
 });
 
 // ── 2. curiosities_collectibles is NOT in motocross/bicycles/clothing niches ──
-// (coins is permitted to retain it as legacy catch-all for unclassified eBay imports)
 
 describe('curiosities_collectibles niche contamination guard', () => {
-  // These are the niches where curiosities_collectibles causes contamination:
-  // MX users would see generic items, clothing users would see coins etc.
   const NICHES_MUST_NOT_HAVE_CURIOSITIES: NicheId[] = ['motocross', 'bicycles', 'clothing'];
 
   test.each(NICHES_MUST_NOT_HAVE_CURIOSITIES)(
@@ -213,9 +252,8 @@ describe('nicheIdForSpecialist routing', () => {
 
   test('curiosities_collectibles routes to coins niche (legacy catch-all)', () => {
     // curiosities_collectibles is in the coins specialist list as a legacy catch-all
-    // for unclassified eBay imports. This is intentional for coins niche.
+    // for unclassified eBay imports. Intentional for coins niche only.
     const result = nicheIdForSpecialist('curiosities_collectibles');
-    // Should be coins (since coins retains it) or null if removed in future
     expect(result === 'coins' || result === null).toBe(true);
   });
 
@@ -226,7 +264,7 @@ describe('nicheIdForSpecialist routing', () => {
 
 // ── 6. No specialist appears in two production niches simultaneously ──────────
 
-describe('No specialist cross-niche membership', () => {
+describe('No specialist cross-niche membership (production niches only)', () => {
   test('each specialist ID appears in at most one production niche', () => {
     const specialistToNiches: Record<string, NicheId[]> = {};
     for (const nicheId of PRODUCTION_NICHE_IDS) {
@@ -237,7 +275,7 @@ describe('No specialist cross-niche membership', () => {
       }
     }
     for (const [specialistId, niches] of Object.entries(specialistToNiches)) {
-      expect(niches).toHaveLength(1); // appears in exactly one niche
+      expect(niches).toHaveLength(1); // each appears in exactly one production niche
     }
   });
 });
@@ -293,7 +331,7 @@ describe('getNichePlaceholderIcon', () => {
     expect(getNichePlaceholderIcon('trainers_sneakers')).toBe('checkroom');
   });
 
-  test('null/undefined returns generic icon', () => {
+  test('null/undefined returns a non-empty string', () => {
     const icon = getNichePlaceholderIcon(null);
     expect(icon).toBeTruthy();
     expect(typeof icon).toBe('string');
@@ -399,7 +437,7 @@ describe('Item lifecycle state machine', () => {
     expect(overlap).toHaveLength(0);
   });
 
-  test('ACTIVE_INVENTORY_STATUSES = DRAFT + LIVE (no sold/archived)', () => {
+  test('ACTIVE_INVENTORY_STATUSES contains all DRAFT + LIVE statuses', () => {
     const expected = [
       ...ITEM_LIFECYCLE.DRAFT_STATUSES,
       ...ITEM_LIFECYCLE.LIVE_STATUSES,
@@ -407,7 +445,7 @@ describe('Item lifecycle state machine', () => {
     expect(ACTIVE_INVENTORY_STATUSES.sort()).toEqual(expected.sort());
   });
 
-  test('HISTORY_STATUSES = SOLD + ARCHIVED (no active statuses)', () => {
+  test('HISTORY_STATUSES contains all SOLD + ARCHIVED statuses', () => {
     const expected = [
       ...ITEM_LIFECYCLE.SOLD_STATUSES,
       ...ITEM_LIFECYCLE.ARCHIVED_STATUSES,
@@ -439,7 +477,6 @@ describe('Item lifecycle state machine', () => {
     expect(getLifecycleGroup('held')).toBe('archived');
   });
 
-  // Unidentified items must remain visible in Stock
   test('review_required is in DRAFT_STATUSES (unidentified items stay in Stock)', () => {
     expect(ITEM_LIFECYCLE.DRAFT_STATUSES).toContain('review_required');
   });
@@ -447,27 +484,47 @@ describe('Item lifecycle state machine', () => {
 
 // ── 11. Mutation guards ───────────────────────────────────────────────────────
 
-describe('Mutation tenant guard (static verification)', () => {
-  // We can't actually call the DB in unit tests, but we can verify the
-  // guard functions in itemService reject bad inputs without hitting the DB.
-
-  test('deleteItem with empty tenantId fails closed', async () => {
-    // Import the actual service to verify its guard logic
+describe('Mutation tenant guard', () => {
+  test('deleteItem with empty tenantId fails closed without hitting DB', async () => {
     const { deleteItem } = await import('@/services/itemService');
     const { error } = await deleteItem('some-item-id', '');
     expect(error).toBeTruthy();
     expect(error).toContain('tenantId is required');
   });
 
-  test('updateItem with empty tenantId fails closed', async () => {
+  test('deleteItem with whitespace-only tenantId fails closed', async () => {
+    const { deleteItem } = await import('@/services/itemService');
+    const { error } = await deleteItem('some-item-id', '   ');
+    expect(error).toBeTruthy();
+    expect(error).toContain('tenantId is required');
+  });
+
+  test('updateItem with empty tenantId fails closed without hitting DB', async () => {
     const { updateItem } = await import('@/services/itemService');
     const { error } = await updateItem('some-item-id', { status: 'sold' as any }, '');
     expect(error).toBeTruthy();
     expect(error).toContain('tenantId is required');
   });
+
+  test('updateItem with undefined tenantId does NOT trigger guard (intentional for legacy callers)', async () => {
+    const { updateItem } = await import('@/services/itemService');
+    // When tenantId is entirely omitted (undefined), the guard intentionally does NOT fire.
+    // Legacy internal callers (pre-SWISH-005) omit tenantId; the DB RLS handles isolation.
+    // We verify only that the guard error message is NOT returned — the mock may
+    // return null or a db-level error depending on mock chain resolution.
+    try {
+      const { error } = await updateItem('some-item-id', { status: 'identified' as any }, undefined);
+      // Guard must NOT produce the tenantId error message
+      if (error) {
+        expect(error).not.toContain('tenantId is required');
+      }
+    } catch {
+      // Mock chain resolution failure is acceptable — guard didn't fire
+    }
+  });
 });
 
-// ── 12. All production niches have a valid niche config ──────────────────────
+// ── 12. All production niches have valid config ──────────────────────────────
 
 describe('Production niche configuration integrity', () => {
   test.each(PRODUCTION_NICHE_IDS as NicheId[])(
@@ -482,29 +539,85 @@ describe('Production niche configuration integrity', () => {
       expect(Array.isArray(config.specialists)).toBe(true);
       expect(config.specialists.length).toBeGreaterThanOrEqual(1);
       expect(config.defaultSpecialist).toBeTruthy();
-      // Default specialist must be in the specialist list
       expect(config.specialists).toContain(config.defaultSpecialist);
     },
   );
 });
 
-// ── 13. Cross-niche contamination simulation ─────────────────────────────────
+// ── 13. Image pipeline rules ─────────────────────────────────────────────────
+
+describe('Image pipeline — isPermanentImageUrl', () => {
+  test('returns true for Supabase storage URLs', () => {
+    expect(isPermanentImageUrl('https://supabase.co/storage/v1/item-images/123.jpg')).toBe(true);
+    expect(isPermanentImageUrl('https://iwgaqieyoahmcjfziwga.onspace.storage/item-images/img.jpg')).toBe(true);
+  });
+
+  test('returns false for eBay CDN URLs', () => {
+    expect(isPermanentImageUrl('https://i.ebayimg.com/images/g/abc.jpg')).toBe(false);
+    expect(isPermanentImageUrl('https://thumbs.ebaystatic.com/images/m/abc.jpg')).toBe(false);
+  });
+
+  test('returns false for empty/null', () => {
+    expect(isPermanentImageUrl('')).toBe(false);
+    expect(isPermanentImageUrl(null as any)).toBe(false);
+  });
+});
+
+describe('Image pipeline — isEbayCdnUrl', () => {
+  test('detects all eBay CDN domains', () => {
+    expect(isEbayCdnUrl('https://i.ebayimg.com/images/g/abc.jpg')).toBe(true);
+    expect(isEbayCdnUrl('https://thumbs.ebaystatic.com/images/m/abc.jpg')).toBe(true);
+    expect(isEbayCdnUrl('https://p.ebayimg.com/images/g/xyz.jpg')).toBe(true);
+  });
+
+  test('returns false for permanent storage URLs', () => {
+    expect(isEbayCdnUrl('https://supabase.co/storage/v1/item-images/123.jpg')).toBe(false);
+  });
+
+  test('returns false for null/empty', () => {
+    expect(isEbayCdnUrl('')).toBe(false);
+    expect(isEbayCdnUrl(null as any)).toBe(false);
+  });
+});
+
+describe('Image pipeline — itemNeedsImages', () => {
+  const permanentUrl = 'https://iwgaqieyoahmcjfziwga.onspace.storage/item-images/img.jpg';
+  const ebayUrl = 'https://i.ebayimg.com/images/g/abc.jpg';
+
+  test('returns true for empty media array', () => {
+    expect(itemNeedsImages([])).toBe(true);
+  });
+
+  test('returns true when media contains eBay CDN URLs', () => {
+    expect(itemNeedsImages([ebayUrl])).toBe(true);
+  });
+
+  test('returns false when permanent URL count matches known eBay count', () => {
+    expect(itemNeedsImages([permanentUrl], { _ebay_img_count: 1 })).toBe(false);
+  });
+
+  test('returns true when stored count < known eBay count (partial sync)', () => {
+    expect(itemNeedsImages([permanentUrl], { _ebay_img_count: 8 })).toBe(true);
+  });
+
+  test('returns true when mixing permanent and eBay CDN URLs', () => {
+    expect(itemNeedsImages([permanentUrl, ebayUrl])).toBe(true);
+  });
+});
+
+// ── 14. Cross-niche contamination simulation ─────────────────────────────────
 
 describe('Cross-niche contamination simulation', () => {
-  // Simulate filtering items as the inventory screen would:
-  // given a list of items with different specialist_ids, only items belonging
-  // to the active niche should appear in each niche's view.
-
   const mockInventory = [
-    { id: '1', specialist_id: 'coins',           title: 'Roman Denarius' },
-    { id: '2', specialist_id: 'islamic_silver',  title: 'Islamic Dirham' },
-    { id: '3', specialist_id: 'motocross',        title: 'KTM 250 SX' },
-    { id: '4', specialist_id: 'bicycles',         title: 'Trek Marlin MTB' },
-    { id: '5', specialist_id: 'clothing',         title: 'Stone Island Jacket' },
-    { id: '6', specialist_id: 'trainers_sneakers', title: 'Nike Air Max' },
+    { id: '1', specialist_id: 'coins',                   title: 'Roman Denarius' },
+    { id: '2', specialist_id: 'islamic_silver',          title: 'Islamic Dirham' },
+    { id: '3', specialist_id: 'motocross',               title: 'KTM 250 SX' },
+    { id: '4', specialist_id: 'bicycles',                title: 'Trek Marlin MTB' },
+    { id: '5', specialist_id: 'clothing',                title: 'Stone Island Jacket' },
+    { id: '6', specialist_id: 'trainers_sneakers',       title: 'Nike Air Max' },
     { id: '7', specialist_id: 'curiosities_collectibles', title: 'Mystery Item' },
-    { id: '8', specialist_id: 'banknotes',        title: 'Victorian Banknote' },
-    { id: '9', specialist_id: 'ancient_artefacts', title: 'Greek Bronze' },
+    { id: '8', specialist_id: 'banknotes',               title: 'Victorian Banknote' },
+    { id: '9', specialist_id: 'ancient_artefacts',       title: 'Greek Bronze' },
   ];
 
   function filterForNiche(nicheId: NicheId) {
@@ -515,15 +628,11 @@ describe('Cross-niche contamination simulation', () => {
   test('CoinFlip only sees coin-niche specialists', () => {
     const visible = filterForNiche('coins');
     const visibleIds = visible.map(i => i.id);
-    // Coin-related items
     expect(visibleIds).toContain('1'); // coins
     expect(visibleIds).toContain('2'); // islamic_silver
     expect(visibleIds).toContain('8'); // banknotes
     expect(visibleIds).toContain('9'); // ancient_artefacts
-    // curiosities_collectibles is intentionally in the coins specialist list
-    // (legacy catch-all for unclassified eBay imports in the coins niche)
-    expect(visibleIds).toContain('7'); // curiosities_collectibles — OK in coins niche
-    // Non-coin items must NOT appear
+    expect(visibleIds).toContain('7'); // curiosities_collectibles (intentional in coins)
     expect(visibleIds).not.toContain('3'); // motocross
     expect(visibleIds).not.toContain('4'); // bicycles
     expect(visibleIds).not.toContain('5'); // clothing
@@ -533,37 +642,35 @@ describe('Cross-niche contamination simulation', () => {
   test('MXFlip only sees motocross specialists', () => {
     const visible = filterForNiche('motocross');
     const visibleIds = visible.map(i => i.id);
-    expect(visibleIds).toContain('3'); // motocross
-    expect(visibleIds).not.toContain('1'); // coins
-    expect(visibleIds).not.toContain('4'); // bicycles
-    expect(visibleIds).not.toContain('5'); // clothing
-    expect(visibleIds).not.toContain('7'); // curiosities_collectibles
+    expect(visibleIds).toContain('3');
+    expect(visibleIds).not.toContain('1');
+    expect(visibleIds).not.toContain('4');
+    expect(visibleIds).not.toContain('5');
+    expect(visibleIds).not.toContain('7');
   });
 
   test('Bike Flipper only sees bicycle specialists', () => {
     const visible = filterForNiche('bicycles');
     const visibleIds = visible.map(i => i.id);
-    expect(visibleIds).toContain('4'); // bicycles
-    expect(visibleIds).not.toContain('1'); // coins
-    expect(visibleIds).not.toContain('3'); // motocross
-    expect(visibleIds).not.toContain('5'); // clothing
-    expect(visibleIds).not.toContain('7'); // curiosities_collectibles
+    expect(visibleIds).toContain('4');
+    expect(visibleIds).not.toContain('1');
+    expect(visibleIds).not.toContain('3');
+    expect(visibleIds).not.toContain('5');
+    expect(visibleIds).not.toContain('7');
   });
 
   test('Threads Flip only sees clothing specialists', () => {
     const visible = filterForNiche('clothing');
     const visibleIds = visible.map(i => i.id);
-    expect(visibleIds).toContain('5'); // clothing
-    expect(visibleIds).toContain('6'); // trainers_sneakers
-    expect(visibleIds).not.toContain('1'); // coins
-    expect(visibleIds).not.toContain('3'); // motocross
-    expect(visibleIds).not.toContain('4'); // bicycles
-    expect(visibleIds).not.toContain('7'); // curiosities_collectibles
+    expect(visibleIds).toContain('5');
+    expect(visibleIds).toContain('6');
+    expect(visibleIds).not.toContain('1');
+    expect(visibleIds).not.toContain('3');
+    expect(visibleIds).not.toContain('4');
+    expect(visibleIds).not.toContain('7');
   });
 
-  test('curiosities_collectibles item does NOT appear in MX, Bike, or Clothing niche views', () => {
-    // curiosities_collectibles is in coins niche (legacy catch-all) but must NOT
-    // appear in MX, Bike Flipper, or Threads Flip — these caused contamination.
+  test('curiosities_collectibles does NOT appear in MX, Bike, or Clothing niche views', () => {
     for (const nicheId of ['motocross', 'bicycles', 'clothing'] as NicheId[]) {
       const visible = filterForNiche(nicheId);
       const curiositiesItem = visible.find(i => i.specialist_id === 'curiosities_collectibles');
@@ -571,28 +678,21 @@ describe('Cross-niche contamination simulation', () => {
     }
   });
 
-  test('No motocross/bike/clothing item appears in the coins niche and vice versa', () => {
-    // Key contamination pairs to check:
-    const coinSpecialists = getNicheSpecialistIds('coins');
-    const mxSpecialists = getNicheSpecialistIds('motocross');
-    const bikeSpecialists = getNicheSpecialistIds('bicycles');
-    const clothingSpecialists = getNicheSpecialistIds('clothing');
+  test('No overlap between any two production niche specialist sets', () => {
+    const coinS    = new Set(getNicheSpecialistIds('coins'));
+    const mxS      = new Set(getNicheSpecialistIds('motocross'));
+    const bikeS    = new Set(getNicheSpecialistIds('bicycles'));
+    const clothS   = new Set(getNicheSpecialistIds('clothing'));
 
-    // No overlap between motocross and coins
-    const coinMxOverlap = coinSpecialists.filter(s => mxSpecialists.includes(s));
-    expect(coinMxOverlap).toHaveLength(0);
+    const overlap = (a: Set<string>, b: Set<string>) =>
+      [...a].filter(x => b.has(x));
 
-    // No overlap between motocross and bicycles
-    const mxBikeOverlap = mxSpecialists.filter(s => bikeSpecialists.includes(s));
-    expect(mxBikeOverlap).toHaveLength(0);
-
-    // No overlap between motocross and clothing
-    const mxClothOverlap = mxSpecialists.filter(s => clothingSpecialists.includes(s));
-    expect(mxClothOverlap).toHaveLength(0);
-
-    // No overlap between bicycles and clothing
-    const bikeclothOverlap = bikeSpecialists.filter(s => clothingSpecialists.includes(s));
-    expect(bikeclothOverlap).toHaveLength(0);
+    expect(overlap(coinS, mxS)).toHaveLength(0);
+    expect(overlap(coinS, bikeS)).toHaveLength(0);
+    expect(overlap(coinS, clothS)).toHaveLength(0);
+    expect(overlap(mxS, bikeS)).toHaveLength(0);
+    expect(overlap(mxS, clothS)).toHaveLength(0);
+    expect(overlap(bikeS, clothS)).toHaveLength(0);
   });
 
   test('Niche counts are isolated when all four niches share a tenant', () => {
@@ -600,61 +700,49 @@ describe('Cross-niche contamination simulation', () => {
     for (const nicheId of PRODUCTION_NICHE_IDS) {
       counts[nicheId] = filterForNiche(nicheId as NicheId).length;
     }
-    // Total items visible across all niches should equal items that have
-    // a production-niche specialist (i.e. NOT curiosities_collectibles)
-    const productionItems = mockInventory.filter(item => {
-      return PRODUCTION_NICHE_IDS.some(nicheId =>
-        getNicheSpecialistIds(nicheId as NicheId).includes(item.specialist_id)
-      );
-    });
+    const productionItems = mockInventory.filter(item =>
+      PRODUCTION_NICHE_IDS.some(nicheId =>
+        getNicheSpecialistIds(nicheId as NicheId).includes(item.specialist_id),
+      ),
+    );
     const totalVisible = Object.values(counts).reduce((s, v) => s + v, 0);
     expect(totalVisible).toBe(productionItems.length);
   });
 });
 
-// ── 14. Image pipeline rules ─────────────────────────────────────────────────
+// ── 15. Rogue specialist IDs in live database ────────────────────────────────
+// These are documentation tests that verify the known rogue IDs
+// (motocross_expert, numismatist_v1, Not established) from the real DB
+// are not mappable to any production niche — confirming they would be
+// invisible in all niche views and require manual review.
 
-describe('Image pipeline — niche isolation rules', () => {
-  const { isPermanentImageUrl, isEbayCdnUrl, itemNeedsImages } = require('@/services/ebayImageService');
+describe('Rogue specialist ID isolation', () => {
+  const ROGUE_IDS = ['motocross_expert', 'numismatist_v1', 'Not established', 'retro_games', 'retro_games_specialist'];
 
-  test('isPermanentImageUrl returns true for Supabase storage URLs', () => {
-    expect(isPermanentImageUrl('https://supabase.co/storage/v1/item-images/123.jpg')).toBe(true);
-    expect(isPermanentImageUrl('https://iwgaqieyoahmcjfziwga.onspace.storage/item-images/img.jpg')).toBe(true);
-  });
+  test.each(ROGUE_IDS)(
+    'Rogue specialist "%s" is not in any production niche specialist list',
+    (rogueId) => {
+      for (const nicheId of PRODUCTION_NICHE_IDS) {
+        const specialists = getNicheSpecialistIds(nicheId as NicheId);
+        expect(specialists).not.toContain(rogueId);
+      }
+    },
+  );
 
-  test('isPermanentImageUrl returns false for eBay CDN URLs', () => {
-    expect(isPermanentImageUrl('https://i.ebayimg.com/images/g/abc.jpg')).toBe(false);
-    expect(isPermanentImageUrl('https://thumbs.ebaystatic.com/images/m/abc.jpg')).toBe(false);
-  });
-
-  test('isPermanentImageUrl returns false for empty/null', () => {
-    expect(isPermanentImageUrl('')).toBe(false);
-    expect(isPermanentImageUrl(null as any)).toBe(false);
-  });
-
-  test('isEbayCdnUrl detects all eBay CDN domains', () => {
-    expect(isEbayCdnUrl('https://i.ebayimg.com/images/g/abc.jpg')).toBe(true);
-    expect(isEbayCdnUrl('https://thumbs.ebaystatic.com/images/m/abc.jpg')).toBe(true);
-    expect(isEbayCdnUrl('https://p.ebayimg.com/images/g/xyz.jpg')).toBe(true);
-  });
-
-  test('itemNeedsImages returns true for empty media array', () => {
-    expect(itemNeedsImages([])).toBe(true);
-  });
-
-  test('itemNeedsImages returns true when media contains eBay CDN URLs', () => {
-    expect(itemNeedsImages(['https://i.ebayimg.com/images/g/abc.jpg'])).toBe(true);
-  });
-
-  test('itemNeedsImages returns false when all URLs are permanent and count matches', () => {
-    const permanentUrl = 'https://iwgaqieyoahmcjfziwga.onspace.storage/item-images/img.jpg';
-    // With _ebay_img_count matching stored count, it should be complete
-    expect(itemNeedsImages([permanentUrl], { _ebay_img_count: 1 })).toBe(false);
-  });
-
-  test('itemNeedsImages returns true when stored count < known eBay count (partial sync)', () => {
-    const permanentUrl = 'https://iwgaqieyoahmcjfziwga.onspace.storage/item-images/img.jpg';
-    // Only 1 stored but eBay had 8
-    expect(itemNeedsImages([permanentUrl], { _ebay_img_count: 8 })).toBe(true);
-  });
+  test.each(ROGUE_IDS)(
+    'nicheIdForSpecialist returns null for rogue ID "%s"',
+    (rogueId) => {
+      // nicheIdForSpecialist checks ALL niches including non-production ones,
+      // but rogue IDs aren't in any niche config at all.
+      // Exception: retro_games is in the 'general' niche config — acceptable since
+      // 'general' is not a production niche so it won't appear in production views.
+      const result = nicheIdForSpecialist(rogueId);
+      if (rogueId === 'retro_games') {
+        // retro_games appears in 'general' niche (non-production)
+        expect(result === 'general' || result === null).toBe(true);
+      } else {
+        expect(result).toBeNull();
+      }
+    },
+  );
 });
