@@ -435,8 +435,18 @@ const KNOWN_PARENT_CATEGORY_HINT = new Set([
   '619', '625', '888', '2984', '1249', '11232', '139971', '64482', '171228',
   // Known parent (non-leaf) categories — skip verify, go straight to title-based resolution
   '1469',  // "Other Collectables" — parent, not a leaf
+  '4739',  // "Islamic" — parent coins category. Use 40714 (Ancient Coins) instead.
   '0', '',
 ]);
+
+// Quick-lookup: confirmed EBAY_GB leaf categories — bypasses slow live API checks
+const KNOWN_GOOD_LEAF_CATEGORIES: Record<string, string> = {
+  '40714': 'Ancient Coins',
+  '3365':  'Roman Imperial (96-235AD)',
+  '4726':  'British Coins',
+  '183454': 'CCG Individual Cards',
+  '261':   'Great Britain Stamps',
+};
 
 // ── isAspectsNotLeaf ─────────────────────────────────────────────────────────
 // Parse eBay's aspects endpoint 400 response to determine if this is truly
@@ -478,9 +488,17 @@ async function verifyCategoryIsLeaf(
     return { isLeaf: cached.isLeaf, name: cached.name };
   }
 
+  // Step 0: KNOWN_GOOD_LEAF_CATEGORIES — immediate bypass for confirmed leaves
+  if (KNOWN_GOOD_LEAF_CATEGORIES[categoryId]) {
+    const name = KNOWN_GOOD_LEAF_CATEGORIES[categoryId];
+    console.log(`[SWISH] Category ${categoryId} ("${name}") confirmed in KNOWN_GOOD_LEAF_CATEGORIES`);
+    TAXONOMY_CACHE.set(cacheKey, { id: categoryId, name, isLeaf: true, timestamp: Date.now() });
+    return { isLeaf: true, name, fromDb: true };
+  }
+
   // Step 1: Check local SWISH ebay_categories catalogue first (fast)
   // TRUST is_leaf=true from the DB (set by leafCategoryTreeNode from Taxonomy subtree/suggestions API)
-  // Do NOT trust is_leaf=false without live confirmation — old cache may have been set incorrectly
+  // ALSO trust is_leaf=false from DB — definitively blocked
   if (supabaseAdmin) {
     try {
       const { data: dbRow } = await supabaseAdmin
@@ -497,14 +515,18 @@ async function verifyCategoryIsLeaf(
           TAXONOMY_CACHE.set(cacheKey, { id: categoryId, name, isLeaf: false, timestamp: Date.now() });
           return { isLeaf: false, name };
         }
+        if (dbRow.is_leaf === false) {
+          // DB definitively says NOT a leaf — block immediately, no live API call needed
+          console.log(`[SWISH] Category ${categoryId} ("${name}") is_leaf=false in DB — blocking`);
+          TAXONOMY_CACHE.set(cacheKey, { id: categoryId, name, isLeaf: false, timestamp: Date.now() });
+          return { isLeaf: false, name };
+        }
         if (dbRow.is_leaf === true) {
           // DB confirms leaf — trust it (set from leafCategoryTreeNode in Taxonomy sync)
           TAXONOMY_CACHE.set(cacheKey, { id: categoryId, name, isLeaf: true, timestamp: Date.now() });
           return { isLeaf: true, name, fromDb: true };
         }
-        // DB says is_leaf=false — but this may have been set by the old buggy aspects check.
-        // Fall through to live API to confirm.
-        console.log(`[SWISH] DB has is_leaf=false for ${categoryId} — re-checking live API to confirm`);
+        // is_leaf is NULL in DB — fall through to live API check
       }
     } catch (dbErr: any) {
       console.log(`[SWISH] Local DB category check error (non-fatal): ${dbErr.message}`);
@@ -642,6 +664,9 @@ const SPECIALIST_LEAF_REFERENCE: Record<string, { id: string; name: string }> = 
   coins_uk:                 { id: '4726',   name: 'British Coins' },
   coins_currency:           { id: '4726',   name: 'British Coins' },
   coins_world:              { id: '40714',  name: 'Ancient Coins' },
+  // Islamic, Indian, Mughal, Timurid, Abbasid coins → Ancient Coins (40714, confirmed EBAY_GB leaf)
+  islamic_silver:           { id: '40714',  name: 'Ancient Coins' },
+  ancient_artefacts:        { id: '40714',  name: 'Ancient Coins' },
   stamps:                   { id: '261',    name: 'Great Britain Stamps' },
   pokemon:                  { id: '183454', name: 'CCG Individual Cards' },
   trading_cards:            { id: '183454', name: 'CCG Individual Cards' },

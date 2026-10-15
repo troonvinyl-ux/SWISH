@@ -127,13 +127,33 @@ export default function ListingPreflightScreen() {
         updateCheck('price', { status: 'pass', detail: `£${price.toFixed(2)}` });
       }
 
-      // ── Category ──────────────────────────────────────────────────────────
+      // ── Category — live leaf validation ─────────────────────────────────
       const categoryId = row.category_id ?? attrs['ebay_category_id'] ?? '';
       if (!categoryId) {
-        updateCheck('category', { status: 'fail', detail: 'No eBay category set. Open Listing Editor → Category → select a leaf category.' });
+        updateCheck('category', { status: 'fail', detail: 'No eBay category set. Tap "Pick Category" to choose a valid leaf category.' });
         allPass = false;
       } else {
-        updateCheck('category', { status: 'pass', detail: `Category ID: ${categoryId}${attrs['ebay_category_name'] ? ` (${attrs['ebay_category_name']})` : ''}` });
+        // Check local DB first — fast path
+        const { data: catRow } = await supabase
+          .from('ebay_categories')
+          .select('category_name, is_leaf, active')
+          .eq('marketplace_id', 'EBAY_GB')
+          .eq('category_id', categoryId)
+          .maybeSingle();
+
+        if (catRow && catRow.is_leaf === false) {
+          // DB says it's a parent — definitive block
+          updateCheck('category', {
+            status: 'fail',
+            detail: `Category ID ${categoryId} ("${catRow.category_name ?? categoryId}") is a PARENT category, not a leaf. eBay requires a leaf category. Tap "Pick Category" to select a valid one.`,
+          });
+          allPass = false;
+        } else if (catRow && catRow.is_leaf === true) {
+          updateCheck('category', { status: 'pass', detail: `${catRow.category_name ?? categoryId} (ID: ${categoryId}) ✓ Confirmed leaf` });
+        } else {
+          // Not in DB — show as pending/unknown but don't block (edge fn will validate live)
+          updateCheck('category', { status: 'warn', detail: `Category ID: ${categoryId}${attrs['ebay_category_name'] ? ` (${attrs['ebay_category_name']})` : ''} — will be validated by eBay on submit` });
+        }
       }
 
       // ── Condition ──────────────────────────────────────────────────────────
