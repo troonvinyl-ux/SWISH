@@ -3406,6 +3406,18 @@ export default function SettingsScreen() {
           </>
         ) : null}
 
+        {/* ── Research Centre ─────────────────────────────────────── */}
+        <SectionHead title="Research" />
+        <CardGroup>
+          <SettingRow
+            icon="manage-search"
+            label="Research Centre"
+            desc="Live eBay · Terapeak · Numista · Gemini AI market data"
+            onPress={() => router.push('/research' as any)}
+            color={Colors.accent}
+          />
+        </CardGroup>
+
         {tenant ? (
           <>
             <SectionHead title="AI Learning" />

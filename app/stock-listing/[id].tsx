@@ -38,7 +38,7 @@ import { useApp } from '@/hooks/useApp';
 import { getSupabaseClient } from '@/template';
 import { useAlert } from '@/template';
 import { Item, getItem, updateItem } from '@/services/itemService';
-import { getItemListings, updateListingPrice, endListing, submitListingToMarketplace, updateListingStatus } from '@/services/listingService';
+import { getItemListings, updateListingPrice, endListing, deleteListing, submitListingToMarketplace, updateListingStatus } from '@/services/listingService';
 import type { SubmitStep } from '@/services/listingService';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { generateListing, saveListing } from '@/services/listingService';
@@ -2063,7 +2063,8 @@ export default function StockListingScreen() {
   const handleEndListing = useCallback(async (listing: SavedListing) => {
     if (!item) return;
     const isLive = listing.status === 'active' && listing.externalListingId;
-    showAlert('End Listing', isLive ? `Remove listing #${listing.externalListingId} from eBay?` : `Remove draft listing?`, [
+    showAlert('End Listing', isLive ? `Remove listing #${listing.externalListingId} from eBay and delete from SWISH?` : `Delete this draft listing from SWISH?`, [
+
       { text: 'Cancel', style: 'cancel' },
       { text: 'End', style: 'destructive', onPress: async () => {
         setEndingId(listing.id);

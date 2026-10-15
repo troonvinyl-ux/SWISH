@@ -463,6 +463,44 @@ export interface SubmitResult {
   externalListingId?: string;
 }
 
+// ── Delete a listing from SWISH DB (and optionally end it on eBay first) ────────
+// This is the SINGLE canonical delete route — no other delete path exists.
+// If the listing has an externalListingId and is active on eBay, it calls
+// endListing() first to remove it from eBay before deleting the SWISH record.
+
+export async function deleteListing(
+  listingId: string,
+  tenantId: string,
+  options?: {
+    itemId?: string;
+    externalListingId?: string;
+    status?: string;
+  },
+): Promise<{ error: string | null }> {
+  const supabase = getSupabaseClient();
+
+  // If the listing is active on eBay, end it first
+  if (options?.externalListingId && options?.status === 'active') {
+    const endResult = await endListing(
+      listingId,
+      options.itemId ?? '',
+      tenantId,
+      options.externalListingId,
+    );
+    if (endResult.error) return { error: `eBay end failed: ${endResult.error}` };
+  }
+
+  // Delete from SWISH DB
+  const { error } = await supabase
+    .from('listings')
+    .delete()
+    .eq('id', listingId)
+    .eq('tenant_id', tenantId); // RLS guard
+
+  if (error) return { error: error.message };
+  return { error: null };
+}
+
 export async function submitListingToMarketplace(
   tenantId: string,
   listingId: string,
