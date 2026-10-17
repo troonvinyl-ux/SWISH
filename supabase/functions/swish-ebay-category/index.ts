@@ -929,7 +929,6 @@ const CURATED_LEAF_CATEGORIES: Omit<CuratedCat, 'treeId'>[] = [
   { id: '4730', name: 'Islamic Coins', isLeaf: true, childCount: 0 },
   { id: '4737', name: 'Ancient Persian & Indian Coins', isLeaf: true, childCount: 0 },
   { id: '93500', name: 'Ancient Coin Collections & Bulk Lots', isLeaf: true, childCount: 0 },
-  { id: '532', name: 'Other Ancient Coins', isLeaf: true, childCount: 0 },
   // British hammered coins
   { id: '122475', name: 'Celtic Coins (c.100 BC–c.100 AD)', isLeaf: true, childCount: 0 },
   { id: '58523', name: 'Anglo-Saxon Coins (c.600–1066)', isLeaf: true, childCount: 0 },
