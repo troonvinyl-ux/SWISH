@@ -519,6 +519,35 @@ async function verifyCategoryIsLeaf(
   const { treeId } = await getUkCategoryTreeId(accessToken);
 
   try {
+    // The subtree endpoint returns the authoritative current category name and
+    // leafCategoryTreeNode flag. Use it first so a cached label cannot disguise a
+    // valid-but-unrelated leaf from an older category map.
+    const subtreeRes = await fetch(
+      `${EBAY_TAXONOMY_API}/category_tree/${treeId}/get_category_subtree?category_id=${encodeURIComponent(categoryId)}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'X-EBAY-C-MARKETPLACE-ID': 'EBAY_GB',
+        },
+        signal: AbortSignal.timeout(8000),
+      },
+    );
+    if (subtreeRes.ok) {
+      const subtreePayload = await subtreeRes.json();
+      const node = subtreePayload.categorySubtreeNode;
+      const liveId = String(node?.category?.categoryId ?? '');
+      if (liveId === String(categoryId)) {
+        return {
+          isLeaf: node.leafCategoryTreeNode === true,
+          name: String(node.category?.categoryName ?? displayName),
+          fromDb: false,
+        };
+      }
+    } else if (subtreeRes.status === 404) {
+      return { isLeaf: false, name: displayName, fromDb: false };
+    }
+
     const res = await fetch(
       `${EBAY_TAXONOMY_API}/category_tree/${treeId}/get_item_aspects_for_category?category_id=${encodeURIComponent(categoryId)}`,
       {
@@ -637,6 +666,7 @@ async function resolveLeafCategory(
   title: string,
   specialistId: string,
   supabaseAdmin?: ReturnType<typeof adminClient>,
+  storedCategoryName = '',
 ): Promise<{ resolvedId: string; resolvedName: string; categoryName: string; treeId: string; treeVersion: string; wasResolved: boolean; confidence: string; error?: string }> {
   const STOP_RESULT = (msg: string) => ({
     resolvedId: '', resolvedName: '', categoryName: '',
@@ -647,6 +677,10 @@ async function resolveLeafCategory(
   const treeId = treeResult.treeId;
   const treeVersion = treeResult.version;
   console.log(`[SWISH] Category resolution: marketplaceId=EBAY_GB, categoryTreeId=${treeId}, categoryTreeVersion=${treeVersion}, storedCategoryId=${categoryId || '(none)'}, itemTitle="${title.slice(0, 60)}"`);
+
+  // Track stale label/ID pairs written by older SWISH category maps. A category ID
+  // can still be a valid leaf while belonging to a completely unrelated eBay category.
+  let storedCategoryMismatch = '';
 
   // Step 1: Validate stored category ID
   if (categoryId && !KNOWN_PARENT_CATEGORY_HINT.has(categoryId)) {
@@ -660,10 +694,27 @@ async function resolveLeafCategory(
             .select('category_name').eq('marketplace_id', 'EBAY_GB').eq('category_id', categoryId).maybeSingle();
           if (nameRow?.category_name) catName = nameRow.category_name;
         }
-        console.log(`[SWISH] Category ${categoryId} ("${catName}") confirmed EBAY_GB leaf (treeId=${treeId}, treeVersion=${treeVersion}, fromDb=${catInfo.fromDb ?? false})`);
-        return { resolvedId: categoryId, resolvedName: catName, categoryName: catName, treeId, treeVersion, wasResolved: false, confidence: catInfo.fromDb ? 'db_verified' : 'taxonomy_verified' };
+
+        const normalizeCategoryLabel = (value: string) => value.toLowerCase()
+          .replace(/\bcoins?\b/g, ' ')
+          .replace(/[()[\],.\-–—&/]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        const savedLabel = normalizeCategoryLabel(String(storedCategoryName ?? ''));
+        const liveLabel = normalizeCategoryLabel(String(catName ?? ''));
+        const labelCompatible = !savedLabel || !liveLabel ||
+          savedLabel.includes(liveLabel) || liveLabel.includes(savedLabel);
+
+        if (labelCompatible) {
+          console.log(`[SWISH] Category ${categoryId} ("${catName}") confirmed EBAY_GB leaf (treeId=${treeId}, treeVersion=${treeVersion}, source=${catInfo.fromDb ? 'db' : 'live_taxonomy'})`);
+          return { resolvedId: categoryId, resolvedName: catName, categoryName: catName, treeId, treeVersion, wasResolved: false, confidence: catInfo.fromDb ? 'db_verified' : 'taxonomy_verified' };
+        }
+
+        storedCategoryMismatch = `Saved category label "${storedCategoryName}" does not match current EBAY_GB category "${catName}" for ID ${categoryId}. `;
+        console.warn(`[SWISH] ${storedCategoryMismatch}Requesting a fresh title-based suggestion.`);
+      } else {
+        console.log(`[SWISH] Category ${categoryId} is NOT a valid EBAY_GB leaf (treeId=${treeId}) — trying title-based suggestions`);
       }
-      console.log(`[SWISH] Category ${categoryId} is NOT a valid EBAY_GB leaf (treeId=${treeId}) — trying title-based suggestions`);
     } else {
       console.log(`[SWISH] Taxonomy API unavailable for categoryId=${categoryId} (treeId=${treeId}) — attempting title-based resolution`);
     }
@@ -691,9 +742,9 @@ async function resolveLeafCategory(
   }
 
   // Step 3: HARD STOP
-  const storedMsg = categoryId && !KNOWN_PARENT_CATEGORY_HINT.has(categoryId)
+  const storedMsg = storedCategoryMismatch || (categoryId && !KNOWN_PARENT_CATEGORY_HINT.has(categoryId)
     ? `Category ID ${categoryId} was rejected by the EBAY_GB Taxonomy API (treeId=${treeId}) — it is not a valid UK listing leaf. `
-    : '';
+    : '');
   const msg = `${storedMsg}Please open the Listing Editor, tap the Category field, select a category marked "✓ Leaf" from the live eBay browser, tap Save, then try submitting again.`;
   console.error(`[SWISH] HARD STOP: Cannot resolve valid EBAY_GB leaf. marketplaceId=EBAY_GB, categoryTreeId=${treeId}, storedCategoryId=${categoryId}, specialistId=${specialistId}`);
   return STOP_RESULT(msg);
@@ -1532,10 +1583,10 @@ async function handleRequest(req: Request): Promise<Response> {
 
   // ── Route: resolve_category ───────────────────────────────────────────────
   if (route === 'resolve_category') {
-    const { categoryId = '', title = '', specialistId = '' } = body;
+    const { categoryId = '', title = '', specialistId = '', categoryName = '' } = body;
     const creds = await getEbayCredentials(supabase, tenantId, false);
     if ('error' in creds) return jsonResponse({ error: creds.error }, 400);
-    const result = await resolveLeafCategory(creds.accessToken, creds.clientId, categoryId, title, specialistId);
+    const result = await resolveLeafCategory(creds.accessToken, creds.clientId, categoryId, title, specialistId, undefined, categoryName);
     if (result.error) return jsonResponse({ success: false, error: result.error }, 400);
     return jsonResponse({ success: true, resolvedId: result.resolvedId, resolvedName: result.resolvedName, wasResolved: result.wasResolved, confidence: result.confidence });
   }
@@ -1684,6 +1735,7 @@ async function handleRequest(req: Request): Promise<Response> {
         title,
         '',
         supabase,
+        String(item?.attributes?.ebay_category_name ?? item?.attributes?._ebay_category_name ?? ''),
       );
       if (categoryCheck.error || !categoryCheck.resolvedId) {
         return jsonResponse({
@@ -1782,7 +1834,10 @@ async function handleRequest(req: Request): Promise<Response> {
   const policyError = validateBusinessPolicies(fulfillmentId, returnId, policies);
   if (policyError) return jsonResponse({ error: policyError }, 400);
 
-  const catResult = await resolveLeafCategory(creds.accessToken, creds.clientId, categoryId, title, item?.specialist_id ?? '', supabase);
+  const catResult = await resolveLeafCategory(
+    creds.accessToken, creds.clientId, categoryId, title, item?.specialist_id ?? '', supabase,
+    String(item?.attributes?.ebay_category_name ?? item?.attributes?._ebay_category_name ?? ''),
+  );
   if (catResult.error) return jsonResponse({ error: catResult.error }, 400);
 
   // If a category was explicitly stored/selected but eBay rejects it, never
