@@ -684,7 +684,7 @@ export async function submitListingToMarketplace(
   return {
     success: true,
     step: 'done',
-    verificationPassed: true,
+    verificationPassed: verification.overallPassed,
     warnings: [
       ...(verification.warnings ?? []),
       ...verificationAdvisories,
