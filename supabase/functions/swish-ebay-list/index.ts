@@ -679,7 +679,7 @@ async function resolveLeafCategory(
   // Canonicalise this known legacy value server-side before validation/submission,
   // so old drafts do not remain permanently blocked by their stale saved ID.
   const requestedCategoryId = String(categoryId ?? '');
-  const isIslamicCoin = /\\b(islamic|dirham|dinar|abbasid|umayyad|fatimid|ilkhanid)\\b/i.test(
+  const isIslamicCoin = /\b(islamic|dirham|dinar|abbasid|umayyad|fatimid|ilkhanid)\b/i.test(
     `${title ?? ''} ${storedCategoryName ?? ''} ${specialistId ?? ''}`,
   );
   if (requestedCategoryId === '4739' && isIslamicCoin) {
