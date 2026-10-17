@@ -113,8 +113,8 @@ Deno.serve(async (request: Request) => {
     const offerId = typeof body?.offerId === 'string' ? body.offerId.trim() : '';
     const action = body?.action;
     if (!tenantId) return json({ error: 'Tenant is required.' }, 400);
-    if (!['read_offer', 'import_offer', 'sync_category_from_ebay', 'round_trip_unpublished', 'push_swish_category'].includes(action)) return json({ error: 'Unsupported test action.' }, 400);
-    if (!offerId || offerId.length > 200 || /[\r\n]/.test(offerId)) return json({ error: 'Enter a valid eBay offer ID.' }, 400);
+    if (!['list_unpublished_offers', 'read_offer', 'import_offer', 'sync_category_from_ebay', 'round_trip_unpublished', 'push_swish_category'].includes(action)) return json({ error: 'Unsupported test action.' }, 400);
+    if (action !== 'list_unpublished_offers' && (!offerId || offerId.length > 200 || /[\\r\\n]/.test(offerId))) return json({ error: 'Select an eBay UK draft first.' }, 400);
 
     const db = adminClient();
     const userClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_ANON_KEY') ?? '', {
