@@ -797,7 +797,7 @@ async function resolveLeafCategory(
     { test: /\b(byzantine)\b/, id: '3364', name: 'Byzantine Coins' },
     { test: /\b(roman provincial)\b/, id: '4735', name: 'Roman Provincial Coins' },
     { test: /\b(roman republican|republican denarius)\b/, id: '4734', name: 'Roman Republican Coins' },
-    { test: /\b(ancient|antique)\b/, id: '532', name: 'Other Ancient Coins' },
+    // Generic ancient/antique titles must use live taxonomy suggestions; never guess a generic category ID.
   ];
   const coinFallback = coinFallbacks.find(entry => entry.test.test(lowerTitle));
   if (coinFallback && (specialistId.includes('coin') || ['islamic_silver', 'gold', 'silver', 'ancient_artefacts'].includes(specialistId))) {
