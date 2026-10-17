@@ -315,19 +315,20 @@ export default function EbayCategoryAdminScreen() {
                 <>
                   <View style={s.resultRow}>
                     <MaterialIcons
-                      name={testResult.valid ? 'check-circle' : 'cancel'}
-                      size={16} color={testResult.valid ? Colors.success : Colors.danger}
+                      name={testResult.valid === true ? 'check-circle' : testResult.valid === false ? 'cancel' : 'help-outline'}
+                      size={16}
+                      color={testResult.valid === true ? Colors.success : testResult.valid === false ? Colors.danger : Colors.textTertiary}
                     />
-                    <Text style={[s.resultLabel, { color: testResult.valid ? Colors.success : Colors.danger }]}>
-                      {testResult.valid ? 'VALID EBAY_GB LEAF' : 'INVALID'}
+                    <Text style={[s.resultLabel, { color: testResult.valid === true ? Colors.success : testResult.valid === false ? Colors.danger : Colors.textTertiary }]}>
+                      {testResult.valid === true ? 'VALID EBAY_GB LEAF' : testResult.valid === false ? 'INVALID' : 'NOT VERIFIED — API ERROR'}
                     </Text>
                   </View>
                   {[
                     ['Category ID', testResult.categoryId],
                     ['Category Name', testResult.categoryName],
                     ['Category Path', testResult.categoryPath],
-                    ['Is Leaf', testResult.isLeaf ? 'Yes' : 'No'],
-                    ['Active', testResult.active !== false ? 'Yes' : 'No'],
+                    ['Is Leaf', testResult.isLeaf === true ? 'Yes' : testResult.isLeaf === false ? 'No' : 'Unknown (not verified)'],
+                    ['Active', testResult.active === true ? 'Yes' : testResult.active === false ? 'No' : 'Unknown (not verified)'],
                     ['Tree ID', testResult.categoryTreeId],
                     ['Tree Version', testResult.categoryTreeVersion],
                     ['Source', testResult.source],
