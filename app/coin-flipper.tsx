@@ -1669,7 +1669,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
           ? { diameter: Number(diameterInput.replace(',', '.')) } : {}),
         ...(yearInput.trim() ? { yearMade: yearInput.trim() } : {}),
         ...(materialInput.trim() ? { material: materialInput.trim() } : {}),
-        ...(edgeLegendInput.trim() ? { customNotes: `Edge legend / visible inscription supplied by user: ${edgeLegendInput.trim()}` } : {}),
+        ...(edgeLegendInput.trim() ? { edgeLegend: edgeLegendInput.trim() } : {}),
       },
       { tenantId: tenant?.id },
     );
