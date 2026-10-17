@@ -529,7 +529,7 @@ export default function ListingPreflightScreen() {
     if (result.success) {
       showAlert(
         'Listed on eBay!',
-        `Your listing is now live on eBay UK.${result.externalListingId ? `\n\nListing ID: ${result.externalListingId}` : ''}`,
+        `Your listing is now live on eBay UK.${result.externalListingId ? `\n\nListing ID: ${result.externalListingId}` : ''}${result.warnings?.length ? `\n\nSWISH advisories (listing was still submitted):\n• ${result.warnings.join('\n• ')}` : ''}`,
         [{
           text: 'View Listing',
           onPress: () => {
