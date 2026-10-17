@@ -453,12 +453,13 @@ const KNOWN_PARENT_CATEGORY_HINT = new Set([
 // HTTP 400 WITH eBay error 13003/13004 → confirmed NOT a leaf
 // HTTP 404 → category doesn't exist
 
-function isAspectsNotLeaf(status: number, bodyText: string): boolean {
+function isAspectsNotLeaf(status: number, bodyText: string): boolean | null {
   if (status === 404) return true;
   if (status !== 400) return false;
   try {
     const parsed = JSON.parse(bodyText);
-    const errors: any[] = parsed.errors ?? [];
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.errors)) return null;
+    const errors: any[] = parsed.errors;
     for (const err of errors) {
       const errId = Number(err.errorId ?? err.error_id ?? 0);
       const msg = String(err.message ?? err.longMessage ?? '').toLowerCase();
@@ -466,10 +467,12 @@ function isAspectsNotLeaf(status: number, bodyText: string): boolean {
       if (msg.includes('not a valid leaf') || msg.includes('is not a leaf') ||
           msg.includes('leaf category') || msg.includes('invalid category id')) return true;
     }
-    // 400 but no explicit "not a leaf" error → valid leaf with no aspects
+    // A parseable eBay error payload without a "not a leaf" error is consistent
+    // with valid categories that simply have no aspects.
     return false;
   } catch {
-    return false; // Can't parse — assume valid leaf
+    // An unreadable 400 body is inconclusive, not proof of a valid leaf.
+    return null;
   }
 }
 
@@ -523,12 +526,17 @@ async function verifyCategoryIsLeaf(
       const bodyText = await res.text().catch(() => '{}');
       const definitelyNotLeaf = isAspectsNotLeaf(res.status, bodyText);
 
-      if (definitelyNotLeaf) {
+      if (definitelyNotLeaf === true) {
         console.log(`[SWISH] Category ${categoryId}: confirmed NOT a leaf (HTTP ${res.status} + error 13003/13004/404, treeId=${treeId})`);
         return { isLeaf: false, name: displayName };
       }
+      if (definitelyNotLeaf === null) {
+        console.log(`[SWISH] Category ${categoryId}: HTTP ${res.status} response was inconclusive; refusing to mark as valid leaf`);
+        return null;
+      }
 
-      // HTTP 400 but NOT error 13003/13004 → valid leaf with no defined aspects
+      // HTTP 400 with a parseable eBay error payload but no "not a leaf" error
+      // can represent a valid leaf with no defined aspects.
       // (e.g. Greek ancient coins, Byzantine coins — valid EBAY_GB leaf categories)
       console.log(`[SWISH] Category ${categoryId}: HTTP ${res.status} but no "not a leaf" error — treating as valid leaf with no aspects (treeId=${treeId}). Body: ${bodyText.slice(0, 200)}`);
       return { isLeaf: true, name: displayName };
@@ -1539,7 +1547,7 @@ async function handleRequest(req: Request): Promise<Response> {
       if (!('error' in creds)) token = creds.accessToken;
     } catch {}
     if (!token) token = await getAppToken();
-    if (!token) return jsonResponse({ success: false, isLeaf: false, aspects: [], error: 'eBay API token unavailable' });
+    if (!token) return jsonResponse({ success: false, isLeaf: null, aspects: [], error: 'eBay API token unavailable; category is not verified' });
     const { aspects, error } = await getEbayCategoryAspects(token, categoryId);
     if (error && aspects.length === 0) {
       const match = error.match(/eBay Taxonomy API error \((\d+)\):\s*([\s\S]*)/);
@@ -1547,12 +1555,16 @@ async function handleRequest(req: Request): Promise<Response> {
         const statusCode = Number(match[1]);
         const responseBody = match[2] ?? '';
         const definitelyNotLeaf = isAspectsNotLeaf(statusCode, responseBody);
-        if (definitelyNotLeaf) {
+        if (definitelyNotLeaf === true) {
           return jsonResponse({ success: true, isLeaf: false, aspects: [], error,
             reason: 'eBay confirmed this is not a leaf category.' });
         }
-        // eBay can return HTTP 400 for valid leaves with no defined item
-        // aspects. Treat only known "not a leaf" codes/messages as rejection.
+        if (statusCode === 400 && definitelyNotLeaf === null) {
+          return jsonResponse({ success: false, isLeaf: null, aspects: [], error,
+            reason: 'eBay returned an inconclusive category response. Retry validation; this category has not been marked valid or invalid.' });
+        }
+        // eBay can return HTTP 400 with a parseable error payload for valid leaves
+        // that simply have no defined item aspects.
         if (statusCode === 400) {
           return jsonResponse({ success: true, isLeaf: true, aspects: [], note: 'Valid leaf category with no defined aspects.' });
         }
