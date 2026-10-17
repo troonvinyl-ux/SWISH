@@ -352,7 +352,7 @@ function CategoryPickerModal({
         error = e;
       }
 
-      if (error || !data?.success || data?.source === 'curated' || data?.source === 'curated_verified') {
+      if (error || !data?.success || data?.source === 'curated' || data?.source === 'curated_verified' || data?.source === 'db_cache') {
         try {
           const fallback = await supabase.functions.invoke('swish-ebay-list', {
             body: { route: 'get_category_children', tenantId, parentId },
@@ -855,7 +855,7 @@ function AICategorySuggestModal({
         fnErr = e;
       }
 
-      if (fnErr || !data?.success || data?.source === 'curated' || data?.source === 'curated_verified' || data?.source === 'curated_fallback' || data?.source === 'db_cache_offline') {
+      if (fnErr || !data?.success || data?.source === 'curated' || data?.source === 'curated_verified' || data?.source === 'curated_fallback' || data?.source === 'db_cache_offline' || data?.source === 'db_cache') {
         try {
           const fallback = await supabase.functions.invoke('swish-ebay-list', {
             body: { route: 'get_category_suggestions', tenantId, query: q.trim().slice(0, 100) },
