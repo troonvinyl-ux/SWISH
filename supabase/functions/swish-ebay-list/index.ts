@@ -1628,18 +1628,13 @@ async function handleRequest(req: Request): Promise<Response> {
     // chose a category that is now a parent/invalid ID, stop and ask for a new
     // selection rather than silently moving the live listing to a title guess.
     if (resolvedCategoryId && resolvedCategoryId !== 'REVISE_PRESERVE') {
-      const { data: categoryItem } = listingId
-        ? await supabase.from('listings').select('items(specialist_id)')
-            .eq('id', listingId).eq('tenant_id', tenantId).maybeSingle()
-        : { data: null };
-      const categorySpecialist = (categoryItem as any)?.items?.specialist_id ?? '';
       const requestedCategoryId = String(resolvedCategoryId);
       const categoryCheck = await resolveLeafCategory(
         creds.accessToken,
         creds.clientId,
         requestedCategoryId,
         title,
-        categorySpecialist,
+        '',
         supabase,
       );
       if (categoryCheck.error || !categoryCheck.resolvedId) {
