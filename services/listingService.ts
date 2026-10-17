@@ -577,6 +577,12 @@ export async function submitListingToMarketplace(
     ? attributeCategoryId
     : (listingCategoryId || attributeCategoryId);
 
+  if (listingCategoryId && attributeCategoryId && listingCategoryId !== attributeCategoryId) {
+    console.warn(
+      `[listingService] Category records differ for listing ${listingId}: listings.category_id=${listingCategoryId}, item.attributes.ebay_category_id=${attributeCategoryId}; using ${storedCategoryId} (${attributeCategoryName ? 'paired item category selection' : 'listing fallback'}).`,
+    );
+  }
+
   // If there is truly no category set at all, surface a clear error now
   // rather than letting the edge function silently guess (and guess wrong).
   // The edge function will still attempt title-based Taxonomy suggestions as a last resort,
