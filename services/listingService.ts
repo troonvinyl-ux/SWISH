@@ -560,12 +560,22 @@ export async function submitListingToMarketplace(
   // against the EBAY_GB Taxonomy API and cause eBay error 21919303.
   // The edge function will use get_category_suggestions to resolve the title
   // if no validated categoryId is present.
-  const rawCategoryId =
-    listingRow?.category_id ??
-    (listingRow?.items as any)?.attributes?.ebay_category_id ??
-    '';
+  const itemAttributes = (listingRow?.items as any)?.attributes ?? {};
+  const attributeCategoryId = String(
+    itemAttributes.ebay_category_id ?? itemAttributes._ebay_category_id ?? '',
+  ).trim();
+  const attributeCategoryName = String(
+    itemAttributes.ebay_category_name ?? itemAttributes._ebay_category_name ?? '',
+  ).trim();
+  const listingCategoryId = String(listingRow?.category_id ?? '').trim();
 
-  const storedCategoryId = rawCategoryId;
+  // A user-picked category is saved as an ID/name pair on the item as well as
+  // listings.category_id. If those records drift, prefer the paired item value:
+  // it preserves the category selection instead of silently resubmitting an
+  // older imported/listing category ID. Otherwise use the listing's saved ID.
+  const storedCategoryId = attributeCategoryId && attributeCategoryName
+    ? attributeCategoryId
+    : (listingCategoryId || attributeCategoryId);
 
   // If there is truly no category set at all, surface a clear error now
   // rather than letting the edge function silently guess (and guess wrong).
