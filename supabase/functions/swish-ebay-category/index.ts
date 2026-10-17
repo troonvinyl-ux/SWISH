@@ -432,6 +432,9 @@ async function getCategorySuggestions(
 ): Promise<{ suggestions: CatSuggestion[]; source: string }> {
   const q = query.trim().slice(0, 100);
   if (q.length < 2) return { suggestions: [], source: 'empty_query' };
+  // PostgREST .or() parses commas and parentheses as filter syntax. Normalize
+  // user-entered text before inserting it into the filter expression.
+  const dbQuery = q.replace(/[(),%]/g, ' ').replace(/\s+/g, ' ').trim();
 
   // 0. LOCAL DB FIRST — the seeded EBAY_GB catalogue has correct category IDs
   //    (e.g. 3365 for Roman Imperial, not 4740 which is the eBay.com/US ID).
@@ -445,7 +448,7 @@ async function getCategorySuggestions(
       .eq('tree_version', treeVersion)
       .eq('active', true)
       .eq('is_leaf', true)
-      .or(`category_name.ilike.%${q}%,category_path.ilike.%${q}%`)
+      .or(`category_name.ilike.%${dbQuery}%,category_path.ilike.%${dbQuery}%`)
       .order('category_name')
       .limit(8);
     if (dbFirst && dbFirst.length > 0) {
@@ -539,7 +542,7 @@ async function getCategorySuggestions(
       .eq('tree_version', treeVersion)
       .eq('active', true)
       .eq('is_leaf', true)
-      .or(`category_name.ilike.%${q}%,category_path.ilike.%${q}%`)
+      .or(`category_name.ilike.%${dbQuery}%,category_path.ilike.%${dbQuery}%`)
       .order('category_name')
       .limit(10);
     if (dbRows && dbRows.length > 0) {
@@ -1045,10 +1048,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return json({ success: true, children: CURATED_LEAF_CATEGORIES, source: 'curated', note: 'eBay credentials not configured' });
     }
     if (route === 'get_category_suggestions') {
+      const safeQuery = String(query).trim().slice(0, 100).replace(/[(),%]/g, ' ').replace(/\s+/g, ' ').trim();
       const { data: dbRows } = await supabase.from('ebay_categories')
         .select('category_id, category_name, is_leaf, category_path')
         .eq('marketplace_id', MARKETPLACE_ID).eq('active', true).eq('is_leaf', true)
-        .or(`category_name.ilike.%${query}%,category_path.ilike.%${query}%`)
+        .or(`category_name.ilike.%${safeQuery}%,category_path.ilike.%${safeQuery}%`)
         .limit(8);
       if (dbRows && dbRows.length > 0) {
         const sug: CatSuggestion[] = dbRows.map((r: any, i: number) => ({
