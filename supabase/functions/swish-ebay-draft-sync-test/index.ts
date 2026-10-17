@@ -141,9 +141,23 @@ Deno.serve(async (request: Request) => {
       return json({ ok: true, action, changed: false, offer: safeOffer(before) });
     }
 
-    // Fetch the complete server-side offer, then PUT that same offer unchanged.
-    // Do not trust a client-supplied offer body. This endpoint never publishes.
-    const afterPut = await ebayRequest(credentials.accessToken, offerId, 'PUT', before);
+    // Rebuild only writable Inventory API fields. GET responses also contain
+    // server-managed fields (offerId/status/warnings/errors) which must not be PUT.
+    // The request body is always derived from eBay's live response, never the client.
+    const writableFields = [
+      'sku', 'marketplaceId', 'format', 'availableQuantity', 'categoryId',
+      'listingDescription', 'listingDuration', 'listingPolicies', 'pricingSummary',
+      'quantityLimitPerBuyer', 'includeCatalogProductDetails', 'merchantLocationKey',
+      'tax', 'storeCategoryNames', 'hideBuyerDetails', 'charity',
+    ];
+    const updateBody: Record<string, unknown> = {};
+    for (const field of writableFields) {
+      if (Object.prototype.hasOwnProperty.call(before, field)) updateBody[field] = before[field];
+    }
+    if (!updateBody.sku || !updateBody.marketplaceId || !updateBody.format) {
+      return json({ error: 'The offer is missing required writable fields. No changes were made.' }, 409);
+    }
+    const afterPut = await ebayRequest(credentials.accessToken, offerId, 'PUT', updateBody);
     const after = await ebayRequest(credentials.accessToken, offerId, 'GET');
     if (String(after?.status ?? '').toUpperCase() !== 'UNPUBLISHED') {
       return json({
