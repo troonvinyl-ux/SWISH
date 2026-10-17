@@ -396,7 +396,7 @@ function CategoryPickerModal({
       } else {
         setLiveCategories(data.children ?? []);
         setMode('live');
-        // curated/curated_verified = pre-verified list served when taxonomy scope not granted
+        // Curated/offline lists are fallback starters, not proof of current leaf status
         const isCurated = data.source === 'curated' || data.source === 'curated_verified';
         setCuratedSource(isCurated);
         if (isCurated) {
