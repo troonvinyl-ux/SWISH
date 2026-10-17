@@ -514,6 +514,7 @@ export default function EbayHubScreen() {
     { id: 'analytics', icon: 'insights', title: 'Analytics', description: 'Traffic, conversion, impressions, and performance', route: '/ebay-analytics', color: Colors.success, available: true },
     { id: 'csv', icon: 'upload-file', title: 'CSV Import', description: 'Bootstrap historical data from eBay exports', route: '/ebay-csv', color: Colors.primary, available: true },
     { id: 'import', icon: 'cloud-download', title: 'API Import', description: 'Import live listings via eBay Trading API', route: '/ebay-import', color: Colors.info, available: true },
+    { id: 'draft-roundtrip-test', icon: 'sync-alt', title: 'Draft Category Round-Trip Test', description: 'Test category sync using an unpublished eBay draft (test harness in progress)', route: '/ebay-draft-sync-test', color: Colors.warning, available: true },
     { id: 'marketing', icon: 'campaign', title: 'Marketing', description: 'Promoted listings and seller promotions', route: '/ebay-hub', color: Colors.accent, available: false, apiNote: 'Requires eBay Marketing API approval' },
     { id: 'account', icon: 'manage-accounts', title: 'Account & Policies', description: 'Business policies, selling limits, payment', route: '/ebay-account', color: Colors.textSecondary, available: true },
     { id: 'sync', icon: 'sync', title: 'Sync Engine', description: 'Synchronise listings, orders, and inventory', route: '/ebay-admin', color: Colors.primary, available: true },
