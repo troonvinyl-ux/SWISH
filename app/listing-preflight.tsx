@@ -158,6 +158,7 @@ export default function ListingPreflightScreen() {
                   route: 'resolve_category',
                   tenantId: tenant.id,
                   categoryId: String(categoryId),
+                  categoryName: String(attrs['ebay_category_name'] ?? attrs['_ebay_category_name'] ?? ''),
                   title,
                   specialistId: item?.specialist_id ?? '',
                 },
