@@ -921,8 +921,9 @@ export default function EbayReturnsScreen() {
     setSyncStatus(prev => ({ ...prev, syncing: true, error: null }));
     try {
       const supabase = getSupabaseClient();
+      const syncRoute = section === 'cases' ? 'sync_cases' : 'sync_returns';
       const { data, error } = await supabase.functions.invoke('swish-ebay-post-order', {
-        body: { route: 'sync_returns', tenantId: tenant.id },
+        body: { route: syncRoute, tenantId: tenant.id },
       });
 
       if (error) {
@@ -952,7 +953,17 @@ export default function EbayReturnsScreen() {
         lastFetched: fetched, lastImported: imported, lastUpdated: updated,
       }));
 
-      if (fetched === 0 && imported === 0) {
+      if (section === 'cases') {
+        if (fetched === 0 && imported === 0 && updated === 0) {
+          showAlert('No Cases Found', 'eBay returned no cases for this account.');
+        } else {
+          showAlert(
+            'Cases Synced',
+            `Fetched ${fetched} case${fetched !== 1 ? 's' : ''} from eBay.\n• ${imported} new · ${updated} updated`,
+          );
+          load();
+        }
+      } else if (fetched === 0 && imported === 0) {
         showAlert('No Open Returns', 'eBay reports no open return requests at this time.');
       } else {
         showAlert(
@@ -965,7 +976,7 @@ export default function EbayReturnsScreen() {
       setSyncStatus(prev => ({ ...prev, syncing: false, error: e?.message ?? 'Unknown error' }));
       showAlert('Sync Failed', e?.message ?? 'Could not sync returns from eBay.');
     }
-  }, [tenant, syncStatus.syncing, showAlert, load]);
+  }, [tenant, syncStatus.syncing, showAlert, load, section]);
 
   const openReturns = returns.filter(r => r.status !== 'closed' && r.status !== 'resolved');
   const openCases = cases.filter(c => c.status !== 'closed' && c.status !== 'resolved');
