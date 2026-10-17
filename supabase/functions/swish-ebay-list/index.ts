@@ -27,6 +27,8 @@
 //   set_policies            — persist user-selected policy IDs to connector
 //   resolve_category        — resolve a category to a valid leaf category
 //   get_category_aspects    — fetch required/recommended aspects for a leaf category
+//   get_category_children   — browse cached/live EBAY_GB category branches
+//   get_category_suggestions— search only live/cached eBay leaf categories
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
@@ -1238,6 +1240,245 @@ async function handleRequest(req: Request): Promise<Response> {
     const { error } = await supabase.from('marketplace_connectors').update(updates).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay');
     if (error) return jsonResponse({ error: error.message }, 500);
     return jsonResponse({ success: true });
+  }
+
+  // ── Taxonomy browser/search routes (fallback for the dedicated category function) ──
+  if (route === 'get_category_children' || route === 'get_category_suggestions') {
+    const query = String(body.query ?? body.searchQuery ?? '').trim().slice(0, 100);
+    const parentId = String(body.parentId ?? '').trim();
+    const { data: connector } = await supabase
+      .from('marketplace_connectors')
+      .select('credential_ref')
+      .eq('tenant_id', tenantId)
+      .eq('marketplace_id', 'ebay')
+      .maybeSingle();
+
+    // Prefer the application token (does not require the seller to have completed
+    // OAuth); retry with the seller token when the app token lacks Taxonomy scope.
+    const categoryTokens: string[] = [];
+    const appToken = await getAppToken();
+    if (appToken) categoryTokens.push(appToken);
+    if (connector?.credential_ref) {
+      const sellerCreds = await getEbayCredentials(supabase, tenantId, false);
+      if (!('error' in sellerCreds) && sellerCreds.accessToken && !categoryTokens.includes(sellerCreds.accessToken)) {
+        categoryTokens.push(sellerCreds.accessToken);
+      }
+    }
+
+    // Search suggestions must return leaf categories only.
+    if (route === 'get_category_suggestions' || query.length >= 2) {
+      if (query.length < 2) {
+        return jsonResponse({ success: false, error: 'query is required (min 2 characters)', suggestions: [] }, 400);
+      }
+
+      let suggestions: Array<{ id: string; name: string; isLeaf: boolean; confidence: string; categoryPath?: string }> = [];
+      let source = 'ebay_live';
+
+      for (const token of categoryTokens) {
+        try {
+          const { treeId } = await getUkCategoryTreeId(token);
+          const response = await fetch(
+            `${EBAY_TAXONOMY_API}/category_tree/${treeId}/get_category_suggestions?q=${encodeURIComponent(query)}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                'X-EBAY-C-MARKETPLACE-ID': 'EBAY_GB',
+              },
+              signal: AbortSignal.timeout(8000),
+            },
+          );
+          if (!response.ok) continue;
+          const payload = await response.json();
+          const raw = Array.isArray(payload.categorySuggestions) ? payload.categorySuggestions : [];
+          suggestions = raw.map((s: any, i: number) => {
+            const cat = s.category ?? {};
+            const ancestors = Array.isArray(s.categoryTreeNodeAncestors) ? s.categoryTreeNodeAncestors : [];
+            const parts = [...ancestors.map((a: any) => String(a.categoryName ?? '')), String(cat.categoryName ?? '')].filter(Boolean);
+            return {
+              id: String(cat.categoryId ?? ''),
+              name: String(cat.categoryName ?? ''),
+              isLeaf: s.leafCategoryTreeNode === true,
+              confidence: i === 0 ? 'high' : i < 3 ? 'medium' : 'low',
+              categoryPath: parts.join(' > '),
+            };
+          }).filter((s: any) => s.id && s.name && s.isLeaf).slice(0, 8);
+          if (suggestions.length) break;
+        } catch (e: any) {
+          console.log(`[SWISH Category] Suggestion search attempt failed: ${e.message}`);
+        }
+      }
+
+      // Use the EBAY_GB local catalogue if live taxonomy isn't accessible.
+      if (!suggestions.length) {
+        try {
+          const safeQuery = query.replace(/[(),%]/g, ' ').trim();
+          const { data: cached } = await supabase.from('ebay_categories')
+            .select('category_id, category_name, category_path')
+            .eq('marketplace_id', 'EBAY_GB')
+            .eq('active', true)
+            .eq('is_leaf', true)
+            .or(`category_name.ilike.%${safeQuery}%,category_path.ilike.%${safeQuery}%`)
+            .order('category_name')
+            .limit(8);
+          if (cached?.length) {
+            suggestions = cached.map((row: any, i: number) => ({
+              id: String(row.category_id), name: String(row.category_name), isLeaf: true,
+              confidence: i === 0 ? 'medium' : 'low', categoryPath: row.category_path ?? row.category_name,
+            }));
+            source = 'db_cache';
+          }
+        } catch (e: any) {
+          console.log(`[SWISH Category] Local suggestion lookup failed: ${e.message}`);
+        }
+      }
+
+      if (!suggestions.length) {
+        return jsonResponse({ success: false, error: 'No matching EBAY_GB leaf categories found. Check the category service deployment/Taxonomy scope or try another keyword.', suggestions: [] });
+      }
+      return jsonResponse({ success: true, suggestions, source, query, marketplaceId: 'EBAY_GB' });
+    }
+
+    // Root entries double as safe browse starters. Parent nodes are labelled and
+    // may be drilled into; leaf nodes can be selected directly.
+    if (!parentId) {
+      const { data: roots } = await supabase.from('ebay_categories')
+        .select('category_id, category_name, is_leaf, category_path')
+        .eq('marketplace_id', 'EBAY_GB')
+        .eq('active', true)
+        .is('parent_category_id', null)
+        .order('category_name')
+        .limit(150);
+      if (roots?.length) {
+        return jsonResponse({
+          success: true,
+          children: roots.map((row: any) => ({
+            id: String(row.category_id), name: String(row.category_name),
+            isLeaf: row.is_leaf === true, childCount: row.is_leaf === true ? 0 : 1,
+            categoryPath: row.category_path ?? row.category_name,
+          })),
+          source: 'db_cache', parentId: '', marketplaceId: 'EBAY_GB',
+        });
+      }
+
+      const curatedRoots = [
+        { id: '267', name: 'Coins (browse all)', isLeaf: false, childCount: 20 },
+        { id: '4726', name: 'British Coins', isLeaf: true, childCount: 0 },
+        { id: '40714', name: 'Ancient Coins', isLeaf: true, childCount: 0 },
+        { id: '18594', name: 'Medieval Coins', isLeaf: true, childCount: 0 },
+        { id: '18593', name: 'Hammered Coins', isLeaf: true, childCount: 0 },
+        { id: '527', name: 'Coin Collections & Lots', isLeaf: true, childCount: 0 },
+        { id: '37964', name: 'Medals: Commemorative', isLeaf: true, childCount: 0 },
+        { id: '37965', name: 'Medals: Other', isLeaf: true, childCount: 0 },
+        { id: '13956', name: 'Militaria (browse all)', isLeaf: false, childCount: 10 },
+        { id: '261', name: 'Great Britain Stamps', isLeaf: true, childCount: 0 },
+        { id: '183454', name: 'Trading Cards / CCG', isLeaf: true, childCount: 0 },
+        { id: '1469', name: 'Other Collectables (browse all)', isLeaf: false, childCount: 10 },
+        { id: '20091', name: 'Antique Furniture', isLeaf: true, childCount: 0 },
+        { id: '870', name: 'Ceramics & Pottery', isLeaf: true, childCount: 0 },
+        { id: '261186', name: 'Rare & Antiquarian Books', isLeaf: true, childCount: 0 },
+        { id: '281', name: 'Jewellery & Watches (browse)', isLeaf: false, childCount: 10 },
+        { id: '50', name: 'Fine Jewellery', isLeaf: true, childCount: 0 },
+        { id: '14324', name: 'Wristwatches', isLeaf: true, childCount: 0 },
+        { id: '79183', name: 'Motocross / Off-Road Bikes', isLeaf: true, childCount: 0 },
+        { id: '35586', name: 'Motorcycle Parts (browse all)', isLeaf: false, childCount: 20 },
+        { id: '177831', name: 'Mountain Bikes', isLeaf: true, childCount: 0 },
+        { id: '56197', name: 'Road Bikes', isLeaf: true, childCount: 0 },
+        { id: '152506', name: 'Trainers & Athletic Shoes', isLeaf: true, childCount: 0 },
+        { id: '175748', name: 'Vintage Clothing', isLeaf: true, childCount: 0 },
+        { id: '3002', name: 'T-Shirts', isLeaf: true, childCount: 0 },
+      ];
+      return jsonResponse({ success: true, children: curatedRoots, source: 'curated', parentId: '', marketplaceId: 'EBAY_GB' });
+    }
+
+    // For child browsing, use the cached branch if available, otherwise ask live
+    // Taxonomy. Persisted cache is keyed by category_id (not category name).
+    try {
+      const { data: cachedChildren } = await supabase.from('ebay_categories')
+        .select('category_id, category_name, is_leaf, category_path')
+        .eq('marketplace_id', 'EBAY_GB')
+        .eq('parent_category_id', parentId)
+        .eq('active', true)
+        .order('is_leaf', { ascending: false })
+        .order('category_name')
+        .limit(200);
+      if (cachedChildren?.length) {
+        return jsonResponse({
+          success: true,
+          children: cachedChildren.map((row: any) => ({
+            id: String(row.category_id), name: String(row.category_name),
+            isLeaf: row.is_leaf === true, childCount: row.is_leaf === true ? 0 : 1,
+            categoryPath: row.category_path ?? row.category_name,
+          })),
+          source: 'db_cache', parentId, marketplaceId: 'EBAY_GB',
+        });
+      }
+    } catch (e: any) {
+      console.log(`[SWISH Category] Cached child lookup failed: ${e.message}`);
+    }
+
+    let lastError = '';
+    for (const token of categoryTokens) {
+      try {
+        const { treeId, version } = await getUkCategoryTreeId(token);
+        const response = await fetch(
+          `${EBAY_TAXONOMY_API}/category_tree/${treeId}/get_category_subtree?category_id=${encodeURIComponent(parentId)}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+              'X-EBAY-C-MARKETPLACE-ID': 'EBAY_GB',
+            },
+            signal: AbortSignal.timeout(10000),
+          },
+        );
+        if (!response.ok) {
+          lastError = `eBay Taxonomy returned HTTP ${response.status}`;
+          continue;
+        }
+        const payload = await response.json();
+        const parentNode = payload.categorySubtreeNode;
+        const nodes = Array.isArray(parentNode?.childCategoryTreeNodes) ? parentNode.childCategoryTreeNodes : [];
+        const { data: parentRow } = await supabase.from('ebay_categories')
+          .select('category_path, path_ids')
+          .eq('marketplace_id', 'EBAY_GB')
+          .eq('category_id', parentId)
+          .maybeSingle();
+        const parentPath = parentRow?.category_path ?? String(parentNode?.category?.categoryName ?? parentId);
+        const parentPathIds = parentRow?.path_ids ?? parentId;
+        const now = new Date().toISOString();
+        const children = nodes.map((node: any) => {
+          const id = String(node.category?.categoryId ?? '');
+          const name = String(node.category?.categoryName ?? '');
+          const isLeaf = node.leafCategoryTreeNode === true;
+          return {
+            id, name, isLeaf,
+            childCount: isLeaf ? 0 : Number(node.childCategoryTreeNodeCount ?? 1),
+            categoryPath: [parentPath, name].filter(Boolean).join(' > '),
+          };
+        }).filter((child: any) => child.id && child.name);
+        const toCache = children.map((child: any) => ({
+          marketplace_id: 'EBAY_GB', tree_id: treeId, tree_version: version ?? 'unknown',
+          category_id: child.id, category_name: child.name, parent_category_id: parentId,
+          is_leaf: child.isLeaf, active: true, category_path: child.categoryPath,
+          path_ids: parentPathIds ? `${parentPathIds}|${child.id}` : child.id,
+          last_synced_at: now, updated_at: now,
+        }));
+        if (toCache.length) {
+          const { error: cacheError } = await supabase.from('ebay_categories').upsert(toCache, { onConflict: 'marketplace_id,category_id' });
+          if (cacheError) console.log(`[SWISH Category] Child cache write failed: ${cacheError.message}`);
+        }
+        return jsonResponse({ success: true, children, source: 'ebay_live', parentId, treeId, marketplaceId: 'EBAY_GB' });
+      } catch (e: any) {
+        lastError = e?.message ?? 'Taxonomy request failed';
+      }
+    }
+
+    return jsonResponse({
+      success: false,
+      error: lastError || 'Category branch is not cached and live eBay Taxonomy is unavailable.',
+      children: [], parentId, marketplaceId: 'EBAY_GB',
+    });
   }
 
   // ── Route: resolve_category ───────────────────────────────────────────────
