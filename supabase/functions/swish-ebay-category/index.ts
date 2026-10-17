@@ -73,7 +73,7 @@ async function getAppToken(): Promise<{ token: string | null; error?: string }> 
     const resp = await fetch(EBAY_TOKEN_URL, {
       method: 'POST',
       headers: { 'Authorization': `Basic ${basicAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope%20https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope%2Fcommerce.taxonomy.readonly',
+      body: 'grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope',
       signal: AbortSignal.timeout(8000),
     });
     const data = await resp.json();
