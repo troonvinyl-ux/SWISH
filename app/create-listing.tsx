@@ -251,11 +251,11 @@ function InlineCategoryPicker({
       }
 
       setLiveCategories(data.children ?? []);
-      // curated/curated_verified sources are pre-verified EBAY_GB lists — show as live
+      // Offline starter lists are navigation fallback only; final publish must verify live
       setMode('live');
       // Show a note if eBay returned a curated list instead of full tree
       if (data.source === 'curated' || data.source === 'curated_verified') {
-        setLiveError('Showing verified SWISH category list (live tree browser requires commerce.taxonomy.readonly scope in eBay developer app).');
+        setLiveError('Showing offline category starters because live eBay Taxonomy is unavailable. Each selected category must be verified live before publishing. Reconnect eBay if the live browser keeps failing.');
       }
     } catch (e: any) {
       clearTimeout(timeoutId);
