@@ -30,7 +30,7 @@ export default function EbayDraftSyncTestScreen() {
   const [result, setResult] = useState<Result | null>(null);
   const [phase, setPhase] = useState<'read' | 'roundtrip' | null>(null);
 
-  async function runTest(action: 'read_offer' | 'round_trip_unpublished') {
+  async function runTest(action: 'read_offer' | 'import_offer' | 'sync_category_from_ebay' | 'round_trip_unpublished' | 'push_swish_category') {
     if (!tenant?.id) {
       setResult({ error: 'SWISH has not finished loading your organisation. Return to the app and try again.' });
       return;
@@ -100,11 +100,29 @@ export default function EbayDraftSyncTestScreen() {
           <Text style={styles.buttonText}>Read draft from eBay</Text>
         </Pressable>
 
+        <Pressable disabled={busy} onPress={() => runTest('import_offer')} style={[styles.button, styles.secondaryButton, busy && styles.disabled]}>
+          <MaterialIcons name="inventory" size={18} color={Colors.background} />
+          <Text style={styles.buttonText}>Import unpublished draft into SWISH</Text>
+        </Pressable>
+
         <Text style={styles.sectionTitle}>2 · Push unchanged draft back</Text>
         <Text style={styles.body}>This sends the same writable offer fields back to eBay, then reads the draft again and compares the category and other tracked fields.</Text>
         <Pressable disabled={busy} onPress={() => runTest('round_trip_unpublished')} style={[styles.button, styles.secondaryButton, busy && styles.disabled]}>
           {busy && phase === 'roundtrip' ? <ActivityIndicator color={Colors.background} /> : <MaterialIcons name="sync" size={18} color={Colors.background} />}
           <Text style={styles.buttonText}>Round-trip unpublished draft</Text>
+        </Pressable>
+
+        <Text style={styles.sectionTitle}>3 · Sync a category change from eBay</Text>
+        <Text style={styles.body}>After changing the category on eBay (leave the offer unpublished), use this to copy eBay's exact category ID into the linked SWISH draft.</Text>
+        <Pressable disabled={busy} onPress={() => runTest('sync_category_from_ebay')} style={[styles.button, styles.secondaryButton, busy && styles.disabled]}>
+          <MaterialIcons name="sync-alt" size={18} color={Colors.background} />
+          <Text style={styles.buttonText}>Sync category from eBay to SWISH</Text>
+        </Pressable>
+        <Text style={styles.sectionTitle}>4 · Push SWISH category back to eBay</Text>
+        <Text style={styles.body}>Checks the SWISH category against eBay UK taxonomy before writing it back. The offer must remain unpublished.</Text>
+        <Pressable disabled={busy} onPress={() => runTest('push_swish_category')} style={[styles.button, styles.secondaryButton, busy && styles.disabled]}>
+          <MaterialIcons name="cloud-upload" size={18} color={Colors.background} />
+          <Text style={styles.buttonText}>Push SWISH category to eBay</Text>
         </Pressable>
 
         {busy ? <View style={styles.loading}><ActivityIndicator color={Colors.primary} /><Text style={styles.body}>Checking the eBay draft…</Text></View> : null}
@@ -115,7 +133,7 @@ export default function EbayDraftSyncTestScreen() {
               {result.error ? 'Test stopped' : result.ok ? 'Check complete' : 'Review result'}
             </Text>
             {result.error ? <Text style={styles.body}>{result.error}</Text> : null}
-            {result.message ? <Text style={styles.body}>{result.message}</Text> : null}
+            {result.message ? <Text style={styles.body}>{result.message}</Text> : null}\n            {result.inventoryId ? <Text style={styles.body}>SWISH inventory ID: {result.inventoryId}</Text> : null}\n            {result.itemId ? <Text style={styles.body}>SWISH item ID: {result.itemId}</Text> : null}\n            {result.syncedCategoryId ? <Text style={styles.body}>Synced category ID: {result.syncedCategoryId}</Text> : null}\n            {result.pushedCategoryId ? <Text style={styles.body}>Pushed category ID: {result.pushedCategoryId}</Text> : null}
             {shownOffer ? (
               <View style={styles.details}>
                 <Detail label="Offer ID" value={shownOffer.offerId} />
@@ -143,7 +161,7 @@ export default function EbayDraftSyncTestScreen() {
         <View style={styles.warning}>
           <MaterialIcons name="info-outline" size={18} color={Colors.warning} />
           <Text style={styles.body}>
-            This first diagnostic verifies eBay draft read/write behaviour only. It does not yet import the offer into the SWISH inventory database or test category edits syncing back from eBay; those steps must be added and verified before the full round-trip test is complete.
+            Use the sequence above on a disposable unpublished draft. Never use a published listing. Import creates a SWISH inventory item/listing; category sync copies the exact eBay category ID; push is blocked unless eBay UK taxonomy verifies the category as a leaf. The backend must be deployed before these controls can work.
           </Text>
         </View>
 
