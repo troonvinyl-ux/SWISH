@@ -234,19 +234,58 @@ export default function ListingPreflightScreen() {
     setCatBrowseItems([]);
     try {
       const supabase = getSupabaseClient();
-      const { data } = await supabase.functions.invoke('swish-ebay-category', {
-        body: { route: 'get_category_children', tenantId: tenant.id, parentId: parentId || '' },
-      });
+      let data: any = null;
+      let error: any = null;
+      try {
+        const primary = await supabase.functions.invoke('swish-ebay-category', {
+          body: { route: 'get_category_children', tenantId: tenant.id, parentId: parentId || '' },
+        });
+        data = primary.data;
+        error = primary.error;
+      } catch (e: any) {
+        error = e;
+      }
+
+      if (error || !data?.success || ['curated', 'curated_verified'].includes(data?.source)) {
+        try {
+          const fallback = await supabase.functions.invoke('swish-ebay-list', {
+            body: { route: 'get_category_children', tenantId: tenant.id, parentId: parentId || '' },
+          });
+          if (!fallback.error && fallback.data?.success) {
+            data = fallback.data;
+            error = null;
+          } else {
+            error = fallback.error ?? error;
+            if (fallback.data) data = fallback.data;
+          }
+        } catch (e: any) {
+          error = error ?? e;
+        }
+      }
+
+      if (error || !data?.success) {
+        setCatBrowseItems([]);
+        showAlert('eBay Categories Unavailable', data?.error ?? error?.message ?? 'The eBay category service did not return a category list.');
+        return;
+      }
+
       const children = data?.children ?? data?.categories ?? [];
-      setCatBrowseItems(children.map((c: any) => ({
-        id: String(c.categoryId ?? c.id ?? ''),
-        name: String(c.categoryName ?? c.name ?? ''),
-        isLeaf: c.isLeaf === true || c.leafCategoryTreeNode === true,
-        hasChildren: c.hasChildren !== false && !(c.isLeaf === true),
-      })));
-    } catch { setCatBrowseItems([]); }
-    setCatBrowseLoading(false);
-  }, [tenant?.id]);
+      setCatBrowseItems(children
+        .filter((cat: any) => cat?.id || cat?.categoryId)
+        .map((cat: any) => ({
+          id: String(cat.categoryId ?? cat.id),
+          name: String(cat.categoryName ?? cat.name ?? ''),
+          isLeaf: cat.isLeaf === true || cat.leafCategoryTreeNode === true,
+          hasChildren: cat.isLeaf !== true && cat.leafCategoryTreeNode !== true && Number(cat.childCount ?? 1) > 0,
+        }))
+        .filter((cat: any) => cat.name));
+    } catch (e: any) {
+      setCatBrowseItems([]);
+      showAlert('eBay Categories Unavailable', e?.message ?? 'Could not load eBay categories.');
+    } finally {
+      setCatBrowseLoading(false);
+    }
+  }, [tenant?.id, showAlert]);
 
   const openCategoryPicker = useCallback(() => {
     setCatSearch('');
