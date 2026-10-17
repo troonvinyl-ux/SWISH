@@ -1060,24 +1060,28 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return json({ success: true, suggestions: filterCurated(query), source: 'curated' });
     }
     if (route === 'validate_category') {
+      // Without an OAuth app token the current eBay tree cannot be checked.
+      // A cached leaf/non-leaf flag is not authoritative and must not be returned
+      // as valid/invalid. The client can retry through swish-ebay-list using the
+      // connected seller token; otherwise it must display "not verified".
       const { data: row } = await supabase.from('ebay_categories')
-        .select('category_id, category_name, category_path, is_leaf, active, tree_id, tree_version')
-        .eq('marketplace_id', MARKETPLACE_ID).eq('category_id', categoryId).maybeSingle();
-      if (!row) {
-        return json({ success: true, valid: false, isLeaf: false, categoryId,
-          reason: 'Category not found in local catalogue. eBay credentials not configured for live validation.' });
-      }
-      if (!row.is_leaf) {
-        return json({ success: true, valid: false, isLeaf: false, active: row.active ?? true,
-          categoryId, categoryName: row.category_name, categoryPath: row.category_path,
-          categoryTreeId: row.tree_id ?? FALLBACK_TREE_ID, categoryTreeVersion: row.tree_version ?? 'unknown',
-          source: 'db_cache',
-          reason: `Category ${categoryId} ("${row.category_name}") is a parent category. Select a leaf category from the browser.` });
-      }
-      return json({ success: true, valid: true, isLeaf: true,
-        active: row.active ?? true, categoryId, categoryName: row.category_name,
-        categoryPath: row.category_path, categoryTreeId: row.tree_id ?? FALLBACK_TREE_ID,
-        categoryTreeVersion: row.tree_version ?? 'unknown', source: 'db_cache' });
+        .select('category_id, category_name, category_path, tree_id, tree_version')
+        .eq('marketplace_id', MARKETPLACE_ID)
+        .eq('category_id', categoryId)
+        .maybeSingle();
+      return json({
+        success: true,
+        valid: null,
+        isLeaf: null,
+        active: null,
+        categoryId,
+        categoryName: row?.category_name,
+        categoryPath: row?.category_path,
+        categoryTreeId: row?.tree_id ?? null,
+        categoryTreeVersion: row?.tree_version ?? null,
+        source: 'api_error',
+        reason: 'eBay Taxonomy token unavailable. A cached category cannot be treated as verified; retry live verification through the connected seller account.',
+      });
     }
     if (route === 'get_sync_stats') {
       return json({ success: true, ...(await getSyncStats(supabase)), tokenAvailable: false });
