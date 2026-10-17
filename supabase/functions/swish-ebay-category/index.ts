@@ -800,27 +800,9 @@ async function validateCategoryId(
     .maybeSingle();
 
   if (row) {
-    if (row.active === false) {
-      return { ...base, valid: false, isLeaf: row.is_leaf ?? false, active: false, source: 'db_cache',
-        categoryName: row.category_name, categoryPath: row.category_path,
-        reason: `Category ${categoryId} is no longer active in the EBAY_GB taxonomy.` };
-    }
-
-    if (row.is_leaf === true) {
-      // DB confirms leaf — also check aspects cache for a complete result
-      const { data: aspectRow } = await supabase.from('ebay_category_aspects')
-        .select('category_id').eq('marketplace_id', MARKETPLACE_ID).eq('category_id', categoryId).maybeSingle();
-      if (aspectRow) {
-        return { ...base, valid: true, isLeaf: true, active: true, source: 'db_cache',
-          categoryName: row.category_name, categoryPath: row.category_path,
-          categoryTreeId: row.tree_id ?? treeId, categoryTreeVersion: row.tree_version ?? treeVersion };
-      }
-      // DB says leaf but no aspects cached — validate via aspects endpoint (may return 200 or 400)
-      // Fall through to Step 2 below
-    }
-    // If DB says is_leaf=false, we still need to verify via the live API because
-    // the DB cache may have been set incorrectly by a previous buggy aspects call.
-    // Fall through to Step 2.
+    // This record is useful for the label/path shown to the user only. Both
+    // active=false and is_leaf=true can be stale, so neither may short-circuit
+    // publish-time validation. Always ask the current EBAY_GB Taxonomy API below.
   }
 
   // Step 2: Live Taxonomy aspects endpoint
@@ -844,7 +826,12 @@ async function validateCategoryId(
 
   if (aspectResult.isLeaf) {
     const { data: updatedRow } = await supabase.from('ebay_categories')
-      .select('category_name, category_path').eq('marketplace_id', MARKETPLACE_ID).eq('category_id', categoryId).maybeSingle();
+      .select('category_name, category_path')
+      .eq('marketplace_id', MARKETPLACE_ID)
+      .eq('tree_id', treeId)
+      .eq('tree_version', treeVersion)
+      .eq('category_id', categoryId)
+      .maybeSingle();
     const catName = updatedRow?.category_name ?? row?.category_name;
     const catPath = updatedRow?.category_path ?? row?.category_path;
     const hasAspects = aspectResult.aspects.length > 0;
