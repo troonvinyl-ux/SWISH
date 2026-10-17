@@ -1700,7 +1700,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
     AccessibilityInfo.announceForAccessibility(
       `Identification complete: ${result.canonicalTitle}, confidence ${Math.round(result.confidence * 100)}%`,
     );
-  }, [capturedImages, tenant?.id, setScanMode, selectedSpecialist]);
+  }, [capturedImages, tenant?.id, setScanMode, selectedSpecialist, weightInput, diameterInput, yearInput, materialInput, edgeLegendInput]);
 
   // ── Save to inventory ───────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
