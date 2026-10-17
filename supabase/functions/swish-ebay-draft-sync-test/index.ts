@@ -447,7 +447,7 @@ Deno.serve(async (request: Request) => {
       });
       if (!taxonomyResp.ok) return json({ error: 'Could not verify the selected category against eBay UK taxonomy. No eBay changes made.' }, 409);
       const taxonomyData: any = await taxonomyResp.json().catch(() => ({}));
-      const categoryNode = taxonomyData?.categorySubtree?.categoryTreeNode;
+      const categoryNode = taxonomyData?.categorySubtreeNode;
       if (String(categoryNode?.category?.categoryId ?? '') !== categoryId || categoryNode?.leafCategoryTreeNode !== true) {
         return json({ error: 'SWISH category is not verified as an eBay UK leaf category. No eBay changes made.' }, 409);
       }
