@@ -907,7 +907,7 @@ async function runTest(
 // IMPORTANT: Leaf status here is based on leafCategoryTreeNode from the live
 // EBAY_GB Taxonomy API. Offline examples are manually seeded from the published EBAY_GB category hierarchy; the live leaf flag remains authoritative when available.
 //
-// Note on Ancient coins: Greek (4738), Byzantine (3364), Islamic (4739), Roman Imperial (122471/3365/122472).
+// Note on Ancient coins: Greek (4738), Byzantine (3364), Islamic (4730), Roman Imperial (122471/3365/122472).
 // are leaf categories in EBAY_GB (leafCategoryTreeNode=true) even though
 // get_item_aspects_for_category returns 400 — they have no required specifics.
 // The DB entries for these will be set correctly after seed_priority_branches.
@@ -926,7 +926,7 @@ const CURATED_LEAF_CATEGORIES: Omit<CuratedCat, 'treeId'>[] = [
   { id: '4735', name: 'Roman Provincial Coins', isLeaf: true, childCount: 0 },
   { id: '3364', name: 'Byzantine Coins', isLeaf: true, childCount: 0 },
   { id: '4740', name: 'Ancient Chinese Coins', isLeaf: true, childCount: 0 },
-  { id: '4739', name: 'Islamic Coins', isLeaf: true, childCount: 0 },
+  { id: '4730', name: 'Islamic Coins', isLeaf: true, childCount: 0 },
   { id: '4737', name: 'Ancient Persian & Indian Coins', isLeaf: true, childCount: 0 },
   { id: '93500', name: 'Ancient Coin Collections & Bulk Lots', isLeaf: true, childCount: 0 },
   { id: '532', name: 'Other Ancient Coins', isLeaf: true, childCount: 0 },
