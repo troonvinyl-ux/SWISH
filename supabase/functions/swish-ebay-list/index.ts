@@ -1734,11 +1734,15 @@ async function handleRequest(req: Request): Promise<Response> {
   // ── Route: revise ─────────────────────────────────────────────────────────
   if (route === 'revise') {
     const {
-      listingId, externalListingId, title = '', description = '', price = 0,
+      listingId, externalListingId, title = '', description: bodyDescription, price = 0,
       condition = '', conditionDescription = '', listingType = 'FixedPriceItem',
       quantity = 1, itemSpecifics = [], mediaUrls: rawMediaUrls = [], categoryId: bodyCategoryId = '',
     } = body;
     if (!externalListingId) return jsonResponse({ error: 'externalListingId required for revise' }, 400);
+
+    // Never let an omitted/empty client description silently erase the live listing.
+    // Use the saved listing description as the fallback; a non-empty editor value wins.
+    let description = typeof bodyDescription === 'string' ? bodyDescription : '';
 
     // BUG A FIX: Read category from DB listings table if not supplied in body
     // The client passes the UI-selected category, but if the client media is empty
@@ -1752,7 +1756,7 @@ async function handleRequest(req: Request): Promise<Response> {
       try {
         const { data: lRow } = await supabase
           .from('listings')
-          .select('category_id, items(media, attributes, specialist_id)')
+          .select('category_id, description, title, price, items(media, attributes, specialist_id)')
           .eq('id', listingId)
           .eq('tenant_id', tenantId)
           .maybeSingle();
@@ -1761,6 +1765,12 @@ async function handleRequest(req: Request): Promise<Response> {
         if (!resolvedCategoryId && lRow?.category_id) {
           resolvedCategoryId = lRow.category_id;
           console.log(`[SWISH revise] Category resolved from DB: categoryId=${resolvedCategoryId}`);
+        }
+
+        // Preserve the saved description when the client omitted it or sent an empty string.
+        if (!description.trim() && typeof lRow?.description === 'string' && lRow.description.trim()) {
+          description = lRow.description;
+          console.log(`[SWISH revise] Description recovered from saved listing ${listingId}`);
         }
 
         // BUG E FIX: If the client passed 0 media URLs, resolve from DB item
