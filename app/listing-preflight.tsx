@@ -304,20 +304,53 @@ export default function ListingPreflightScreen() {
       setCatSearchLoading(true);
       try {
         const supabase = getSupabaseClient();
-        const { data } = await supabase.functions.invoke('swish-ebay-category', {
-          body: { route: 'get_category_suggestions', tenantId: tenant.id, query: text.trim().slice(0, 100) },
-        });
-        const sug = data?.suggestions ?? [];
-        setCatSuggestions(sug.map((s: any) => ({
-          id: String(s.categoryId ?? s.id ?? ''),
-          name: String(s.categoryName ?? s.name ?? ''),
-          path: s.categoryPath ?? '',
-          isLeaf: s.isLeaf === true || s.leafCategoryTreeNode === true,
-        })));
+        const query = text.trim().slice(0, 100);
+        let data: any = null;
+        let error: any = null;
+        try {
+          const primary = await supabase.functions.invoke('swish-ebay-category', {
+            body: { route: 'get_category_suggestions', tenantId: tenant.id, query },
+          });
+          data = primary.data;
+          error = primary.error;
+        } catch (e: any) {
+          error = e;
+        }
+
+        if (error || !data?.success || ['curated', 'curated_verified', 'db_cache_offline', 'curated_fallback'].includes(data?.source)) {
+          try {
+            const fallback = await supabase.functions.invoke('swish-ebay-list', {
+              body: { route: 'get_category_suggestions', tenantId: tenant.id, query },
+            });
+            if (!fallback.error && fallback.data?.success) {
+              data = fallback.data;
+              error = null;
+            } else {
+              error = fallback.error ?? error;
+              if (fallback.data) data = fallback.data;
+            }
+          } catch (e: any) {
+            error = error ?? e;
+          }
+        }
+        if (error || !data?.success) {
+          setCatSuggestions([]);
+          showAlert('eBay Category Search Failed', data?.error ?? error?.message ?? 'Unable to search eBay categories.');
+          return;
+        }
+        const sug = Array.isArray(data?.suggestions) ? data.suggestions : [];
+        setCatSuggestions(sug
+          .filter((s: any) => s?.id && s?.name && s.isLeaf === true)
+          .map((s: any) => ({
+            id: String(s.categoryId ?? s.id),
+            name: String(s.categoryName ?? s.name),
+            path: s.categoryPath ?? '',
+            isLeaf: true,
+          })));
       } catch { setCatSuggestions([]); }
       setCatSearchLoading(false);
     }, 500);
-  }, [tenant?.id]);
+  }, [tenant?.id, showAlert]);
 
   const handleCatDrillDown = useCallback((item: { id: string; name: string; isLeaf: boolean; hasChildren: boolean }) => {
     if (item.isLeaf) {
