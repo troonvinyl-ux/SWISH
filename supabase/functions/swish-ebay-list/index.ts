@@ -674,6 +674,20 @@ async function resolveLeafCategory(
     treeId: '', treeVersion: '', wasResolved: false, confidence: 'none', error: msg,
   });
 
+  // Legacy SWISH drafts may still store the retired Islamic Coins ID 4739.
+  // The live catalogue validation confirmed 4730 as the correct EBAY_GB leaf.
+  // Canonicalise this known legacy value server-side before validation/submission,
+  // so old drafts do not remain permanently blocked by their stale saved ID.
+  const requestedCategoryId = String(categoryId ?? '');
+  const isIslamicCoin = /\\b(islamic|dirham|dinar|abbasid|umayyad|fatimid|ilkhanid)\\b/i.test(
+    `${title ?? ''} ${storedCategoryName ?? ''} ${specialistId ?? ''}`,
+  );
+  if (requestedCategoryId === '4739' && isIslamicCoin) {
+    categoryId = '4730';
+    storedCategoryName = 'Islamic Coins';
+    console.log('[SWISH] Canonicalised legacy Islamic coin category 4739 → 4730 before live validation');
+  }
+
   const treeResult = await getUkCategoryTreeId(token);
   const treeId = treeResult.treeId;
   const treeVersion = treeResult.version;
