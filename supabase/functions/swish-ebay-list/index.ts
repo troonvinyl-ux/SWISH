@@ -1253,13 +1253,17 @@ async function handleRequest(req: Request): Promise<Response> {
         }
       }
 
-      // Use the EBAY_GB local catalogue if live taxonomy isn't accessible.
-      if (!suggestions.length) {
+      // Use the local catalogue only when it is synchronized to the exact live
+      // EBAY_GB tree version. If tree metadata is unavailable, stale category IDs
+      // are worse than an explicit search error, so do not guess from old rows.
+      if (!suggestions.length && currentTree) {
         try {
           const safeQuery = query.replace(/[(),%]/g, ' ').trim();
           const { data: cached } = await supabase.from('ebay_categories')
             .select('category_id, category_name, category_path')
             .eq('marketplace_id', 'EBAY_GB')
+            .eq('tree_id', currentTree.treeId)
+            .eq('tree_version', currentTree.version)
             .eq('active', true)
             .eq('is_leaf', true)
             .or(`category_name.ilike.%${safeQuery}%,category_path.ilike.%${safeQuery}%`)
@@ -1273,7 +1277,7 @@ async function handleRequest(req: Request): Promise<Response> {
             source = 'db_cache';
           }
         } catch (e: any) {
-          console.log(`[SWISH Category] Local suggestion lookup failed: ${e.message}`);
+          console.log(`[SWISH Category] Current-tree suggestion lookup failed: ${e.message}`);
         }
       }
 
