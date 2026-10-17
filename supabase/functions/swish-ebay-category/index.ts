@@ -474,8 +474,10 @@ async function getCategorySuggestions(
 
       const all: CatSuggestion[] = raw.map((s: any, i: number) => {
         const cat    = s.category ?? {};
-        // leafCategoryTreeNode is the authoritative leaf flag from eBay
-        const isLeaf = s.leafCategoryTreeNode === true;
+        // eBay's get_category_suggestions contract already returns leaf nodes.
+        // Unlike get_category_subtree, CategorySuggestion does NOT include
+        // leafCategoryTreeNode, so reading that property marks every result false.
+        const isLeaf = Boolean(cat.categoryId);
         const ancestors: any[] = s.categoryTreeNodeAncestors ?? [];
         const pathParts = [...ancestors.map((a: any) => a.categoryName ?? ''), cat.categoryName ?? ''].filter(Boolean);
         return {
