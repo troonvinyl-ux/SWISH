@@ -272,6 +272,26 @@ Deno.serve(async (request: Request) => {
               updated_at: new Date().toISOString(),
             }).eq('id', linkedListingId).eq('tenant_id', tenantId);
             if (listingUpdateErr) throw new Error('Could not update the existing SWISH draft listing: ' + listingUpdateErr.message);
+          } else {
+            const price = Number(before.pricingSummary?.price?.value ?? 0);
+            const { data: createdListing, error: createListingErr } = await db.from('listings').insert({
+              tenant_id: tenantId,
+              item_id: match.id,
+              marketplace_id: 'ebay',
+              external_listing_id: null,
+              title: String(match.canonical_title ?? before.sku ?? '').slice(0, 120),
+              description: String(before.listingDescription ?? match.description ?? ''),
+              price,
+              floor_price: 0,
+              ceiling_price: price * 1.5,
+              status: 'draft',
+              shipping_cost: 0,
+              views: 0,
+              watchers: 0,
+              category_id: String(before.categoryId ?? '') || null,
+            }).select('id').single();
+            if (createListingErr || !createdListing) throw new Error('Could not link the existing SWISH item to a draft listing: ' + (createListingErr?.message ?? 'no listing returned'));
+            linkedListingId = createdListing.id;
           }
           return json({
             ok: true, action, alreadyImported: true, matchedBySku: true,
