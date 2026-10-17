@@ -701,9 +701,6 @@ async function getCategoryAspects(
 
       if (definitelyNotLeaf) {
         console.log(`[cat-svc] Category ${categoryId}: confirmed NOT a leaf (HTTP ${res.status}, eBay error 13003/13004/404)`);
-        // Only write is_leaf=false if we're certain
-        await supabase.from('ebay_categories').update({ is_leaf: false, updated_at: new Date().toISOString() })
-          .eq('marketplace_id', MARKETPLACE_ID).eq('category_id', categoryId);
         return {
           aspects: [], isLeaf: false, definitelyNotLeaf: true,
           source: 'ebay_live', ebayStatus: res.status,
@@ -714,12 +711,6 @@ async function getCategoryAspects(
       // HTTP 400 but NOT a "not a leaf" error → this is a leaf with no defined aspects
       // (e.g. Greek coins, Byzantine coins — valid to list but eBay has no required specifics)
       console.log(`[cat-svc] Category ${categoryId}: HTTP ${res.status} but NOT a "not a leaf" error — treating as leaf with no aspects`);
-      // Mark as leaf in DB if not already
-      await supabase.from('ebay_categories').upsert({
-        marketplace_id: MARKETPLACE_ID, tree_id: treeId, category_id: categoryId,
-        is_leaf: true, active: true, last_synced_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-      }, { onConflict: 'marketplace_id,category_id' }).then(() => {}).catch(() => {});
-
       return {
         aspects: [], isLeaf: true, definitelyNotLeaf: false,
         source: 'ebay_live', ebayStatus: res.status,
@@ -729,7 +720,9 @@ async function getCategoryAspects(
 
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      return { aspects: [], isLeaf: false, source: 'ebay_error', ebayStatus: res.status,
+      // HTTP 401/403/429/5xx and network failures do not prove that a
+      // category is a parent. Surface it as unverified so the picker can retry.
+      return { aspects: [], isLeaf: null, source: 'ebay_error', ebayStatus: res.status,
         error: `eBay Taxonomy HTTP ${res.status}: ${body.slice(0, 200)}` };
     }
 
@@ -749,11 +742,6 @@ async function getCategoryAspects(
     const now = new Date().toISOString();
     await supabase.from('ebay_category_aspects').upsert(
       { marketplace_id: MARKETPLACE_ID, tree_id: treeId, category_id: categoryId, aspects, synced_at: now },
-      { onConflict: 'marketplace_id,category_id' },
-    );
-    await supabase.from('ebay_categories').upsert(
-      { marketplace_id: MARKETPLACE_ID, tree_id: treeId, category_id: categoryId,
-        category_name: categoryId, is_leaf: true, active: true, last_synced_at: now, updated_at: now },
       { onConflict: 'marketplace_id,category_id' },
     );
     return { aspects, isLeaf: true, source: 'ebay_live' };
@@ -843,7 +831,7 @@ async function validateCategoryId(
   //   404 → doesn't exist
   const aspectResult = await getCategoryAspects(supabase, token, treeId, categoryId, true);
 
-  if (aspectResult.source === 'error' || (!aspectResult.isLeaf && aspectResult.ebayStatus == null && aspectResult.error)) {
+  if (aspectResult.source === 'error' || aspectResult.source === 'ebay_error' || (!aspectResult.isLeaf && aspectResult.ebayStatus == null && aspectResult.error)) {
     return {
       ...base,
       valid: null,
