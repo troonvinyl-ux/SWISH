@@ -1,4 +1,0 @@
-SWISH GitHub write-permission test.
-
-Created to verify that the connected GitHub integration can commit a new file to the repository.
-No application code was changed.
