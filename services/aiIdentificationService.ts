@@ -260,6 +260,7 @@ export interface KnownItemAttributes {
   condition?: string;
   conditionGrade?: string;
   customNotes?: string;
+  edgeLegend?: string;
   existingTitle?: string;
   existingAttributes?: Record<string, any>;
 }
