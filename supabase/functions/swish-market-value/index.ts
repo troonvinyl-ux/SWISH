@@ -491,19 +491,26 @@ interface VisualSearchResult {
   error?: string;
 }
 
-async function runEbayVisualSearch(imageUrl: string, appToken: string): Promise<VisualSearchResult> {
+async function runEbayVisualSearch(imageInput: string, appToken: string): Promise<VisualSearchResult> {
   const noResult: VisualSearchResult = { available: false, items: [], totalFound: 0 };
   if (!appToken || !imageUrl) return noResult;
   try {
-    const imgResp = await fetch(imageUrl, { signal: AbortSignal.timeout(10000) });
-    if (!imgResp.ok) return { ...noResult, error: `Image fetch ${imgResp.status}` };
-    const imgBuffer = await imgResp.arrayBuffer();
-    const imgBytes = new Uint8Array(imgBuffer);
-    let b64 = '';
-    const chunkSize = 8192;
-    for (let i = 0; i < imgBytes.length; i += chunkSize) b64 += String.fromCharCode(...imgBytes.slice(i, i + chunkSize));
-    const imageBase64 = btoa(b64);
+    let imageBase64 = '';
+    if (/^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(imageInput)) {
+      imageBase64 = imageInput.slice(imageInput.indexOf(',') + 1).replace(/\s/g, '');
+    } else if (/^[A-Za-z0-9+/]+=*$/.test(imageInput) && imageInput.length > 100) {
+      imageBase64 = imageInput;
+    } else {
+      const imgResp = await fetch(imageInput, { signal: AbortSignal.timeout(10000) });
+      if (!imgResp.ok) return { ...noResult, error: `Image fetch ${imgResp.status}` };
+      const imgBytes = new Uint8Array(await imgResp.arrayBuffer());
+      let binary = '';
+      const chunkSize = 8192;
+      for (let i = 0; i < imgBytes.length; i += chunkSize) binary += String.fromCharCode(...imgBytes.slice(i, i + chunkSize));
+      imageBase64 = btoa(binary);
+    }
     if (imageBase64.length < 100) return { ...noResult, error: 'Image too small' };
+    if (imageBase64.length > 7_000_000) return { ...noResult, error: 'Image exceeds eBay visual-search size limit' };
     const resp = await fetch(`${EBAY_BROWSE_BASE}/item_summary/search_by_image?limit=10&fieldgroups=MATCHING_ITEMS`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${appToken}`, 'X-EBAY-C-MARKETPLACE-ID': EBAY_GLOBAL_ID, 'Content-Type': 'application/json' },
@@ -534,14 +541,14 @@ interface GeminiMarketResult {
   error?: string;
 }
 
-async function runGeminiMarketResearch(imageUrls: string[], title: string, specialistId: string, attributes: Record<string, any>, condition: string): Promise<GeminiMarketResult> {
+async function runGeminiMarketResearch(imageUrls: string[], title: string, specialistId: string, attributes: Record<string, any>, condition: string, inlineImageBase64 = ''): Promise<GeminiMarketResult> {
   const noResult: GeminiMarketResult = {
     available: false, searchTerms: [], estimatedLow: 0, estimatedMid: 0, estimatedHigh: 0,
     confidence: 'insufficient', itemDescription: '', marketContext: '', valuationBasis: '', comparableDescription: '',
   };
   const apiKey = Deno.env.get('ONSPACE_AI_API_KEY');
   const baseUrl = Deno.env.get('ONSPACE_AI_BASE_URL');
-  if (!apiKey || !baseUrl || imageUrls.length === 0) return { ...noResult, error: 'Gemini not configured or no images' };
+  if (!apiKey || !baseUrl || (imageUrls.length === 0 && !inlineImageBase64)) return { ...noResult, error: 'Gemini not configured or no images' };
 
   const nicheContext = specialistId === 'bicycles' ? 'bicycle or cycling component sold on eBay UK'
     : specialistId === 'motocross' ? 'motocross or off-road motorcycle sold on eBay UK'
@@ -569,10 +576,16 @@ estimatedLow/Mid/High: typical eBay UK SOLD prices (not asking). 0 if unable to 
 
   try {
     const messageContent: any[] = [{ type: 'text', text: prompt }];
-    for (const url of imageUrls.slice(0, 3)) {
+    if (inlineImageBase64 && inlineImageBase64.length <= 7_000_000) {
+      const dataUrl = inlineImageBase64.startsWith('data:image/')
+        ? inlineImageBase64
+        : `data:image/jpeg;base64,${inlineImageBase64}`;
+      messageContent.push({ type: 'image_url', image_url: { url: dataUrl } });
+    }
+    for (const url of imageUrls.slice(0, inlineImageBase64 ? 2 : 3)) {
       if (url.startsWith('https://')) messageContent.push({ type: 'image_url', image_url: { url } });
     }
-    console.log(`[SWISH Market v8] Gemini vision: ${imageUrls.length} images`);
+    console.log(`[SWISH Market v8] Gemini vision: ${imageUrls.length + (inlineImageBase64 ? 1 : 0)} images`);
     const resp = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -897,7 +910,7 @@ Deno.serve(async (req: Request) => {
     specialistId = 'curiosities_collectibles', attributes = {}, condition = '',
     identificationConfidence = 0.5, identificationTier = 'medium',
     numistaTypeId, numistaMatchScore = 0, numistaMatchTier = 'no_match',
-    applyToItem = false, imageUrls: callerImageUrls,
+    applyToItem = false, imageUrls: callerImageUrls, imageBase64: callerImageBase64,
   } = body;
 
   if (!tenantId) return jsonResponse({ error: 'tenantId is required' }, 400);
@@ -926,11 +939,18 @@ Deno.serve(async (req: Request) => {
     const { data: itemRow } = await supabase.from('items').select('media').eq('id', itemId).eq('tenant_id', tenantId).maybeSingle();
     imageUrls = ((itemRow?.media ?? []) as string[]).filter(u => typeof u === 'string' && u.startsWith('https://'));
   }
-  console.log(`[SWISH Market v7] Images: ${imageUrls.length}`);
+  // Research Centre sends a local image as a data URL. Keep it in-memory only:
+  // it is never persisted to the database or written to logs.
+  const inlineImageBase64 = typeof callerImageBase64 === 'string'
+    && /^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(callerImageBase64)
+    && callerImageBase64.length <= 7_000_000
+      ? callerImageBase64
+      : '';
+  console.log(`[SWISH Market v8] Images: ${imageUrls.length + (inlineImageBase64 ? 1 : 0)}`);
 
   // ── Phase 1: Gemini + App token (parallel, non-blocking) ──────────────────
   const [gemini, appToken] = await Promise.all([
-    runGeminiMarketResearch(imageUrls, cleanTitle, specialistId, attributes, condition),
+    runGeminiMarketResearch(imageUrls, cleanTitle, specialistId, attributes, condition, inlineImageBase64),
     getEbayAppToken(creds.clientId, creds.clientSecret),
   ]);
   console.log(`[SWISH Market v7] Gemini: available=${gemini.available} mid=£${gemini.estimatedMid} conf=${gemini.confidence}`);
@@ -945,7 +965,7 @@ Deno.serve(async (req: Request) => {
   const [teapeakResult, firstBrowseResult, visualSearch] = await Promise.all([
     callTerapeak(creds.accessToken, primaryQuery, 'PREVIOUS_3_MONTHS'),
     searchEbayBrowse(creds.accessToken, primaryQuery, 50),
-    (appToken && imageUrls.length > 0) ? runEbayVisualSearch(imageUrls[0], appToken) : Promise.resolve<VisualSearchResult>({ available: false, items: [], totalFound: 0 }),
+    (appToken && (inlineImageBase64 || imageUrls.length > 0)) ? runEbayVisualSearch(inlineImageBase64 || imageUrls[0], appToken) : Promise.resolve<VisualSearchResult>({ available: false, items: [], totalFound: 0 }),
   ]);
 
   // Mark credential as having analytics scope if Terapeak succeeded
@@ -1050,7 +1070,7 @@ Deno.serve(async (req: Request) => {
     .map(i => { const { score, reason } = scoreListing(i.title, i.price, cleanTitle, attributes, specialistId); return { ...i, score, reason }; })
     .sort((a, b) => b.score - a.score)
     .slice(0, 12)
-    .map(i => ({ title: i.title.slice(0, 80), price: i.price, listingType: i.listingType, score: Math.round(i.score * 100), url: i.url, evidenceClass: 'B_active_asking_price' }));
+    .map(i => ({ title: i.title.slice(0, 80), price: i.price, currency: i.currency, condition: i.condition, listingType: i.listingType, score: Math.round(i.score * 100), url: i.url, itemUrl: i.url, imageUrl: i.imageUrl, evidenceClass: 'B_active_asking_price' }));
   const relevantActiveCount = topComparables.filter(i => i.score >= 28).length;
 
   console.log(`[SWISH Market v8] Final: mid=£${valuation.valuationMid} conf=${valuation.valuationConfidence} method=${valuation.primaryEvidenceSource} teapeakSold=${finalTerapeak.soldQuantity} listPrice=£${valuation.recommendedListingPrice}`);
