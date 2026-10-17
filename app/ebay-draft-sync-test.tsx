@@ -19,6 +19,7 @@ type OfferSnapshot = {
 type Result = {
   ok?: boolean; error?: string; message?: string; offer?: OfferSnapshot;
   before?: OfferSnapshot; after?: OfferSnapshot; changedFields?: string[];
+  inventoryId?: string | number; itemId?: string; syncedCategoryId?: string; pushedCategoryId?: string;
 };
 
 export default function EbayDraftSyncTestScreen() {
@@ -133,7 +134,11 @@ export default function EbayDraftSyncTestScreen() {
               {result.error ? 'Test stopped' : result.ok ? 'Check complete' : 'Review result'}
             </Text>
             {result.error ? <Text style={styles.body}>{result.error}</Text> : null}
-            {result.message ? <Text style={styles.body}>{result.message}</Text> : null}\n            {result.inventoryId ? <Text style={styles.body}>SWISH inventory ID: {result.inventoryId}</Text> : null}\n            {result.itemId ? <Text style={styles.body}>SWISH item ID: {result.itemId}</Text> : null}\n            {result.syncedCategoryId ? <Text style={styles.body}>Synced category ID: {result.syncedCategoryId}</Text> : null}\n            {result.pushedCategoryId ? <Text style={styles.body}>Pushed category ID: {result.pushedCategoryId}</Text> : null}
+            {result.message ? <Text style={styles.body}>{result.message}</Text> : null}
+            {result.inventoryId ? <Text style={styles.body}>SWISH inventory ID: {result.inventoryId}</Text> : null}
+            {result.itemId ? <Text style={styles.body}>SWISH item ID: {result.itemId}</Text> : null}
+            {result.syncedCategoryId ? <Text style={styles.body}>Synced category ID: {result.syncedCategoryId}</Text> : null}
+            {result.pushedCategoryId ? <Text style={styles.body}>Pushed category ID: {result.pushedCategoryId}</Text> : null}
             {shownOffer ? (
               <View style={styles.details}>
                 <Detail label="Offer ID" value={shownOffer.offerId} />
