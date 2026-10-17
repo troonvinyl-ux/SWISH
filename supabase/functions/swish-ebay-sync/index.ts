@@ -258,7 +258,7 @@ function parseItemXml(itemXml: string, defaultStatus: 'active' | 'sold' | 'ended
       returnsPolicy: [returnsAccepted, returnsWithin, refundOption].filter(Boolean).join(', '),
       sku: extractTag(itemXml, 'SKU') || '',
       bestOfferEnabled: itemXml.includes('<BestOfferEnabled>true</BestOfferEnabled>'),
-      photos: photos.slice(0, 12),
+      photos: photos.slice(0, 24),
       galleryUrl,
       listedAt: extractTag(itemXml, 'StartTime') || null,
       endedAt: extractTag(itemXml, 'EndTime') || null,
