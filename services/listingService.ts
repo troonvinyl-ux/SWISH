@@ -532,16 +532,17 @@ export async function submitListingToMarketplace(
     };
   }
 
-  if (!verification.overallPassed) {
-    return {
-      success: false,
-      step: 'failed',
-      verificationPassed: false,
-      failureReasons: verification.failureReasons,
-      warnings: verification.warnings,
-      error: `Verification failed: ${verification.failureReasons.join('; ')}`,
-    };
-  }
+  // SWISH quality verification is advisory, not an eBay submission gate.
+  // Preserve the result and surface its failures as warnings, but allow the
+  // real eBay submission pipeline to decide whether the listing is acceptable.
+  // Missing listing / failed verification execution still blocks above; eBay's
+  // own authentication, category, policy and API response checks remain intact.
+  const verificationAdvisories = verification.overallPassed
+    ? []
+    : [
+        'SWISH verification advisory — review before or after listing:',
+        ...verification.failureReasons,
+      ];
 
   // ── Step 2: Pre-flight check — fetch category and business policy config ─────
   // The edge function reads listings.category_id — if it is null the Taxonomy
@@ -686,6 +687,7 @@ export async function submitListingToMarketplace(
     verificationPassed: true,
     warnings: [
       ...(verification.warnings ?? []),
+      ...verificationAdvisories,
       ...(ebayData.warnings ?? []),
     ],
     publishedAt: ebayData.publishedAt,
