@@ -16,8 +16,9 @@ type OfferSnapshot = {
   offerId?: string; sku?: string; status?: string; marketplaceId?: string;
   categoryId?: string; format?: string; availableQuantity?: number | null;
 };
+type DraftOffer = { offerId: string; sku?: string; categoryId?: string; status?: string; format?: string; availableQuantity?: number | null; marketplaceId?: string };
 type Result = {
-  ok?: boolean; error?: string; message?: string; offer?: OfferSnapshot;
+  ok?: boolean; error?: string; message?: string; offer?: OfferSnapshot; offers?: DraftOffer[];
   before?: OfferSnapshot; after?: OfferSnapshot; changedFields?: string[];
   inventoryId?: string | number; itemId?: string; syncedCategoryId?: string; pushedCategoryId?: string;
   source?: string; swishItemId?: string; swishListingId?: string; submittedFields?: string[];
@@ -28,17 +29,18 @@ export default function EbayDraftSyncTestScreen() {
   const insets = useSafeAreaInsets();
   const { tenant } = useApp();
   const [offerId, setOfferId] = useState('');
+  const [draftOffers, setDraftOffers] = useState<DraftOffer[]>([]);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [phase, setPhase] = useState<'read' | 'roundtrip' | null>(null);
 
-  async function runTest(action: 'read_offer' | 'import_offer' | 'sync_category_from_ebay' | 'round_trip_unpublished' | 'push_swish_category') {
+  async function runTest(action: 'list_unpublished_offers' | 'read_offer' | 'import_offer' | 'sync_category_from_ebay' | 'round_trip_unpublished' | 'push_swish_category') {
     if (!tenant?.id) {
       setResult({ error: 'SWISH has not finished loading your organisation. Return to the app and try again.' });
       return;
     }
-    if (!offerId.trim()) {
-      setResult({ error: 'Enter the offer ID from your unpublished eBay draft.' });
+    if (action !== 'list_unpublished_offers' && !offerId.trim()) {
+      setResult({ error: 'Select one of your eBay UK drafts first.' });
       return;
     }
     setBusy(true);
@@ -47,10 +49,17 @@ export default function EbayDraftSyncTestScreen() {
     try {
       const supabase = getSupabaseClient();
       const { data, error } = await supabase.functions.invoke('swish-ebay-draft-sync-test', {
-        body: { action, tenantId: tenant.id, offerId: offerId.trim() },
+        body: { action, tenantId: tenant.id, ...(offerId.trim() ? { offerId: offerId.trim() } : {}) },
       });
-      if (error) throw new Error(error.message || 'Could not call the draft diagnostic. The Edge Function may not be deployed yet.');
-      setResult(data as Result);
+      if (error) throw new Error(error.message || 'Could not load your eBay UK drafts. The Edge Function may not be deployed yet.');
+      if (action === 'list_unpublished_offers') {
+        const found = Array.isArray(data?.offers) ? data.offers as DraftOffer[] : [];
+        setDraftOffers(found);
+        setOfferId('');
+        setResult({ ok: true, message: found.length ? `Found ${found.length} unpublished eBay UK draft(s). Tap one below to select it.` : 'No unpublished drafts were returned by eBay UK. You do not need to find an API offer ID manually.' });
+      } else {
+        setResult(data as Result);
+      }
     } catch (error: any) {
       setResult({ error: error?.message || 'Draft diagnostic failed.' });
     } finally {
@@ -84,23 +93,32 @@ export default function EbayDraftSyncTestScreen() {
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>1 · Select your eBay draft</Text>
-        <Text style={styles.body}>In eBay, open the unpublished draft and copy its Inventory API offer ID. Enter that ID below—not the live listing item number.</Text>
-        <TextInput
-          value={offerId}
-          onChangeText={setOfferId}
-          autoCapitalize="none"
-          autoCorrect={false}
-          placeholder="eBay offer ID"
-          placeholderTextColor={Colors.textTertiary}
-          editable={!busy}
-          style={styles.input}
-        />
-
-        <Pressable disabled={busy} onPress={() => runTest('read_offer')} style={[styles.button, busy && styles.disabled]}>
+        <Text style={styles.sectionTitle}>1 · Choose a coin draft from eBay UK</Text>
+        <Text style={styles.body}>Tap the button below. SWISH will fetch your unpublished eBay UK drafts and let you select one. You do not need to find or copy an API ID.</Text>
+        <Pressable disabled={busy} onPress={() => runTest('list_unpublished_offers')} style={[styles.button, busy && styles.disabled]}>
           {busy && phase === 'read' ? <ActivityIndicator color={Colors.background} /> : <MaterialIcons name="download" size={18} color={Colors.background} />}
-          <Text style={styles.buttonText}>Read draft from eBay</Text>
+          <Text style={styles.buttonText}>Find my eBay UK drafts</Text>
         </Pressable>
+        {draftOffers.length ? (
+          <View style={styles.draftList}>
+            {draftOffers.map((offer) => (
+              <Pressable key={offer.offerId} disabled={busy} onPress={() => { setOfferId(offer.offerId); setResult({ ok: true, message: 'Draft selected. You can now import it into SWISH.' , offer }); }} style={[styles.draftOption, offerId === offer.offerId && styles.draftOptionSelected]}>
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text style={styles.draftTitle}>{offer.sku || 'eBay draft'}</Text>
+                  <Text style={styles.body}>Category {offer.categoryId || 'not set'} · {offer.format || 'format unknown'} · {offer.status || 'UNPUBLISHED'}</Text>
+                  <Text style={styles.draftId}>Offer reference: {offer.offerId}</Text>
+                </View>
+                <MaterialIcons name={offerId === offer.offerId ? 'radio-button-checked' : 'radio-button-unchecked'} size={20} color={Colors.primary} />
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+        {offerId ? (
+          <Pressable disabled={busy} onPress={() => runTest('read_offer')} style={[styles.button, styles.secondaryButton, busy && styles.disabled]}>
+            <MaterialIcons name="check-circle" size={18} color={Colors.background} />
+            <Text style={styles.buttonText}>Read selected draft</Text>
+          </Pressable>
+        ) : null}
 
         <Pressable disabled={busy} onPress={() => runTest('import_offer')} style={[styles.button, styles.secondaryButton, busy && styles.disabled]}>
           <MaterialIcons name="inventory" size={18} color={Colors.background} />
@@ -200,6 +218,11 @@ const styles = StyleSheet.create({
   title: { fontSize: Typography.size.xl, fontWeight: Typography.weight.bold, color: Colors.textPrimary },
   subtitle: { fontSize: Typography.size.xs, color: Colors.textTertiary, marginTop: 2 },
   content: { padding: Spacing.base, gap: Spacing.md },
+  draftList: { gap: Spacing.sm },
+  draftOption: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md, backgroundColor: Colors.surface, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.surfaceBorder },
+  draftOptionSelected: { borderColor: Colors.primary, backgroundColor: Colors.primaryDim },
+  draftTitle: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: Colors.textPrimary },
+  draftId: { fontSize: 10, color: Colors.textTertiary },
   notice: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md, padding: Spacing.base, borderRadius: Radius.xl, borderWidth: 1, borderColor: Colors.success + '55', backgroundColor: Colors.surface },
   noticeTitle: { fontSize: Typography.size.md, fontWeight: Typography.weight.bold, color: Colors.success },
   body: { fontSize: Typography.size.sm, color: Colors.textSecondary, lineHeight: 21 },
