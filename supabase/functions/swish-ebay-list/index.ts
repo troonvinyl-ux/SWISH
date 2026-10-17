@@ -184,30 +184,40 @@ async function getAppToken(): Promise<string | null> {
     return _appTokenCache.token;
   }
 
-  try {
-    const basicAuth = btoa(`${clientId}:${clientSecret}`);
-    const resp = await fetch(EBAY_TOKEN_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${basicAuth}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: 'grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope%20https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope%2Fcommerce.taxonomy.readonly',
-      signal: AbortSignal.timeout(5000),
-    });
-    const data = await resp.json();
-    if (!data.access_token) {
-      console.log(`[SWISH] App token request failed: ${data.error_description ?? data.error ?? 'unknown'}`);
-      return null;
+  const basicAuth = btoa(`${clientId}:${clientSecret}`);
+  const requestedScopes = [
+    'https://api.ebay.com/oauth/api_scope https://api.ebay.com/oauth/api_scope/commerce.taxonomy.readonly',
+    'https://api.ebay.com/oauth/api_scope',
+  ];
+
+  // Prefer Taxonomy scope for live categories. Fall back to the general app
+  // scope for unrelated public Browse calls; category routes then try the
+  // seller token, which must be re-authorised with commerce.taxonomy.readonly.
+  for (const scope of requestedScopes) {
+    try {
+      const resp = await fetch(EBAY_TOKEN_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${basicAuth}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({ grant_type: 'client_credentials', scope }).toString(),
+        signal: AbortSignal.timeout(5000),
+      });
+      const data = await resp.json();
+      if (!data.access_token) {
+        console.log(`[SWISH] App token request failed for requested scope: ${data.error_description ?? data.error ?? 'unknown'}`);
+        continue;
+      }
+      const expiresAt = Date.now() + (data.expires_in ?? 7200) * 1000;
+      _appTokenCache = { token: data.access_token, expiresAt };
+      console.log(`[SWISH] App token obtained successfully (taxonomyScope=${scope.includes('commerce.taxonomy.readonly')})`);
+      return data.access_token;
+    } catch (e: any) {
+      console.log(`[SWISH] App token fetch failed for scope: ${e.message}`);
     }
-    const expiresAt = Date.now() + (data.expires_in ?? 7200) * 1000;
-    _appTokenCache = { token: data.access_token, expiresAt };
-    console.log('[SWISH] App token obtained successfully (Taxonomy API)');
-    return data.access_token;
-  } catch (e: any) {
-    console.log(`[SWISH] App token fetch error: ${e.message}`);
-    return null;
   }
+  return null;
 }
 
 // ── Token refresh ─────────────────────────────────────────────────────────────
