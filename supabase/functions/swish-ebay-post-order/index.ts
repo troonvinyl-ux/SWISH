@@ -662,8 +662,6 @@ async function handleSyncCases(
         const deadline = dateValue(member.respondByDate ?? member.respondBy) ?? null;
         const buyerUsername = String(member.buyer ?? member.buyerUsername ?? '');
         const caseType = String(member.caseType ?? member.caseTypeEnum ?? member.caseReason ?? '');
-        const itemId = member.itemId ?? member.item_id ?? null;
-        const transactionId = member.transactionId ?? member.transaction_id ?? null;
         const row: Record<string, any> = {
           tenant_id: tenantId,
           ebay_case_id: ebayCaseId,
