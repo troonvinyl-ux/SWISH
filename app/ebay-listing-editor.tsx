@@ -112,80 +112,40 @@ const NUMISTA_TO_EBAY_CATEGORY: Record<string, { id: string; name: string }> = {
   roman:     { id: '4157', name: 'Roman Coins' },
   medieval:  { id: '18594', name: 'Medieval Coins' },
   hammered:  { id: '18593', name: 'Hammered Coins' },
-  milled:    { id: '4726', name: 'British Coins' },
-  decimal:   { id: '4726', name: 'British Coins' },
-  mughal:    { id: '40714', name: 'Ancient Coins' },
-  indian:    { id: '40714', name: 'Ancient Coins' },
-  persian:   { id: '40714', name: 'Ancient Coins' },
-  rupee:     { id: '40714', name: 'Ancient Coins' },
-  islamic:   { id: '40714', name: 'Ancient Coins' },
-  dirham:    { id: '40714', name: 'Ancient Coins' },
-  dinar:     { id: '40714', name: 'Ancient Coins' },
-  ancient:   { id: '40714', name: 'Ancient Coins' },
-};
-
-function getNumistaSuggestedCategory(attrs: Record<string, any>, specialistId: string): { id: string; name: string } | null {
-  // Only suggest coin categories for coin-related specialists.
-  // MX, bicycle, clothing specialists must NOT receive coin category defaults.
-  const COIN_SPECIALISTS = new Set([
-    'coins', 'coins_uk', 'coins_currency', 'coins_world', 'islamic_silver',
-    'banknotes', 'gold', 'silver', 'ancient_artefacts', 'curiosities_collectibles',
-  ]);
-  if (!COIN_SPECIALISTS.has(specialistId)) return null;
-
-  // 1. Check numista_category attribute
-  // Match the most-specific phrase first so "Ancient Greek" is not
-  // swallowed by the broad "ancient" fallback.
-  const categoryEntries = Object.entries(NUMISTA_TO_EBAY_CATEGORY)
-    .sort(([a], [b]) => b.length - a.length);
-  const numistaCategory = String(attrs['numista_category'] ?? '').toLowerCase();
-  for (const [keyword, cat] of categoryEntries) {
-    if (numistaCategory.includes(keyword)) return cat;
-  }
-  // 2. Apply the same specificity-first matching to the canonical title.
-  const title = String(attrs['canonical_title'] ?? '').toLowerCase();
-  for (const [keyword, cat] of categoryEntries) {
-    if (title.includes(keyword)) return cat;
-  }
-  if (title.includes('mughal') || title.includes('rupee') || title.includes('indo') ||
-      title.includes('kushan') || title.includes('mauryan') || title.includes('persian') ||
-      title.includes('indian') || title.includes('dirham') || title.includes('dinar') ||
-      title.includes('abbasid') || title.includes('umayyad') || title.includes('fatimid') ||
-      title.includes('ilkhanid') || title.includes('islamic')) {
-    return { id: '40714', name: 'Ancient Coins' };
-  }
-  if (title.includes('medieval') || title.includes('hammered')) {
-    return { id: '18594', name: 'Medieval Coins' };
-  }
-  // 3. Specialist ID fallback
-  return NUMISTA_TO_EBAY_CATEGORY[specialistId] ?? null;
-}
-
-// ── eBay Category static fallback list ───────────────────────────────────────
-
-// eBay UK Trading-API-verified leaf categories — universal, niche-spanning list
-// Add categories relevant to all SWISH niches: coins, MX, bicycles, clothing etc.
-const EBAY_CATEGORIES = [
-  // Offline EBAY_GB starter options only. Every selected ID is revalidated against live
-  // eBay Taxonomy at publish time; these labels never override the live category response.
-  { id: '4726', name: 'British Coins' },
-  { id: '40714', name: 'Ancient Coins' },
-  { id: '4738', name: 'Ancient Coins: Greek' },
-  { id: '4159', name: 'Ancient Coins: Byzantine' },
+  milled:      // EBAY_GB coin leaf categories from eBay UK's published tree. Do not use parent IDs.
+  { id: '4738', name: 'Ancient Greek Coins' },
+  { id: '122471', name: 'Roman Imperial Coins (27 BC–96 AD)' },
   { id: '3365', name: 'Roman Imperial Coins (96–235 AD)' },
-  { id: '4157', name: 'Roman Coins' },
-  { id: '4740', name: 'Ancient Coins: Roman Imperial' },
-  { id: '4741', name: 'Ancient Coins: Roman Republic' },
-  { id: '4742', name: 'Ancient Coins: Celtic' },
-  { id: '4743', name: 'Ancient Coins: Judean' },
-  { id: '4744', name: 'Ancient Coins: Other' },
-  { id: '18594', name: 'Medieval Coins' },
-  { id: '18593', name: 'Hammered Coins' },
-  { id: '527', name: 'Coin Collections & Lots' },
-  { id: '4138', name: 'US Coins' },
-  { id: '4735', name: 'World Coins' },
-  { id: '4734', name: 'Australian Coins' },
-  { id: '29539', name: 'Bullion (Gold / Silver Coins)' },
+  { id: '122472', name: 'Roman Imperial Coins (235–476 AD)' },
+  { id: '4734', name: 'Roman Republican Coins' },
+  { id: '4735', name: 'Roman Provincial Coins' },
+  { id: '3364', name: 'Byzantine Coins' },
+  { id: '4740', name: 'Ancient Chinese Coins' },
+  { id: '4739', name: 'Islamic Coins' },
+  { id: '4737', name: 'Ancient Persian & Indian Coins' },
+  { id: '93500', name: 'Ancient Coin Collections & Bulk Lots' },
+  { id: '532', name: 'Other Ancient Coins' },
+  { id: '122475', name: 'Celtic Coins (c.100 BC–c.100 AD)' },
+  { id: '58523', name: 'Anglo-Saxon Coins (c.600–1066)' },
+  { id: '122476', name: 'Norman Coins (1066–1154)' },
+  { id: '47389', name: 'Later Medieval British Coins' },
+  { id: '58524', name: 'Tudor Coins (1485–1603)' },
+  { id: '122477', name: 'Stuart & Commonwealth Coins' },
+  { id: '58522', name: 'Other British Hammered Coins' },
+  { id: '122486', name: 'British 50p Coins' },
+  { id: '122487', name: 'British One Pound Coins' },
+  { id: '122488', name: 'British Two Pound Coins' },
+  { id: '3407', name: 'Other British Decimal Coinage' },
+  { id: '93508', name: 'British Coin Collections & Bulk Lots' },
+  { id: '79964', name: 'Other British Coins' },
+  { id: '539', name: 'French Coins' },
+  { id: '540', name: 'German Coins' },
+  { id: '45152', name: 'Greek Modern Coins' },
+  { id: '93509', name: 'European Coin Collections & Bulk Lots' },
+  { id: '93510', name: 'World Coin Collections & Bulk Lots' },
+  { id: '257', name: 'Other World Coins' },
+  { id: '177652', name: 'Gold Bullion Coins' },
+  { id: '177653', name: 'Silver Bullion Coins' },
   { id: '47188', name: 'Tokens, Medals & Badges' },
   { id: '620', name: 'Exonumia' },
   { id: '10968', name: 'Notgeld & Emergency Currency' },
