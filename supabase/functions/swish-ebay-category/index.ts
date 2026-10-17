@@ -436,35 +436,11 @@ async function getCategorySuggestions(
   // user-entered text before inserting it into the filter expression.
   const dbQuery = q.replace(/[(),%]/g, ' ').replace(/\s+/g, ' ').trim();
 
-  // 0. LOCAL DB FIRST — the seeded EBAY_GB catalogue has correct category IDs
-  //    (e.g. 3365 for Roman Imperial, not 4740 which is the eBay.com/US ID).
-  //    seed_priority_branches syncs the Coins branch 6 levels deep with MARKETPLACE_ID=EBAY_GB,
-  //    so the DB is the authoritative source of truth for EBAY_GB leaf IDs.
-  try {
-    const { data: dbFirst } = await supabase.from('ebay_categories')
-      .select('category_id, category_name, is_leaf, category_path, tree_id, tree_version')
-      .eq('marketplace_id', MARKETPLACE_ID)
-      .eq('tree_id', treeId)
-      .eq('tree_version', treeVersion)
-      .eq('active', true)
-      .eq('is_leaf', true)
-      .or(`category_name.ilike.%${dbQuery}%,category_path.ilike.%${dbQuery}%`)
-      .order('category_name')
-      .limit(8);
-    if (dbFirst && dbFirst.length > 0) {
-      console.log(`[cat-svc] DB-first match: ${dbFirst.length} results for "${q}"`);
-      return {
-        suggestions: dbFirst.map((r: any, i: number) => ({
-          id: r.category_id, name: r.category_name, isLeaf: true,
-          confidence: i === 0 ? 'high' : 'medium',
-          categoryPath: r.category_path, treeId: r.tree_id ?? treeId, treeVersion: r.tree_version ?? treeVersion,
-        })).slice(0, 8),
-        source: 'db_cache',
-      };
-    }
-  } catch {}
+  // Query the current EBAY_GB Taxonomy before using the local cache. Category entries
+  // can outlive a taxonomy change, so cached labels/leaf flags must never outrank the
+  // live suggestion response. The DB below remains a fallback if live taxonomy fails.
 
-  // 1. Live eBay Taxonomy API — leafCategoryTreeNode is authoritative
+  // 1. Live eBay Taxonomy API — suggestions provide candidate leaf categories
   try {
     const res = await fetch(
       `${EBAY_TAXONOMY}/category_tree/${treeId}/get_category_suggestions?q=${encodeURIComponent(q)}`,
