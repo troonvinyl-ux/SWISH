@@ -1270,6 +1270,17 @@ async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
+    // Only trust category-cache rows synchronized from the currently reported
+    // EBAY_GB tree version. Old versions can retain obsolete leaf flags/IDs.
+    let currentTree: { treeId: string; version: string } | null = null;
+    for (const token of categoryTokens) {
+      const meta = await getUkCategoryTreeId(token);
+      if (!meta.error && meta.version && meta.version !== 'fallback' && meta.version !== 'unknown') {
+        currentTree = { treeId: meta.treeId, version: meta.version };
+        break;
+      }
+    }
+
     // Search suggestions must return leaf categories only.
     if (route === 'get_category_suggestions' || query.length >= 2) {
       if (query.length < 2) {
@@ -1347,14 +1358,20 @@ async function handleRequest(req: Request): Promise<Response> {
     // Root entries double as safe browse starters. Parent nodes are labelled and
     // may be drilled into; leaf nodes can be selected directly.
     if (!parentId) {
-      const { data: roots } = await supabase.from('ebay_categories')
-        .select('category_id, category_name, is_leaf, category_path')
-        .eq('marketplace_id', 'EBAY_GB')
-        .eq('active', true)
-        .is('parent_category_id', null)
-        .order('category_name')
-        .limit(150);
-      if (roots?.length) {
+      let roots: any[] = [];
+      if (currentTree) {
+        const { data } = await supabase.from('ebay_categories')
+          .select('category_id, category_name, is_leaf, category_path')
+          .eq('marketplace_id', 'EBAY_GB')
+          .eq('tree_id', currentTree.treeId)
+          .eq('tree_version', currentTree.version)
+          .eq('active', true)
+          .is('parent_category_id', null)
+          .order('category_name')
+          .limit(150);
+        roots = data ?? [];
+      }
+      if (roots.length) {
         return jsonResponse({
           success: true,
           children: roots.map((row: any) => ({
@@ -1399,15 +1416,21 @@ async function handleRequest(req: Request): Promise<Response> {
     // For child browsing, use the cached branch if available, otherwise ask live
     // Taxonomy. Persisted cache is keyed by category_id (not category name).
     try {
-      const { data: cachedChildren } = await supabase.from('ebay_categories')
-        .select('category_id, category_name, is_leaf, category_path')
-        .eq('marketplace_id', 'EBAY_GB')
-        .eq('parent_category_id', parentId)
-        .eq('active', true)
-        .order('is_leaf', { ascending: false })
-        .order('category_name')
-        .limit(200);
-      if (cachedChildren?.length) {
+      let cachedChildren: any[] = [];
+      if (currentTree) {
+        const { data } = await supabase.from('ebay_categories')
+          .select('category_id, category_name, is_leaf, category_path')
+          .eq('marketplace_id', 'EBAY_GB')
+          .eq('tree_id', currentTree.treeId)
+          .eq('tree_version', currentTree.version)
+          .eq('parent_category_id', parentId)
+          .eq('active', true)
+          .order('is_leaf', { ascending: false })
+          .order('category_name')
+          .limit(200);
+        cachedChildren = data ?? [];
+      }
+      if (cachedChildren.length) {
         return jsonResponse({
           success: true,
           children: cachedChildren.map((row: any) => ({
