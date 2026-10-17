@@ -356,6 +356,8 @@ async function getLeafDescendants(
   const { data: dbLeaves } = await supabase.from('ebay_categories')
     .select('category_id, category_name, category_path')
     .eq('marketplace_id', MARKETPLACE_ID)
+    .eq('tree_id', treeId)
+    .eq('tree_version', treeVersion)
     .eq('is_leaf', true)
     .eq('active', true)
     .like('path_ids', `%${parentId}%`)
@@ -439,6 +441,8 @@ async function getCategorySuggestions(
     const { data: dbFirst } = await supabase.from('ebay_categories')
       .select('category_id, category_name, is_leaf, category_path, tree_id, tree_version')
       .eq('marketplace_id', MARKETPLACE_ID)
+      .eq('tree_id', treeId)
+      .eq('tree_version', treeVersion)
       .eq('active', true)
       .eq('is_leaf', true)
       .or(`category_name.ilike.%${q}%,category_path.ilike.%${q}%`)
@@ -529,6 +533,8 @@ async function getCategorySuggestions(
     const { data: dbRows } = await supabase.from('ebay_categories')
       .select('category_id, category_name, is_leaf, category_path, tree_id, tree_version')
       .eq('marketplace_id', MARKETPLACE_ID)
+      .eq('tree_id', treeId)
+      .eq('tree_version', treeVersion)
       .eq('active', true)
       .eq('is_leaf', true)
       .or(`category_name.ilike.%${q}%,category_path.ilike.%${q}%`)
@@ -578,7 +584,11 @@ async function getCategoryChildren(
   // Local DB first
   const { data: cached } = await supabase.from('ebay_categories')
     .select('category_id, category_name, is_leaf, category_path')
-    .eq('marketplace_id', MARKETPLACE_ID).eq('parent_category_id', parentId).eq('active', true)
+    .eq('marketplace_id', MARKETPLACE_ID)
+    .eq('tree_id', treeId)
+    .eq('tree_version', treeVersion)
+    .eq('parent_category_id', parentId)
+    .eq('active', true)
     .order('is_leaf', { ascending: false }).order('category_name').limit(200);
   if (cached && cached.length > 0) {
     return {
@@ -657,14 +667,26 @@ async function getCategoryAspects(
   token: string,
   treeId: string,
   categoryId: string,
+  forceLive = false,
 ): Promise<{ aspects: CatAspect[]; isLeaf: boolean; categoryName?: string; source: string; ebayStatus?: number; definitelyNotLeaf?: boolean; error?: string }> {
-  // Check aspects cache
-  const { data: cached } = await supabase.from('ebay_category_aspects')
-    .select('aspects').eq('marketplace_id', MARKETPLACE_ID).eq('category_id', categoryId).maybeSingle();
-  if (cached?.aspects && Array.isArray(cached.aspects) && cached.aspects.length > 0) {
-    const { data: catRow } = await supabase.from('ebay_categories')
-      .select('category_name').eq('marketplace_id', MARKETPLACE_ID).eq('category_id', categoryId).maybeSingle();
-    return { aspects: cached.aspects as CatAspect[], isLeaf: true, categoryName: catRow?.category_name, source: 'db_cache' };
+  // Cached aspects are allowed for browsing only when they match the selected tree.
+  // Validation at publish time forces a live request so old aspects cannot bless a parent.
+  if (!forceLive) {
+    const { data: cached } = await supabase.from('ebay_category_aspects')
+      .select('aspects, tree_id')
+      .eq('marketplace_id', MARKETPLACE_ID)
+      .eq('tree_id', treeId)
+      .eq('category_id', categoryId)
+      .maybeSingle();
+    if (cached?.aspects && Array.isArray(cached.aspects) && cached.aspects.length > 0) {
+      const { data: catRow } = await supabase.from('ebay_categories')
+        .select('category_name')
+        .eq('marketplace_id', MARKETPLACE_ID)
+        .eq('tree_id', treeId)
+        .eq('category_id', categoryId)
+        .maybeSingle();
+      return { aspects: cached.aspects as CatAspect[], isLeaf: true, categoryName: catRow?.category_name, source: 'db_cache' };
+    }
   }
 
   try {
@@ -783,7 +805,11 @@ async function validateCategoryId(
   // Taxonomy subtree/suggestions API (leafCategoryTreeNode), not the aspects endpoint.
   const { data: row } = await supabase.from('ebay_categories')
     .select('category_id, category_name, category_path, is_leaf, active, tree_id, tree_version')
-    .eq('marketplace_id', MARKETPLACE_ID).eq('category_id', categoryId).maybeSingle();
+    .eq('marketplace_id', MARKETPLACE_ID)
+    .eq('tree_id', treeId)
+    .eq('tree_version', treeVersion)
+    .eq('category_id', categoryId)
+    .maybeSingle();
 
   if (row) {
     if (row.active === false) {
@@ -815,7 +841,7 @@ async function validateCategoryId(
   //   400 + error 13003 → NOT a leaf
   //   400 without error 13003 → leaf with no aspects (still valid!)
   //   404 → doesn't exist
-  const aspectResult = await getCategoryAspects(supabase, token, treeId, categoryId);
+  const aspectResult = await getCategoryAspects(supabase, token, treeId, categoryId, true);
 
   if (aspectResult.isLeaf) {
     const { data: updatedRow } = await supabase.from('ebay_categories')
