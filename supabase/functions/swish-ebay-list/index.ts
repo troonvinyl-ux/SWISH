@@ -1058,6 +1058,17 @@ function friendlyError(rawErrors: string[], fallback: string): string {
   if (!rawErrors.length) return fallback;
   const raw = rawErrors.join('; ').toLowerCase();
 
+  // eBay Trading API error 518 is an application-level call quota, not a listing validation problem.
+  // Do not suggest changing listing fields or reconnecting OAuth for this response.
+  if (
+    raw.includes('exceeded usage limit on this call') ||
+    raw.includes('call usage limit has been reached') ||
+    raw.includes('errorcode>518') ||
+    raw.includes('error code 518')
+  ) {
+    return 'eBay has temporarily blocked this SWISH API call because the application has reached its eBay API usage limit (error 518). Your live listing has not been ended or deleted. Do not keep pressing Push; check API usage and limits in the eBay Developers Program, then retry when the limit is available again. Reconnecting eBay or changing the listing details will not clear this limit.';
+  }
+
   if (raw.includes('not a valid ebay leaf') || raw.includes('not a leaf category')) {
     return 'The selected category is a parent/invalid eBay category. Open the Listing Editor → tap Category → use the live browser to drill down to a category marked "✓ Leaf" → tap Save, then retry.';
   }
