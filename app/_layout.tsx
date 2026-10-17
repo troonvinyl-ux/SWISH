@@ -53,19 +53,24 @@ function TVBackHandlerEffect({ children }: { children: React.ReactNode }) {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     ...MaterialIcons.font,
     ...MaterialCommunityIcons.font,
     ...FontAwesome.font,
   });
 
+  // Do not leave the entire app stuck behind the splash screen if an icon font
+  // fails to load in a particular preview/build environment. Icon glyphs may
+  // fall back, but the main navigation and screens should still launch.
   useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync().catch(() => {
+        // The splash screen may already have been hidden by the host runtime.
+      });
     }
-  }, [fontsLoaded]);
+  }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded) return null;
+  if (!fontsLoaded && !fontError) return null;
 
   return (
     <AlertProvider>
