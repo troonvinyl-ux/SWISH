@@ -20,6 +20,7 @@ type Result = {
   ok?: boolean; error?: string; message?: string; offer?: OfferSnapshot;
   before?: OfferSnapshot; after?: OfferSnapshot; changedFields?: string[];
   inventoryId?: string | number; itemId?: string; syncedCategoryId?: string; pushedCategoryId?: string;
+  source?: string; swishItemId?: string; swishListingId?: string; submittedFields?: string[];
 };
 
 export default function EbayDraftSyncTestScreen() {
@@ -139,6 +140,10 @@ export default function EbayDraftSyncTestScreen() {
             {result.itemId ? <Text style={styles.body}>SWISH item ID: {result.itemId}</Text> : null}
             {result.syncedCategoryId ? <Text style={styles.body}>Synced category ID: {result.syncedCategoryId}</Text> : null}
             {result.pushedCategoryId ? <Text style={styles.body}>Pushed category ID: {result.pushedCategoryId}</Text> : null}
+            {result.source ? <Text style={styles.body}>Submission source: {result.source}</Text> : null}
+            {result.swishItemId ? <Text style={styles.body}>SWISH item ID: {result.swishItemId}</Text> : null}
+            {result.swishListingId ? <Text style={styles.body}>SWISH listing ID: {result.swishListingId}</Text> : null}
+            {result.submittedFields?.length ? <Text style={styles.body}>Fields sent to eBay: {result.submittedFields.join(', ')}</Text> : null}
             {shownOffer ? (
               <View style={styles.details}>
                 <Detail label="Offer ID" value={shownOffer.offerId} />
