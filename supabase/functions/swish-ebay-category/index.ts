@@ -305,7 +305,7 @@ async function syncCategoriesDeep(
 // ── seedPriorityBranches ──────────────────────────────────────────────────────
 
 const PRIORITY_ROOTS = [
-  ['58520', 'Coins', 6],      // EBAY_GB Coins branch (under top-level Coins 11116) — ancient and British coin leaves
+  ['11116', 'Coins', 6],      // EBAY_GB Coins root; traversal includes nested Coins (58520) and leaf subcategories
   ['1', 'Collectables', 3],
   ['281', 'Jewellery & Watches', 3],
   ['261', 'Stamps', 3],
