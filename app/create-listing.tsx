@@ -150,6 +150,7 @@ function InlineCategoryPicker({
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([]);
   const [search, setSearch] = useState('');
   const [customId, setCustomId] = useState('');
+  const [remoteSuggestionsActive, setRemoteSuggestionsActive] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadCategories = useCallback(async (parentId: string) => {
@@ -244,12 +245,80 @@ function InlineCategoryPicker({
     }
   }, [tenantId]);
 
+  const searchLiveCategories = useCallback(async (rawQuery: string) => {
+    const query = rawQuery.trim().slice(0, 100);
+    if (!tenantId || query.length < 2) {
+      setLiveError('Enter at least 2 characters to search eBay categories.');
+      return;
+    }
+    setLiveLoading(true);
+    setLiveError(null);
+    try {
+      let data: any = null;
+      let error: any = null;
+      try {
+        const primary = await supabase.functions.invoke('swish-ebay-category', {
+          body: { route: 'get_category_suggestions', tenantId, query },
+        });
+        data = primary.data;
+        error = primary.error;
+      } catch (e: any) {
+        error = e;
+      }
+      if (error || !data?.success) {
+        try {
+          const fallback = await supabase.functions.invoke('swish-ebay-list', {
+            body: { route: 'get_category_suggestions', tenantId, query },
+          });
+          if (!fallback.error && fallback.data?.success) {
+            data = fallback.data;
+            error = null;
+          } else {
+            error = fallback.error ?? error;
+            if (fallback.data) data = fallback.data;
+          }
+        } catch (e: any) {
+          error = error ?? e;
+        }
+      }
+      if (error || !data?.success) {
+        setRemoteSuggestionsActive(false);
+        setLiveError(data?.error ?? error?.message ?? 'eBay category search is unavailable.');
+        return;
+      }
+      const suggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
+      const cats: LiveCat[] = suggestions
+        .filter((cat: any) => cat?.id && cat?.name && cat.isLeaf === true)
+        .map((cat: any) => ({
+          id: String(cat.id), name: String(cat.name), isLeaf: true, childCount: 0,
+        }));
+      if (!cats.length) {
+        setRemoteSuggestionsActive(false);
+        setLiveError('No verified eBay leaf categories matched that search. Try a broader term.');
+        return;
+      }
+      setBreadcrumbs([]);
+      setLiveCategories(cats);
+      setRemoteSuggestionsActive(true);
+      setMode('live');
+      setLiveError(data.source === 'db_cache' || data.source === 'curated' || data.source === 'curated_fallback'
+        ? 'Showing cached/curated eBay categories. Confirm the category before publishing.'
+        : null);
+    } catch (e: any) {
+      setRemoteSuggestionsActive(false);
+      setLiveError(e?.message ?? 'eBay category search failed.');
+    } finally {
+      setLiveLoading(false);
+    }
+  }, [tenantId, supabase]);
+
   // Reset and load when modal opens
   useEffect(() => {
     if (!visible) return;
     setBreadcrumbs([]);
     setSearch('');
     setCustomId('');
+    setRemoteSuggestionsActive(false);
     setLiveError(null);
     loadCategories('');
     return () => {
@@ -288,11 +357,13 @@ function InlineCategoryPicker({
     loadCategories('');
   }, [loadCategories]);
 
-  const liveFiltered = search.trim()
-    ? liveCategories.filter(c =>
-        c.name.toLowerCase().includes(search.toLowerCase()) || c.id.includes(search.trim())
-      )
-    : liveCategories;
+  const liveFiltered = remoteSuggestionsActive
+    ? liveCategories
+    : search.trim()
+      ? liveCategories.filter(c =>
+          c.name.toLowerCase().includes(search.toLowerCase()) || c.id.includes(search.trim())
+        )
+      : liveCategories;
 
   const staticFiltered = search.trim()
     ? EBAY_CATEGORY_FALLBACK.filter(c =>
@@ -357,8 +428,13 @@ function InlineCategoryPicker({
           <TextInput
             style={icp.searchInput}
             value={search}
-            onChangeText={setSearch}
-            placeholder="Search e.g. Coin, Medal, Militaria..."
+            onChangeText={value => {
+              setSearch(value);
+              setRemoteSuggestionsActive(false);
+            }}
+            onSubmitEditing={() => searchLiveCategories(search)}
+            returnKeyType="search"
+            placeholder="Search e.g. Mughal Rupee, Medal, Militaria..."
             placeholderTextColor={Colors.textTertiary}
             autoCorrect={false}
           />
