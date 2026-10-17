@@ -792,7 +792,7 @@ interface ComputedValuation {
   saleProb30d: number | null; fairMarketValue: number; currentAskingMarketMid: number;
   auctionStartPrice?: number;
   insufficientSoldEvidence: boolean;
-  primaryEvidenceSource: 'terapeak' | 'browse_ai_blend' | 'ai_estimate_only' | 'none';
+  primaryEvidenceSource: 'terapeak' | 'marketplace_insights' | 'browse_ai_blend' | 'ai_estimate_only' | 'none';
 }
 
 function computeValuation(params: {
@@ -1129,7 +1129,7 @@ Deno.serve(async (req: Request) => {
       fairMarketValue: median,
       currentAskingMarketMid: 0,
       insufficientSoldEvidence: soldComparableItems.length < 3,
-      primaryEvidenceSource: 'terapeak',
+      primaryEvidenceSource: 'marketplace_insights',
     };
   }
 
