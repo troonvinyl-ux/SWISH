@@ -538,12 +538,17 @@ async function verifyCategoryIsLeaf(
       const node = subtreePayload.categorySubtreeNode;
       const liveId = String(node?.category?.categoryId ?? '');
       if (liveId === String(categoryId)) {
-        return {
-          isLeaf: node.leafCategoryTreeNode === true,
-          name: String(node.category?.categoryName ?? displayName),
-          fromDb: false,
-          nameVerified: Boolean(node.category?.categoryName),
-        };
+        // Only treat an explicit boolean leaf flag as authoritative. If the
+        // Taxonomy subtree root omits this property, do not convert "unknown"
+        // into false; continue to the aspects endpoint below for validation.
+        if (typeof node.leafCategoryTreeNode === 'boolean') {
+          return {
+            isLeaf: node.leafCategoryTreeNode,
+            name: String(node.category?.categoryName ?? displayName),
+            fromDb: false,
+            nameVerified: Boolean(node.category?.categoryName),
+          };
+        }
       }
     } else if (subtreeRes.status === 404) {
       return { isLeaf: false, name: categoryId, fromDb: false, nameVerified: true };
