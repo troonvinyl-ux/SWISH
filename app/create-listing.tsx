@@ -1009,7 +1009,7 @@ export default function CreateListingScreen() {
     setGeneratedListing(saved);
     // Navigate to the listing editor for full review
     router.push(`/ebay-listing-editor?id=${saved.id}` as any);
-  }, [item, tenant, showAlert, router]);
+  }, [item, tenant, showAlert, router, confirmedCategory]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
