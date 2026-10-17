@@ -12,14 +12,15 @@
 // Routes:
 //   dispatch     — submit tracking/carrier to eBay and update SWISH order
 //   get_shipping — fetch shipping fulfillments for an order from eBay
+//   sync_returns — fetch open return requests from eBay Post-Order API and sync to ebay_returns
 //
 // POST body:
 //   {
-//     route: 'dispatch' | 'get_shipping',
+//     route: 'dispatch' | 'get_shipping' | 'sync_returns',
 //     tenantId: string,
-//     orderId: string,          // SWISH order UUID
-//     carrier: string,          // e.g. 'Royal Mail'
-//     trackingNumber: string,   // e.g. 'RM123456789GB'
+//     orderId?: string,         // Required only by dispatch and get_shipping
+//     carrier?: string,         // e.g. 'Royal Mail'
+//     trackingNumber?: string,  // e.g. 'RM123456789GB'
 //     serviceCode?: string,     // eBay shipping service code (optional)
 //     dispatchPhotoUrl?: string // URL of dispatch proof photo (optional)
 //   }
@@ -422,6 +423,165 @@ async function handleGetShipping(
   }
 }
 
+// ── Sync return requests from eBay Post-Order API ─────────────────────────────
+//
+// The app's Returns screen calls this route without a SWISH orderId. Keep return
+// synchronization independent of the dispatch/shipping routes, which require it.
+async function handleSyncReturns(
+  supabase: ReturnType<typeof adminClient>,
+  tenantId: string,
+): Promise<Response> {
+  const tokenResult = await getAccessToken(supabase, tenantId);
+  if ('error' in tokenResult) return jsonResponse({ success: false, error: tokenResult.error }, 400);
+
+  let fetched = 0;
+  let imported = 0;
+  let updated = 0;
+  const pageSize = 200;
+  const maxRecords = 1000;
+
+  try {
+    for (let offset = 0; offset < maxRecords; offset += pageSize) {
+      const url = new URL('https://api.ebay.com/post-order/v2/return/search');
+      url.searchParams.set('return_state', 'ALL_OPEN');
+      url.searchParams.set('limit', String(pageSize));
+      url.searchParams.set('offset', String(offset));
+
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${tokenResult.accessToken}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        signal: AbortSignal.timeout(15000),
+      });
+
+      if (!response.ok) {
+        const responseText = await response.text().catch(() => '');
+        const detail = responseText.slice(0, 700);
+        const approvalHint = response.status === 403
+          ? ' eBay may require additional Post-Order API approval or re-authorisation with the required scopes.'
+          : '';
+        return jsonResponse({
+          success: false,
+          error: `eBay Post-Order return search failed (HTTP ${response.status}). ${detail}${approvalHint}`,
+          fetched, imported, updated,
+          requiresApproval: response.status === 403,
+        }, response.status >= 500 ? 503 : 400);
+      }
+
+      const payload = await response.json();
+      const members: any[] = Array.isArray(payload.members) ? payload.members : [];
+      fetched += members.length;
+
+      for (const member of members) {
+        const summary = member.summary ?? member;
+        const detail = member.detail ?? member;
+        const creation = summary.creationInfo ?? detail.creationInfo ?? member.creationInfo ?? {};
+        const returnIdValue = member.returnId ?? summary.returnId ?? detail.returnId ?? member.id;
+        if (returnIdValue === undefined || returnIdValue === null || String(returnIdValue).trim() === '') continue;
+        const ebayReturnId = String(returnIdValue);
+
+        const item = creation.item ?? summary.item ?? detail.item ?? {};
+        const buyer = creation.buyer ?? summary.buyer ?? detail.buyer ?? {};
+        const rawState = String(member.state ?? member.status ?? summary.state ?? detail.state ?? '').toUpperCase();
+        const sellerOptions = member.sellerAvailableOptions ?? summary.sellerAvailableOptions ?? detail.sellerAvailableOptions ?? [];
+        const buyerOptions = member.buyerAvailableOptions ?? summary.buyerAvailableOptions ?? detail.buyerAvailableOptions ?? [];
+        const closed = /CLOSED|REJECTED|CANCELLED|RESOLVED|REFUND(?:_ISSUED|ED)/.test(rawState);
+        const awaitingSeller = (Array.isArray(sellerOptions) && sellerOptions.length > 0) ||
+          /RETURN_REQUESTED|SELLER_RESPONSE_DUE/.test(rawState);
+        const awaitingBuyer = (Array.isArray(buyerOptions) && buyerOptions.length > 0) ||
+          /RETURN_ACCEPTED|RETURN_STARTED|ITEM_SHIPPED|ITEM_DELIVERED/.test(rawState);
+        const status = closed ? (/RESOLVED|REFUND/.test(rawState) ? 'resolved' : 'closed')
+          : awaitingSeller ? 'awaiting_seller'
+          : awaitingBuyer ? 'awaiting_buyer'
+          : 'open';
+
+        const money = (v: any): number | null => {
+          if (v === undefined || v === null) return null;
+          const n = Number(typeof v === 'object' ? (v.value ?? v.amount) : v);
+          return Number.isFinite(n) ? n : null;
+        };
+        const refundAmount = money(detail.refundInfo?.actualRefundAmount ??
+          detail.refundInfo?.estimatedRefundAmount ?? member.refundAmount ?? summary.refundAmount);
+        const createdAtRaw = creation.creationDate ?? creation.createdDate ?? member.creationDate ??
+          summary.creationDate ?? detail.creationDate;
+        const createdAtDate = createdAtRaw ? new Date(createdAtRaw) : null;
+        const createdAt = createdAtDate && Number.isFinite(createdAtDate.getTime())
+          ? createdAtDate.toISOString()
+          : new Date().toISOString();
+        const commentsValue = creation.comments ?? summary.comments ?? detail.comments ?? member.comments;
+        const comments = typeof commentsValue === 'string'
+          ? commentsValue
+          : String(commentsValue?.content ?? commentsValue?.text ?? '');
+        const buyerUsername = String(
+          buyer.buyerLoginName ?? buyer.username ?? buyer.userName ??
+          creation.buyerLoginName ?? member.buyerUsername ?? ''
+        );
+        const reason = String(creation.reason ?? member.reason ?? summary.reason ?? detail.reason ?? '');
+        const orderId = creation.orderId ?? item.orderId ?? member.orderId ?? summary.orderId ?? detail.orderId;
+        const deadline = detail.refundInfo?.refundDueDate ?? detail.returnDeadline ??
+          member.refundDueDate ?? member.deadline ?? null;
+
+        const row: Record<string, any> = {
+          tenant_id: tenantId,
+          ebay_return_id: ebayReturnId,
+          ebay_order_id: orderId === undefined || orderId === null ? null : String(orderId),
+          buyer_username: buyerUsername,
+          reason,
+          comments,
+          status,
+          updated_at: new Date().toISOString(),
+        };
+        if (refundAmount !== null) row.refund_amount = refundAmount;
+        if (deadline) row.deadline = deadline;
+        if (createdAtRaw) row.created_at = createdAt;
+
+        const { data: existing, error: lookupError } = await supabase
+          .from('ebay_returns')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .eq('ebay_return_id', ebayReturnId)
+          .limit(1)
+          .maybeSingle();
+        if (lookupError) {
+          console.error(`[SWISH Returns] Lookup failed for ${ebayReturnId}: ${lookupError.message}`);
+          return jsonResponse({ success: false, error: `Database lookup failed while syncing return ${ebayReturnId}: ${lookupError.message}`, fetched, imported, updated }, 500);
+        }
+
+        if (existing?.id) {
+          const updateRow = { ...row };
+          delete updateRow.created_at;
+          const { error: updateError } = await supabase.from('ebay_returns')
+            .update(updateRow).eq('id', existing.id).eq('tenant_id', tenantId);
+          if (updateError) {
+            console.error(`[SWISH Returns] Update failed for ${ebayReturnId}: ${updateError.message}`);
+            return jsonResponse({ success: false, error: `Database update failed while syncing return ${ebayReturnId}: ${updateError.message}`, fetched, imported, updated }, 500);
+          }
+          updated++;
+        } else {
+          const { error: insertError } = await supabase.from('ebay_returns').insert(row);
+          if (insertError) {
+            console.error(`[SWISH Returns] Insert failed for ${ebayReturnId}: ${insertError.message}`);
+            return jsonResponse({ success: false, error: `Database insert failed while syncing return ${ebayReturnId}: ${insertError.message}`, fetched, imported, updated }, 500);
+          }
+          imported++;
+        }
+      }
+
+      const totalPages = Number(payload.paginationOutput?.totalPages ?? 0);
+      if (members.length < pageSize || (totalPages > 0 && offset / pageSize + 1 >= totalPages)) break;
+    }
+
+    console.log(`[SWISH Returns] tenant=${tenantId} fetched=${fetched} imported=${imported} updated=${updated}`);
+    return jsonResponse({ success: true, fetched, imported, updated, source: 'ebay_post_order', syncedAt: new Date().toISOString() });
+  } catch (e: any) {
+    console.error(`[SWISH Returns] Sync failed: ${e.message}`);
+    return jsonResponse({ success: false, error: `Could not sync eBay returns: ${e.message}`, fetched, imported, updated }, 503);
+  }
+}
+
 // ── Main Handler ──────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -433,7 +593,9 @@ Deno.serve(async (req: Request) => {
 
   const { route = 'dispatch', tenantId, orderId } = body;
   if (!tenantId) return jsonResponse({ error: 'tenantId is required' }, 400);
-  if (!orderId)  return jsonResponse({ error: 'orderId is required' }, 400);
+  if ((route === 'dispatch' || route === 'get_shipping') && !orderId) {
+    return jsonResponse({ error: 'orderId is required for dispatch/get_shipping' }, 400);
+  }
 
   const supabase = adminClient();
   const authHeader = req.headers.get('Authorization');
@@ -453,6 +615,10 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    if (route === 'sync_returns') {
+      return await handleSyncReturns(supabase, tenantId);
+    }
+
     if (route === 'dispatch') {
       const { carrier = '', trackingNumber = '', serviceCode, dispatchPhotoUrl } = body;
       return await handleDispatch(supabase, tenantId, orderId, carrier, trackingNumber, serviceCode, dispatchPhotoUrl);
