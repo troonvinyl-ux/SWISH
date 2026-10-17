@@ -107,8 +107,8 @@ export default function EbayDraftSyncTestScreen() {
           <Text style={styles.buttonText}>Import unpublished draft into SWISH</Text>
         </Pressable>
 
-        <Text style={styles.sectionTitle}>2 · Push unchanged draft back</Text>
-        <Text style={styles.body}>This sends the same writable offer fields back to eBay, then reads the draft again and compares the category and other tracked fields.</Text>
+        <Text style={styles.sectionTitle}>2 · Push the imported SWISH draft back</Text>
+        <Text style={styles.body}>First tap “Import unpublished draft into SWISH”. This test then loads the saved SWISH item and listing, sends their saved offer fields to eBay UK, reads the offer back, and compares the result. It does not publish the offer.</Text>
         <Pressable disabled={busy} onPress={() => runTest('round_trip_unpublished')} style={[styles.button, styles.secondaryButton, busy && styles.disabled]}>
           {busy && phase === 'roundtrip' ? <ActivityIndicator color={Colors.background} /> : <MaterialIcons name="sync" size={18} color={Colors.background} />}
           <Text style={styles.buttonText}>Round-trip unpublished draft</Text>
