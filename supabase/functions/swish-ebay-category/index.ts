@@ -305,7 +305,7 @@ async function syncCategoriesDeep(
 // ── seedPriorityBranches ──────────────────────────────────────────────────────
 
 const PRIORITY_ROOTS = [
-  ['267', 'Coins', 6],        // Deep sync for Coins — Ancient > Greek/Roman/Byzantine etc.
+  ['58520', 'Coins', 6],      // EBAY_GB Coins branch (under top-level Coins 11116) — ancient and British coin leaves
   ['1', 'Collectables', 3],
   ['281', 'Jewellery & Watches', 3],
   ['261', 'Stamps', 3],
@@ -903,9 +903,9 @@ async function runTest(
   }));
   results.greekSuggestionSource = greekSug.source;
 
-  // Test: validate 4726 (British Coins — known leaf)
-  const validation4726 = await validateCategoryId(supabase, token, treeId, treeVersion, '4726');
-  results.britishCoinsValidation = { valid: validation4726.valid, isLeaf: validation4726.isLeaf, source: validation4726.source };
+  // Test: validate 79964 (Other British Coins — published EBAY_GB leaf)
+  const validation79964 = await validateCategoryId(supabase, token, treeId, treeVersion, '79964');
+  results.otherBritishCoinsValidation = { valid: validation79964.valid, isLeaf: validation79964.isLeaf, source: validation79964.source };
 
   // Test: validate a known-good ancient coin category
   // After seed_priority_branches, Greek coins should be in the DB with correct is_leaf
@@ -915,11 +915,11 @@ async function runTest(
   }));
   results.mughalSource = mughalSug.source;
 
-  const aspects4726 = await getCategoryAspects(supabase, token, treeId, '4726');
-  results.britishCoinsAspects = {
-    isLeaf: aspects4726.isLeaf, totalAspects: aspects4726.aspects.length,
-    requiredAspects: aspects4726.aspects.filter(a => a.required).map(a => a.name),
-    source: aspects4726.source,
+  const aspectsGreek = await getCategoryAspects(supabase, token, treeId, '4738');
+  results.greekCoinAspects = {
+    isLeaf: aspectsGreek.isLeaf, totalAspects: aspectsGreek.aspects.length,
+    requiredAspects: aspectsGreek.aspects.filter(a => a.required).map(a => a.name),
+    source: aspectsGreek.source,
   };
 
   results.dbStats = await getSyncStats(supabase);
@@ -939,29 +939,50 @@ async function runTest(
 interface CuratedCat { id: string; name: string; isLeaf: boolean; childCount: number; treeId?: string; }
 
 const CURATED_LEAF_CATEGORIES: Omit<CuratedCat, 'treeId'>[] = [
-  // Offline search hints only; leaf status is revalidated against live Taxonomy before publish.
-  { id: '4726', name: 'British Coins', isLeaf: true, childCount: 0 },
-  { id: '40714', name: 'Ancient Coins', isLeaf: true, childCount: 0 },
-  { id: '3365', name: 'Roman Imperial Coins', isLeaf: true, childCount: 0 },
-  { id: '4157', name: 'Roman Coins', isLeaf: true, childCount: 0 },
-  { id: '4158', name: 'Greek Coins', isLeaf: true, childCount: 0 },
-  { id: '37968', name: 'Byzantine Coins', isLeaf: true, childCount: 0 },
-  { id: '40717', name: 'Islamic Coins (Indian / Middle East)', isLeaf: true, childCount: 0 },
-  { id: '4744', name: 'Celtic Coins', isLeaf: true, childCount: 0 },
-  { id: '4159', name: 'Celtic & Anglo-Saxon Coins', isLeaf: true, childCount: 0 },
-  { id: '18594', name: 'Medieval Coins', isLeaf: true, childCount: 0 },
-  { id: '18593', name: 'Hammered Coins', isLeaf: true, childCount: 0 },
-  { id: '18596', name: 'Proof, Specimen & Uncirculated Coins', isLeaf: true, childCount: 0 },
-  { id: '527', name: 'Coin Collections & Lots', isLeaf: true, childCount: 0 },
-  { id: '4138', name: 'US Coins', isLeaf: true, childCount: 0 },
-  { id: '4735', name: 'World Coins', isLeaf: true, childCount: 0 },
-  { id: '4734', name: 'Australian Coins', isLeaf: true, childCount: 0 },
-  { id: '29539', name: 'Bullion (Gold / Silver Coins)', isLeaf: true, childCount: 0 },
+  // Offline EBAY_GB leaf suggestions. IDs below are taken from eBay UK's published
+  // category tree, not inferred from US/global category IDs. Parent nodes are excluded.
+  // Ancient coins
+  { id: '4738', name: 'Ancient Coins: Greek', isLeaf: true, childCount: 0 },
+  { id: '122471', name: 'Roman Imperial Coins (27 BC–96 AD)', isLeaf: true, childCount: 0 },
+  { id: '3365', name: 'Roman Imperial Coins (96–235 AD)', isLeaf: true, childCount: 0 },
+  { id: '122472', name: 'Roman Imperial Coins (235–476 AD)', isLeaf: true, childCount: 0 },
+  { id: '4734', name: 'Roman Republican Coins', isLeaf: true, childCount: 0 },
+  { id: '4735', name: 'Roman Provincial Coins', isLeaf: true, childCount: 0 },
+  { id: '3364', name: 'Byzantine Coins', isLeaf: true, childCount: 0 },
+  { id: '4740', name: 'Ancient Chinese Coins', isLeaf: true, childCount: 0 },
+  { id: '4739', name: 'Islamic Coins', isLeaf: true, childCount: 0 },
+  { id: '4737', name: 'Ancient Persian & Indian Coins', isLeaf: true, childCount: 0 },
+  { id: '93500', name: 'Ancient Coin Collections & Bulk Lots', isLeaf: true, childCount: 0 },
+  { id: '532', name: 'Other Ancient Coins', isLeaf: true, childCount: 0 },
+  // British hammered coins
+  { id: '122475', name: 'Celtic Coins (c.100 BC–c.100 AD)', isLeaf: true, childCount: 0 },
+  { id: '58523', name: 'Anglo-Saxon Coins (c.600–1066)', isLeaf: true, childCount: 0 },
+  { id: '122476', name: 'Norman Coins (1066–1154)', isLeaf: true, childCount: 0 },
+  { id: '47389', name: 'Later Medieval British Coins (1154–1485)', isLeaf: true, childCount: 0 },
+  { id: '58524', name: 'Tudor Coins (1485–1603)', isLeaf: true, childCount: 0 },
+  { id: '122477', name: 'Stuart & Commonwealth Coins', isLeaf: true, childCount: 0 },
+  { id: '58522', name: 'Other British Hammered Coins', isLeaf: true, childCount: 0 },
+  // Modern British coins
+  { id: '122486', name: 'British 50p Coins', isLeaf: true, childCount: 0 },
+  { id: '122487', name: 'British One Pound Coins', isLeaf: true, childCount: 0 },
+  { id: '122488', name: 'British Two Pound Coins', isLeaf: true, childCount: 0 },
+  { id: '3407', name: 'Other British Decimal Coinage', isLeaf: true, childCount: 0 },
+  { id: '93508', name: 'British Coin Collections & Bulk Lots', isLeaf: true, childCount: 0 },
+  { id: '79964', name: 'Other British Coins', isLeaf: true, childCount: 0 },
+  // Other world coins
+  { id: '539', name: 'French Coins', isLeaf: true, childCount: 0 },
+  { id: '540', name: 'German Coins', isLeaf: true, childCount: 0 },
+  { id: '45152', name: 'Greek Modern Coins', isLeaf: true, childCount: 0 },
+  { id: '93509', name: 'European Coin Collections & Bulk Lots', isLeaf: true, childCount: 0 },
+  { id: '93510', name: 'World Coin Collections & Bulk Lots', isLeaf: true, childCount: 0 },
+  { id: '257', name: 'Other World Coins', isLeaf: true, childCount: 0 },
+  // Non-coin starter categories retained for other SWISH niches. The publish path
+  // always performs live EBAY_GB leaf validation before any listing is submitted.
   { id: '47188', name: 'Tokens, Medals & Badges', isLeaf: true, childCount: 0 },
   { id: '620', name: 'Exonumia', isLeaf: true, childCount: 0 },
   { id: '10968', name: 'Notgeld & Emergency Currency', isLeaf: true, childCount: 0 },
-  { id: '14486', name: 'British Banknotes', isLeaf: true, childCount: 0 },
-  { id: '14487', name: 'World Banknotes', isLeaf: true, childCount: 0 },
+  { id: '6071', name: 'Other British Banknotes', isLeaf: true, childCount: 0 },
+  { id: '385', name: 'Other World Banknotes', isLeaf: true, childCount: 0 },
   { id: '261', name: 'Great Britain Stamps', isLeaf: true, childCount: 0 },
   { id: '183454', name: 'Trading Cards / CCG', isLeaf: true, childCount: 0 },
   { id: '20091', name: 'Antique Furniture', isLeaf: true, childCount: 0 },
@@ -984,8 +1005,8 @@ const CURATED_LEAF_CATEGORIES: Omit<CuratedCat, 'treeId'>[] = [
   { id: '26460', name: 'Motorcycle Bodywork & Fairings', isLeaf: true, childCount: 0 },
   { id: '25634', name: 'Motorcycle Brakes', isLeaf: true, childCount: 0 },
   { id: '25633', name: 'Motorcycle Electrical', isLeaf: true, childCount: 0 },
-  { id: '177831', name: 'Complete Mountain Bikes', isLeaf: true, childCount: 0 },
-  { id: '56197', name: 'Complete Road Bikes', isLeaf: true, childCount: 0 },
+  { id: '177831', name: 'Mountain Bikes', isLeaf: true, childCount: 0 },
+  { id: '56197', name: 'Road Bikes', isLeaf: true, childCount: 0 },
   { id: '177832', name: 'Electric Bikes', isLeaf: true, childCount: 0 },
   { id: '48647', name: 'BMX Bikes', isLeaf: true, childCount: 0 },
   { id: '56199', name: 'Hybrid & City Bikes', isLeaf: true, childCount: 0 },
@@ -999,7 +1020,7 @@ const CURATED_LEAF_CATEGORIES: Omit<CuratedCat, 'treeId'>[] = [
   { id: '56200', name: 'Cycle Computers', isLeaf: true, childCount: 0 },
   { id: '15275', name: 'Bicycle Tyres & Tubes', isLeaf: true, childCount: 0 },
   { id: '152506', name: 'Trainers & Athletic Shoes', isLeaf: true, childCount: 0 },
-  { id: '175748', name: 'Vintage & Rare Clothing', isLeaf: true, childCount: 0 },
+  { id: '175748', name: 'Vintage Clothing', isLeaf: true, childCount: 0 },
   { id: '50995', name: 'Hoodies & Sweatshirts', isLeaf: true, childCount: 0 },
   { id: '3002', name: 'T-Shirts', isLeaf: true, childCount: 0 },
   { id: '57988', name: 'Jeans', isLeaf: true, childCount: 0 },
@@ -1007,7 +1028,6 @@ const CURATED_LEAF_CATEGORIES: Omit<CuratedCat, 'treeId'>[] = [
   { id: '63848', name: 'Jackets & Coats', isLeaf: true, childCount: 0 },
   { id: '172131', name: 'Sportswear', isLeaf: true, childCount: 0 },
   { id: '169741', name: 'Activewear', isLeaf: true, childCount: 0 },
-
 ];
 
 function filterCurated(query: string): CatSuggestion[] {
