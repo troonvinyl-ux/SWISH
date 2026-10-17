@@ -1906,43 +1906,27 @@ async function handleRequest(req: Request): Promise<Response> {
   const policyError = validateBusinessPolicies(fulfillmentId, returnId, policies);
   if (policyError) return jsonResponse({ error: policyError }, 400);
 
-  const catResult = await resolveLeafCategory(
-    creds.accessToken, creds.clientId, categoryId, title, item?.specialist_id ?? '', supabase,
-    String(item?.attributes?.ebay_category_name ?? item?.attributes?._ebay_category_name ?? ''),
+  // Direct category passthrough: use the exact ID selected/saved by the user.
+  // Do not call SWISH's taxonomy resolver or leaf validator here: their false
+  // negatives have been blocking every listing despite a previously validated
+  // category. eBay receives this exact category ID in the listing payload and
+  // remains the final authority on whether the listing can be created.
+  const resolvedCategoryId = String(categoryId ?? '').trim();
+  const savedCategoryName = String(
+    item?.attributes?.ebay_category_name ??
+    item?.attributes?._ebay_category_name ??
+    resolvedCategoryId
   );
-  if (catResult.error) return jsonResponse({ error: catResult.error }, 400);
-
-  // If a category was explicitly stored/selected but eBay rejects it, never
-  // silently publish to a different category based only on the listing title.
-  if (categoryId && catResult.wasResolved && catResult.resolvedId !== String(categoryId)) {
-    return jsonResponse({
-      success: false,
-      error: `Selected category ${categoryId} is not a valid EBAY_GB leaf category. SWISH found "${catResult.resolvedName}" (${catResult.resolvedId}) as a possible alternative. Select the alternative only if it matches your item, then retry.`,
-      selectedCategoryId: String(categoryId),
-      suggestedCategory: { id: catResult.resolvedId, name: catResult.resolvedName },
-    }, 400);
-  }
-
-  const resolvedCategoryId = catResult.resolvedId;
-
-  // Final server-side validation
-  if (resolvedCategoryId && catResult.confidence !== 'taxonomy_verified' && catResult.confidence !== 'db_verified') {
-    const finalCheck = await verifyCategoryIsLeaf(creds.accessToken, creds.clientId, resolvedCategoryId, supabase);
-    if (finalCheck === null) {
-      console.error(`[SWISH] Final validation inconclusive: categoryId=${resolvedCategoryId} could not be verified against current EBAY_GB Taxonomy. Blocking submission.`);
-      return jsonResponse({
-        success: false,
-        error: `SWISH could not verify category ${resolvedCategoryId} against the current EBAY_GB Taxonomy because eBay's category service did not return a conclusive response. No listing was submitted. Retry category search or reconnect eBay to grant the commerce.taxonomy.readonly scope.`,
-        categoryId: resolvedCategoryId,
-        categoryVerified: false,
-      }, 503);
-    }
-    if (!finalCheck.isLeaf) {
-      console.error(`[SWISH] Final validation failed: categoryId=${resolvedCategoryId} is not a valid EBAY_GB leaf (treeId=${catResult.treeId}). Blocking submission.`);
-      return jsonResponse({ error: `Category ${resolvedCategoryId} was rejected by eBay's EBAY_GB Taxonomy as a non-leaf category (treeId=${catResult.treeId}). Please open the Listing Editor, select a valid leaf category, and retry.` }, 400);
-    }
-  }
-  console.log(`[SWISH] Submitting: marketplaceId=EBAY_GB, categoryTreeId=${catResult.treeId}, categoryTreeVersion=${catResult.treeVersion}, categoryId=${resolvedCategoryId}, categoryName="${catResult.categoryName}"`);
+  const catResult = {
+    resolvedId: resolvedCategoryId,
+    resolvedName: savedCategoryName,
+    categoryName: savedCategoryName,
+    treeId: '3',
+    treeVersion: 'not-queried',
+    wasResolved: false,
+    confidence: 'user_selected',
+  };
+  console.log(`[SWISH] Direct category passthrough: marketplaceId=EBAY_GB, categoryId=${resolvedCategoryId}, categoryName="${savedCategoryName}". No SWISH leaf validation performed.`);
 
   const attrs: Record<string, any> = item?.attributes ?? {};
   const specialistId: string = item?.specialist_id ?? '';
