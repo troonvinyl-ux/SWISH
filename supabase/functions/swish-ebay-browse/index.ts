@@ -211,7 +211,7 @@ function parseItemXml(itemXml: string, ebayStatus: string): Record<string, any> 
   const photos = [
     ...(galleryUrl && !allPicUrls.includes(galleryUrl) ? [galleryUrl] : []),
     ...allPicUrls,
-  ].slice(0, 12); // up to 12 eBay images
+  ].slice(0, 24); // retain the full eBay gallery (up to 24 images)
 
   // Dates
   const listedAt = extractTag(itemXml, 'StartTime') || null;
