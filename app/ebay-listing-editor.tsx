@@ -1619,7 +1619,8 @@ export default function EbayListingEditorScreen() {
       dispatchDays: '3',
       floorPrice: (Number(row.floor_price ?? 0)).toFixed(2),
       ceilingPrice: (Number(row.ceiling_price ?? 0)).toFixed(2),
-      itemSpecifics: attrSpecifics.slice(0, 25),
+      // Keep every valid eBay-specific candidate; truncating to 25 silently drops listing attributes.
+      itemSpecifics: attrSpecifics,
       media: item?.media ?? [],
       itemTitle: item?.canonical_title ?? '',
       itemCondition: item?.condition ?? '',
