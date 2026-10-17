@@ -62,7 +62,6 @@ async function refreshToken(
     body: new URLSearchParams({
       grant_type: 'refresh_token',
       refresh_token: refreshToken,
-      scope: 'https://api.ebay.com/oauth/api_scope/sell.fulfillment https://api.ebay.com/oauth/api_scope/sell.inventory',
     }).toString(),
     signal: AbortSignal.timeout(15000),
   });
