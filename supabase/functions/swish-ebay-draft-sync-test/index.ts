@@ -215,6 +215,73 @@ Deno.serve(async (request: Request) => {
       }
 
       const sku = String(before.sku ?? '');
+      // Reuse an existing SWISH item with the exact same SKU before creating anything.
+      // This prevents a draft sync from duplicating inventory already in SWISH.
+      if (sku) {
+        const { data: skuMatches, error: skuErr } = await db.from('items')
+          .select('id,inventory_id,canonical_title,description,attributes,sku,quantity')
+          .eq('tenant_id', tenantId)
+          .eq('sku', sku)
+          .limit(2);
+        if (skuErr) throw new Error('Could not match the eBay draft to existing SWISH inventory: ' + skuErr.message);
+        if ((skuMatches ?? []).length > 1) {
+          return json({ error: `More than one SWISH item uses SKU ${sku}; no import made to avoid duplicating or linking the wrong coin.` }, 409);
+        }
+        const match = skuMatches?.[0];
+        if (match) {
+          const writableFields = [
+            'sku', 'marketplaceId', 'format', 'availableQuantity', 'categoryId',
+            'listingDescription', 'listingDuration', 'listingPolicies', 'pricingSummary',
+            'quantityLimitPerBuyer', 'includeCatalogProductDetails', 'merchantLocationKey',
+            'tax', 'storeCategoryNames', 'hideBuyerDetails', 'charity',
+          ];
+          const offerSnapshot: Record<string, unknown> = {};
+          for (const field of writableFields) {
+            if (Object.prototype.hasOwnProperty.call(before, field)) offerSnapshot[field] = before[field];
+          }
+          const attrs = {
+            ...(match.attributes ?? {}),
+            _ebay_offer_id: offerId,
+            _ebay_sku: sku,
+            _ebay_title: String(match.canonical_title ?? before.sku ?? ''),
+            _ebay_category_id: String(before.categoryId ?? ''),
+            ebay_category_id: String(before.categoryId ?? ''),
+            _ebay_draft_status: 'UNPUBLISHED',
+            _ebay_offer_snapshot: offerSnapshot,
+          };
+          const { error: itemUpdateErr } = await db.from('items').update({
+            attributes: attrs,
+            updated_at: new Date().toISOString(),
+          }).eq('id', match.id).eq('tenant_id', tenantId);
+          if (itemUpdateErr) throw new Error('Could not link the eBay draft to existing SWISH inventory: ' + itemUpdateErr.message);
+
+          const { data: matchedListings, error: listingMatchErr } = await db.from('listings')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .eq('item_id', match.id)
+            .eq('marketplace_id', 'ebay')
+            .in('status', ['draft', 'pending'])
+            .limit(1);
+          if (listingMatchErr) throw new Error('Could not find the existing SWISH draft listing: ' + listingMatchErr.message);
+          let linkedListingId = matchedListings?.[0]?.id ?? null;
+          if (linkedListingId) {
+            const { error: listingUpdateErr } = await db.from('listings').update({
+              category_id: String(before.categoryId ?? '') || null,
+              price: Number(before.pricingSummary?.price?.value ?? 0),
+              description: String(before.listingDescription ?? match.description ?? ''),
+              updated_at: new Date().toISOString(),
+            }).eq('id', linkedListingId).eq('tenant_id', tenantId);
+            if (listingUpdateErr) throw new Error('Could not update the existing SWISH draft listing: ' + listingUpdateErr.message);
+          }
+          return json({
+            ok: true, action, alreadyImported: true, matchedBySku: true,
+            itemId: match.id, listingId: linkedListingId, inventoryId: match.inventory_id,
+            offer: safeOffer(before),
+            message: 'Matched the eBay draft to existing SWISH inventory by exact SKU; no duplicate item created.',
+          });
+        }
+      }
+
       const inventoryItemResp = await fetch(`${INVENTORY_URL}/inventory_item/${encodeURIComponent(sku)}`, {
         headers: { Authorization: `Bearer ${credentials.accessToken}`, 'Content-Language': 'en-GB', 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_GB' },
         signal: AbortSignal.timeout(15000),
