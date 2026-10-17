@@ -15,13 +15,6 @@ const corsHeaders = {
 const EBAY_TOKEN_URL    = 'https://api.ebay.com/identity/v1/oauth2/token';
 const EBAY_BROWSE_BASE  = 'https://api.ebay.com/buy/browse/v1';
 const APP_TOKEN_SCOPE   = 'https://api.ebay.com/oauth/api_scope';
-const TRADING_REFRESH_SCOPE = [
-  'https://api.ebay.com/oauth/api_scope/sell.inventory',
-  'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
-  'https://api.ebay.com/oauth/api_scope/sell.account',
-  'https://api.ebay.com/oauth/api_scope/commerce.identity.readonly',
-].join(' ');
-
 const TRADING_API = 'https://api.ebay.com/ws/api.dll';
 const SITE_ID = '3'; // eBay UK
 
@@ -48,10 +41,10 @@ async function refreshUserToken(
 ): Promise<{ accessToken: string; expiresAt: string }> {
   console.log('[eBay Auth] Refreshing user access token...');
   const basicAuth = btoa(`${clientId}:${clientSecret}`);
+  // Omit scope so eBay retains the complete set granted at consent.
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
     refresh_token: refreshToken,
-    scope: TRADING_REFRESH_SCOPE,
   });
   const resp = await fetch(EBAY_TOKEN_URL, {
     method: 'POST',
