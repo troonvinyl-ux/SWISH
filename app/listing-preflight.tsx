@@ -293,7 +293,7 @@ export default function ListingPreflightScreen() {
         error = e;
       }
 
-      if (error || !data?.success || ['curated', 'curated_verified'].includes(data?.source)) {
+      if (error || !data?.success || ['curated', 'curated_verified', 'db_cache'].includes(data?.source)) {
         try {
           const fallback = await supabase.functions.invoke('swish-ebay-list', {
             body: { route: 'get_category_children', tenantId: tenant.id, parentId: parentId || '' },
@@ -364,7 +364,7 @@ export default function ListingPreflightScreen() {
           error = e;
         }
 
-        if (error || !data?.success || ['curated', 'curated_verified', 'db_cache_offline', 'curated_fallback'].includes(data?.source)) {
+        if (error || !data?.success || ['curated', 'curated_verified', 'db_cache_offline', 'curated_fallback', 'db_cache'].includes(data?.source)) {
           try {
             const fallback = await supabase.functions.invoke('swish-ebay-list', {
               body: { route: 'get_category_suggestions', tenantId: tenant.id, query },
