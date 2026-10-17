@@ -89,14 +89,60 @@ export default function EbayCategoryAdminScreen() {
     setTestLoading(true);
     setTestResult(null);
     try {
-      const { data } = await supabase.functions.invoke('swish-ebay-category', {
-        body: { route: 'validate_category', tenantId: tenant.id, categoryId: testCatId.trim() },
-      });
-      setTestResult({ type: 'validate', ...data });
+      let data: any = null;
+      let error: any = null;
+      try {
+        const primary = await supabase.functions.invoke('swish-ebay-category', {
+          body: { route: 'validate_category', tenantId: tenant.id, categoryId: testCatId.trim() },
+        });
+        data = primary.data;
+        error = primary.error;
+      } catch (e: any) {
+        error = e;
+      }
+
+      // Retry through the listing function so category testing can use the
+      // connected seller token when the application token has no Taxonomy scope.
+      if (error || data?.valid == null) {
+        try {
+          const fallback = await supabase.functions.invoke('swish-ebay-list', {
+            body: { route: 'get_category_aspects', tenantId: tenant.id, categoryId: testCatId.trim() },
+          });
+          if (!fallback.error && typeof fallback.data?.isLeaf === 'boolean') {
+            data = {
+              ...data,
+              categoryId: testCatId.trim(),
+              valid: fallback.data.isLeaf,
+              isLeaf: fallback.data.isLeaf,
+              active: fallback.data.isLeaf ? true : false,
+              categoryName: fallback.data.categoryName ?? data?.categoryName,
+              source: 'seller_token_taxonomy',
+              reason: fallback.data.reason ?? fallback.data.error ?? data?.reason,
+            };
+            error = null;
+          } else {
+            error = fallback.error ?? error;
+            data = {
+              ...data,
+              categoryId: testCatId.trim(),
+              valid: null,
+              isLeaf: null,
+              active: null,
+              source: 'api_error',
+              reason: fallback.data?.reason ?? fallback.data?.error ?? error?.message ?? 'eBay category could not be verified live.',
+            };
+          }
+        } catch (e: any) {
+          error = error ?? e;
+        }
+      }
+
+      setTestResult({ type: 'validate', ...(data ?? {}), ...(error && data?.valid == null ? { valid: null, isLeaf: null, active: null, error: error.message } : {}) });
     } catch (e: any) {
-      setTestResult({ error: e.message });
+      setTestResult({ type: 'validate', categoryId: testCatId.trim(), valid: null, isLeaf: null, active: null, source: 'api_error', error: e.message });
+    } finally {
+      setTestLoading(false);
     }
-    setTestLoading(false);
   }, [tenant?.id, testCatId]);
 
   const handleTestSuggest = useCallback(async () => {
@@ -104,14 +150,43 @@ export default function EbayCategoryAdminScreen() {
     setTestLoading(true);
     setTestResult(null);
     try {
-      const { data } = await supabase.functions.invoke('swish-ebay-category', {
-        body: { route: 'get_category_suggestions', tenantId: tenant.id, query: testQuery.trim() },
-      });
-      setTestResult({ type: 'suggest', ...data });
+      let data: any = null;
+      let error: any = null;
+      try {
+        const primary = await supabase.functions.invoke('swish-ebay-category', {
+          body: { route: 'get_category_suggestions', tenantId: tenant.id, query: testQuery.trim() },
+        });
+        data = primary.data;
+        error = primary.error;
+      } catch (e: any) {
+        error = e;
+      }
+      if (error || !data?.success || ['curated', 'curated_verified', 'db_cache_offline', 'db_cache'].includes(data?.source)) {
+        try {
+          const fallback = await supabase.functions.invoke('swish-ebay-list', {
+            body: { route: 'get_category_suggestions', tenantId: tenant.id, query: testQuery.trim().slice(0, 100) },
+          });
+          if (!fallback.error && fallback.data?.success) {
+            data = fallback.data;
+            error = null;
+          } else {
+            error = fallback.error ?? error;
+            if (fallback.data) data = fallback.data;
+          }
+        } catch (e: any) {
+          error = error ?? e;
+        }
+      }
+      if (error && !data?.success) {
+        setTestResult({ type: 'suggest', success: false, source: 'api_error', suggestions: [], error: error.message ?? 'Category search failed.' });
+      } else {
+        setTestResult({ type: 'suggest', ...(data ?? {}), ...(error ? { warning: error.message } : {}) });
+      }
     } catch (e: any) {
-      setTestResult({ error: e.message });
+      setTestResult({ type: 'suggest', success: false, source: 'api_error', suggestions: [], error: e.message });
+    } finally {
+      setTestLoading(false);
     }
-    setTestLoading(false);
   }, [tenant?.id, testQuery]);
 
   const handleRunTest = useCallback(async () => {
