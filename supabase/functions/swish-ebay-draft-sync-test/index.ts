@@ -153,7 +153,37 @@ Deno.serve(async (request: Request) => {
         .limit(1);
       if (findErr) throw new Error('Could not check for an existing draft import: ' + findErr.message);
       if (existingItems?.length) {
-        return json({ ok: true, action, alreadyImported: true, itemId: existingItems[0].id, inventoryId: existingItems[0].inventory_id, offer: safeOffer(before) });
+        const existing = existingItems[0];
+        const writableFields = [
+          'sku', 'marketplaceId', 'format', 'availableQuantity', 'categoryId',
+          'listingDescription', 'listingDuration', 'listingPolicies', 'pricingSummary',
+          'quantityLimitPerBuyer', 'includeCatalogProductDetails', 'merchantLocationKey',
+          'tax', 'storeCategoryNames', 'hideBuyerDetails', 'charity',
+        ];
+        const offerSnapshot: Record<string, unknown> = {};
+        for (const field of writableFields) {
+          if (Object.prototype.hasOwnProperty.call(before, field)) offerSnapshot[field] = before[field];
+        }
+        const refreshedAttributes = {
+          ...(existing.attributes ?? {}),
+          _ebay_offer_id: offerId,
+          _ebay_sku: String(before.sku ?? ''),
+          _ebay_title: String(existing.canonical_title ?? before.sku ?? ''),
+          _ebay_category_id: String(before.categoryId ?? ''),
+          ebay_category_id: String(before.categoryId ?? ''),
+          _ebay_draft_status: 'UNPUBLISHED',
+          _ebay_offer_snapshot: offerSnapshot,
+        };
+        const { error: refreshErr } = await db.from('items').update({
+          attributes: refreshedAttributes,
+          updated_at: new Date().toISOString(),
+        }).eq('id', existing.id).eq('tenant_id', tenantId);
+        if (refreshErr) throw new Error('Could not refresh the imported offer snapshot: ' + refreshErr.message);
+        await db.from('listings').update({
+          category_id: String(before.categoryId ?? '') || null,
+          updated_at: new Date().toISOString(),
+        }).eq('tenant_id', tenantId).eq('item_id', existing.id).eq('marketplace_id', 'ebay');
+        return json({ ok: true, action, alreadyImported: true, snapshotRefreshed: true, itemId: existing.id, inventoryId: existing.inventory_id, offer: safeOffer(before) });
       }
 
       const sku = String(before.sku ?? '');
