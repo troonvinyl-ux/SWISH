@@ -649,7 +649,7 @@ const SPECIALIST_LEAF_REFERENCE: Record<string, { id: string; name: string }> = 
   coins_uk:                 { id: '79964', name: 'Other British Coins' },
   coins_currency:           { id: '79964', name: 'Other British Coins' },
   coins_world:              { id: '257',   name: 'Other World Coins' },
-  islamic_silver:           { id: '4739',  name: 'Islamic Coins' },
+  islamic_silver:           { id: '4730',  name: 'Islamic Coins' },
   stamps:                   { id: '261',   name: 'Great Britain Stamps' },
   pokemon:                  { id: '183454', name: 'CCG Individual Cards' },
   trading_cards:            { id: '183454', name: 'CCG Individual Cards' },
@@ -772,7 +772,7 @@ async function resolveLeafCategory(
   // Every candidate is still verified against the current EBAY_GB taxonomy before use.
   const lowerTitle = String(title ?? '').toLowerCase();
   const coinFallbacks: Array<{ test: RegExp; id: string; name: string }> = [
-    { test: /\b(islamic|dirham|dinar|abbasid|umayyad|fatimid|ilkhanid)\b/, id: '4739', name: 'Islamic Coins' },
+    { test: /\b(islamic|dirham|dinar|abbasid|umayyad|fatimid|ilkhanid)\b/, id: '4730', name: 'Islamic Coins' },
     { test: /\b(chinese|china|fukien|mace|cash coin|cash coins)\b/, id: '4740', name: 'Ancient Chinese Coins' },
     { test: /\b(greek|hellenistic|alexander|macedon)\b/, id: '4738', name: 'Ancient Greek Coins' },
     { test: /\b(byzantine)\b/, id: '3364', name: 'Byzantine Coins' },
@@ -1514,7 +1514,7 @@ async function handleRequest(req: Request): Promise<Response> {
         { id: '4738', name: 'Ancient Greek Coins', isLeaf: true, childCount: 0 },
         { id: '3365', name: 'Roman Imperial Coins (96–235 AD)', isLeaf: true, childCount: 0 },
         { id: '3364', name: 'Byzantine Coins', isLeaf: true, childCount: 0 },
-        { id: '4739', name: 'Islamic Coins', isLeaf: true, childCount: 0 },
+        { id: '4730', name: 'Islamic Coins', isLeaf: true, childCount: 0 },
         { id: '4737', name: 'Ancient Persian & Indian Coins', isLeaf: true, childCount: 0 },
         { id: '532', name: 'Other Ancient Coins', isLeaf: true, childCount: 0 },
         { id: '79964', name: 'Other British Coins', isLeaf: true, childCount: 0 },
