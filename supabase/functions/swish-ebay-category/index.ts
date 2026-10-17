@@ -1087,7 +1087,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           id: r.category_id, name: r.category_name, isLeaf: true,
           confidence: i === 0 ? 'medium' : 'low', categoryPath: r.category_path,
         }));
-        return json({ success: true, suggestions: sug, source: 'db_cache' });
+        return json({ success: true, suggestions: sug, source: 'db_cache_offline' });
       }
       return json({ success: true, suggestions: filterCurated(query), source: 'curated' });
     }
