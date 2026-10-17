@@ -57,21 +57,6 @@ export default function EbayDraftSyncTestScreen() {
         setResult({ ok: true, message: 'eBay UK returned no unpublished drafts to sync.' });
         return;
       }
-      const { data: existingItems } = await supabase.from('items')
-        .select('sku,canonical_title,media')
-        .eq('tenant_id', tenant.id)
-        .in('sku', offers.map(offer => offer.sku).filter(Boolean));
-      const itemBySku = new Map((existingItems ?? []).map((item: any) => [String(item.sku), item]));
-      const enrichedOffers = offers.map(offer => {
-        const item: any = itemBySku.get(String(offer.sku ?? ''));
-        const media = Array.isArray(item?.media) ? item.media : [];
-        return {
-          ...offer,
-          title: String(item?.canonical_title ?? offer.sku ?? 'eBay draft'),
-          imageUrl: media.find((url: unknown) => typeof url === 'string' && url.startsWith('https://')),
-        };
-      });
-      setDraftOffers(enrichedOffers);
       let imported = 0;
       let alreadyInSwish = 0;
       const failures: string[] = [];
@@ -87,6 +72,21 @@ export default function EbayDraftSyncTestScreen() {
           imported++;
         }
       }
+      const { data: syncedItems } = await supabase.from('items')
+        .select('sku,canonical_title,media')
+        .eq('tenant_id', tenant.id)
+        .in('sku', offers.map(offer => offer.sku).filter(Boolean));
+      const itemBySku = new Map((syncedItems ?? []).map((item: any) => [String(item.sku), item]));
+      const enrichedOffers = offers.map(offer => {
+        const item: any = itemBySku.get(String(offer.sku ?? ''));
+        const media = Array.isArray(item?.media) ? item.media : [];
+        return {
+          ...offer,
+          title: String(item?.canonical_title ?? offer.sku ?? 'eBay draft'),
+          imageUrl: media.find((url: unknown) => typeof url === 'string' && url.startsWith('https://')),
+        };
+      });
+      setDraftOffers(enrichedOffers);
       setResult({
         ok: failures.length === 0,
         message: `eBay UK draft sync finished. ${imported} imported, ${alreadyInSwish} already in SWISH, ${failures.length} failed. Tap a draft below to select it for the round-trip test.${failures.length ? '\\n' + failures.slice(0, 5).join('\\n') : ''}`,
