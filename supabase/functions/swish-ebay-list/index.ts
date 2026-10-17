@@ -518,10 +518,10 @@ async function verifyCategoryIsLeaf(
           return { isLeaf: false, name };
         }
         if (dbRow.is_leaf === false) {
-          // DB definitively says NOT a leaf — block immediately, no live API call needed
-          console.log(`[SWISH] Category ${categoryId} ("${name}") is_leaf=false in DB — blocking`);
-          TAXONOMY_CACHE.set(cacheKey, { id: categoryId, name, isLeaf: false, timestamp: Date.now() });
-          return { isLeaf: false, name };
+          // A cached non-leaf flag may come from an old/bad taxonomy sync. Do
+          // not permanently reject it here; confirm against the live EBAY_GB API
+          // below before deciding that a user-selected category is a parent.
+          console.log(`[SWISH] Category ${categoryId} cached is_leaf=false — confirming against live taxonomy`);
         }
         if (dbRow.is_leaf === true) {
           // DB confirms leaf — trust it (set from leafCategoryTreeNode in Taxonomy sync)
@@ -1504,8 +1504,27 @@ async function handleRequest(req: Request): Promise<Response> {
     if (!token) return jsonResponse({ success: false, isLeaf: false, aspects: [], error: 'eBay API token unavailable' });
     const { aspects, error } = await getEbayCategoryAspects(token, categoryId);
     if (error && aspects.length === 0) {
-      const isParent = error.includes('400') || error.includes('404');
-      return jsonResponse({ success: !isParent, isLeaf: !isParent, aspects: [], error });
+      const match = error.match(/eBay Taxonomy API error \((\d+)\):\s*([\s\S]*)/);
+      if (match) {
+        const statusCode = Number(match[1]);
+        const responseBody = match[2] ?? '';
+        const definitelyNotLeaf = isAspectsNotLeaf(statusCode, responseBody);
+        if (definitelyNotLeaf) {
+          return jsonResponse({ success: true, isLeaf: false, aspects: [], error,
+            reason: 'eBay confirmed this is not a leaf category.' });
+        }
+        // eBay can return HTTP 400 for valid leaves with no defined item
+        // aspects. Treat only known "not a leaf" codes/messages as rejection.
+        if (statusCode === 400) {
+          return jsonResponse({ success: true, isLeaf: true, aspects: [], note: 'Valid leaf category with no defined aspects.' });
+        }
+        if (statusCode === 404) {
+          return jsonResponse({ success: true, isLeaf: false, aspects: [], error,
+            reason: 'eBay could not find this category.' });
+        }
+      }
+      // Network, auth and server errors do not prove that the category is a parent.
+      return jsonResponse({ success: false, isLeaf: null, aspects: [], error });
     }
     return jsonResponse({ success: true, isLeaf: true, aspects });
   }
