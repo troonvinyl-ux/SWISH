@@ -120,8 +120,10 @@ export async function saveListing(
   const { config } = await getBusinessConfig(tenantId);
   const defaultShipping = config?.defaultShippingCost ?? 0;
 
-  // Resolve category ID — prefer passed param, fall back to generated listing
-  const resolvedCategoryId = categoryId ?? generated.category_id ?? null;
+  // Only persist a user-confirmed category ID here. AI-generated listing text
+  // must never invent/override an eBay category; publish-time taxonomy resolution
+  // handles the no-category case using current EBAY_GB suggestions.
+  const resolvedCategoryId = categoryId ?? null;
 
   const { data, error } = await supabase
     .from('listings')
@@ -550,6 +552,7 @@ export async function submitListingToMarketplace(
     .from('listings')
     .select('category_id, items(attributes, specialist_id)')
     .eq('id', listingId)
+    .eq('tenant_id', tenantId)
     .maybeSingle();
 
   // Resolve the stored category ID from the listing or item attributes.
