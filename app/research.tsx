@@ -348,9 +348,9 @@ export default function ResearchScreen() {
 
       // Match the current swish-market-value response contract first, while retaining
       // legacy aliases for older deployed Edge Function versions.
-      const sold = mv?.teapeakProductResearch ?? mv?.teapeakData ?? {};
+      const sold = mv?.verifiedSoldResearch ?? mv?.teapeakProductResearch ?? mv?.teapeakData ?? {};
       const soldAverage = Number(sold.averageSoldPrice ?? sold.avgSoldPrice ?? 0);
-      const soldCount = Number(sold.soldQuantity ?? 0);
+      const soldCount = Number(sold.soldQuantity ?? sold.soldCount ?? 0);
       const soldLow = Number(sold.priceMin ?? sold.lowSoldPrice ?? 0);
       const soldHigh = Number(sold.priceMax ?? sold.highSoldPrice ?? 0);
       if (soldAverage > 0 || soldCount > 0) {
@@ -362,10 +362,10 @@ export default function ResearchScreen() {
           };
         }
         newSummary.recentSoldCount = soldCount;
-        newSummary.sellThrough = sold.sellThroughRate ?? sold.sellThrough ?? null;
+        newSummary.sellThrough = sold.sellThroughRate ?? sold.sellThrough ?? undefined;
         newSummary.currency = 'GBP';
         newSummary.source = sold.available
-          ? 'eBay Product Research / Terapeak (sold-market statistics)'
+          ? (sold.source === 'ebay_marketplace_insights' ? 'eBay verified sold listings' : 'eBay Product Research / Terapeak (sold-market statistics)')
           : 'eBay sold-market statistics';
       }
 
@@ -398,7 +398,7 @@ export default function ResearchScreen() {
 
       // Only render actual sold listing records if the source returned them. Product
       // Research often returns aggregates only; do not fabricate individual sold items.
-      const soldListings = sold.topSoldListings
+      const soldListings = sold.items ?? sold.topSoldListings
         ?? mv?.soldMarket?.sampleSoldListings
         ?? (Array.isArray(mv?.stats?.recentSales)
           ? mv.stats.recentSales.filter((item: any) => /sold/i.test(String(item.sellSummary ?? '')))
@@ -471,7 +471,7 @@ export default function ResearchScreen() {
       setSummary(newSummary);
       setResults(newResults);
 
-      if (newResults.length === 0 && !newSummary.avgSoldPrice && !newSummary.geminiEstimate) {
+      if (newResults.length === 0 && !newSummary.avgSoldPrice && !newSummary.recentSoldCount && !newSummary.geminiEstimate) {
         setError('No results found. Try a different search term or add an image for visual research.');
       }
     } catch (e: any) {
