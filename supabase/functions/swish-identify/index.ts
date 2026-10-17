@@ -350,6 +350,7 @@ function buildKnownAttributesContext(attrs: Record<string, any>): string {
 
   if (attrs.weight) hard.push(`Weight: ${attrs.weight}g — USER-MEASURED HARD EVIDENCE`);
   if (attrs.diameter) hard.push(`Diameter: ${attrs.diameter}mm — USER-MEASURED HARD EVIDENCE`);
+  if (attrs.edgeLegend) hard.push(`Edge legend / inscription transcribed by user: ${attrs.edgeLegend} — EXACT TEXT EVIDENCE; compare with visible coin and do not silently normalize or complete missing characters`);
   if (attrs.material) hard.push(`Material: ${attrs.material}`);
   if (attrs.ruler) hard.push(`Ruler: ${attrs.ruler}`);
   if (attrs.denomination) hard.push(`Denomination: ${attrs.denomination}`);
