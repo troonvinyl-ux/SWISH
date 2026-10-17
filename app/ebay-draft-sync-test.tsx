@@ -34,6 +34,55 @@ export default function EbayDraftSyncTestScreen() {
   const [result, setResult] = useState<Result | null>(null);
   const [phase, setPhase] = useState<'read' | 'roundtrip' | null>(null);
 
+  async function syncDraftsToSwish() {
+    if (!tenant?.id) {
+      setResult({ error: 'SWISH has not finished loading your organisation. Return to the app and try again.' });
+      return;
+    }
+    setBusy(true);
+    setPhase('read');
+    setResult(null);
+    setDraftOffers([]);
+    setOfferId('');
+    try {
+      const supabase = getSupabaseClient();
+      const { data: listData, error: listError } = await supabase.functions.invoke('swish-ebay-draft-sync-test', {
+        body: { action: 'list_unpublished_offers', tenantId: tenant.id },
+      });
+      if (listError) throw new Error(listError.message || 'Could not retrieve unpublished drafts from eBay UK.');
+      const offers = Array.isArray(listData?.offers) ? listData.offers as DraftOffer[] : [];
+      setDraftOffers(offers);
+      if (!offers.length) {
+        setResult({ ok: true, message: 'eBay UK returned no unpublished drafts to sync.' });
+        return;
+      }
+
+      let imported = 0;
+      let alreadyInSwish = 0;
+      const failures: string[] = [];
+      for (const offer of offers) {
+        const { data, error } = await supabase.functions.invoke('swish-ebay-draft-sync-test', {
+          body: { action: 'import_offer', tenantId: tenant.id, offerId: offer.offerId },
+        });
+        if (error || data?.error || !data?.ok) {
+          failures.push(`${offer.sku || offer.offerId}: ${data?.error || error?.message || 'Import failed'}`);
+        } else if (data.alreadyImported) {
+          alreadyInSwish++;
+        } else {
+          imported++;
+        }
+      }
+      setResult({
+        ok: failures.length === 0,
+        message: `eBay UK draft sync finished. ${imported} imported, ${alreadyInSwish} already in SWISH, ${failures.length} failed. Tap a draft below to select it for the round-trip test.${failures.length ? '\\n' + failures.slice(0, 5).join('\\n') : ''}`,
+      });
+    } catch (error: any) {
+      setResult({ error: error?.message || 'Could not sync drafts from eBay UK.' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function runTest(action: 'list_unpublished_offers' | 'read_offer' | 'import_offer' | 'sync_category_from_ebay' | 'round_trip_unpublished' | 'push_swish_category') {
     if (!tenant?.id) {
       setResult({ error: 'SWISH has not finished loading your organisation. Return to the app and try again.' });
@@ -93,11 +142,11 @@ export default function EbayDraftSyncTestScreen() {
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>1 · Choose a coin draft from eBay UK</Text>
-        <Text style={styles.body}>Tap the button below. SWISH will fetch your unpublished eBay UK drafts and let you select one. You do not need to find or copy an API ID.</Text>
-        <Pressable disabled={busy} onPress={() => runTest('list_unpublished_offers')} style={[styles.button, busy && styles.disabled]}>
-          {busy && phase === 'read' ? <ActivityIndicator color={Colors.background} /> : <MaterialIcons name="download" size={18} color={Colors.background} />}
-          <Text style={styles.buttonText}>Find my eBay UK drafts</Text>
+        <Text style={styles.sectionTitle}>1 · Sync eBay UK drafts into SWISH</Text>
+        <Text style={styles.body}>One tap retrieves your unpublished eBay UK drafts and imports them into the existing SWISH database. Existing imports are refreshed rather than duplicated. No IDs to find or enter.</Text>
+        <Pressable disabled={busy} onPress={syncDraftsToSwish} style={[styles.button, busy && styles.disabled]}>
+          {busy && phase === 'read' ? <ActivityIndicator color={Colors.background} /> : <MaterialIcons name="sync" size={18} color={Colors.background} />}
+          <Text style={styles.buttonText}>Sync drafts from eBay UK</Text>
         </Pressable>
         {draftOffers.length ? (
           <View style={styles.draftList}>
