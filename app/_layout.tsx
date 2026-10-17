@@ -90,6 +90,7 @@ export default function RootLayout() {
                 <Stack.Screen name="privacy-policy" />
                 <Stack.Screen name="listings" />
                 <Stack.Screen name="ebay-import" />
+                <Stack.Screen name="ebay-draft-sync-test" />
                 <Stack.Screen name="ebay-admin" />
                 <Stack.Screen name="dispatch" />
                 <Stack.Screen name="tasks" />
