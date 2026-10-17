@@ -13,10 +13,11 @@
 //   dispatch     — submit tracking/carrier to eBay and update SWISH order
 //   get_shipping — fetch shipping fulfillments for an order from eBay
 //   sync_returns — fetch open return requests from eBay Post-Order API and sync to ebay_returns
+//   sync_cases   — fetch escalated cases from eBay Post-Order API and sync to ebay_cases
 //
 // POST body:
 //   {
-//     route: 'dispatch' | 'get_shipping' | 'sync_returns',
+//     route: 'dispatch' | 'get_shipping' | 'sync_returns' | 'sync_cases',
 //     tenantId: string,
 //     orderId?: string,         // Required only by dispatch and get_shipping
 //     carrier?: string,         // e.g. 'Royal Mail'
@@ -582,6 +583,149 @@ async function handleSyncReturns(
   }
 }
 
+// ── Sync escalated cases from eBay Post-Order API ─────────────────────────────
+// eBay's case search returns CaseSummaryType fields (caseId, buyer, caseStatusEnum,
+// claimAmount.value, creationDate.value, respondByDate.value, itemId, transactionId).
+// Keep the sync idempotent by matching on tenant_id + ebay_case_id.
+async function handleSyncCases(
+  supabase: ReturnType<typeof adminClient>,
+  tenantId: string,
+): Promise<Response> {
+  const tokenResult = await getAccessToken(supabase, tenantId);
+  if ('error' in tokenResult) return jsonResponse({ success: false, error: tokenResult.error }, 400);
+
+  let fetched = 0;
+  let imported = 0;
+  let updated = 0;
+  const pageSize = 200;
+  const maxRecords = 1000;
+
+  try {
+    for (let offset = 0; offset < maxRecords; offset += pageSize) {
+      const url = new URL('https://api.ebay.com/post-order/v2/casemanagement/search');
+      url.searchParams.set('limit', String(pageSize));
+      url.searchParams.set('offset', String(offset));
+      url.searchParams.set('sort', 'Descending');
+
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${tokenResult.accessToken}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        signal: AbortSignal.timeout(15000),
+      });
+
+      if (!response.ok) {
+        const responseText = await response.text().catch(() => '');
+        const approvalHint = response.status === 403
+          ? ' eBay may require Post-Order API approval or an account with permission to access cases.'
+          : '';
+        return jsonResponse({
+          success: false,
+          error: `eBay case search failed (HTTP ${response.status}). ${responseText.slice(0, 700)}${approvalHint}`,
+          fetched, imported, updated,
+          requiresApproval: response.status === 403,
+        }, response.status >= 500 ? 503 : 400);
+      }
+
+      const payload = await response.json();
+      const members: any[] = Array.isArray(payload.members) ? payload.members : [];
+      fetched += members.length;
+
+      for (const member of members) {
+        const caseIdValue = member.caseId ?? member.case_id ?? member.id;
+        if (caseIdValue === undefined || caseIdValue === null || String(caseIdValue).trim() === '') continue;
+        const ebayCaseId = String(caseIdValue);
+        const rawStatus = String(member.caseStatusEnum ?? member.caseStatus ?? member.status ?? 'OTHER').toUpperCase();
+        const status = ['CLOSED', 'CS_CLOSED'].includes(rawStatus)
+          ? 'closed'
+          : rawStatus === 'REFUND_AGREED_BUT_FAILED'
+            ? 'awaiting_seller'
+            : rawStatus === 'WAITING_DELIVERY'
+              ? 'awaiting_buyer'
+              : rawStatus === 'WAITING_CS'
+                ? 'escalated'
+                : 'open';
+
+        const dateValue = (v: any): string | null => {
+          const raw = v && typeof v === 'object' ? (v.value ?? v.date ?? null) : v;
+          if (!raw) return null;
+          const parsed = new Date(raw);
+          return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
+        };
+        const amountValue = member.claimAmount?.value ?? member.claimAmount ?? null;
+        const amountNum = amountValue === null ? null : Number(amountValue);
+        const claimAmount = amountNum !== null && Number.isFinite(amountNum) ? amountNum : null;
+        const createdAt = dateValue(member.creationDate) ?? dateValue(member.createdAt) ?? new Date().toISOString();
+        const deadline = dateValue(member.respondByDate ?? member.respondBy) ?? null;
+        const buyerUsername = String(member.buyer ?? member.buyerUsername ?? '');
+        const caseType = String(member.caseType ?? member.caseTypeEnum ?? member.caseReason ?? '');
+        const itemId = member.itemId ?? member.item_id ?? null;
+        const transactionId = member.transactionId ?? member.transaction_id ?? null;
+        const row: Record<string, any> = {
+          tenant_id: tenantId,
+          ebay_case_id: ebayCaseId,
+          ebay_order_id: member.orderId === undefined || member.orderId === null ? null : String(member.orderId),
+          case_type: caseType || null,
+          buyer_username: buyerUsername,
+          status,
+          escalated: rawStatus === 'OPEN' || rawStatus === 'WAITING_CS',
+          updated_at: new Date().toISOString(),
+        };
+        if (claimAmount !== null) row.refund_amount = claimAmount;
+        if (deadline) row.deadline = deadline;
+        if (createdAt) row.created_at = createdAt;
+        if (itemId !== null && itemId !== undefined) row.ebay_item_id = String(itemId);
+        if (transactionId !== null && transactionId !== undefined) row.ebay_transaction_id = String(transactionId);
+
+        const { data: existing, error: lookupError } = await supabase
+          .from('ebay_cases')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .eq('ebay_case_id', ebayCaseId)
+          .limit(1)
+          .maybeSingle();
+        if (lookupError) {
+          console.error(`[SWISH Cases] Lookup failed for ${ebayCaseId}: ${lookupError.message}`);
+          return jsonResponse({ success: false, error: `Database lookup failed while syncing case ${ebayCaseId}: ${lookupError.message}`, fetched, imported, updated }, 500);
+        }
+
+        if (existing?.id) {
+          const updateRow = { ...row };
+          delete updateRow.created_at;
+          // These columns are optional in older table versions; do not send them
+          // unless the API supplied a value that the current database can persist.
+          const { error: updateError } = await supabase.from('ebay_cases')
+            .update(updateRow).eq('id', existing.id).eq('tenant_id', tenantId);
+          if (updateError) {
+            console.error(`[SWISH Cases] Update failed for ${ebayCaseId}: ${updateError.message}`);
+            return jsonResponse({ success: false, error: `Database update failed while syncing case ${ebayCaseId}: ${updateError.message}`, fetched, imported, updated }, 500);
+          }
+          updated++;
+        } else {
+          const { error: insertError } = await supabase.from('ebay_cases').insert(row);
+          if (insertError) {
+            console.error(`[SWISH Cases] Insert failed for ${ebayCaseId}: ${insertError.message}`);
+            return jsonResponse({ success: false, error: `Database insert failed while syncing case ${ebayCaseId}: ${insertError.message}`, fetched, imported, updated }, 500);
+          }
+          imported++;
+        }
+      }
+
+      const totalPages = Number(payload.paginationOutput?.totalPages ?? 0);
+      if (members.length < pageSize || (totalPages > 0 && offset / pageSize + 1 >= totalPages)) break;
+    }
+
+    console.log(`[SWISH Cases] tenant=${tenantId} fetched=${fetched} imported=${imported} updated=${updated}`);
+    return jsonResponse({ success: true, fetched, imported, updated, source: 'ebay_post_order', syncedAt: new Date().toISOString() });
+  } catch (e: any) {
+    console.error(`[SWISH Cases] Sync failed: ${e.message}`);
+    return jsonResponse({ success: false, error: `Could not sync eBay cases: ${e.message}`, fetched, imported, updated }, 503);
+  }
+}
+
 // ── Main Handler ──────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -617,6 +761,10 @@ Deno.serve(async (req: Request) => {
   try {
     if (route === 'sync_returns') {
       return await handleSyncReturns(supabase, tenantId);
+    }
+
+    if (route === 'sync_cases') {
+      return await handleSyncCases(supabase, tenantId);
     }
 
     if (route === 'dispatch') {
