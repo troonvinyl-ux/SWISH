@@ -432,9 +432,6 @@ function validateBusinessPolicies(
 
 // ── eBay Taxonomy Category Resolution ────────────────────────────────────────
 
-const TAXONOMY_CACHE = new Map<string, { id: string; name: string; isLeaf: boolean; timestamp: number }>();
-const TAXONOMY_CACHE_TTL = 15 * 60 * 1000;
-
 const KNOWN_PARENT_CATEGORY_HINT = new Set([
   '4', '99', '260', '1', '550', '281', '220', '467', '11116', '11450',
   '619', '625', '888', '2984', '1249', '11232', '139971', '64482', '171228',
@@ -482,48 +479,23 @@ async function verifyCategoryIsLeaf(
   categoryId: string,
   supabaseAdmin?: ReturnType<typeof adminClient>,
 ): Promise<{ isLeaf: boolean; name: string; fromDb?: boolean } | null> {
-  // Publish-time validation must never be short-circuited by a process-local
-  // cache or hard-coded "known good" ID. eBay can change categories and cached
-  // leaf flags are exactly the failure mode this path is meant to prevent.
-  const cacheKey = `info:${categoryId}`;
-
-  // Step 1: Read local data for a display name only. Neither is_leaf=true nor
-  // is_leaf=false is accepted as proof; the live EBAY_GB Taxonomy response below
-  // decides whether this selected ID can be published.
-  // TRUST is_leaf=true from the DB (set by leafCategoryTreeNode from Taxonomy subtree/suggestions API)
-  // ALSO trust is_leaf=false from DB — definitively blocked
+  // Read the local category name for human-readable errors only. Cached
+  // active/leaf flags are never used as the publish decision.
+  let displayName = categoryId;
   if (supabaseAdmin) {
     try {
       const { data: dbRow } = await supabaseAdmin
         .from('ebay_categories')
-        .select('category_id, category_name, is_leaf, active')
+        .select('category_name, is_leaf, active')
         .eq('marketplace_id', 'EBAY_GB')
         .eq('category_id', categoryId)
         .maybeSingle();
       if (dbRow) {
-        const name   = dbRow.category_name ?? categoryId;
-        const active = dbRow.active !== false;
-        console.log(`[SWISH] Local DB category check: ${categoryId} → isLeaf=${dbRow.is_leaf} active=${active} name="${name}"`);
-        if (!active) {
-          TAXONOMY_CACHE.set(cacheKey, { id: categoryId, name, isLeaf: false, timestamp: Date.now() });
-          return { isLeaf: false, name };
-        }
-        if (dbRow.is_leaf === false) {
-          // A cached non-leaf flag may come from an old/bad taxonomy sync. Do
-          // not permanently reject it here; confirm against the live EBAY_GB API
-          // below before deciding that a user-selected category is a parent.
-          console.log(`[SWISH] Category ${categoryId} cached is_leaf=false — confirming against live taxonomy`);
-        }
-        if (dbRow.is_leaf === true) {
-          // A cached leaf flag can become stale when eBay changes the category
-          // tree. Use the live Taxonomy API for the publish-time decision; the
-          // in-memory TTL cache above prevents repeated checks during one session.
-          console.log(`[SWISH] Category ${categoryId} cached is_leaf=true — confirming against live taxonomy`);
-        }
-        // NULL or either cached leaf flag must fall through to the live API check.
+        displayName = dbRow.category_name || categoryId;
+        console.log(`[SWISH] Cached category metadata only: ${categoryId} → isLeaf=${dbRow.is_leaf} active=${dbRow.active !== false} name="${displayName}"`);
       }
     } catch (dbErr: any) {
-      console.log(`[SWISH] Local DB category check error (non-fatal): ${dbErr.message}`);
+      console.log(`[SWISH] Local category label lookup failed (non-fatal): ${dbErr.message}`);
     }
   }
 
@@ -545,16 +517,7 @@ async function verifyCategoryIsLeaf(
       },
     );
     if (res.ok) {
-      if (supabaseAdmin) {
-        const now = new Date().toISOString();
-        supabaseAdmin.from('ebay_categories').upsert(
-          { marketplace_id: 'EBAY_GB', tree_id: treeId, category_id: categoryId,
-            category_name: categoryId, is_leaf: true, active: true, last_synced_at: now, updated_at: now },
-          { onConflict: 'marketplace_id,category_id' }
-        ).then(() => {}).catch(() => {});
-      }
-      TAXONOMY_CACHE.set(cacheKey, { id: categoryId, name: categoryId, isLeaf: true, timestamp: Date.now() });
-      return { isLeaf: true, name: categoryId };
+      return { isLeaf: true, name: displayName };
     }
     if (res.status === 404 || res.status === 400) {
       const bodyText = await res.text().catch(() => '{}');
@@ -562,29 +525,13 @@ async function verifyCategoryIsLeaf(
 
       if (definitelyNotLeaf) {
         console.log(`[SWISH] Category ${categoryId}: confirmed NOT a leaf (HTTP ${res.status} + error 13003/13004/404, treeId=${treeId})`);
-        if (supabaseAdmin) {
-          supabaseAdmin.from('ebay_categories')
-            .update({ is_leaf: false, updated_at: new Date().toISOString() })
-            .eq('marketplace_id', 'EBAY_GB').eq('category_id', categoryId)
-            .then(() => {}).catch(() => {});
-        }
-        TAXONOMY_CACHE.set(cacheKey, { id: categoryId, name: categoryId, isLeaf: false, timestamp: Date.now() });
-        return { isLeaf: false, name: categoryId };
+        return { isLeaf: false, name: displayName };
       }
 
       // HTTP 400 but NOT error 13003/13004 → valid leaf with no defined aspects
       // (e.g. Greek ancient coins, Byzantine coins — valid EBAY_GB leaf categories)
       console.log(`[SWISH] Category ${categoryId}: HTTP ${res.status} but no "not a leaf" error — treating as valid leaf with no aspects (treeId=${treeId}). Body: ${bodyText.slice(0, 200)}`);
-      if (supabaseAdmin) {
-        const now = new Date().toISOString();
-        supabaseAdmin.from('ebay_categories').upsert(
-          { marketplace_id: 'EBAY_GB', tree_id: treeId, category_id: categoryId,
-            is_leaf: true, active: true, last_synced_at: now, updated_at: now },
-          { onConflict: 'marketplace_id,category_id' }
-        ).then(() => {}).catch(() => {});
-      }
-      TAXONOMY_CACHE.set(cacheKey, { id: categoryId, name: categoryId, isLeaf: true, timestamp: Date.now() });
-      return { isLeaf: true, name: categoryId };
+      return { isLeaf: true, name: displayName };
     }
     const body = await res.text().catch(() => '');
     console.log(`[SWISH] Taxonomy leaf check returned ${res.status} for categoryId=${categoryId} (treeId=${treeId}). Body: ${body.slice(0, 200)}`);
@@ -636,8 +583,6 @@ async function findLeafCategoryByTitle(
 
       if (leafResults.length > 0) {
         console.log(`[SWISH] Taxonomy API: ${leafResults.length} leaf suggestions for "${searchQuery}"`);
-        const best = leafResults[0];
-        TAXONOMY_CACHE.set(cacheKey, { id: best.id, name: best.name, isLeaf: true, timestamp: Date.now() });
         return leafResults.slice(0, 5);
       }
     } else {
