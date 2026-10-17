@@ -127,6 +127,34 @@ Deno.serve(async (request: Request) => {
     if (!membership) return json({ error: 'Access denied for this SWISH organisation.' }, 403);
 
     const credentials = await getCredentials(db, tenantId);
+    if (action === 'list_unpublished_offers') {
+      const response = await fetch(`${INVENTORY_URL}/offer?marketplace_id=EBAY_GB&limit=100&offset=0`, {
+        headers: {
+          Authorization: `Bearer ${credentials.accessToken}`,
+          'Content-Language': 'en-GB',
+          'X-EBAY-C-MARKETPLACE-ID': 'EBAY_GB',
+        },
+        signal: AbortSignal.timeout(15000),
+      });
+      const responseText = await response.text();
+      let payload: any = {};
+      try { payload = responseText ? JSON.parse(responseText) : {}; } catch { payload = {}; }
+      if (!response.ok) {
+        const message = String(payload?.errors?.[0]?.message ?? payload?.message ?? 'Could not list eBay UK offers').slice(0, 300);
+        throw new Error(`eBay offer list failed (HTTP ${response.status}): ${message}`);
+      }
+      const offers = (Array.isArray(payload?.offers) ? payload.offers : [])
+        .filter((offer: any) => String(offer?.status ?? '').toUpperCase() === 'UNPUBLISHED')
+        .map((offer: any) => ({
+          ...safeOffer(offer),
+          offerId: String(offer?.offerId ?? ''),
+          sku: String(offer?.sku ?? ''),
+          categoryId: String(offer?.categoryId ?? ''),
+          status: 'UNPUBLISHED',
+        }))
+        .filter((offer: any) => offer.offerId);
+      return json({ ok: true, action, marketplaceId: 'EBAY_GB', offers, total: offers.length, limit: 100 });
+    }
     const before = await ebayRequest(credentials.accessToken, offerId, 'GET');
     if (String(before?.offerId ?? '') !== offerId) return json({ error: 'eBay returned an unexpected offer. No changes were made.' }, 409);
     if (String(before?.marketplaceId ?? '') !== 'EBAY_GB') return json({ error: 'This test only supports EBAY_GB offers. No changes were made.' }, 400);
