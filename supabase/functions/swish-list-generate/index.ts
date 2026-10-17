@@ -66,14 +66,14 @@ interface MXBrief {
   ebayCategoryName: string;
 }
 
-// eBay UK leaf categories for off-road bikes and parts
+// Known EBAY_GB leaf categories only. Supermoto and motorcycle-parts category
+// IDs are deliberately omitted here because the historic IDs used before were
+// parent/wrongly labelled nodes. Those items must be resolved via live Taxonomy.
 const MX_EBAY_CATEGORIES: Record<string, { id: string; name: string }> = {
-  motocross:   { id: '79183',  name: 'Motocross / Off-Road' },
-  enduro:      { id: '79183',  name: 'Motocross / Off-Road' },
-  trail:       { id: '79183',  name: 'Motocross / Off-Road' },
-  supermoto:   { id: '79183',  name: 'Motorcycles & Scooters' },
+  motocross:   { id: '79183',  name: 'Motocross / Off-Road Bikes' },
+  enduro:      { id: '79183',  name: 'Motocross / Off-Road Bikes' },
+  trail:       { id: '79183',  name: 'Motocross / Off-Road Bikes' },
   pitbike:     { id: '103963', name: 'Pit Bikes' },
-  parts:       { id: '35586',  name: 'Motorcycle Parts' },
   accessories: { id: '10750',  name: 'Motorcycle Accessories' },
 };
 
@@ -133,7 +133,10 @@ function buildMXBrief(item: any): MXBrief {
     : 'Motocross';
 
   const catKey = vehicleType.toLowerCase().replace(/\s/g, '');
-  const cat = MX_EBAY_CATEGORIES[catKey] ?? MX_EBAY_CATEGORIES['motocross'];
+  const needsLiveCategory = vehicleType === 'Supermoto' || vehicleType === 'Motorcycle Part';
+  const cat = MX_EBAY_CATEGORIES[catKey] ?? (needsLiveCategory
+    ? { id: '', name: 'Resolve from live EBAY_GB Taxonomy suggestions' }
+    : MX_EBAY_CATEGORIES['motocross']);
 
   // Build structured title: [Year] [Make] [Model] [Engine]cc [Stroke] [Type] - [Running]
   const titleParts: string[] = [];
@@ -238,11 +241,13 @@ function buildMXBrief(item: any): MXBrief {
 
   const categoryHints = [
     `MX EBAY CATEGORY:`,
-    `Recommended: ${cat.name} (ID: ${cat.id})`,
+    cat.id
+      ? `Recommended verified EBAY_GB leaf: ${cat.name} (ID: ${cat.id})`
+      : `No fixed category ID is supplied for ${vehicleType}. Resolve the correct leaf through live EBAY_GB Taxonomy suggestions; do not invent or reuse a parent ID.`,
     `Vehicle type: ${vehicleType}`,
-    `- Motocross/Enduro/Trail bikes → ID 79183`,
-    `- Pit bikes → ID 103963`,
-    `- Parts → ID 35586`,
+    `- Motocross/Enduro/Trail bikes → verified leaf ID 79183`,
+    `- Pit bikes → verified leaf ID 103963`,
+    `- Parts and Supermoto → use live Taxonomy leaf suggestions, never historic parent IDs`,
   ].join('\n');
 
   return {
