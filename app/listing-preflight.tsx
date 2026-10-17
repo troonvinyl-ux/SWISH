@@ -373,17 +373,31 @@ export default function ListingPreflightScreen() {
     setCatSaving(true);
     try {
       const supabase = getSupabaseClient();
-      // Save to listings.category_id and item attributes
-      await supabase.from('listings').update({ category_id: catId, updated_at: new Date().toISOString() }).eq('id', listingId);
-      // Also update item attributes for future sessions
-      const { data: lRow } = await supabase.from('listings').select('item_id, items(id, attributes)').eq('id', listingId).maybeSingle();
+      // Persist the selected category to the correct tenant's listing/item records.
+      const { error: saveListingError } = await supabase.from('listings')
+        .update({ category_id: catId, updated_at: new Date().toISOString() })
+        .eq('id', listingId)
+        .eq('tenant_id', tenant.id);
+      if (saveListingError) throw saveListingError;
+
+      const { data: lRow, error: lookupError } = await supabase.from('listings')
+        .select('item_id, items(id, attributes)')
+        .eq('id', listingId)
+        .eq('tenant_id', tenant.id)
+        .maybeSingle();
+      if (lookupError) throw lookupError;
+
       const itemId2 = (lRow as any)?.items?.id;
       const existingAttrs = (lRow as any)?.items?.attributes ?? {};
       if (itemId2) {
-        await supabase.from('items').update({
-          attributes: { ...existingAttrs, ebay_category_id: catId, ebay_category_name: catName },
-          updated_at: new Date().toISOString(),
-        }).eq('id', itemId2);
+        const { error: saveItemError } = await supabase.from('items')
+          .update({
+            attributes: { ...existingAttrs, ebay_category_id: catId, ebay_category_name: catName },
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', itemId2)
+          .eq('tenant_id', tenant.id);
+        if (saveItemError) throw saveItemError;
       }
       setCategoryPickerOpen(false);
       // Re-run preflight to reflect the new category
