@@ -960,7 +960,7 @@ const CURATED_LEAF_CATEGORIES: Omit<CuratedCat, 'treeId'>[] = [
   { id: '50',     name: 'Fine Jewellery',                   isLeaf: true,  childCount: 0 },
   { id: '14324',  name: 'Wristwatches',                     isLeaf: true,  childCount: 0 },
   { id: '14325',  name: 'Pocket Watches',                   isLeaf: true,  childCount: 0 },
-  { id: '1469',   name: 'Other Collectables',               isLeaf: true,  childCount: 0 },
+  { id: '1469',   name: 'Other Collectables',               isLeaf: false, childCount: 10 },
   // Motocross & Off-Road (Flipper MX)
   { id: '79183',  name: 'Motocross / Off-Road Bikes',       isLeaf: true,  childCount: 0 },
   { id: '103963', name: 'Pit Bikes',                        isLeaf: true,  childCount: 0 },
