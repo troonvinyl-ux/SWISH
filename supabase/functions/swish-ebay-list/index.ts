@@ -1581,8 +1581,9 @@ async function handleRequest(req: Request): Promise<Response> {
       try {
         const { data: lRow } = await supabase
           .from('listings')
-          .select('category_id, items(media, attributes)')
+          .select('category_id, items(media, attributes, specialist_id)')
           .eq('id', listingId)
+          .eq('tenant_id', tenantId)
           .maybeSingle();
 
         // BUG A FIX: Use DB category_id if body didn't supply one
@@ -1622,6 +1623,42 @@ async function handleRequest(req: Request): Promise<Response> {
 
     const creds = await getEbayCredentials(supabase, tenantId, true);
     if ('error' in creds) return jsonResponse({ error: creds.error }, 400);
+
+    // Revisions use the same leaf-category guard as new listings. If the user
+    // chose a category that is now a parent/invalid ID, stop and ask for a new
+    // selection rather than silently moving the live listing to a title guess.
+    if (resolvedCategoryId && resolvedCategoryId !== 'REVISE_PRESERVE') {
+      const { data: categoryItem } = listingId
+        ? await supabase.from('listings').select('items(specialist_id)')
+            .eq('id', listingId).eq('tenant_id', tenantId).maybeSingle()
+        : { data: null };
+      const categorySpecialist = (categoryItem as any)?.items?.specialist_id ?? '';
+      const requestedCategoryId = String(resolvedCategoryId);
+      const categoryCheck = await resolveLeafCategory(
+        creds.accessToken,
+        creds.clientId,
+        requestedCategoryId,
+        title,
+        categorySpecialist,
+        supabase,
+      );
+      if (categoryCheck.error || !categoryCheck.resolvedId) {
+        return jsonResponse({
+          success: false,
+          error: categoryCheck.error ?? 'Could not verify this eBay category. Please select a valid leaf category and retry.',
+          categoryId: requestedCategoryId,
+        }, 400);
+      }
+      if (categoryCheck.resolvedId !== requestedCategoryId) {
+        return jsonResponse({
+          success: false,
+          error: `Category ${requestedCategoryId} is not a verified EBAY_GB leaf category. SWISH found "${categoryCheck.resolvedName}" (${categoryCheck.resolvedId}) as a possible alternative. Select the correct category in the Listing Editor and retry; SWISH has not changed the live category.`,
+          suggestedCategory: { id: categoryCheck.resolvedId, name: categoryCheck.resolvedName },
+        }, 400);
+      }
+      resolvedCategoryId = categoryCheck.resolvedId;
+    }
+
     const { fulfillmentId, returnId, paymentId } = await getSelectedPolicyIds(supabase, tenantId, {});
     const sellerProfilesXml = buildSellerProfiles(fulfillmentId, returnId, paymentId);
     const conditionId = mapConditionId(condition, '');
@@ -1647,7 +1684,7 @@ async function handleRequest(req: Request): Promise<Response> {
       if (resolvedCategoryId && resolvedCategoryId !== 'REVISE_PRESERVE') {
         updatePayload.category_id = resolvedCategoryId;
       }
-      await supabase.from('listings').update(updatePayload).eq('id', listingId);
+      await supabase.from('listings').update(updatePayload).eq('id', listingId).eq('tenant_id', tenantId);
     }
     return jsonResponse({ success: true, externalListingId });
   }
