@@ -115,7 +115,24 @@ export default function EbayDraftSyncTestScreen() {
       const { data, error } = await supabase.functions.invoke('swish-ebay-draft-sync-test', {
         body: { action, tenantId: tenant.id, ...(offerId.trim() ? { offerId: offerId.trim() } : {}) },
       });
-      if (error) throw new Error(error.message || 'Could not load your eBay UK drafts. The Edge Function may not be deployed yet.');
+      if (error) {
+        let detail = error.message || 'Edge Function request failed.';
+        try {
+          const context = (error as any).context;
+          if (context && typeof context.clone === 'function') {
+            const responseText = await context.clone().text();
+            if (responseText) {
+              try {
+                const payload = JSON.parse(responseText);
+                detail = String(payload.error || payload.message || responseText);
+              } catch {
+                detail = responseText.slice(0, 500);
+              }
+            }
+          }
+        } catch {}
+        throw new Error(detail);
+      }
       if (action === 'list_unpublished_offers') {
         const found = Array.isArray(data?.offers) ? data.offers as DraftOffer[] : [];
         setDraftOffers(found);
