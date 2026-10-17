@@ -276,18 +276,22 @@ Deno.serve(async (request: Request) => {
       if (!/^\\d+$/.test(categoryId)) return json({ error: 'SWISH category is missing or invalid. No eBay changes made.' }, 409);
       // Never guess a category. Require the exact category ID to be confirmed as a
       // leaf in eBay's current UK taxonomy before writing it back.
-      const taxonomyResp = await fetch(`${TAXONOMY_URL}/${encodeURIComponent(String(before.categoryTreeId ?? '3'))}/get_category_tree?category_ids=${encodeURIComponent(categoryId)}`, {
+      const treeResp = await fetch(`${TAXONOMY_URL}/get_default_category_tree_id?marketplace_id=EBAY_GB`, {
         headers: { Authorization: `Bearer ${credentials.accessToken}`, 'Accept-Language': 'en-GB' },
         signal: AbortSignal.timeout(15000),
       });
-      // Taxonomy endpoint requires a category tree ID; do not assume a tree ID.
-      // If no explicit category tree ID is available on the offer, refuse the write.
-      if (!before.categoryTreeId || !taxonomyResp.ok) {
-        return json({ error: 'Cannot safely validate the category against eBay UK taxonomy from this offer response. No eBay changes made.' }, 409);
-      }
+      if (!treeResp.ok) return json({ error: 'Could not verify the category tree with eBay UK taxonomy. No eBay changes made.' }, 409);
+      const treeData: any = await treeResp.json().catch(() => ({}));
+      const treeId = String(treeData?.categoryTreeId ?? '');
+      if (!treeId) return json({ error: 'eBay did not return the UK category tree ID. No eBay changes made.' }, 409);
+      const taxonomyResp = await fetch(`${TAXONOMY_URL}/category_tree/${encodeURIComponent(treeId)}/get_category_subtree?category_id=${encodeURIComponent(categoryId)}`, {
+        headers: { Authorization: `Bearer ${credentials.accessToken}`, 'Accept-Language': 'en-GB' },
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!taxonomyResp.ok) return json({ error: 'Could not verify the selected category against eBay UK taxonomy. No eBay changes made.' }, 409);
       const taxonomyData: any = await taxonomyResp.json().catch(() => ({}));
-      const categoryNode = taxonomyData?.categories?.find((c: any) => String(c?.category?.categoryId) === categoryId)?.category;
-      if (!categoryNode || categoryNode.leafCategoryTreeNode !== true) {
+      const categoryNode = taxonomyData?.categorySubtree?.categoryTreeNode;
+      if (String(categoryNode?.category?.categoryId ?? '') !== categoryId || categoryNode?.leafCategoryTreeNode !== true) {
         return json({ error: 'SWISH category is not verified as an eBay UK leaf category. No eBay changes made.' }, 409);
       }
       const writableFields = ['sku','marketplaceId','format','availableQuantity','categoryId','listingDescription','listingDuration','listingPolicies','pricingSummary','quantityLimitPerBuyer','includeCatalogProductDetails','merchantLocationKey','tax','storeCategoryNames','hideBuyerDetails','charity'];
