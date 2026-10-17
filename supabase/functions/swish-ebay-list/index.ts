@@ -1759,6 +1759,18 @@ async function handleRequest(req: Request): Promise<Response> {
 
   const catResult = await resolveLeafCategory(creds.accessToken, creds.clientId, categoryId, title, item?.specialist_id ?? '', supabase);
   if (catResult.error) return jsonResponse({ error: catResult.error }, 400);
+
+  // If a category was explicitly stored/selected but eBay rejects it, never
+  // silently publish to a different category based only on the listing title.
+  if (categoryId && catResult.wasResolved && catResult.resolvedId !== String(categoryId)) {
+    return jsonResponse({
+      success: false,
+      error: `Selected category ${categoryId} is not a valid EBAY_GB leaf category. SWISH found "${catResult.resolvedName}" (${catResult.resolvedId}) as a possible alternative. Select the alternative only if it matches your item, then retry.`,
+      selectedCategoryId: String(categoryId),
+      suggestedCategory: { id: catResult.resolvedId, name: catResult.resolvedName },
+    }, 400);
+  }
+
   const resolvedCategoryId = catResult.resolvedId;
 
   // Final server-side validation
