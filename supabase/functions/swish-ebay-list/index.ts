@@ -1317,6 +1317,75 @@ async function handleRequest(req: Request): Promise<Response> {
         });
       }
 
+      // When no current-version root cache exists, load the actual EBAY_GB
+      // root rather than presenting hard-coded category IDs as a live tree.
+      let rootError = '';
+      for (const token of categoryTokens) {
+        try {
+          const { treeId, version } = await getUkCategoryTreeId(token);
+          const response = await fetch(
+            `${EBAY_TAXONOMY_API}/category_tree/${treeId}/get_category_subtree?category_id=0`,
+            {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                'X-EBAY-C-MARKETPLACE-ID': 'EBAY_GB',
+              },
+              signal: AbortSignal.timeout(10000),
+            },
+          );
+          if (!response.ok) {
+            rootError = `eBay Taxonomy root returned HTTP ${response.status}`;
+            continue;
+          }
+          const payload = await response.json();
+          const rootNode = payload.categorySubtreeNode;
+          const nodes = Array.isArray(rootNode?.childCategoryTreeNodes) ? rootNode.childCategoryTreeNodes : [];
+          const now = new Date().toISOString();
+          const liveRoots = nodes.map((node: any) => {
+            const id = String(node.category?.categoryId ?? '');
+            const name = String(node.category?.categoryName ?? '');
+            const isLeaf = node.leafCategoryTreeNode === true;
+            return {
+              id, name, isLeaf,
+              childCount: isLeaf ? 0 : Number(node.childCategoryTreeNodeCount ?? 1),
+              categoryPath: name,
+            };
+          }).filter((item: any) => item.id && item.name);
+          if (liveRoots.length) {
+            const rows = liveRoots.map((item: any) => ({
+              marketplace_id: 'EBAY_GB',
+              tree_id: treeId,
+              tree_version: version ?? currentTree?.version ?? 'unknown',
+              category_id: item.id,
+              category_name: item.name,
+              parent_category_id: '0',
+              is_leaf: item.isLeaf,
+              active: true,
+              category_path: item.categoryPath,
+              path_ids: `0|${item.id}`,
+              last_synced_at: now,
+              updated_at: now,
+            }));
+            const { error: cacheError } = await supabase.from('ebay_categories')
+              .upsert(rows, { onConflict: 'marketplace_id,category_id' });
+            if (cacheError) console.log(`[SWISH Category] Root cache write failed: ${cacheError.message}`);
+            return jsonResponse({
+              success: true,
+              children: liveRoots,
+              source: 'ebay_live',
+              parentId: '',
+              treeId,
+              treeVersion: version ?? null,
+              marketplaceId: 'EBAY_GB',
+            });
+          }
+          rootError = 'eBay Taxonomy returned no root categories.';
+        } catch (e: any) {
+          rootError = e?.message ?? 'eBay Taxonomy root request failed';
+        }
+      }
+
       const curatedRoots = [
         { id: '267', name: 'Coins (browse all)', isLeaf: false, childCount: 20 },
         { id: '4726', name: 'British Coins', isLeaf: true, childCount: 0 },
@@ -1344,7 +1413,14 @@ async function handleRequest(req: Request): Promise<Response> {
         { id: '175748', name: 'Vintage Clothing', isLeaf: true, childCount: 0 },
         { id: '3002', name: 'T-Shirts', isLeaf: true, childCount: 0 },
       ];
-      return jsonResponse({ success: true, children: curatedRoots, source: 'curated', parentId: '', marketplaceId: 'EBAY_GB' });
+      return jsonResponse({
+        success: true,
+        children: curatedRoots,
+        source: 'curated',
+        ...(rootError ? { note: `Live EBAY_GB root fetch unavailable: ${rootError}. Options shown are offline navigation hints and will be revalidated before publish.` } : {}),
+        parentId: '',
+        marketplaceId: 'EBAY_GB',
+      });
     }
 
     // For child browsing, use the cached branch if available, otherwise ask live
