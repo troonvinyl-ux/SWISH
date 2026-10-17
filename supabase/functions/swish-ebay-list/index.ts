@@ -492,7 +492,7 @@ async function verifyCategoryIsLeaf(
   _clientId: string,
   categoryId: string,
   supabaseAdmin?: ReturnType<typeof adminClient>,
-): Promise<{ isLeaf: boolean; name: string; fromDb?: boolean } | null> {
+): Promise<{ isLeaf: boolean; name: string; fromDb?: boolean; nameVerified?: boolean } | null> {
   // Read the local category name for human-readable errors only. Cached
   // active/leaf flags are never used as the publish decision.
   let displayName = categoryId;
@@ -542,10 +542,11 @@ async function verifyCategoryIsLeaf(
           isLeaf: node.leafCategoryTreeNode === true,
           name: String(node.category?.categoryName ?? displayName),
           fromDb: false,
+          nameVerified: Boolean(node.category?.categoryName),
         };
       }
     } else if (subtreeRes.status === 404) {
-      return { isLeaf: false, name: displayName, fromDb: false };
+      return { isLeaf: false, name: categoryId, fromDb: false, nameVerified: true };
     }
 
     const res = await fetch(
@@ -560,7 +561,7 @@ async function verifyCategoryIsLeaf(
       },
     );
     if (res.ok) {
-      return { isLeaf: true, name: displayName };
+      return { isLeaf: true, name: categoryId, fromDb: false, nameVerified: false };
     }
     if (res.status === 404 || res.status === 400) {
       const bodyText = await res.text().catch(() => '{}');
@@ -568,7 +569,7 @@ async function verifyCategoryIsLeaf(
 
       if (definitelyNotLeaf === true) {
         console.log(`[SWISH] Category ${categoryId}: confirmed NOT a leaf (HTTP ${res.status} + error 13003/13004/404, treeId=${treeId})`);
-        return { isLeaf: false, name: displayName };
+        return { isLeaf: false, name: categoryId, fromDb: false, nameVerified: false };
       }
       if (definitelyNotLeaf === null) {
         console.log(`[SWISH] Category ${categoryId}: HTTP ${res.status} response was inconclusive; refusing to mark as valid leaf`);
@@ -689,7 +690,7 @@ async function resolveLeafCategory(
     if (catInfo !== null) {
       if (catInfo.isLeaf) {
         let catName = catInfo.name === categoryId ? categoryId : catInfo.name;
-        if (catName === categoryId && supabaseAdmin) {
+        if (catName === categoryId && supabaseAdmin && catInfo.nameVerified !== false) {
           const { data: nameRow } = await supabaseAdmin.from('ebay_categories')
             .select('category_name').eq('marketplace_id', 'EBAY_GB').eq('category_id', categoryId).maybeSingle();
           if (nameRow?.category_name) catName = nameRow.category_name;
@@ -702,15 +703,18 @@ async function resolveLeafCategory(
           .trim();
         const savedLabel = normalizeCategoryLabel(String(storedCategoryName ?? ''));
         const liveLabel = normalizeCategoryLabel(String(catName ?? ''));
-        const labelCompatible = !savedLabel || !liveLabel ||
-          savedLabel.includes(liveLabel) || liveLabel.includes(savedLabel);
+        const labelCompatible = !savedLabel ||
+          (catInfo.nameVerified === true && Boolean(liveLabel) &&
+            (savedLabel.includes(liveLabel) || liveLabel.includes(savedLabel)));
 
         if (labelCompatible) {
           console.log(`[SWISH] Category ${categoryId} ("${catName}") confirmed EBAY_GB leaf (treeId=${treeId}, treeVersion=${treeVersion}, source=${catInfo.fromDb ? 'db' : 'live_taxonomy'})`);
           return { resolvedId: categoryId, resolvedName: catName, categoryName: catName, treeId, treeVersion, wasResolved: false, confidence: catInfo.fromDb ? 'db_verified' : 'taxonomy_verified' };
         }
 
-        storedCategoryMismatch = `Saved category label "${storedCategoryName}" does not match current EBAY_GB category "${catName}" for ID ${categoryId}. `;
+        storedCategoryMismatch = catInfo.nameVerified === true
+          ? `Saved category label "${storedCategoryName}" does not match current EBAY_GB category "${catName}" for ID ${categoryId}. `
+          : `Could not verify the saved category label "${storedCategoryName}" against the live EBAY_GB category name for ID ${categoryId}. `;
         console.warn(`[SWISH] ${storedCategoryMismatch}Requesting a fresh title-based suggestion.`);
       } else {
         console.log(`[SWISH] Category ${categoryId} is NOT a valid EBAY_GB leaf (treeId=${treeId}) — trying title-based suggestions`);
