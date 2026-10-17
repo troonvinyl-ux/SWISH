@@ -102,20 +102,26 @@ const NUMISTA_TO_EBAY_CATEGORY: Record<string, { id: string; name: string }> = {
   // curiosities_collectibles intentionally omitted — generic fallback for unknown items;
   // use live eBay taxonomy resolution instead of silently assigning a coin category.
   // Title / category keyword mappings — coins only
-  ancient:  { id: '40714',    name: 'Ancient Coins' },
-  greek:    { id: '40714',    name: 'Ancient Coins' },
-  roman:    { id: '40714',    name: 'Ancient Coins' },
-  medieval: { id: '18594',    name: 'Medieval Coins' },
-  hammered: { id: '18593',    name: 'Hammered Coins' },
-  milled:   { id: '4726',     name: 'British Coins' },
-  decimal:  { id: '4726',     name: 'British Coins' },
-  mughal:   { id: '40714',    name: 'Ancient Coins' },
-  indian:   { id: '40714',    name: 'Ancient Coins' },
-  persian:  { id: '40714',    name: 'Ancient Coins' },
-  rupee:    { id: '40714',    name: 'Ancient Coins' },
-  islamic:  { id: '40714',    name: 'Ancient Coins' },
-  dirham:   { id: '40714',    name: 'Ancient Coins' },
-  dinar:    { id: '40714',    name: 'Ancient Coins' },
+  // Specific ancient subdivisions precede broad fallback categories.
+  'roman imperial': { id: '4740', name: 'Ancient Coins: Roman Imperial' },
+  'roman republic': { id: '4741', name: 'Ancient Coins: Roman Republic' },
+  byzantine: { id: '4159', name: 'Ancient Coins: Byzantine' },
+  greek:     { id: '4738', name: 'Ancient Coins: Greek' },
+  celtic:    { id: '4742', name: 'Ancient Coins: Celtic' },
+  judean:    { id: '4743', name: 'Ancient Coins: Judean' },
+  roman:     { id: '4157', name: 'Roman Coins' },
+  medieval:  { id: '18594', name: 'Medieval Coins' },
+  hammered:  { id: '18593', name: 'Hammered Coins' },
+  milled:    { id: '4726', name: 'British Coins' },
+  decimal:   { id: '4726', name: 'British Coins' },
+  mughal:    { id: '40714', name: 'Ancient Coins' },
+  indian:    { id: '40714', name: 'Ancient Coins' },
+  persian:   { id: '40714', name: 'Ancient Coins' },
+  rupee:     { id: '40714', name: 'Ancient Coins' },
+  islamic:   { id: '40714', name: 'Ancient Coins' },
+  dirham:    { id: '40714', name: 'Ancient Coins' },
+  dinar:     { id: '40714', name: 'Ancient Coins' },
+  ancient:   { id: '40714', name: 'Ancient Coins' },
 };
 
 function getNumistaSuggestedCategory(attrs: Record<string, any>, specialistId: string): { id: string; name: string } | null {
@@ -128,20 +134,24 @@ function getNumistaSuggestedCategory(attrs: Record<string, any>, specialistId: s
   if (!COIN_SPECIALISTS.has(specialistId)) return null;
 
   // 1. Check numista_category attribute
+  // Match the most-specific phrase first so "Ancient Greek" is not
+  // swallowed by the broad "ancient" fallback.
+  const categoryEntries = Object.entries(NUMISTA_TO_EBAY_CATEGORY)
+    .sort(([a], [b]) => b.length - a.length);
   const numistaCategory = String(attrs['numista_category'] ?? '').toLowerCase();
-  for (const [keyword, cat] of Object.entries(NUMISTA_TO_EBAY_CATEGORY)) {
+  for (const [keyword, cat] of categoryEntries) {
     if (numistaCategory.includes(keyword)) return cat;
   }
-  // 2. Check canonical_title for keywords — use only Trading-API-verified IDs
+  // 2. Apply the same specificity-first matching to the canonical title.
   const title = String(attrs['canonical_title'] ?? '').toLowerCase();
+  for (const [keyword, cat] of categoryEntries) {
+    if (title.includes(keyword)) return cat;
+  }
   if (title.includes('mughal') || title.includes('rupee') || title.includes('indo') ||
       title.includes('kushan') || title.includes('mauryan') || title.includes('persian') ||
       title.includes('indian') || title.includes('dirham') || title.includes('dinar') ||
       title.includes('abbasid') || title.includes('umayyad') || title.includes('fatimid') ||
       title.includes('ilkhanid') || title.includes('islamic')) {
-    return { id: '40714', name: 'Ancient Coins' };
-  }
-  if (title.includes('ancient') || title.includes('greek') || title.includes('roman')) {
     return { id: '40714', name: 'Ancient Coins' };
   }
   if (title.includes('medieval') || title.includes('hammered')) {
