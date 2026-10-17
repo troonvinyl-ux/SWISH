@@ -580,7 +580,7 @@ async function verifyCategoryIsLeaf(
       // can represent a valid leaf with no defined aspects.
       // (e.g. Greek ancient coins, Byzantine coins — valid EBAY_GB leaf categories)
       console.log(`[SWISH] Category ${categoryId}: HTTP ${res.status} but no "not a leaf" error — treating as valid leaf with no aspects (treeId=${treeId}). Body: ${bodyText.slice(0, 200)}`);
-      return { isLeaf: true, name: displayName };
+      return { isLeaf: true, name: categoryId, fromDb: false, nameVerified: false };
     }
     const body = await res.text().catch(() => '');
     console.log(`[SWISH] Taxonomy leaf check returned ${res.status} for categoryId=${categoryId} (treeId=${treeId}). Body: ${body.slice(0, 200)}`);
