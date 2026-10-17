@@ -598,7 +598,7 @@ function InlineCategoryPicker({
                 value={customId}
                 onChangeText={setCustomId}
                 keyboardType="number-pad"
-                placeholder="e.g. 40714"
+                placeholder="e.g. 4738"
                 placeholderTextColor={Colors.textTertiary}
               />
               <Pressable
