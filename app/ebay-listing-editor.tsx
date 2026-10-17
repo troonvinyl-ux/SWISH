@@ -826,7 +826,7 @@ function AICategorySuggestModal({
         fnErr = e;
       }
 
-      if (fnErr || !data?.success || data?.source === 'curated' || data?.source === 'curated_verified' || data?.source === 'curated_fallback') {
+      if (fnErr || !data?.success || data?.source === 'curated' || data?.source === 'curated_verified' || data?.source === 'curated_fallback' || data?.source === 'db_cache_offline') {
         try {
           const fallback = await supabase.functions.invoke('swish-ebay-list', {
             body: { route: 'get_category_suggestions', tenantId, query: q.trim().slice(0, 100) },
