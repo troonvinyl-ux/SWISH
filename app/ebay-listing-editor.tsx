@@ -239,7 +239,7 @@ const EBAY_CATEGORIES = [
 ];
 
 // Hint shown in the static fallback
-const STATIC_FALLBACK_NOTE = 'Live eBay API unavailable — showing fallback list with medal categories. Tap “Retry Live” when connected to browse the full category tree and verify leaf IDs.';
+const STATIC_FALLBACK_NOTE = 'Live eBay Taxonomy is unavailable. These are offline starter categories only; SWISH must verify the selected leaf against eBay before publishing. Reconnect eBay if live category browsing keeps failing.';
 
 const CONDITION_OPTIONS = [
   { value: 'New',        id: '1000' },
