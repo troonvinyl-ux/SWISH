@@ -173,6 +173,16 @@ Deno.serve(async (request: Request) => {
       if (idErr || !inventoryId) throw new Error('Could not allocate a SWISH inventory ID: ' + (idErr?.message ?? 'no ID returned'));
       const categoryId = String(before.categoryId ?? '');
       const imageUrls = Array.isArray(product.imageUrls) ? product.imageUrls.filter((u: unknown) => typeof u === 'string' && String(u).startsWith('https://')) : [];
+      const offerWritableFields = [
+        'sku', 'marketplaceId', 'format', 'availableQuantity', 'categoryId',
+        'listingDescription', 'listingDuration', 'listingPolicies', 'pricingSummary',
+        'quantityLimitPerBuyer', 'includeCatalogProductDetails', 'merchantLocationKey',
+        'tax', 'storeCategoryNames', 'hideBuyerDetails', 'charity',
+      ];
+      const offerSnapshot: Record<string, unknown> = {};
+      for (const field of offerWritableFields) {
+        if (Object.prototype.hasOwnProperty.call(before, field)) offerSnapshot[field] = before[field];
+      }
       const attributes: Record<string, any> = {
         _ebay_offer_id: offerId,
         _ebay_sku: sku,
@@ -180,6 +190,8 @@ Deno.serve(async (request: Request) => {
         _ebay_category_id: categoryId,
         ebay_category_id: categoryId,
         _ebay_draft_status: 'UNPUBLISHED',
+        _ebay_offer_snapshot: offerSnapshot,
+        _ebay_inventory_item_snapshot: inventoryItem,
         ...(product.aspects && typeof product.aspects === 'object' ? product.aspects : {}),
       };
       const { data: item, error: itemErr } = await db.from('items').insert({
@@ -304,9 +316,31 @@ Deno.serve(async (request: Request) => {
       return json({ ok: String(after?.categoryId ?? '') === categoryId, action, pushedCategoryId: categoryId, before: safeOffer(before), after: safeOffer(after) });
     }
 
-    // Rebuild only writable Inventory API fields. GET responses also contain
-    // server-managed fields (offerId/status/warnings/errors) which must not be PUT.
-    // The request body is always derived from eBay's live response, never the client.
+    // Round-trip from the saved SWISH record, not from the fresh eBay GET response.
+    // This proves whether SWISH preserved and can submit the imported writable fields.
+    const { data: matchedItems, error: matchErr } = await db.from('items')
+      .select('id,attributes,quantity,canonical_title,description')
+      .eq('tenant_id', tenantId)
+      .contains('attributes', { _ebay_offer_id: offerId })
+      .limit(1);
+    if (matchErr) throw new Error('Could not load the imported SWISH item: ' + matchErr.message);
+    const item = matchedItems?.[0];
+    if (!item) return json({ error: 'Import this unpublished eBay offer into SWISH first. No eBay changes made.' }, 404);
+
+    const { data: swishListings, error: listingErr } = await db.from('listings')
+      .select('id,title,description,price,category_id,status')
+      .eq('tenant_id', tenantId)
+      .eq('item_id', item.id)
+      .eq('marketplace_id', 'ebay')
+      .limit(1);
+    if (listingErr) throw new Error('Could not load the imported SWISH listing: ' + listingErr.message);
+    const swishListing = swishListings?.[0];
+    if (!swishListing) return json({ error: 'Imported SWISH item has no linked eBay draft listing. No eBay changes made.' }, 404);
+
+    const savedSnapshot = item.attributes?._ebay_offer_snapshot;
+    if (!savedSnapshot || typeof savedSnapshot !== 'object') {
+      return json({ error: 'This SWISH import predates the round-trip test. Re-import the unpublished offer to save its original writable fields. No eBay changes made.' }, 409);
+    }
     const writableFields = [
       'sku', 'marketplaceId', 'format', 'availableQuantity', 'categoryId',
       'listingDescription', 'listingDuration', 'listingPolicies', 'pricingSummary',
@@ -315,38 +349,52 @@ Deno.serve(async (request: Request) => {
     ];
     const updateBody: Record<string, unknown> = {};
     for (const field of writableFields) {
-      if (Object.prototype.hasOwnProperty.call(before, field)) updateBody[field] = before[field];
+      if (Object.prototype.hasOwnProperty.call(savedSnapshot, field)) updateBody[field] = savedSnapshot[field];
     }
-    if (!updateBody.sku || !updateBody.marketplaceId || !updateBody.format) {
-      return json({ error: 'The offer is missing required writable fields. No changes were made.' }, 409);
+
+    // Overlay the values actually saved in SWISH so local edits are part of the test.
+    const swishCategoryId = String(swishListing.category_id ?? item.attributes?._ebay_category_id ?? '');
+    if (swishCategoryId) updateBody.categoryId = swishCategoryId;
+    if (Number.isFinite(Number(swishListing.price)) && Number(swishListing.price) > 0) {
+      updateBody.pricingSummary = {
+        ...(updateBody.pricingSummary as Record<string, unknown> ?? {}),
+        price: { value: Number(swishListing.price).toFixed(2), currency: 'GBP' },
+      };
     }
-    const afterPut = await ebayRequest(credentials.accessToken, offerId, 'PUT', updateBody);
+    const swishQuantity = Number(item.quantity);
+    if (Number.isFinite(swishQuantity) && swishQuantity > 0) updateBody.availableQuantity = swishQuantity;
+
+    if (!updateBody.sku || updateBody.marketplaceId !== 'EBAY_GB' || !updateBody.format) {
+      return json({ error: 'The imported SWISH record is missing required eBay UK offer fields (SKU, EBAY_GB marketplace, or format). No eBay changes made.', swishItemId: item.id, swishListingId: swishListing.id }, 409);
+    }
+
+    const beforeSafe = safeOffer(before);
+    const response = await ebayRequest(credentials.accessToken, offerId, 'PUT', updateBody);
     const after = await ebayRequest(credentials.accessToken, offerId, 'GET');
     if (String(after?.status ?? '').toUpperCase() !== 'UNPUBLISHED') {
-      return json({
-        ok: false,
-        error: 'Safety verification failed: eBay no longer reports the offer as UNPUBLISHED. Do not continue testing.',
-        before: safeOffer(before),
-        after: safeOffer(after),
-        changed: true,
-      }, 409);
+      return json({ ok: false, error: 'Safety verification failed: eBay no longer reports the offer as UNPUBLISHED. Stop testing.', before: beforeSafe, after: safeOffer(after), changed: true }, 409);
     }
-    const beforeSafe = safeOffer(before);
     const afterSafe = safeOffer(after);
     const changedFields = Object.keys(beforeSafe).filter((key) =>
       JSON.stringify((beforeSafe as any)[key]) !== JSON.stringify((afterSafe as any)[key])
     );
+    const expectedCategory = String(updateBody.categoryId ?? '');
+    const categoryMatches = !expectedCategory || String(after.categoryId ?? '') === expectedCategory;
     return json({
-      ok: changedFields.length === 0,
+      ok: categoryMatches,
       action,
       changed: true,
+      source: 'swish_database_record',
+      swishItemId: item.id,
+      swishListingId: swishListing.id,
+      submittedFields: Object.keys(updateBody),
       before: beforeSafe,
       after: afterSafe,
       changedFields,
-      message: changedFields.length === 0
-        ? 'Unpublished offer round-trip verified; no tracked offer fields changed.'
-        : 'Unpublished offer was updated, but tracked fields differ. Review the before/after values.',
-      warnings: afterPut?.warnings ?? [],
+      message: categoryMatches
+        ? 'SWISH-sourced offer update accepted by eBay UK. Review before/after values and submitted fields.'
+        : 'eBay accepted the request but the category read-back differs from the category saved in SWISH.',
+      warnings: response?.warnings ?? [],
     });
   } catch (error: any) {
     // Never log credentials or raw eBay request bodies.
