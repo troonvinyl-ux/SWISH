@@ -133,26 +133,36 @@ export default function ListingPreflightScreen() {
         updateCheck('category', { status: 'fail', detail: 'No eBay category set. Tap "Pick Category" to choose a valid leaf category.' });
         allPass = false;
       } else {
-        // Check local DB first — fast path
-        const { data: catRow } = await supabase
-          .from('ebay_categories')
-          .select('category_name, is_leaf, active')
-          .eq('marketplace_id', 'EBAY_GB')
-          .eq('category_id', categoryId)
-          .maybeSingle();
-
-        if (catRow && catRow.is_leaf === false) {
-          // DB says it's a parent — definitive block
-          updateCheck('category', {
-            status: 'fail',
-            detail: `Category ID ${categoryId} ("${catRow.category_name ?? categoryId}") is a PARENT category, not a leaf. eBay requires a leaf category. Tap "Pick Category" to select a valid one.`,
+        // Validate against the current eBay category tree. Cached leaf flags can
+        // be stale after a taxonomy update, so never pass preflight from DB alone.
+        try {
+          const { data: validation, error: validationError } = await supabase.functions.invoke('swish-ebay-category', {
+            body: { route: 'validate_category', tenantId: tenant.id, categoryId: String(categoryId) },
           });
-          allPass = false;
-        } else if (catRow && catRow.is_leaf === true) {
-          updateCheck('category', { status: 'pass', detail: `${catRow.category_name ?? categoryId} (ID: ${categoryId}) ✓ Confirmed leaf` });
-        } else {
-          // Not in DB — show as pending/unknown but don't block (edge fn will validate live)
-          updateCheck('category', { status: 'warn', detail: `Category ID: ${categoryId}${attrs['ebay_category_name'] ? ` (${attrs['ebay_category_name']})` : ''} — will be validated by eBay on submit` });
+          if (validationError) throw validationError;
+
+          if (validation?.valid === true && validation?.isLeaf === true) {
+            updateCheck('category', {
+              status: 'pass',
+              detail: `${validation.categoryName ?? attrs['ebay_category_name'] ?? categoryId} (ID: ${categoryId}) ✓ Verified against EBAY_GB Taxonomy`,
+            });
+          } else if (validation?.valid === false || validation?.isLeaf === false) {
+            updateCheck('category', {
+              status: 'fail',
+              detail: validation?.reason ?? `Category ID ${categoryId} is not a verified EBAY_GB leaf. Tap "Pick Category" and choose a leaf category.`,
+            });
+            allPass = false;
+          } else {
+            updateCheck('category', {
+              status: 'warn',
+              detail: validation?.reason ?? `Category ID ${categoryId} could not be verified right now. eBay will perform a final server-side check when you submit.`,
+            });
+          }
+        } catch (e: any) {
+          updateCheck('category', {
+            status: 'warn',
+            detail: `Live category validation is unavailable (${e?.message ?? 'unknown error'}). The publish function will retry validation before submission.`,
+          });
         }
       }
 
