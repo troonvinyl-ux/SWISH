@@ -668,7 +668,7 @@ async function getCategoryAspects(
   treeId: string,
   categoryId: string,
   forceLive = false,
-): Promise<{ aspects: CatAspect[]; isLeaf: boolean; categoryName?: string; source: string; ebayStatus?: number; definitelyNotLeaf?: boolean; error?: string }> {
+): Promise<{ aspects: CatAspect[]; isLeaf: boolean | null; categoryName?: string; source: string; ebayStatus?: number; definitelyNotLeaf?: boolean; error?: string }> {
   // Cached aspects are allowed for browsing only when they match the selected tree.
   // Validation at publish time forces a live request so old aspects cannot bless a parent.
   if (!forceLive) {
@@ -758,7 +758,7 @@ async function getCategoryAspects(
     );
     return { aspects, isLeaf: true, source: 'ebay_live' };
   } catch (e: any) {
-    return { aspects: [], isLeaf: false, source: 'error', error: e.message };
+    return { aspects: [], isLeaf: null, source: 'error', error: e.message };
   }
 }
 
@@ -773,13 +773,13 @@ async function getCategoryAspects(
 // A category is VALID when: exists + EBAY_GB + active + is_leaf === true
 
 interface ValidationResult {
-  valid: boolean;
+  valid: boolean | null;
   marketplaceId: string;
   categoryId: string;
   categoryName?: string;
   categoryPath?: string;
-  isLeaf: boolean;
-  active: boolean;
+  isLeaf: boolean | null;
+  active: boolean | null;
   categoryTreeId: string;
   categoryTreeVersion: string;
   source: string;
@@ -842,6 +842,17 @@ async function validateCategoryId(
   //   400 without error 13003 → leaf with no aspects (still valid!)
   //   404 → doesn't exist
   const aspectResult = await getCategoryAspects(supabase, token, treeId, categoryId, true);
+
+  if (aspectResult.source === 'error' || (!aspectResult.isLeaf && aspectResult.ebayStatus == null && aspectResult.error)) {
+    return {
+      ...base,
+      valid: null,
+      isLeaf: null,
+      active: null,
+      source: 'api_error',
+      reason: `Live eBay Taxonomy validation failed: ${aspectResult.error ?? 'Unknown API error'}. This category is unverified, not confirmed to be a parent. Retry after the eBay category service is available.`,
+    };
+  }
 
   if (aspectResult.isLeaf) {
     const { data: updatedRow } = await supabase.from('ebay_categories')
