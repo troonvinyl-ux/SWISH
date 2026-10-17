@@ -221,11 +221,14 @@ export default function ListingPreflightScreen() {
               detail: `${validation.categoryName ?? attrs['ebay_category_name'] ?? categoryId} (ID: ${categoryId}) ✓ Verified against current EBAY_GB Taxonomy`,
             });
           } else if (validation?.valid === false || validation?.isLeaf === false) {
+            // Preflight taxonomy checks can disagree with the connected seller's
+            // publish path. Treat this client-side result as advisory and let the
+            // server-side publish route perform the final authoritative validation.
+            // The edge function still blocks a category it cannot verify as a leaf.
             updateCheck('category', {
-              status: 'fail',
-              detail: validation?.reason ?? `Category ID ${categoryId} is not a verified EBAY_GB leaf. Tap "Pick Category" and choose a leaf category.`,
+              status: 'warn',
+              detail: `Preflight category warning: ${validation?.reason ?? `Category ID ${categoryId} was not verified as an EBAY_GB leaf.`} The publish service will perform its own final check; eBay submission will still stop if the category is invalid.`,
             });
-            allPass = false;
           } else {
             updateCheck('category', {
               status: 'warn',
