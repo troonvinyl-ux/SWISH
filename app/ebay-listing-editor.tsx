@@ -142,7 +142,7 @@ const NUMISTA_TO_EBAY_CATEGORY: Record<string, { id: string; name: string }> = {
 function getNumistaSuggestedCategory(attrs: Record<string, any>, specialistId: string): { id: string; name: string } | null {
   const COIN_SPECIALISTS = new Set([
     'coins', 'coins_uk', 'coins_currency', 'coins_world', 'islamic_silver',
-    'gold', 'silver', 'ancient_artefacts',
+    'gold', 'silver',
   ]);
   if (!COIN_SPECIALISTS.has(specialistId)) return NUMISTA_TO_EBAY_CATEGORY[specialistId] ?? null;
 
@@ -179,6 +179,7 @@ function getNumistaSuggestedCategory(attrs: Record<string, any>, specialistId: s
     return NUMISTA_TO_EBAY_CATEGORY[specialistId];
   }
   if (specialistId === 'coins_world') return NUMISTA_TO_EBAY_CATEGORY.coins_world;
+  if (specialistId === 'islamic_silver') return NUMISTA_TO_EBAY_CATEGORY.islamic;
   return null;
 }
 
