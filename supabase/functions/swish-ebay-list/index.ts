@@ -745,6 +745,32 @@ async function resolveLeafCategory(
     console.log(`[SWISH] No EBAY_GB leaf suggestions returned for title="${title.slice(0, 60)}" (treeId=${treeId})`);
   }
 
+  // If live keyword suggestions return no result, try a narrow coin-category fallback.
+  // Every candidate is still verified against the current EBAY_GB taxonomy before use.
+  const lowerTitle = String(title ?? '').toLowerCase();
+  const coinFallbacks: Array<{ test: RegExp; id: string; name: string }> = [
+    { test: /\b(islamic|dirham|dinar|abbasid|umayyad|fatimid|ilkhanid)\b/, id: '4739', name: 'Islamic Coins' },
+    { test: /\b(chinese|china|fukien|mace|cash coin|cash coins)\b/, id: '4740', name: 'Ancient Chinese Coins' },
+    { test: /\b(greek|hellenistic|alexander|macedon)\b/, id: '4738', name: 'Ancient Greek Coins' },
+    { test: /\b(byzantine)\b/, id: '3364', name: 'Byzantine Coins' },
+    { test: /\b(roman provincial)\b/, id: '4735', name: 'Roman Provincial Coins' },
+    { test: /\b(roman republican|republican denarius)\b/, id: '4734', name: 'Roman Republican Coins' },
+    { test: /\b(ancient|antique)\b/, id: '532', name: 'Other Ancient Coins' },
+  ];
+  const coinFallback = coinFallbacks.find(entry => entry.test.test(lowerTitle));
+  if (coinFallback && (specialistId.includes('coin') || ['islamic_silver', 'gold', 'silver', 'ancient_artefacts'].includes(specialistId))) {
+    const verified = await verifyCategoryIsLeaf(token, clientId, coinFallback.id, supabaseAdmin);
+    if (verified?.isLeaf) {
+      console.log(`[SWISH] Taxonomy suggestions empty; live-verified title fallback: ${coinFallback.id} ${coinFallback.name}`);
+      return {
+        resolvedId: coinFallback.id, resolvedName: verified.name || coinFallback.name,
+        categoryName: verified.name || coinFallback.name, treeId, treeVersion,
+        wasResolved: true, confidence: 'taxonomy_verified',
+      };
+    }
+    console.warn(`[SWISH] Coin fallback ${coinFallback.id} not confirmed as EBAY_GB leaf; refusing to use it.`);
+  }
+
   // Step 3: HARD STOP
   const storedMsg = storedCategoryMismatch || (categoryId && !KNOWN_PARENT_CATEGORY_HINT.has(categoryId)
     ? `Category ID ${categoryId} was rejected by the EBAY_GB Taxonomy API (treeId=${treeId}) — it is not a valid UK listing leaf. `
