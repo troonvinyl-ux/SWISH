@@ -452,11 +452,16 @@ export default function ListingPreflightScreen() {
     try {
       const supabase = getSupabaseClient();
       // Persist the selected category to the correct tenant's listing/item records.
-      const { error: saveListingError } = await supabase.from('listings')
+      const { data: savedListing, error: saveListingError } = await supabase.from('listings')
         .update({ category_id: catId, updated_at: new Date().toISOString() })
         .eq('id', listingId)
-        .eq('tenant_id', tenant.id);
+        .eq('tenant_id', tenant.id)
+        .select('id, category_id')
+        .maybeSingle();
       if (saveListingError) throw saveListingError;
+      if (!savedListing || String(savedListing.category_id ?? '') !== String(catId)) {
+        throw new Error('The selected eBay category did not persist to this SWISH listing. No submission was attempted.');
+      }
 
       const { data: lRow, error: lookupError } = await supabase.from('listings')
         .select('item_id, items(id, attributes)')
@@ -476,6 +481,21 @@ export default function ListingPreflightScreen() {
           .eq('id', itemId2)
           .eq('tenant_id', tenant.id);
         if (saveItemError) throw saveItemError;
+
+        // Read the chosen ID/name pair back so the submit path cannot proceed
+        // with a stale category left in the linked item record.
+        const { data: verifiedItem, error: verifyItemError } = await supabase
+          .from('items')
+          .select('attributes')
+          .eq('id', itemId2)
+          .eq('tenant_id', tenant.id)
+          .maybeSingle();
+        if (verifyItemError) throw verifyItemError;
+        const savedAttrs = verifiedItem?.attributes ?? {};
+        if (String(savedAttrs.ebay_category_id ?? '') !== String(catId) ||
+            String(savedAttrs.ebay_category_name ?? '') !== String(catName)) {
+          throw new Error('The selected eBay category did not persist to the linked SWISH item. No submission was attempted.');
+        }
       }
       setCategoryPickerOpen(false);
       // Re-run preflight to reflect the new category
