@@ -246,7 +246,7 @@ Deno.serve(async (request: Request) => {
       const item = matchedItems?.[0];
       if (!item) return json({ error: 'Import this unpublished offer into SWISH first.' }, 404);
       const categoryId = String(before.categoryId ?? '');
-      if (!/^\\d+$/.test(categoryId)) return json({ error: 'eBay returned no numeric category ID. SWISH was not changed.' }, 409);
+      if (!/^\d+$/.test(categoryId)) return json({ error: 'eBay returned no numeric category ID. SWISH was not changed.' }, 409);
       const attrs = { ...(item.attributes ?? {}), _ebay_category_id: categoryId, ebay_category_id: categoryId, _ebay_draft_status: 'UNPUBLISHED' };
       const { error: itemUpdateErr } = await db.from('items').update({ attributes: attrs, updated_at: new Date().toISOString() }).eq('id', item.id).eq('tenant_id', tenantId);
       if (itemUpdateErr) throw new Error('Could not update SWISH category attributes: ' + itemUpdateErr.message);
@@ -273,7 +273,7 @@ Deno.serve(async (request: Request) => {
         .eq('tenant_id', tenantId).eq('item_id', item.id).eq('marketplace_id', 'ebay').limit(1);
       if (listingFindErr || !listings?.length) throw new Error('SWISH draft listing not found.');
       const categoryId = String(listings[0].category_id ?? '');
-      if (!/^\\d+$/.test(categoryId)) return json({ error: 'SWISH category is missing or invalid. No eBay changes made.' }, 409);
+      if (!/^\d+$/.test(categoryId)) return json({ error: 'SWISH category is missing or invalid. No eBay changes made.' }, 409);
       // Never guess a category. Require the exact category ID to be confirmed as a
       // leaf in eBay's current UK taxonomy before writing it back.
       const treeResp = await fetch(`${TAXONOMY_URL}/get_default_category_tree_id?marketplace_id=EBAY_GB`, {
