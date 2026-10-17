@@ -615,21 +615,19 @@ async function findLeafCategoryByTitle(
 }
 
 const SPECIALIST_LEAF_REFERENCE: Record<string, { id: string; name: string }> = {
-  coins_uk:                 { id: '4726',   name: 'British Coins' },
-  coins_currency:           { id: '4726',   name: 'British Coins' },
-  coins_world:              { id: '40714',  name: 'Ancient Coins' },
-  // Islamic, Indian, Mughal, Timurid, Abbasid coins → Ancient Coins (40714, confirmed EBAY_GB leaf)
-  islamic_silver:           { id: '40714',  name: 'Ancient Coins' },
-  ancient_artefacts:        { id: '40714',  name: 'Ancient Coins' },
-  stamps:                   { id: '261',    name: 'Great Britain Stamps' },
+  // EBAY_GB verified leaf defaults; unspecified coin types go through live suggestions.
+  coins_uk:                 { id: '79964', name: 'Other British Coins' },
+  coins_currency:           { id: '79964', name: 'Other British Coins' },
+  coins_world:              { id: '257',   name: 'Other World Coins' },
+  islamic_silver:           { id: '4739',  name: 'Islamic Coins' },
+  stamps:                   { id: '261',   name: 'Great Britain Stamps' },
   pokemon:                  { id: '183454', name: 'CCG Individual Cards' },
   trading_cards:            { id: '183454', name: 'CCG Individual Cards' },
-  militaria:                { id: '13956',  name: 'Militaria' },
-  watches:                  { id: '14324',  name: 'Wristwatches' },
-  jewellery_gold_silver:    { id: '50',     name: 'Fine Jewellery' },
-  // curiosities_collectibles intentionally omitted — 1469 is a parent, not a leaf.
-  // Title-based resolution (Taxonomy suggestions API) is used instead.
-};
+  watches:                  { id: '14324', name: 'Wristwatches' },
+  jewellery_gold_silver:    { id: '50',    name: 'Fine Jewellery' },
+  // Do not hard-code gold/silver generic, banknotes, curiosities, or ancient artefacts
+  // to parent or coin-only nodes. Those require a live category match.
+}
 void SPECIALIST_LEAF_REFERENCE;
 
 async function resolveLeafCategory(
@@ -1406,30 +1404,24 @@ async function handleRequest(req: Request): Promise<Response> {
       }
 
       const curatedRoots = [
-        { id: '267', name: 'Coins (browse all)', isLeaf: false, childCount: 20 },
-        { id: '4726', name: 'British Coins', isLeaf: true, childCount: 0 },
-        { id: '40714', name: 'Ancient Coins', isLeaf: true, childCount: 0 },
-        { id: '18594', name: 'Medieval Coins', isLeaf: true, childCount: 0 },
-        { id: '18593', name: 'Hammered Coins', isLeaf: true, childCount: 0 },
-        { id: '527', name: 'Coin Collections & Lots', isLeaf: true, childCount: 0 },
-        { id: '37964', name: 'Medals: Commemorative', isLeaf: true, childCount: 0 },
-        { id: '37965', name: 'Medals: Other', isLeaf: true, childCount: 0 },
-        { id: '13956', name: 'Militaria (browse all)', isLeaf: false, childCount: 10 },
+        // The offline menu offers verified leaf examples only. Parent categories
+        // are displayed as navigation nodes by the live taxonomy route, never as
+        // selectable/publishable leaf categories.
+        { id: '4738', name: 'Ancient Greek Coins', isLeaf: true, childCount: 0 },
+        { id: '3365', name: 'Roman Imperial Coins (96–235 AD)', isLeaf: true, childCount: 0 },
+        { id: '3364', name: 'Byzantine Coins', isLeaf: true, childCount: 0 },
+        { id: '4739', name: 'Islamic Coins', isLeaf: true, childCount: 0 },
+        { id: '4737', name: 'Ancient Persian & Indian Coins', isLeaf: true, childCount: 0 },
+        { id: '532', name: 'Other Ancient Coins', isLeaf: true, childCount: 0 },
+        { id: '79964', name: 'Other British Coins', isLeaf: true, childCount: 0 },
+        { id: '257', name: 'Other World Coins', isLeaf: true, childCount: 0 },
+        { id: '6071', name: 'Other British Banknotes', isLeaf: true, childCount: 0 },
+        { id: '385', name: 'Other World Banknotes', isLeaf: true, childCount: 0 },
         { id: '261', name: 'Great Britain Stamps', isLeaf: true, childCount: 0 },
         { id: '183454', name: 'Trading Cards / CCG', isLeaf: true, childCount: 0 },
-        { id: '1469', name: 'Other Collectables (browse all)', isLeaf: false, childCount: 10 },
-        { id: '20091', name: 'Antique Furniture', isLeaf: true, childCount: 0 },
-        { id: '870', name: 'Ceramics & Pottery', isLeaf: true, childCount: 0 },
-        { id: '261186', name: 'Rare & Antiquarian Books', isLeaf: true, childCount: 0 },
-        { id: '281', name: 'Jewellery & Watches (browse)', isLeaf: false, childCount: 10 },
         { id: '50', name: 'Fine Jewellery', isLeaf: true, childCount: 0 },
         { id: '14324', name: 'Wristwatches', isLeaf: true, childCount: 0 },
-        { id: '79183', name: 'Motocross / Off-Road Bikes', isLeaf: true, childCount: 0 },
-        { id: '35586', name: 'Motorcycle Parts (browse all)', isLeaf: false, childCount: 20 },
-        { id: '177831', name: 'Mountain Bikes', isLeaf: true, childCount: 0 },
-        { id: '56197', name: 'Road Bikes', isLeaf: true, childCount: 0 },
         { id: '152506', name: 'Trainers & Athletic Shoes', isLeaf: true, childCount: 0 },
-        { id: '175748', name: 'Vintage Clothing', isLeaf: true, childCount: 0 },
         { id: '3002', name: 'T-Shirts', isLeaf: true, childCount: 0 },
       ];
       return jsonResponse({
