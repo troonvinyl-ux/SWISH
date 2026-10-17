@@ -136,7 +136,7 @@ const NUMISTA_TO_EBAY_CATEGORY: Record<string, { id: string; name: string }> = {
   '50p':                { id: '122486', name: 'British 50p Coins' },
   'one pound':          { id: '122487', name: 'British One Pound Coins' },
   decimal:              { id: '3407',   name: 'Other British Decimal Coinage' },
-  ancient:              { id: '532',    name: 'Other Ancient Coins' },
+  // Generic ancient coins require a live taxonomy selection; do not guess a category ID.
 }
 
 function getNumistaSuggestedCategory(attrs: Record<string, any>, specialistId: string): { id: string; name: string } | null {
@@ -202,7 +202,6 @@ const EBAY_CATEGORIES = [
   { id: '4730', name: 'Islamic Coins' },
   { id: '4737', name: 'Ancient Persian & Indian Coins' },
   { id: '93500', name: 'Ancient Coin Collections & Bulk Lots' },
-  { id: '532', name: 'Other Ancient Coins' },
   { id: '122475', name: 'Celtic Coins (c.100 BC–c.100 AD)' },
   { id: '58523', name: 'Anglo-Saxon Coins (c.600–1066)' },
   { id: '122476', name: 'Norman Coins (1066–1154)' },
