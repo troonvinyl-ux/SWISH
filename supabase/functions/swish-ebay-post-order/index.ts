@@ -489,10 +489,17 @@ async function handleSyncReturns(
         const rawState = String(member.state ?? member.status ?? summary.state ?? detail.state ?? '').toUpperCase();
         const sellerOptions = member.sellerAvailableOptions ?? summary.sellerAvailableOptions ?? detail.sellerAvailableOptions ?? [];
         const buyerOptions = member.buyerAvailableOptions ?? summary.buyerAvailableOptions ?? detail.buyerAvailableOptions ?? [];
+        const sellerDue = member.sellerResponseDue ?? summary.sellerResponseDue ?? detail.sellerResponseDue;
+        const buyerDue = member.buyerResponseDue ?? summary.buyerResponseDue ?? detail.buyerResponseDue;
         const closed = /CLOSED|REJECTED|CANCELLED|RESOLVED|REFUND(?:_ISSUED|ED)/.test(rawState);
-        const awaitingSeller = (Array.isArray(sellerOptions) && sellerOptions.length > 0) ||
+        // eBay's return-search response uses sellerResponseDue/buyerResponseDue to
+        // identify whose action is due. Available-options arrays are not equivalent
+        // to the response-due fields, so prefer the explicit deadline/action signals.
+        const awaitingSeller = Boolean(sellerDue?.activityDue || sellerDue?.respondByDate?.value) ||
+          ((Array.isArray(sellerOptions) && sellerOptions.length > 0) && /SELLER|RETURN_REQUESTED/.test(rawState)) ||
           /RETURN_REQUESTED|SELLER_RESPONSE_DUE/.test(rawState);
-        const awaitingBuyer = (Array.isArray(buyerOptions) && buyerOptions.length > 0) ||
+        const awaitingBuyer = Boolean(buyerDue?.activityDue || buyerDue?.respondByDate?.value) ||
+          ((Array.isArray(buyerOptions) && buyerOptions.length > 0) && /BUYER|RETURN_ACCEPTED|RETURN_STARTED|ITEM_SHIPPED|ITEM_DELIVERED/.test(rawState)) ||
           /RETURN_ACCEPTED|RETURN_STARTED|ITEM_SHIPPED|ITEM_DELIVERED/.test(rawState);
         const status = closed ? (/RESOLVED|REFUND/.test(rawState) ? 'resolved' : 'closed')
           : awaitingSeller ? 'awaiting_seller'
@@ -504,11 +511,21 @@ async function handleSyncReturns(
           const n = Number(typeof v === 'object' ? (v.value ?? v.amount) : v);
           return Number.isFinite(n) ? n : null;
         };
-        const refundAmount = money(detail.refundInfo?.actualRefundAmount ??
-          detail.refundInfo?.estimatedRefundAmount ?? member.refundAmount ?? summary.refundAmount);
+        const refundAmount = money(
+          member.sellerTotalRefund?.actualRefundAmount ??
+          member.sellerTotalRefund?.estimatedRefundAmount ??
+          member.buyerTotalRefund?.actualRefundAmount ??
+          member.buyerTotalRefund?.estimatedRefundAmount ??
+          detail.refundInfo?.actualRefundAmount ??
+          detail.refundInfo?.estimatedRefundAmount ??
+          member.refundAmount ?? summary.refundAmount
+        );
         const createdAtRaw = creation.creationDate ?? creation.createdDate ?? member.creationDate ??
           summary.creationDate ?? detail.creationDate;
-        const createdAtDate = createdAtRaw ? new Date(createdAtRaw) : null;
+        const createdAtDateRaw = createdAtRaw && typeof createdAtRaw === 'object'
+          ? (createdAtRaw.value ?? createdAtRaw.date ?? null)
+          : createdAtRaw;
+        const createdAtDate = createdAtDateRaw ? new Date(createdAtDateRaw) : null;
         const createdAt = createdAtDate && Number.isFinite(createdAtDate.getTime())
           ? createdAtDate.toISOString()
           : new Date().toISOString();
@@ -517,13 +534,17 @@ async function handleSyncReturns(
           ? commentsValue
           : String(commentsValue?.content ?? commentsValue?.text ?? '');
         const buyerUsername = String(
-          buyer.buyerLoginName ?? buyer.username ?? buyer.userName ??
+          member.buyerLoginName ?? buyer.buyerLoginName ?? buyer.username ?? buyer.userName ??
           creation.buyerLoginName ?? member.buyerUsername ?? ''
         );
         const reason = String(creation.reason ?? member.reason ?? summary.reason ?? detail.reason ?? '');
         const orderId = creation.orderId ?? item.orderId ?? member.orderId ?? summary.orderId ?? detail.orderId;
-        const deadline = detail.refundInfo?.refundDueDate ?? detail.returnDeadline ??
-          member.refundDueDate ?? member.deadline ?? null;
+        const deadline = sellerDue?.respondByDate?.value ??
+          buyerDue?.respondByDate?.value ??
+          member.timeoutDate?.value ??
+          detail.refundInfo?.refundDueDate?.value ??
+          detail.refundInfo?.refundDueDate ??
+          detail.returnDeadline ?? member.refundDueDate ?? member.deadline ?? null;
 
         const row: Record<string, any> = {
           tenant_id: tenantId,
