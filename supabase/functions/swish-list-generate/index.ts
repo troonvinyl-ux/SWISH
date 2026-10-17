@@ -561,7 +561,7 @@ FINANCIAL CONTEXT:
 REQUIREMENTS:
 1. Title: Max 80 characters.${isMXSpecialist ? ' Follow the MX title formula above.' : ' Include "Possible"/"Provisional" if identification is not confirmed.'}
 2. Description: 150–400 words. Honest and professional.${isMXSpecialist ? ' Follow MX description structure.' : ' Disclose provisional identification and alterations if present.'} Use paragraph breaks (\\n\\n).
-3. Category: Human-readable category path for ${marketplace_id}
+3. Category: Human-readable category path for ${marketplace_id}. Never invent an eBay category ID; use only a verified ID explicitly supplied in trusted context, otherwise output an empty category_id and let the live EBAY_GB Taxonomy resolver choose.
 4. Condition ID: "1000"=New, "2500"=Refurbished, "3000"=Used, "4000"=Very Good, "5000"=Good, "6000"=Acceptable
 5. Item specifics: 5–12 key-value pairs from confirmed attributes only. Each name/value max 65 chars. Exclude internal IDs, Numista fields, inferred fields.
 6. Keywords: 10–15 search terms buyers would actually use
@@ -572,7 +572,7 @@ Return ONLY this exact JSON:
   "title": "string — max 80 chars",
   "description": "string — honest, professional",
   "category": "string — category path",
-  "category_id": "string — eBay category ID",
+  "category_id": "string — verified eBay category ID explicitly supplied in trusted context, otherwise empty string; never guess numeric IDs",
   "condition_id": "string — condition code",
   "condition_description": "1–2 sentences from visible/stated condition only",
   "recommended_price": number,
