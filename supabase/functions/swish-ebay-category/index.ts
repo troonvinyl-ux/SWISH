@@ -567,7 +567,7 @@ async function getCategorySuggestions(
 //
 // KEY DESIGN RULE: category_id is the ONLY unique identifier.
 // eBay's tree allows identical names at multiple levels, e.g.:
-//   Collectibles (root) > Coins (267) > Coins (child_id) > Ancient > Greek
+//   Collectables > Coins (11116) > Coins (58520) > Ancient (4733) > Greek (4738)
 // Two nodes named "Coins" are different categories with different IDs.
 // We NEVER deduplicate by name. The full category_path (from root) is stored
 // to make "Coins > Coins" visually distinct from just "Coins".
@@ -929,9 +929,9 @@ async function runTest(
 
 // ── Curated categories for the root browser ───────────────────────────────────
 // IMPORTANT: Leaf status here is based on leafCategoryTreeNode from the live
-// EBAY_GB Taxonomy API. These are NOT manually assigned.
+// EBAY_GB Taxonomy API. Offline examples are manually seeded from the published EBAY_GB category hierarchy; the live leaf flag remains authoritative when available.
 //
-// Note on Ancient coins: Greek (4738), Byzantine (4159), Roman Imperial etc.
+// Note on Ancient coins: Greek (4738), Byzantine (3364), Islamic (4739), Roman Imperial (122471/3365/122472).
 // are leaf categories in EBAY_GB (leafCategoryTreeNode=true) even though
 // get_item_aspects_for_category returns 400 — they have no required specifics.
 // The DB entries for these will be set correctly after seed_priority_branches.
