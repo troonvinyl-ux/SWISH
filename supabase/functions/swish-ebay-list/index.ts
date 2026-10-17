@@ -185,14 +185,11 @@ async function getAppToken(): Promise<string | null> {
   }
 
   const basicAuth = btoa(`${clientId}:${clientSecret}`);
+  // eBay Taxonomy API uses the standard application OAuth scope.
+  // commerce.taxonomy.readonly is not a valid eBay OAuth scope.
   const requestedScopes = [
-    'https://api.ebay.com/oauth/api_scope https://api.ebay.com/oauth/api_scope/commerce.taxonomy.readonly',
     'https://api.ebay.com/oauth/api_scope',
   ];
-
-  // Prefer Taxonomy scope for live categories. Fall back to the general app
-  // scope for unrelated public Browse calls; category routes then try the
-  // seller token, which must be re-authorised with commerce.taxonomy.readonly.
   for (const scope of requestedScopes) {
     try {
       const resp = await fetch(EBAY_TOKEN_URL, {
