@@ -1296,6 +1296,62 @@ async function handleRequest(req: Request): Promise<Response> {
   const auth = await verifyTenantMembership(supabase, authHeader, tenantId, internalSecret);
   if (!auth.ok) return jsonResponse({ error: auth.error }, 401);
 
+  // ── Route: get_api_usage — eBay Developer Analytics rate-limit dashboard ──
+  // Uses the server-held application credentials. Never expose credentials/tokens to the client.
+  if (route === 'get_api_usage') {
+    const appToken = await getAppToken();
+    if (!appToken) {
+      return jsonResponse({
+        success: false,
+        error: 'Could not obtain an eBay application token. Check the server-side EBAY_CLIENT_ID and EBAY_CLIENT_SECRET configuration.',
+      }, 502);
+    }
+
+    try {
+      const response = await fetch('https://api.ebay.com/developer/analytics/v1_beta/rate_limit', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${appToken}`,
+          Accept: 'application/json',
+        },
+        signal: AbortSignal.timeout(12000),
+      });
+      const responseText = await response.text();
+      let payload: any = null;
+      try { payload = responseText ? JSON.parse(responseText) : null; } catch {}
+
+      if (!response.ok) {
+        const safeMessage = String(payload?.errors?.[0]?.message ?? payload?.error_description ?? payload?.error ?? responseText ?? `HTTP ${response.status}`).slice(0, 500);
+        console.error(`[SWISH API Usage] Developer Analytics API returned HTTP ${response.status}: ${safeMessage}`);
+        return jsonResponse({
+          success: false,
+          status: response.status,
+          error: response.status === 401 || response.status === 403
+            ? 'eBay rejected the Developer Analytics request. Check that this Production application is authorised for Developer Analytics and that its OAuth scopes are correct.'
+            : `eBay Developer Analytics API returned HTTP ${response.status}: ${safeMessage}`,
+        }, 502);
+      }
+
+      // eBay has occasionally returned 204 No Content from this endpoint.
+      if (!payload) {
+        return jsonResponse({
+          success: true,
+          data: null,
+          message: 'eBay returned no rate-limit data for this request. Retry shortly or check eBay API status.',
+          checkedAt: new Date().toISOString(),
+        });
+      }
+      return jsonResponse({
+        success: true,
+        data: payload,
+        checkedAt: new Date().toISOString(),
+      });
+    } catch (e: any) {
+      console.error(`[SWISH API Usage] Request failed: ${e?.message ?? e}`);
+      return jsonResponse({ success: false, error: 'Could not reach eBay Developer Analytics. Please retry.' }, 502);
+    }
+  }
+
   // ── Route: get_seller_policies ────────────────────────────────────────────
   if (route === 'get_seller_policies') {
     const creds = await getEbayCredentials(supabase, tenantId, false);
