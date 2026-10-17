@@ -169,21 +169,35 @@ function InlineCategoryPicker({
     timeoutRef.current = timeoutId;
 
     try {
-      // Try dedicated category function first (faster, fewer timeout conflicts)
-      // Falls back to swish-ebay-list if swish-ebay-category not yet deployed
+      // Try the dedicated taxonomy function first, then fall back on both
+      // transport errors and HTTP-200 { success:false } responses.
       let data: any = null;
       let error: any = null;
       try {
-        const r = await supabase.functions.invoke('swish-ebay-category', {
+        const primary = await supabase.functions.invoke('swish-ebay-category', {
           body: { route: 'get_category_children', tenantId, parentId },
         });
-        data = r.data; error = r.error;
-      } catch {
-        // Fallback to swish-ebay-list
-        const r2 = await supabase.functions.invoke('swish-ebay-list', {
-          body: { route: 'get_category_children', tenantId, parentId },
-        });
-        data = r2.data; error = r2.error;
+        data = primary.data;
+        error = primary.error;
+      } catch (e: any) {
+        error = e;
+      }
+
+      if (error || !data?.success) {
+        try {
+          const fallback = await supabase.functions.invoke('swish-ebay-list', {
+            body: { route: 'get_category_children', tenantId, parentId },
+          });
+          if (!fallback.error && fallback.data?.success) {
+            data = fallback.data;
+            error = null;
+          } else {
+            error = fallback.error ?? error;
+            if (fallback.data) data = fallback.data;
+          }
+        } catch (e: any) {
+          error = error ?? e;
+        }
       }
       clearTimeout(timeoutId);
 
