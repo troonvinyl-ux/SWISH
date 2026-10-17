@@ -345,7 +345,7 @@ export default function EbayCategoryAdminScreen() {
               style={s.input}
               value={testCatId}
               onChangeText={setTestCatId}
-              placeholder="Category ID (e.g. 4726)"
+              placeholder="Category ID (e.g. 79964)"
               placeholderTextColor={Colors.textTertiary}
               keyboardType="number-pad"
               returnKeyType="done"
@@ -378,7 +378,7 @@ export default function EbayCategoryAdminScreen() {
             {testLoading ? <ActivityIndicator size="small" color={Colors.background} style={{ width: 16, height: 16 }} /> : <MaterialIcons name="science" size={16} color={Colors.background} />}
             <Text style={s.actionBtnText}>Run Full Test (Mughal Rupee)</Text>
           </Pressable>
-          <Text style={s.actionDesc}>Tests Mughal Rupee suggestion, validates British Coins (4726), fetches aspects. Shows exactly what Preflight and createOffer will use.</Text>
+          <Text style={s.actionDesc}>Tests Mughal Rupee suggestions, validates Other British Coins (79964), and fetches Ancient Greek coin aspects used by Preflight and publishing.</Text>
 
           {testLoading ? <ActivityIndicator color={Colors.primary} style={{ marginTop: Spacing.md }} /> : null}
 
@@ -457,16 +457,16 @@ export default function EbayCategoryAdminScreen() {
                   ))}
                   {(testResult.mughalSuggestion ?? []).length === 0 ? <Text style={s.resultKey}>No suggestions — check eBay credentials.</Text> : null}
 
-                  <Text style={[s.resultLabel, { marginTop: Spacing.sm }]}>British Coins (4726) Validation:</Text>
+                  <Text style={[s.resultLabel, { marginTop: Spacing.sm }]}>Other British Coins (79964) Validation:</Text>
                   <Text style={s.resultVal}>
-                    {testResult.britishCoinsValidation?.valid ? 'Valid EBAY_GB leaf' : 'Invalid: ' + testResult.britishCoinsValidation?.reason}
+                    {testResult.otherBritishCoinsValidation?.valid ? 'Valid EBAY_GB leaf' : 'Invalid: ' + testResult.otherBritishCoinsValidation?.reason}
                   </Text>
 
-                  {testResult.britishCoinsAspects ? (
+                  {testResult.greekCoinAspects ? (
                     <>
-                      <Text style={[s.resultLabel, { marginTop: Spacing.sm }]}>British Coins Aspects:</Text>
-                      <Text style={s.resultVal}>{testResult.britishCoinsAspects.totalAspects} aspects, {testResult.britishCoinsAspects.requiredAspects?.length ?? 0} required</Text>
-                      <Text style={s.resultKey}>Required: {testResult.britishCoinsAspects.requiredAspects?.join(', ') || 'none'}</Text>
+                      <Text style={[s.resultLabel, { marginTop: Spacing.sm }]}>Ancient Greek Coin Aspects:</Text>
+                      <Text style={s.resultVal}>{testResult.greekCoinAspects.totalAspects} aspects, {testResult.greekCoinAspects.requiredAspects?.length ?? 0} required</Text>
+                      <Text style={s.resultKey}>Required: {testResult.greekCoinAspects.requiredAspects?.join(', ') || 'none'}</Text>
                     </>
                   ) : null}
 
