@@ -570,9 +570,9 @@ async function findLeafCategoryByTitle(
 
       for (const s of suggestions.slice(0, 20)) {
         const catRef = s.category;
-        const isLeafNode = s.leafCategoryTreeNode === true;
-
-        if (catRef?.categoryId && isLeafNode) {
+        // get_category_suggestions returns leaf categories by contract, but its
+        // CategorySuggestion schema has no leafCategoryTreeNode property.
+        if (catRef?.categoryId && catRef?.categoryName) {
           leafResults.push({
             id: String(catRef.categoryId),
             name: catRef.categoryName ?? String(catRef.categoryId),
@@ -1242,7 +1242,9 @@ async function handleRequest(req: Request): Promise<Response> {
             return {
               id: String(cat.categoryId ?? ''),
               name: String(cat.categoryName ?? ''),
-              isLeaf: s.leafCategoryTreeNode === true,
+              // CategorySuggestion responses already contain leaf nodes;
+              // leafCategoryTreeNode is not a field in this response schema.
+              isLeaf: Boolean(cat.categoryId && cat.categoryName),
               confidence: i === 0 ? 'high' : i < 3 ? 'medium' : 'low',
               categoryPath: parts.join(' > '),
             };
