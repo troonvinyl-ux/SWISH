@@ -745,6 +745,29 @@ async function resolveLeafCategory(
     console.log(`[SWISH] No EBAY_GB leaf suggestions returned for title="${title.slice(0, 60)}" (treeId=${treeId})`);
   }
 
+  // Older SWISH category maps sometimes stored a generic/obsolete category ID
+  // (for example 257) even though the listing retains a useful category label.
+  // If title search did not find a live leaf, retry using that saved label before
+  // falling back or blocking publication. Results come from live EBAY_GB Taxonomy.
+  if (storedCategoryName && storedCategoryName.trim().length > 2) {
+    const labelSuggestions = await findLeafCategoryByTitle(token, clientId, storedCategoryName.trim());
+    const labelMatch = labelSuggestions.find((candidate: any) => candidate?.id && candidate?.name);
+    if (labelMatch) {
+      if (supabaseAdmin) {
+        const now = new Date().toISOString();
+        supabaseAdmin.from('ebay_categories').upsert(
+          { marketplace_id: 'EBAY_GB', tree_id: treeId, tree_version: treeVersion,
+            category_id: labelMatch.id, category_name: labelMatch.name, is_leaf: true, active: true,
+            last_synced_at: now, updated_at: now },
+          { onConflict: 'marketplace_id,category_id' }
+        ).then(() => {}).catch(() => {});
+      }
+      console.log(`[SWISH] Saved-label-resolved to live EBAY_GB leaf: categoryId=${labelMatch.id}, name="${labelMatch.name}"`);
+      return { resolvedId: labelMatch.id, resolvedName: labelMatch.name, categoryName: labelMatch.name,
+        treeId, treeVersion, wasResolved: true, confidence: labelMatch.confidence ?? 'taxonomy_verified' };
+    }
+  }
+
   // If live keyword suggestions return no result, try a narrow coin-category fallback.
   // Every candidate is still verified against the current EBAY_GB taxonomy before use.
   const lowerTitle = String(title ?? '').toLowerCase();
