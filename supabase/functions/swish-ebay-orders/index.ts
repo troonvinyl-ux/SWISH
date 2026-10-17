@@ -56,12 +56,6 @@ async function refreshAccessToken(
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
     refresh_token: refreshToken,
-    scope: [
-      'https://api.ebay.com/oauth/api_scope/sell.inventory',
-      'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
-      'https://api.ebay.com/oauth/api_scope/sell.finances',
-      'https://api.ebay.com/oauth/api_scope/sell.account',
-    ].join(' '),
   });
 
   const resp = await fetch(EBAY_TOKEN_URL, {
