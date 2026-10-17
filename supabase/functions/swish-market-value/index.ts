@@ -481,6 +481,58 @@ async function searchEbayBrowse(
   }
 }
 
+// ── SOURCE B2: eBay Marketplace Insights — individual sold items (when approved) ──
+// This API is restricted to approved applications. If SWISH's app is not approved,
+// the function reports the access status and the engine continues with other sources.
+interface SoldListingSearchResult {
+  available: boolean;
+  items: Array<{ title: string; price: number; currency: string; condition: string; soldDate: string; url: string; imageUrl: string; itemId: string }>;
+  totalFound: number;
+  error?: string;
+  httpStatus?: number;
+}
+async function searchEbaySoldListings(appToken: string | null, query: string, maxResults = 50): Promise<SoldListingSearchResult> {
+  const empty: SoldListingSearchResult = { available: false, items: [], totalFound: 0 };
+  if (!appToken || query.trim().length < 3) return { ...empty, error: 'Missing app token or query' };
+  const params = new URLSearchParams({ q: query.slice(0, 100), limit: String(Math.min(maxResults, 100)) });
+  try {
+    const resp = await fetch(\`https://api.ebay.com/buy/marketplace_insights/v1_beta/item_sales/search?\${params.toString()}\`, {
+      headers: {
+        Authorization: \`Bearer \${appToken}\`,
+        Accept: 'application/json',
+        'X-EBAY-C-MARKETPLACE-ID': EBAY_GLOBAL_ID,
+      },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!resp.ok) {
+      const message = (await resp.text()).slice(0, 220);
+      console.log(\`[SWISH Market] Marketplace Insights HTTP \${resp.status}: \${message}\`);
+      return { ...empty, httpStatus: resp.status, error: resp.status === 403
+        ? 'Marketplace Insights sold-item API access is not enabled for this eBay developer application'
+        : \`Marketplace Insights \${resp.status}\` };
+    }
+    const data = await resp.json();
+    const raw = data.itemSales ?? data.itemSummaries ?? data.items ?? data.sales ?? [];
+    const items = (Array.isArray(raw) ? raw : []).map((item: any) => {
+      const priceObj = item.price ?? item.lastSoldPrice ?? item.soldPrice ?? {};
+      const price = toGBP(Number(priceObj.value ?? priceObj.amount ?? priceObj ?? 0), String(priceObj.currency ?? item.currency ?? 'GBP'));
+      return {
+        title: String(item.title ?? item.itemTitle ?? '').slice(0, 180),
+        price,
+        currency: 'GBP',
+        condition: String(item.condition ?? item.conditionId ?? ''),
+        soldDate: String(item.lastSoldDate ?? item.soldDate ?? item.saleDate ?? item.lastSoldDateTime ?? ''),
+        url: String(item.itemWebUrl ?? item.itemUrl ?? item.url ?? ''),
+        imageUrl: String(item.image?.imageUrl ?? item.imageUrl ?? item.thumbnailImages?.[0]?.imageUrl ?? ''),
+        itemId: String(item.itemId ?? item.legacyItemId ?? ''),
+      };
+    }).filter((item: any) => item.title && item.price > 0);
+    return { available: true, items, totalFound: Number(data.total ?? data.totalItems ?? items.length) };
+  } catch (e: any) {
+    return { ...empty, error: \`Marketplace Insights: \${e?.message ?? 'request failed'}\` };
+  }
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // SOURCE C: eBay VISUAL SEARCH (app token)
 // ══════════════════════════════════════════════════════════════════════════════
@@ -962,10 +1014,11 @@ Deno.serve(async (req: Request) => {
   // ── Phase 2: Terapeak + Browse + Visual (parallel first query) ────────────
   const primaryQuery = searchQueries[0];
 
-  const [teapeakResult, firstBrowseResult, visualSearch] = await Promise.all([
+  const [teapeakResult, firstBrowseResult, visualSearch, firstSoldSearch] = await Promise.all([
     callTerapeak(creds.accessToken, primaryQuery, 'PREVIOUS_3_MONTHS'),
     searchEbayBrowse(creds.accessToken, primaryQuery, 50),
     (appToken && (inlineImageBase64 || imageUrls.length > 0)) ? runEbayVisualSearch(inlineImageBase64 || imageUrls[0], appToken) : Promise.resolve<VisualSearchResult>({ available: false, items: [], totalFound: 0 }),
+    searchEbaySoldListings(appToken, primaryQuery, 50),
   ]);
 
   // Mark credential as having analytics scope if Terapeak succeeded
@@ -1016,9 +1069,15 @@ Deno.serve(async (req: Request) => {
 
   const finalTerapeak = teapeakResult.available ? teapeakResult : (teapeakBroadResult?.available ? teapeakBroadResult : teapeakResult);
 
+  // If the primary sold query is empty, try one more specific query before giving up.
+  let finalSoldSearch = firstSoldSearch;
+  if ((!finalSoldSearch.available || finalSoldSearch.items.length === 0) && searchQueries.length > 1) {
+    finalSoldSearch = await searchEbaySoldListings(appToken, searchQueries[1], 50);
+  }
   const totalBrowseItems = browseResults.reduce((sum, r) => sum + r.items.length, 0);
   console.log(`[SWISH Market v8] Browse total: ${totalBrowseItems} items across ${browseResults.length} queries`);
   console.log(`[SWISH Market v8] Terapeak: available=${finalTerapeak.available} sold=${finalTerapeak.soldQuantity} avg=£${finalTerapeak.averageSoldPrice} needsReauth=${finalTerapeak.needsReauth} httpStatus=${finalTerapeak.httpStatus}`);
+  console.log(`[SWISH Market v8] Marketplace Insights: available=${finalSoldSearch.available} soldItems=${finalSoldSearch.items.length} httpStatus=${finalSoldSearch.httpStatus ?? 'n/a'}`);
 
   // ── MX running status ──────────────────────────────────────────────────────
   const isMX = specialistId === 'motocross';
@@ -1036,6 +1095,43 @@ Deno.serve(async (req: Request) => {
     targetTitle: cleanTitle, targetAttrs: attributes,
     specialistId, identificationConfidence, identificationTier, condition,
   });
+
+  const soldComparableItems = finalSoldSearch.items
+    .map(item => ({ ...item, score: scoreListing(item.title, item.price, cleanTitle, attributes, specialistId).score }))
+    .filter(item => item.score >= 0.35)
+    .filter((item, index, all) => all.findIndex(other =>
+      other.itemId && item.itemId ? other.itemId === item.itemId :
+      other.title.toLowerCase() === item.title.toLowerCase() && other.price === item.price
+    ) === index)
+    .sort((a, b) => a.price - b.price);
+  if ((!finalTerapeak.available || finalTerapeak.averageSoldPrice <= 0) && soldComparableItems.length > 0) {
+    const prices = soldComparableItems.map(item => item.price);
+    const median = prices[Math.floor(prices.length / 2)];
+    const low = prices[Math.floor((prices.length - 1) * 0.15)];
+    const high = prices[Math.floor((prices.length - 1) * 0.85)];
+    const confidence = soldComparableItems.length >= 8 ? 'medium' : soldComparableItems.length >= 3 ? 'low' : 'very_low';
+    const idAdjustedConfidence = identificationConfidence < 0.4 ? 'very_low' : identificationConfidence < 0.5 && confidence === 'medium' ? 'low' : confidence;
+    const listPrice = Math.round(median * 0.95 * 100) / 100;
+    valuation = {
+      valuationLow: Math.round(low * 100) / 100,
+      valuationMid: Math.round(median * 100) / 100,
+      valuationHigh: Math.round(high * 100) / 100,
+      valuationConfidence: idAdjustedConfidence,
+      valuationMethod: 'marketplace_insights_verified_sold_comparables',
+      valuationWarnings: [
+        `Marketplace Insights returned ${soldComparableItems.length} title-relevant sold listings; active asking prices were excluded from this estimate.`,
+        ...(identificationConfidence < 0.5 ? ['Identification confidence is limited; treat the valuation range cautiously.'] : []),
+      ],
+      recommendedListingPrice: listPrice,
+      recommendedListingFormat: 'BuyItNow_WithBestOffer',
+      listingPriceRationale: `${soldComparableItems.length} relevant sold listings; median £${median.toFixed(2)}, indicative range £${low.toFixed(2)}–£${high.toFixed(2)}. Recommended starting price £${listPrice.toFixed(2)}.`,
+      saleProb30d: null,
+      fairMarketValue: median,
+      currentAskingMarketMid: 0,
+      insufficientSoldEvidence: soldComparableItems.length < 3,
+      primaryEvidenceSource: 'terapeak',
+    };
+  }
 
   if (isMX && mxMultiplier < 1.0 && valuation.valuationMid > 0) {
     const m = mxMultiplier;
@@ -1082,6 +1178,38 @@ Deno.serve(async (req: Request) => {
     searchQuery: searchQueries[0],
     searchQueriesUsed: searchQueries,
     valuation,
+
+    verifiedSoldResearch: {
+      source: soldComparableItems.length > 0 && (!finalTerapeak.available || finalTerapeak.averageSoldPrice <= 0)
+        ? 'ebay_marketplace_insights'
+        : finalTerapeak.available ? 'ebay_product_research_aggregate' : 'none',
+      available: soldComparableItems.length > 0 || finalTerapeak.available,
+      accessStatus: finalSoldSearch.httpStatus ?? null,
+      accessError: finalSoldSearch.error ?? null,
+      query: finalSoldSearch.items.length > 0 ? primaryQuery : finalSoldSearch.error ? primaryQuery : null,
+      soldCount: soldComparableItems.length > 0 && (!finalTerapeak.available || finalTerapeak.averageSoldPrice <= 0)
+        ? soldComparableItems.length : finalTerapeak.soldQuantity,
+      averageSoldPrice: soldComparableItems.length > 0 && (!finalTerapeak.available || finalTerapeak.averageSoldPrice <= 0)
+        ? Math.round(soldComparableItems.reduce((sum, item) => sum + item.price, 0) / soldComparableItems.length * 100) / 100
+        : finalTerapeak.averageSoldPrice,
+      medianSoldPrice: soldComparableItems.length > 0 && (!finalTerapeak.available || finalTerapeak.averageSoldPrice <= 0)
+        ? soldComparableItems[Math.floor(soldComparableItems.length / 2)].price
+        : finalTerapeak.medianConditionPrice,
+      lowSoldPrice: soldComparableItems.length > 0 && (!finalTerapeak.available || finalTerapeak.averageSoldPrice <= 0)
+        ? soldComparableItems[0].price : finalTerapeak.priceMin,
+      highSoldPrice: soldComparableItems.length > 0 && (!finalTerapeak.available || finalTerapeak.averageSoldPrice <= 0)
+        ? soldComparableItems[soldComparableItems.length - 1].price : finalTerapeak.priceMax,
+      items: soldComparableItems.slice(0, 12).map(item => ({
+        title: item.title, price: item.price, currency: item.currency, condition: item.condition,
+        soldDate: item.soldDate, itemUrl: item.url, imageUrl: item.imageUrl, itemId: item.itemId,
+        relevanceScore: Math.round(item.score * 100),
+      })),
+      note: soldComparableItems.length > 0
+        ? 'Sold item prices are from eBay Marketplace Insights and filtered for title relevance.'
+        : finalTerapeak.available
+          ? 'Product Research provides aggregate sold statistics; individual sold items were not returned.'
+          : 'Individual sold-item access depends on eBay Marketplace Insights API approval. Active listings are not sold evidence.',
+    },
 
     // ── TERAPEAK — GENUINE SOLD DATA (class A) ───────────────────────────────
     // This is the primary valuation signal in v7.
@@ -1254,8 +1382,12 @@ Deno.serve(async (req: Request) => {
       medianAuctionPrice: 0, medianBinPrice: valuation.valuationMid,
       dataQuality: valuation.valuationConfidence === 'high' ? 'high' : valuation.valuationConfidence === 'medium' ? 'medium' : valuation.valuationConfidence === 'low' ? 'low' : 'insufficient',
       recentSales: [
-        ...finalTerapeak.topSoldListings.map(l => ({ title: l.title, price: l.price, currency: 'GBP', listingType: l.condition, condition: l.condition, url: '', sellSummary: 'Sold (Terapeak)' as const, endDate: '' })),
-        ...topComparables.slice(0, Math.max(0, 10 - finalTerapeak.topSoldListings.length)).map(c => ({ title: c.title, price: c.price, currency: 'GBP', listingType: c.listingType, condition: '', url: (c as any).url, sellSummary: 'Active (asking price)' as const, endDate: '' })),
+        ...soldComparableItems.slice(0, 10).map(item => ({
+          title: item.title, price: item.price, currency: item.currency, listingType: 'Sold',
+          condition: item.condition, url: item.url, sellSummary: 'Sold (Marketplace Insights)' as const, endDate: item.soldDate,
+        })),
+        ...finalTerapeak.topSoldListings.map(l => ({ title: l.title, price: l.price, currency: 'GBP', listingType: l.condition, condition: l.condition, url: '', sellSummary: 'Sold (Product Research)' as const, endDate: '' })),
+        ...topComparables.slice(0, Math.max(0, 10 - soldComparableItems.length - finalTerapeak.topSoldListings.length)).map(c => ({ title: c.title, price: c.price, currency: 'GBP', listingType: c.listingType, condition: '', url: (c as any).url, sellSummary: 'Active (asking price)' as const, endDate: '' })),
       ].slice(0, 10),
     },
     recommendation: {
