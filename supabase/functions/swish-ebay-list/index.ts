@@ -438,6 +438,10 @@ const KNOWN_PARENT_CATEGORY_HINT = new Set([
   // Known parent (non-leaf) categories — skip verify, go straight to title-based resolution
   '1469',  // "Other Collectables" — parent, not a leaf
   '4739',  // "Islamic" — parent coins category. Use 40714 (Ancient Coins) instead.
+  '267',   // Coins browse root
+  '13956', // Militaria browse root in the SWISH curated taxonomy list
+  '4455', '35586', '2906', // Motorcycle/bicycle parent categories
+  '15724', '15725', '57990', '57991', '11483', '11484', // Clothing/shoe parent categories
   '0', '',
 ]);
 
@@ -524,11 +528,12 @@ async function verifyCategoryIsLeaf(
           console.log(`[SWISH] Category ${categoryId} cached is_leaf=false — confirming against live taxonomy`);
         }
         if (dbRow.is_leaf === true) {
-          // DB confirms leaf — trust it (set from leafCategoryTreeNode in Taxonomy sync)
-          TAXONOMY_CACHE.set(cacheKey, { id: categoryId, name, isLeaf: true, timestamp: Date.now() });
-          return { isLeaf: true, name, fromDb: true };
+          // A cached leaf flag can become stale when eBay changes the category
+          // tree. Use the live Taxonomy API for the publish-time decision; the
+          // in-memory TTL cache above prevents repeated checks during one session.
+          console.log(`[SWISH] Category ${categoryId} cached is_leaf=true — confirming against live taxonomy`);
         }
-        // is_leaf is NULL in DB — fall through to live API check
+        // NULL or either cached leaf flag must fall through to the live API check.
       }
     } catch (dbErr: any) {
       console.log(`[SWISH] Local DB category check error (non-fatal): ${dbErr.message}`);
