@@ -677,8 +677,6 @@ async function handleSyncCases(
         if (claimAmount !== null) row.refund_amount = claimAmount;
         if (deadline) row.deadline = deadline;
         if (createdAt) row.created_at = createdAt;
-        if (itemId !== null && itemId !== undefined) row.ebay_item_id = String(itemId);
-        if (transactionId !== null && transactionId !== undefined) row.ebay_transaction_id = String(transactionId);
 
         const { data: existing, error: lookupError } = await supabase
           .from('ebay_cases')
