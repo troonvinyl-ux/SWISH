@@ -1155,7 +1155,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   if (route === 'get_category_children') {
     const result = await getCategoryChildren(supabase, token, treeId, treeVersion, parentId);
-    return json({ success: true, ...result, parentId, treeId, treeVersion });
+    const routeOk = result.source !== 'error';
+    return json({
+      success: routeOk,
+      ...result,
+      ...(routeOk ? {} : { error: 'The dedicated eBay taxonomy request failed for this category branch; retrying via the connected seller token may succeed.' }),
+      parentId, treeId, treeVersion,
+    });
   }
 
   if (route === 'get_leaf_descendants') {
