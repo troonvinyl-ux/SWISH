@@ -435,11 +435,22 @@ function validateBusinessPolicies(
 const KNOWN_PARENT_CATEGORY_HINT = new Set([
   '4', '99', '260', '1', '550', '281', '220', '467', '11116', '11450',
   '619', '625', '888', '2984', '1249', '11232', '139971', '64482', '171228',
-  // Known parent (non-leaf) categories — skip verify, go straight to title-based resolution
-  '1469',  // "Other Collectables" — parent, not a leaf
-  '4739',  // "Islamic" — parent coins category. Use 40714 (Ancient Coins) instead.
-  '267',   // Coins browse root
-  '13956', // Militaria browse root in the SWISH curated taxonomy list
+  // Known parent (non-leaf) categories — these IDs must never be published directly.
+  '1469',  // Other Collectables parent
+  '11116', // Coins parent beneath Collectables
+  '58520', // Coins subtree parent beneath Coins
+  '4733',  // Ancient coins parent
+  '58519', // Roman coins parent
+  '3394',  // British coins parent
+  '58521', // British hammered coins parent
+  '72366', // Early milled coins parent
+  '122480', // Decimal coinage parent
+  '141146', // Commemorative coins parent
+  '141151', // Proof sets / coins parent
+  '45148', // European coins parent
+  '253',   // United States coins parent
+  '13956', // Militaria browse parent
+  '267',   // Books, Comics & Magazines parent in EBAY_GB (not Coins)
   '4455', '35586', '2906', // Motorcycle/bicycle parent categories
   '15724', '15725', '57990', '57991', '11483', '11484', // Clothing/shoe parent categories
   '0', '',
