@@ -41,6 +41,9 @@ const EBAY_SCOPES = [
   'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
   'https://api.ebay.com/oauth/api_scope/sell.account',
   'https://api.ebay.com/oauth/api_scope/commerce.identity.readonly',
+  // Required by the EBAY_GB live category browser and publish-time leaf validator.
+  // Existing sellers must re-authorise once to grant this additional scope.
+  'https://api.ebay.com/oauth/api_scope/commerce.taxonomy.readonly',
   // v7: Terapeak / Sell Analytics — enables GET /sell/analytics/v1/product_research/sell
   // Provides genuine historical sold price data (same as eBay Seller Hub Product Research).
   // Existing connected accounts will not have this scope until they re-authorise.
