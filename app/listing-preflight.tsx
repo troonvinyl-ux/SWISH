@@ -136,15 +136,62 @@ export default function ListingPreflightScreen() {
         // Validate against the current eBay category tree. Cached leaf flags can
         // be stale after a taxonomy update, so never pass preflight from DB alone.
         try {
-          const { data: validation, error: validationError } = await supabase.functions.invoke('swish-ebay-category', {
-            body: { route: 'validate_category', tenantId: tenant.id, categoryId: String(categoryId) },
-          });
-          if (validationError) throw validationError;
+          let validation: any = null;
+          let validationError: any = null;
+          try {
+            const primary = await supabase.functions.invoke('swish-ebay-category', {
+              body: { route: 'validate_category', tenantId: tenant.id, categoryId: String(categoryId) },
+            });
+            validation = primary.data;
+            validationError = primary.error;
+          } catch (e: any) {
+            validationError = e;
+          }
+
+          // The dedicated taxonomy function uses an application token. If that
+          // token cannot verify a category, retry through the listing function,
+          // which can use the connected seller token and the actual publish path.
+          if (validationError || validation?.valid == null) {
+            try {
+              const fallback = await supabase.functions.invoke('swish-ebay-list', {
+                body: {
+                  route: 'resolve_category',
+                  tenantId: tenant.id,
+                  categoryId: String(categoryId),
+                  title,
+                  specialistId: item?.specialist_id ?? '',
+                },
+              });
+              if (!fallback.error && fallback.data?.success && fallback.data?.resolvedId) {
+                const resolvedId = String(fallback.data.resolvedId);
+                if (resolvedId === String(categoryId)) {
+                  validation = {
+                    valid: true,
+                    isLeaf: true,
+                    categoryName: fallback.data.resolvedName ?? attrs['ebay_category_name'] ?? categoryId,
+                    source: 'seller_token_taxonomy',
+                  };
+                  validationError = null;
+                } else {
+                  validation = {
+                    valid: false,
+                    isLeaf: false,
+                    reason: `Selected category ${categoryId} could not be verified as a leaf. eBay suggests ${fallback.data.resolvedName ?? resolvedId} (ID ${resolvedId}); select it manually if it matches this item.`,
+                  };
+                  validationError = null;
+                }
+              } else {
+                validationError = fallback.error ?? new Error(fallback.data?.error ?? 'Seller-token category validation unavailable');
+              }
+            } catch (e: any) {
+              validationError = validationError ?? e;
+            }
+          }
 
           if (validation?.valid === true && validation?.isLeaf === true) {
             updateCheck('category', {
               status: 'pass',
-              detail: `${validation.categoryName ?? attrs['ebay_category_name'] ?? categoryId} (ID: ${categoryId}) ✓ Verified against EBAY_GB Taxonomy`,
+              detail: `${validation.categoryName ?? attrs['ebay_category_name'] ?? categoryId} (ID: ${categoryId}) ✓ Verified against current EBAY_GB Taxonomy`,
             });
           } else if (validation?.valid === false || validation?.isLeaf === false) {
             updateCheck('category', {
@@ -155,7 +202,7 @@ export default function ListingPreflightScreen() {
           } else {
             updateCheck('category', {
               status: 'warn',
-              detail: validation?.reason ?? `Category ID ${categoryId} could not be verified right now. eBay will perform a final server-side check when you submit.`,
+              detail: validation?.reason ?? validationError?.message ?? `Category ID ${categoryId} could not be verified right now. The publish function will retry validation before submission.`,
             });
           }
         } catch (e: any) {
