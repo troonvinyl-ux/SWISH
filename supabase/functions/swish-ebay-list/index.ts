@@ -1798,7 +1798,16 @@ async function handleRequest(req: Request): Promise<Response> {
   // Final server-side validation
   if (resolvedCategoryId && catResult.confidence !== 'taxonomy_verified' && catResult.confidence !== 'db_verified') {
     const finalCheck = await verifyCategoryIsLeaf(creds.accessToken, creds.clientId, resolvedCategoryId, supabase);
-    if (finalCheck !== null && !finalCheck.isLeaf) {
+    if (finalCheck === null) {
+      console.error(`[SWISH] Final validation inconclusive: categoryId=${resolvedCategoryId} could not be verified against current EBAY_GB Taxonomy. Blocking submission.`);
+      return jsonResponse({
+        success: false,
+        error: `SWISH could not verify category ${resolvedCategoryId} against the current EBAY_GB Taxonomy because eBay's category service did not return a conclusive response. No listing was submitted. Retry category search or reconnect eBay to grant the commerce.taxonomy.readonly scope.`,
+        categoryId: resolvedCategoryId,
+        categoryVerified: false,
+      }, 503);
+    }
+    if (!finalCheck.isLeaf) {
       console.error(`[SWISH] Final validation failed: categoryId=${resolvedCategoryId} is not a valid EBAY_GB leaf (treeId=${catResult.treeId}). Blocking submission.`);
       return jsonResponse({ error: `Category ${resolvedCategoryId} was rejected by eBay's EBAY_GB Taxonomy as a non-leaf category (treeId=${catResult.treeId}). Please open the Listing Editor, select a valid leaf category, and retry.` }, 400);
     }
