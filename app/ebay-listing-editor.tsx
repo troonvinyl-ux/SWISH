@@ -818,19 +818,35 @@ function AICategorySuggestModal({
     setSuggestions([]);
     setSearched(false);
     try {
-      // Try dedicated category function first, fall back to swish-ebay-list
+      // Try the dedicated taxonomy function, then fall back on both transport
+      // errors and unsuccessful response bodies.
       let data: any = null;
       let fnErr: any = null;
       try {
-        const r = await supabase.functions.invoke('swish-ebay-category', {
+        const primary = await supabase.functions.invoke('swish-ebay-category', {
           body: { route: 'get_category_suggestions', tenantId, query: q.trim().slice(0, 100) },
         });
-        data = r.data; fnErr = r.error;
-      } catch {
-        const r2 = await supabase.functions.invoke('swish-ebay-list', {
-          body: { route: 'get_category_suggestions', tenantId, query: q.trim().slice(0, 100) },
-        });
-        data = r2.data; fnErr = r2.error;
+        data = primary.data;
+        fnErr = primary.error;
+      } catch (e: any) {
+        fnErr = e;
+      }
+
+      if (fnErr || !data?.success) {
+        try {
+          const fallback = await supabase.functions.invoke('swish-ebay-list', {
+            body: { route: 'get_category_suggestions', tenantId, query: q.trim().slice(0, 100) },
+          });
+          if (!fallback.error && fallback.data?.success) {
+            data = fallback.data;
+            fnErr = null;
+          } else {
+            fnErr = fallback.error ?? fnErr;
+            if (fallback.data) data = fallback.data;
+          }
+        } catch (e: any) {
+          fnErr = fnErr ?? e;
+        }
       }
       if (fnErr) {
         let msg = fnErr.message;
