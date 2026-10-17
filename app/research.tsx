@@ -25,7 +25,7 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface ResearchResult {
-  source: 'terapeak' | 'ebay_browse' | 'numista' | 'gemini';
+  source: 'terapeak' | 'marketplace_insights' | 'ebay_browse' | 'numista' | 'gemini';
   title: string;
   price?: number;
   currency?: string;
@@ -62,7 +62,8 @@ function fmt(price?: number, currency = 'GBP'): string {
 
 function sourceChip(source: ResearchResult['source']) {
   const cfg: Record<string, { label: string; color: string }> = {
-    terapeak:   { label: 'Terapeak', color: Colors.success },
+    terapeak:   { label: 'Product Research', color: Colors.success },
+    marketplace_insights: { label: 'eBay Sold', color: Colors.success },
     ebay_browse:{ label: 'eBay',     color: '#E53238' },
     numista:    { label: 'Numista',  color: Colors.info },
     gemini:     { label: 'Gemini AI',color: Colors.accent },
@@ -407,7 +408,7 @@ export default function ResearchScreen() {
         const price = Number(s.price ?? s.soldPrice ?? 0);
         if (!s.title || !(price > 0)) continue;
         newResults.push({
-          source: 'terapeak',
+          source: sold.source === 'ebay_marketplace_insights' ? 'marketplace_insights' : 'terapeak',
           title: s.title,
           price,
           currency: s.currency ?? 'GBP',
@@ -465,6 +466,7 @@ export default function ResearchScreen() {
           apiStatus?.teapeakStatus ? 'eBay sold research HTTP ' + apiStatus.teapeakStatus : '',
           apiStatus?.browseApiError ? 'eBay Browse: ' + apiStatus.browseApiError : '',
           mv?.teapeakProductResearch?.needsReauth ? 'Reconnect eBay to grant the required sold-research access.' : '',
+          mv?.verifiedSoldResearch?.accessError ?? '',
         ].filter(Boolean).join(' ');
         setError(details || 'No results found. Try a more specific search term or add an image for visual research.');
       }
@@ -593,7 +595,7 @@ export default function ResearchScreen() {
         ) : null}
 
         {/* Summary */}
-        {summary && (summary.avgSoldPrice || summary.geminiEstimate || summary.numista) ? (
+        {summary && (summary.avgSoldPrice || summary.recentSoldCount || summary.geminiEstimate || summary.numista) ? (
           <>
             <Text style={s.sectionLabel}>MARKET SUMMARY</Text>
             <SummaryPanel summary={summary} />
