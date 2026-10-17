@@ -149,6 +149,7 @@ function getNumistaSuggestedCategory(attrs: Record<string, any>, specialistId: s
   const normalize = (value: unknown) => String(value ?? '')
     .toLowerCase()
     .replace(/[()[\],.\-–—]/g, ' ')
+    .replace(/\bcoins?\b/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -1522,14 +1523,14 @@ export default function EbayListingEditorScreen() {
     // If the specialist_id is curiosities_collectibles and no category is stored,
     // the user will be prompted to select a category via the live picker.
     const specCategoryMap: Record<string, { id: string; name: string }> = {
-      // ── Coins & Numismatics ──────────────────────────────────────────────
-      coins_uk:                 { id: '4726',   name: 'British Coins' },
-      coins_currency:           { id: '4726',   name: 'British Coins' },
-      coins_world:              { id: '40714',  name: 'Ancient Coins' },
-      islamic_silver:           { id: '40714',  name: 'Ancient Coins' },
-      banknotes:                { id: '11116',  name: 'Banknotes' },
-      gold:                     { id: '29539',  name: 'Bullion' },
-      silver:                   { id: '29539',  name: 'Bullion' },
+      // ── Coins & Numismatics: final leaves, never browse parents ───────────
+      coins_uk:                 { id: '79964', name: 'Other British Coins' },
+      coins_currency:           { id: '79964', name: 'Other British Coins' },
+      coins_world:              { id: '257',   name: 'Other World Coins' },
+      islamic_silver:           { id: '4739',  name: 'Islamic Coins' },
+      banknotes:                { id: '6071',  name: 'Other British Banknotes' },
+      gold:                     { id: '177652', name: 'Gold Bullion Coins' },
+      silver:                   { id: '177653', name: 'Silver Bullion Coins' },
       // ── Collectibles ─────────────────────────────────────────────────────
       stamps:                   { id: '261',    name: 'Great Britain Stamps' },
       pokemon_cards:            { id: '183454', name: 'CCG Individual Cards' },
@@ -1539,20 +1540,18 @@ export default function EbayListingEditorScreen() {
       jewellery_gold_silver:    { id: '50',     name: 'Fine Jewellery' },
       jewellery_precious_metals:{ id: '50',     name: 'Fine Jewellery' },
       books_rare:               { id: '261186', name: 'Rare & Antiquarian Books' },
-      militaria:                { id: '13956',  name: 'Militaria' },
-      ancient_artefacts:        { id: '40714',  name: 'Ancient Coins' },
       toys_vintage:             { id: '220',    name: 'Vintage Toys' },
       watches:                  { id: '14324',  name: 'Wristwatches' },
-      art:                      { id: '550',    name: 'Art' },
       ceramics_pottery:         { id: '870',    name: 'Ceramics & Pottery' },
+      // Avoid guessed defaults for parent categories such as Militaria, Art,
+      // Men's Clothing, and Ancient Artefacts. Use live taxonomy suggestions.
       // ── Motocross & Off-Road ─────────────────────────────────────────────
       motocross:                { id: '79183',  name: 'Motocross / Off-Road Bikes' },
       // ── Bicycles ─────────────────────────────────────────────────────────
       bicycles:                 { id: '177831', name: 'Mountain Bikes' },
       // ── Clothing ─────────────────────────────────────────────────────────
-      clothing:                 { id: '15724',  name: "Men's Clothing" },
       trainers_sneakers:        { id: '152506', name: 'Trainers & Athletic Shoes' },
-      // curiosities_collectibles intentionally absent — must not default to Ancient Coins
+      // curiosities_collectibles intentionally absent — user must choose via live category search
     };
 
     // BUG FIX: Read category_id from the listings table FIRST (set by import/editor save),
