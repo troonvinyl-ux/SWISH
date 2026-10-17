@@ -228,17 +228,10 @@ async function refreshAccessToken(
   refreshToken: string,
 ): Promise<{ accessToken: string; expiresAt: string }> {
   const basicAuth = btoa(`${clientId}:${clientSecret}`);
+  // Omit scope so eBay preserves the complete scope set granted at consent.
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
     refresh_token: refreshToken,
-    scope: [
-      'https://api.ebay.com/oauth/api_scope',
-      'https://api.ebay.com/oauth/api_scope/sell.inventory',
-      'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
-      'https://api.ebay.com/oauth/api_scope/sell.account',
-      'https://api.ebay.com/oauth/api_scope/sell.marketing',
-      'https://api.ebay.com/oauth/api_scope/commerce.taxonomy.readonly',
-    ].join(' '),
   });
 
   const resp = await fetch(EBAY_TOKEN_URL, {
