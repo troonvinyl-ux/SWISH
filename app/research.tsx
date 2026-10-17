@@ -346,85 +346,128 @@ export default function ResearchScreen() {
       const newSummary: ResearchSummary = {};
       const newResults: ResearchResult[] = [];
 
-      // Terapeak data (highest quality source)
-      if (mv?.teapeakData?.avgSoldPrice) {
-        newSummary.avgSoldPrice = mv.teapeakData.avgSoldPrice;
-        newSummary.soldPriceRange = { low: mv.teapeakData.lowSoldPrice, high: mv.teapeakData.highSoldPrice };
-        newSummary.recentSoldCount = mv.teapeakData.soldQuantity;
-        newSummary.sellThrough = mv.teapeakData.sellThrough;
+      // Match the current swish-market-value response contract first, while retaining
+      // legacy aliases for older deployed Edge Function versions.
+      const sold = mv?.teapeakProductResearch ?? mv?.teapeakData ?? {};
+      const soldAverage = Number(sold.averageSoldPrice ?? sold.avgSoldPrice ?? 0);
+      const soldCount = Number(sold.soldQuantity ?? 0);
+      const soldLow = Number(sold.priceMin ?? sold.lowSoldPrice ?? 0);
+      const soldHigh = Number(sold.priceMax ?? sold.highSoldPrice ?? 0);
+      if (soldAverage > 0 || soldCount > 0) {
+        if (soldAverage > 0) newSummary.avgSoldPrice = soldAverage;
+        if (soldLow > 0 || soldHigh > 0) {
+          newSummary.soldPriceRange = {
+            low: soldLow > 0 ? soldLow : soldAverage,
+            high: soldHigh > 0 ? soldHigh : soldAverage,
+          };
+        }
+        newSummary.recentSoldCount = soldCount;
+        newSummary.sellThrough = sold.sellThroughRate ?? sold.sellThrough ?? null;
         newSummary.currency = 'GBP';
-        newSummary.source = 'Terapeak Product Research (verified sold)';
+        newSummary.source = sold.available
+          ? 'eBay Product Research / Terapeak (sold-market statistics)'
+          : 'eBay sold-market statistics';
       }
 
-      // eBay Browse API results
-      if (mv?.activeAskingPrices?.sampleListings?.length) {
-        newSummary.activeListing = mv.activeAskingPrices.count;
-        for (const listing of mv.activeAskingPrices.sampleListings.slice(0, 8)) {
+      // Current backend contract: Browse results are under browseApiResults.topItems.
+      // These are active asking prices and must never be counted as sold comparables.
+      const browse = mv?.browseApiResults ?? {};
+      const activeListings = mv?.activeAskingPrices?.sampleListings ?? browse.topItems ?? [];
+      if (activeListings.length) {
+        newSummary.activeListing = Number(
+          mv?.activeAskingPrices?.count ?? browse.totalFetched ?? activeListings.length
+        );
+        for (const listing of activeListings.slice(0, 12)) {
+          const price = Number(listing.price ?? listing.priceAmount ?? 0);
+          if (!listing.title || !(price > 0)) continue;
           newResults.push({
             source: 'ebay_browse',
-            title: listing.title ?? 'eBay Listing',
-            price: listing.price ?? listing.priceAmount,
+            title: listing.title,
+            price,
             currency: listing.currency ?? 'GBP',
             imageUrl: listing.imageUrl,
-            itemUrl: listing.itemUrl ?? (listing.itemId ? `https://www.ebay.co.uk/itm/${listing.itemId}` : undefined),
+            itemUrl: listing.itemUrl ?? listing.url ?? (listing.itemId ? 'https://www.ebay.co.uk/itm/' + listing.itemId : undefined),
             condition: listing.condition,
             isActive: true,
             isSoldPrice: false,
           });
         }
+      } else if (Number(browse.totalFetched ?? 0) > 0) {
+        newSummary.activeListing = Number(browse.totalFetched);
       }
 
-      // Sold comparables
-      if (mv?.soldMarket?.sampleSoldListings?.length) {
-        for (const s of mv.soldMarket.sampleSoldListings.slice(0, 10)) {
-          newResults.push({
-            source: 'ebay_browse',
-            title: s.title ?? 'Sold Item',
-            price: s.price ?? s.soldPrice,
-            currency: s.currency ?? 'GBP',
-            imageUrl: s.imageUrl,
-            itemUrl: s.itemUrl ?? (s.itemId ? `https://www.ebay.co.uk/itm/${s.itemId}` : undefined),
-            soldDate: s.soldDate ?? s.lastSoldDate,
-            condition: s.condition,
-            isSoldPrice: true,
-          });
-        }
+      // Only render actual sold listing records if the source returned them. Product
+      // Research often returns aggregates only; do not fabricate individual sold items.
+      const soldListings = sold.topSoldListings
+        ?? mv?.soldMarket?.sampleSoldListings
+        ?? (Array.isArray(mv?.stats?.recentSales)
+          ? mv.stats.recentSales.filter((item: any) => /sold/i.test(String(item.sellSummary ?? '')))
+          : []);
+      for (const s of soldListings.slice(0, 12)) {
+        const price = Number(s.price ?? s.soldPrice ?? 0);
+        if (!s.title || !(price > 0)) continue;
+        newResults.push({
+          source: 'terapeak',
+          title: s.title,
+          price,
+          currency: s.currency ?? 'GBP',
+          imageUrl: s.imageUrl,
+          itemUrl: s.itemUrl ?? s.url ?? (s.itemId ? 'https://www.ebay.co.uk/itm/' + s.itemId : undefined),
+          soldDate: s.soldDate ?? s.lastSoldDate ?? s.endDate,
+          condition: s.condition,
+          isActive: false,
+          isSoldPrice: true,
+        });
       }
 
-      // Gemini market estimate
-      if (mv?.geminiMarketResearch?.estimatedMid) {
-        const g = mv.geminiMarketResearch;
+      // Gemini estimate is an inference fallback, not verified sold evidence.
+      const g = mv?.geminiMarketResearch;
+      const gRange = g?.estimatedRange ?? {};
+      const gMid = Number(g?.estimatedMid ?? gRange.mid ?? 0);
+      if (gMid > 0) {
         newSummary.geminiEstimate = {
-          low: g.estimatedLow ?? 0,
-          mid: g.estimatedMid ?? 0,
-          high: g.estimatedHigh ?? 0,
-          confidence: g.confidence ?? 'medium',
-          rationale: g.marketContext ?? g.rationale ?? '',
+          low: Number(g?.estimatedLow ?? gRange.low ?? 0),
+          mid: gMid,
+          high: Number(g?.estimatedHigh ?? gRange.high ?? 0),
+          confidence: g?.confidence ?? 'medium',
+          rationale: g?.marketContext ?? g?.rationale ?? g?.valuationBasis ?? '',
         };
         newSummary.currency = newSummary.currency ?? 'GBP';
       }
 
-      // Numista reference
-      if (mv?.numistaMatch?.title) {
-        const n = mv.numistaMatch;
+      // The backend returns a Numista verification reference only when a type ID was
+      // supplied upstream. Do not pretend it performed a new Numista search.
+      const n = mv?.numistaMatch ?? mv?.numista;
+      if (n?.title || n?.typeId) {
+        const nTitle = n.title ?? (n.typeId ? 'Numista type N#' + n.typeId : '');
         newSummary.numista = {
-          title: n.title,
+          title: nTitle,
           weight: n.weight,
           diameter: n.diameter,
           composition: n.composition,
-          url: n.numistaUrl ?? (n.typeId ? `https://en.numista.com/catalogue/index.php?r=${n.typeId}` : undefined),
+          url: n.numistaUrl ?? (n.typeId ? 'https://en.numista.com/catalogue/index.php?r=' + n.typeId : undefined),
         };
-        if (n.typeId) {
+        if (nTitle) {
           newResults.push({
             source: 'numista',
-            title: n.title,
-            imageUrl: n.imageUrl,
-            itemUrl: n.numistaUrl,
+            title: nTitle,
+            itemUrl: n.numistaUrl ?? (n.typeId ? 'https://en.numista.com/catalogue/index.php?r=' + n.typeId : undefined),
+            isActive: false,
             isSoldPrice: false,
           });
         }
       }
 
+      // Report the real failure mode when no results were returned.
+      const apiStatus = mv?.dataSource?.apiConnectionStatus;
+      if (newResults.length === 0 && !newSummary.avgSoldPrice && !newSummary.geminiEstimate) {
+        const details = [
+          apiStatus?.teapeakStatus ? 'eBay sold research HTTP ' + apiStatus.teapeakStatus : '',
+          apiStatus?.browseApiError ? 'eBay Browse: ' + apiStatus.browseApiError : '',
+          mv?.teapeakProductResearch?.needsReauth ? 'Reconnect eBay to grant the required sold-research access.' : '',
+        ].filter(Boolean).join(' ');
+        setError(details || 'No results found. Try a more specific search term or add an image for visual research.');
+      }
       setSummary(newSummary);
       setResults(newResults);
 
