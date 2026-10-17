@@ -766,34 +766,71 @@ function CaptureTab({
               </Text>
             </View>
 
-            {/* Weight / diameter fields for Islamic mode */}
-            {isIslamic ? (
-              <View style={ct.islamicMeasureCard}>
-                <Text style={ct.islamicMeasureTitle}>PHYSICAL MEASUREMENTS (optional but recommended)</Text>
-                <View style={ct.islamicMeasureRow}>
-                  <View style={ct.islamicMeasureField}>
-                    <Text style={ct.islamicMeasureLabel}>Weight (g)</Text>
-                    <TextInput
-                      style={ct.islamicMeasureInput}
-                      placeholder="e.g. 5.12"
-                      placeholderTextColor={CF.textMuted}
-                      keyboardType="decimal-pad"
-                      accessibilityLabel="Coin weight in grams"
-                    />
-                  </View>
-                  <View style={ct.islamicMeasureField}>
-                    <Text style={ct.islamicMeasureLabel}>Diameter (mm)</Text>
-                    <TextInput
-                      style={ct.islamicMeasureInput}
-                      placeholder="e.g. 20.5"
-                      placeholderTextColor={CF.textMuted}
-                      keyboardType="decimal-pad"
-                      accessibilityLabel="Coin diameter in millimetres"
-                    />
-                  </View>
+            {/* User-supplied evidence is available to all coin specialists, not just Islamic mode. */}
+            <View style={ct.islamicMeasureCard}>
+              <Text style={ct.islamicMeasureTitle}>COIN EVIDENCE (optional — improves identification)</Text>
+              <View style={ct.islamicMeasureRow}>
+                <View style={ct.islamicMeasureField}>
+                  <Text style={ct.islamicMeasureLabel}>Weight (g)</Text>
+                  <TextInput
+                    style={ct.islamicMeasureInput}
+                    value={weightInput}
+                    onChangeText={setWeightInput}
+                    placeholder="e.g. 7.77"
+                    placeholderTextColor={CF.textMuted}
+                    keyboardType="decimal-pad"
+                    accessibilityLabel="Coin weight in grams"
+                  />
+                </View>
+                <View style={ct.islamicMeasureField}>
+                  <Text style={ct.islamicMeasureLabel}>Diameter (mm)</Text>
+                  <TextInput
+                    style={ct.islamicMeasureInput}
+                    value={diameterInput}
+                    onChangeText={setDiameterInput}
+                    placeholder="e.g. 20.5"
+                    placeholderTextColor={CF.textMuted}
+                    keyboardType="decimal-pad"
+                    accessibilityLabel="Coin diameter in millimetres"
+                  />
                 </View>
               </View>
-            ) : null}
+              <View style={ct.islamicMeasureRow}>
+                <View style={ct.islamicMeasureField}>
+                  <Text style={ct.islamicMeasureLabel}>Year / date</Text>
+                  <TextInput
+                    style={ct.islamicMeasureInput}
+                    value={yearInput}
+                    onChangeText={setYearInput}
+                    placeholder="e.g. 2007"
+                    placeholderTextColor={CF.textMuted}
+                    accessibilityLabel="Coin year or date"
+                  />
+                </View>
+                <View style={ct.islamicMeasureField}>
+                  <Text style={ct.islamicMeasureLabel}>Metal (if known)</Text>
+                  <TextInput
+                    style={ct.islamicMeasureInput}
+                    value={materialInput}
+                    onChangeText={setMaterialInput}
+                    placeholder="e.g. bimetallic"
+                    placeholderTextColor={CF.textMuted}
+                    accessibilityLabel="Coin material"
+                  />
+                </View>
+              </View>
+              <View style={ct.islamicMeasureField}>
+                <Text style={ct.islamicMeasureLabel}>Edge legend / other visible text</Text>
+                <TextInput
+                  style={ct.islamicMeasureInput}
+                  value={edgeLegendInput}
+                  onChangeText={setEdgeLegendInput}
+                  placeholder="Enter the edge inscription exactly as seen"
+                  placeholderTextColor={CF.textMuted}
+                  accessibilityLabel="Coin edge legend or visible inscription"
+                />
+              </View>
+            </View>
 
             <View style={{ height: 100 }} />
           </>
@@ -1407,6 +1444,13 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
 
   // ── Capture state ───────────────────────────────────────────────────────────
   const [capturedImages, setCapturedImages] = useState<CapturedImage[]>([]);
+  // Optional hard evidence for every coin identification (web and native).
+  // These values must be sent to swish-identify rather than being UI-only.
+  const [weightInput, setWeightInput] = useState('');
+  const [diameterInput, setDiameterInput] = useState('');
+  const [yearInput, setYearInput] = useState('');
+  const [materialInput, setMaterialInput] = useState('');
+  const [edgeLegendInput, setEdgeLegendInput] = useState('');
 
   // ── Quick Mode ─────────────────────────────────────────────────────────────
   // Multi-coin rapid-fire capture without leaving the Capture tab.
@@ -1618,7 +1662,15 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
       capturedImages,
       selectedSpecialist.specialistId,
       undefined,
-      undefined,
+      {
+        ...(weightInput.trim() && Number.isFinite(Number(weightInput.replace(',', '.'))) && Number(weightInput.replace(',', '.')) > 0
+          ? { weight: Number(weightInput.replace(',', '.')) } : {}),
+        ...(diameterInput.trim() && Number.isFinite(Number(diameterInput.replace(',', '.'))) && Number(diameterInput.replace(',', '.')) > 0
+          ? { diameter: Number(diameterInput.replace(',', '.')) } : {}),
+        ...(yearInput.trim() ? { yearMade: yearInput.trim() } : {}),
+        ...(materialInput.trim() ? { material: materialInput.trim() } : {}),
+        ...(edgeLegendInput.trim() ? { customNotes: `Edge legend / visible inscription supplied by user: ${edgeLegendInput.trim()}` } : {}),
+      },
       { tenantId: tenant?.id },
     );
 
