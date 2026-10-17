@@ -128,7 +128,10 @@ export default function ListingPreflightScreen() {
       }
 
       // ── Category — live leaf validation ─────────────────────────────────
-      const categoryId = row.category_id ?? attrs['ebay_category_id'] ?? '';
+      const categoryId = row.category_id ?? attrs['ebay_category_id'] ?? attrs['_ebay_category_id'] ?? '';
+      const savedCategoryName = String(
+        row.category_name ?? attrs['ebay_category_name'] ?? attrs['_ebay_category_name'] ?? ''
+      ).trim();
       if (!categoryId) {
         updateCheck('category', { status: 'fail', detail: 'No eBay category set. Tap "Pick Category" to choose a valid leaf category.' });
         allPass = false;
@@ -140,7 +143,12 @@ export default function ListingPreflightScreen() {
           let validationError: any = null;
           try {
             const primary = await supabase.functions.invoke('swish-ebay-category', {
-              body: { route: 'validate_category', tenantId: tenant.id, categoryId: String(categoryId) },
+              body: {
+                route: 'validate_category',
+                tenantId: tenant.id,
+                categoryId: String(categoryId),
+                categoryName: savedCategoryName,
+              },
             });
             validation = primary.data;
             validationError = primary.error;
@@ -151,14 +159,16 @@ export default function ListingPreflightScreen() {
           // The dedicated taxonomy function uses an application token. If that
           // token cannot verify a category, retry through the listing function,
           // which can use the connected seller token and the actual publish path.
-          if (validationError || validation?.valid == null) {
+          // Also run seller-token resolution whenever a saved label exists. This catches old
+          // records where the ID still points to a valid leaf but the saved label belongs elsewhere.
+          if (validationError || validation?.valid == null || savedCategoryName) {
             try {
               const fallback = await supabase.functions.invoke('swish-ebay-list', {
                 body: {
                   route: 'resolve_category',
                   tenantId: tenant.id,
                   categoryId: String(categoryId),
-                  categoryName: String(attrs['ebay_category_name'] ?? attrs['_ebay_category_name'] ?? ''),
+                  categoryName: savedCategoryName,
                   title,
                   specialistId: item?.specialist_id ?? '',
                 },
@@ -183,9 +193,25 @@ export default function ListingPreflightScreen() {
                 }
               } else {
                 validationError = fallback.error ?? new Error(fallback.data?.error ?? 'Seller-token category validation unavailable');
+                // If an old saved label exists, a plain leaf-ID pass is not enough
+                // to prove the listing is in the intended category.
+                if (savedCategoryName) {
+                  validation = {
+                    valid: null,
+                    isLeaf: null,
+                    reason: 'The category ID could not be matched to its saved label against the live seller taxonomy. Retry with eBay connected or choose the category again.',
+                  };
+                }
               }
             } catch (e: any) {
               validationError = validationError ?? e;
+              if (savedCategoryName) {
+                validation = {
+                  valid: null,
+                  isLeaf: null,
+                  reason: 'The category ID could not be matched to its saved label against the live seller taxonomy. Retry with eBay connected or choose the category again.',
+                };
+              }
             }
           }
 
