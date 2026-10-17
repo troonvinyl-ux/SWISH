@@ -347,8 +347,12 @@ export default function ListingPreflightScreen() {
             path: s.categoryPath ?? '',
             isLeaf: true,
           })));
-      } catch { setCatSuggestions([]); }
-      setCatSearchLoading(false);
+      } catch (e: any) {
+        setCatSuggestions([]);
+        showAlert('eBay Category Search Failed', e?.message ?? 'Unable to search eBay categories.');
+      } finally {
+        setCatSearchLoading(false);
+      }
     }, 500);
   }, [tenant?.id, showAlert]);
 
