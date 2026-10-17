@@ -90,7 +90,7 @@ const EBAY_CATEGORY_FALLBACK = [
   { id: '4735', name: 'Roman Provincial Coins' },
   { id: '3364', name: 'Byzantine Coins' },
   { id: '4740', name: 'Ancient Chinese Coins' },
-  { id: '4739', name: 'Islamic Coins' },
+  { id: '4730', name: 'Islamic Coins' },
   { id: '4737', name: 'Ancient Persian & Indian Coins' },
   { id: '93500', name: 'Ancient Coin Collections & Bulk Lots' },
   { id: '532', name: 'Other Ancient Coins' },
