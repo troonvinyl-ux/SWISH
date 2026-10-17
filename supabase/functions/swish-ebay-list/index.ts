@@ -448,15 +448,6 @@ const KNOWN_PARENT_CATEGORY_HINT = new Set([
   '0', '',
 ]);
 
-// Quick-lookup: confirmed EBAY_GB leaf categories — bypasses slow live API checks
-const KNOWN_GOOD_LEAF_CATEGORIES: Record<string, string> = {
-  '40714': 'Ancient Coins',
-  '3365':  'Roman Imperial (96-235AD)',
-  '4726':  'British Coins',
-  '183454': 'CCG Individual Cards',
-  '261':   'Great Britain Stamps',
-};
-
 // ── isAspectsNotLeaf ─────────────────────────────────────────────────────────
 // Parse eBay's aspects endpoint 400 response to determine if this is truly
 // "not a leaf" vs "valid leaf with no defined aspects".
@@ -491,21 +482,14 @@ async function verifyCategoryIsLeaf(
   categoryId: string,
   supabaseAdmin?: ReturnType<typeof adminClient>,
 ): Promise<{ isLeaf: boolean; name: string; fromDb?: boolean } | null> {
+  // Publish-time validation must never be short-circuited by a process-local
+  // cache or hard-coded "known good" ID. eBay can change categories and cached
+  // leaf flags are exactly the failure mode this path is meant to prevent.
   const cacheKey = `info:${categoryId}`;
-  const cached = TAXONOMY_CACHE.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < TAXONOMY_CACHE_TTL) {
-    return { isLeaf: cached.isLeaf, name: cached.name };
-  }
 
-  // Step 0: KNOWN_GOOD_LEAF_CATEGORIES — immediate bypass for confirmed leaves
-  if (KNOWN_GOOD_LEAF_CATEGORIES[categoryId]) {
-    const name = KNOWN_GOOD_LEAF_CATEGORIES[categoryId];
-    console.log(`[SWISH] Category ${categoryId} ("${name}") confirmed in KNOWN_GOOD_LEAF_CATEGORIES`);
-    TAXONOMY_CACHE.set(cacheKey, { id: categoryId, name, isLeaf: true, timestamp: Date.now() });
-    return { isLeaf: true, name, fromDb: true };
-  }
-
-  // Step 1: Check local SWISH ebay_categories catalogue first (fast)
+  // Step 1: Read local data for a display name only. Neither is_leaf=true nor
+  // is_leaf=false is accepted as proof; the live EBAY_GB Taxonomy response below
+  // decides whether this selected ID can be published.
   // TRUST is_leaf=true from the DB (set by leafCategoryTreeNode from Taxonomy subtree/suggestions API)
   // ALSO trust is_leaf=false from DB — definitively blocked
   if (supabaseAdmin) {
@@ -616,12 +600,8 @@ async function findLeafCategoryByTitle(
   _clientId: string,
   searchQuery: string,
 ): Promise<Array<{ id: string; name: string; confidence: string }>> {
-  const cacheKey = `suggest:${searchQuery.toLowerCase().slice(0, 40)}`;
-  const cached = TAXONOMY_CACHE.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < TAXONOMY_CACHE_TTL && cached.isLeaf) {
-    return [{ id: cached.id, name: cached.name, confidence: 'high' }];
-  }
-
+  // Do not reuse title-only category guesses across requests: the category tree
+  // and leaf status may have changed. Ask the current EBAY_GB Taxonomy each time.
   try {
     const { treeId: liveSuggestTreeId } = await getUkCategoryTreeId(accessToken).catch(() => ({ treeId: EBAY_UK_CATEGORY_TREE_ID, version: 'fallback', fromCache: false }));
     const res = await fetch(
