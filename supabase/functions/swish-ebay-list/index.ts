@@ -1795,35 +1795,12 @@ async function handleRequest(req: Request): Promise<Response> {
     const creds = await getEbayCredentials(supabase, tenantId, true);
     if ('error' in creds) return jsonResponse({ error: creds.error }, 400);
 
-    // Revisions use the same leaf-category guard as new listings. If the user
-    // chose a category that is now a parent/invalid ID, stop and ask for a new
-    // selection rather than silently moving the live listing to a title guess.
-    if (resolvedCategoryId && resolvedCategoryId !== 'REVISE_PRESERVE') {
-      const requestedCategoryId = String(resolvedCategoryId);
-      const categoryCheck = await resolveLeafCategory(
-        creds.accessToken,
-        creds.clientId,
-        requestedCategoryId,
-        title,
-        '',
-        supabase,
-        String(item?.attributes?.ebay_category_name ?? item?.attributes?._ebay_category_name ?? ''),
-      );
-      if (categoryCheck.error || !categoryCheck.resolvedId) {
-        return jsonResponse({
-          success: false,
-          error: categoryCheck.error ?? 'Could not verify this eBay category. Please select a valid leaf category and retry.',
-          categoryId: requestedCategoryId,
-        }, 400);
-      }
-      if (categoryCheck.resolvedId !== requestedCategoryId) {
-        return jsonResponse({
-          success: false,
-          error: `Category ${requestedCategoryId} is not a verified EBAY_GB leaf category. SWISH found "${categoryCheck.resolvedName}" (${categoryCheck.resolvedId}) as a possible alternative. Select the correct category in the Listing Editor and retry; SWISH has not changed the live category.`,
-          suggestedCategory: { id: categoryCheck.resolvedId, name: categoryCheck.resolvedName },
-        }, 400);
-      }
-      resolvedCategoryId = categoryCheck.resolvedId;
+    // Direct category passthrough for revisions: use the exact saved/selected
+    // category ID. Do not run SWISH's leaf resolver here; it previously referenced
+    // an uninitialised `item` variable and blocked revisions before reaching eBay.
+    // eBay's ReviseItem/ReviseFixedPriceItem response is authoritative.
+    if (resolvedCategoryId) {
+      resolvedCategoryId = String(resolvedCategoryId).trim();
     }
 
     const { fulfillmentId, returnId, paymentId } = await getSelectedPolicyIds(supabase, tenantId, {});
