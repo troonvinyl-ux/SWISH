@@ -799,12 +799,6 @@ async function validateCategoryId(
     .eq('category_id', categoryId)
     .maybeSingle();
 
-  if (row) {
-    // This record is useful for the label/path shown to the user only. Both
-    // active=false and is_leaf=true can be stale, so neither may short-circuit
-    // publish-time validation. Always ask the current EBAY_GB Taxonomy API below.
-  }
-
   // Step 2: Live Taxonomy aspects endpoint
   // This confirms leaf status definitively:
   //   200 → leaf
