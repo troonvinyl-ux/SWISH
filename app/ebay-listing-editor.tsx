@@ -88,31 +88,107 @@ interface ListingEditorData {
 // Used to auto-suggest the correct category when a Numista match is verified.
 
 const NUMISTA_TO_EBAY_CATEGORY: Record<string, { id: string; name: string }> = {
-  // Specialist ID mappings — only Trading-API-verified IDs
-  // ── COINS ──────────────────────────────────────────────────────────────────
-  coins_uk:                 { id: '4726',   name: 'British Coins' },
-  coins_currency:           { id: '4726',   name: 'British Coins' },
-  coins_world:              { id: '40714',  name: 'Ancient Coins' },
-  stamps:                   { id: '261',    name: 'Great Britain Stamps' },
+  // These are final EBAY_GB leaf categories, not parent categories.
+  coins_uk:                 { id: '79964', name: 'Other British Coins' },
+  coins_currency:           { id: '79964', name: 'Other British Coins' },
+  coins_world:              { id: '257',   name: 'Other World Coins' },
+  stamps:                   { id: '261',   name: 'Great Britain Stamps' },
   pokemon:                  { id: '183454', name: 'CCG Individual Cards' },
   trading_cards:            { id: '183454', name: 'CCG Individual Cards' },
-  militaria:                { id: '13956',  name: 'Militaria' },
   watches:                  { id: '14324',  name: 'Wristwatches' },
   jewellery_gold_silver:    { id: '50',     name: 'Fine Jewellery' },
-  // curiosities_collectibles intentionally omitted — generic fallback for unknown items;
-  // use live eBay taxonomy resolution instead of silently assigning a coin category.
-  // Title / category keyword mappings — coins only
-  // Specific ancient subdivisions precede broad fallback categories.
-  'roman imperial': { id: '4740', name: 'Ancient Coins: Roman Imperial' },
-  'roman republic': { id: '4741', name: 'Ancient Coins: Roman Republic' },
-  byzantine: { id: '4159', name: 'Ancient Coins: Byzantine' },
-  greek:     { id: '4738', name: 'Ancient Coins: Greek' },
-  celtic:    { id: '4742', name: 'Ancient Coins: Celtic' },
-  judean:    { id: '4743', name: 'Ancient Coins: Judean' },
-  roman:     { id: '4157', name: 'Roman Coins' },
-  medieval:  { id: '18594', name: 'Medieval Coins' },
-  hammered:  { id: '18593', name: 'Hammered Coins' },
-  milled:      // EBAY_GB coin leaf categories from eBay UK's published tree. Do not use parent IDs.
+
+  // Specific ancient coin periods first; a date-free "Roman Imperial" must be browsed.
+  'roman imperial 235': { id: '122472', name: 'Roman Imperial Coins (235–476 AD)' },
+  'roman imperial 96':  { id: '3365',   name: 'Roman Imperial Coins (96–235 AD)' },
+  'roman imperial 27':  { id: '122471', name: 'Roman Imperial Coins (27 BC–96 AD)' },
+  'roman provincial':   { id: '4735',   name: 'Roman Provincial Coins' },
+  'roman republican':   { id: '4734',   name: 'Roman Republican Coins' },
+  'roman republic':     { id: '4734',   name: 'Roman Republican Coins' },
+  byzantine:            { id: '3364',   name: 'Byzantine Coins' },
+  greek:                { id: '4738',   name: 'Ancient Greek Coins' },
+  chinese:              { id: '4740',   name: 'Ancient Chinese Coins' },
+
+  // Islamic coins must win over broader geographic/period words in the title.
+  abbasid:              { id: '4739',   name: 'Islamic Coins' },
+  umayyad:              { id: '4739',   name: 'Islamic Coins' },
+  fatimid:              { id: '4739',   name: 'Islamic Coins' },
+  ilkhanid:             { id: '4739',   name: 'Islamic Coins' },
+  islamic:              { id: '4739',   name: 'Islamic Coins' },
+  dirham:               { id: '4739',   name: 'Islamic Coins' },
+  dinar:                { id: '4739',   name: 'Islamic Coins' },
+  mughal:               { id: '4737',   name: 'Ancient Persian & Indian Coins' },
+  persian:              { id: '4737',   name: 'Ancient Persian & Indian Coins' },
+  indian:               { id: '4737',   name: 'Ancient Persian & Indian Coins' },
+  rupee:                { id: '4737',   name: 'Ancient Persian & Indian Coins' },
+
+  // Specific British periods use the final child categories, never parent nodes.
+  celtic:               { id: '122475', name: 'Celtic Coins (c.100 BC–c.100 AD)' },
+  'anglo saxon':        { id: '58523',  name: 'Anglo-Saxon Coins (c.600–1066)' },
+  norman:               { id: '122476', name: 'Norman Coins (1066–1154)' },
+  'later medieval':     { id: '47389',  name: 'Later Medieval British Coins' },
+  medieval:             { id: '47389',  name: 'Later Medieval British Coins' },
+  tudor:                { id: '58524',  name: 'Tudor Coins (1485–1603)' },
+  stuart:               { id: '122477', name: 'Stuart & Commonwealth Coins' },
+  hammered:             { id: '58522',  name: 'Other British Hammered Coins' },
+  'two pounds':         { id: '122488', name: 'British Two Pound Coins' },
+  'two pound':          { id: '122488', name: 'British Two Pound Coins' },
+  '50p':                { id: '122486', name: 'British 50p Coins' },
+  'one pound':          { id: '122487', name: 'British One Pound Coins' },
+  decimal:              { id: '3407',   name: 'Other British Decimal Coinage' },
+  ancient:              { id: '532',    name: 'Other Ancient Coins' },
+}
+
+function getNumistaSuggestedCategory(attrs: Record<string, any>, specialistId: string): { id: string; name: string } | null {
+  const COIN_SPECIALISTS = new Set([
+    'coins', 'coins_uk', 'coins_currency', 'coins_world', 'islamic_silver',
+    'gold', 'silver', 'ancient_artefacts',
+  ]);
+  if (!COIN_SPECIALISTS.has(specialistId)) return NUMISTA_TO_EBAY_CATEGORY[specialistId] ?? null;
+
+  const normalize = (value: unknown) => String(value ?? '')
+    .toLowerCase()
+    .replace(/[()[\],.\-–—]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const numistaCategory = normalize(attrs['numista_category']);
+  const title = normalize(attrs['canonical_title']);
+  // Explicit order matters: specific subtype and period rules precede broad
+  // geography/era labels. Generic Roman Imperial has no guessed default because
+  // eBay UK has three separate time-period leaves.
+  const priority = [
+    'roman imperial 235', 'roman imperial 96', 'roman imperial 27',
+    'roman provincial', 'roman republican', 'roman republic',
+    'byzantine', 'greek', 'chinese',
+    'abbasid', 'umayyad', 'fatimid', 'ilkhanid', 'islamic', 'dirham', 'dinar',
+    'mughal', 'persian', 'indian', 'rupee',
+    'celtic', 'anglo saxon', 'norman', 'later medieval', 'tudor', 'stuart',
+    'hammered', 'two pounds', 'two pound', '50p', 'one pound', 'decimal', 'ancient',
+  ];
+
+  for (const value of [numistaCategory, title]) {
+    if (!value) continue;
+    for (const keyword of priority) {
+      if (value.includes(keyword)) return NUMISTA_TO_EBAY_CATEGORY[keyword] ?? null;
+    }
+  }
+
+  if (specialistId === 'coins_uk' || specialistId === 'coins_currency') {
+    return NUMISTA_TO_EBAY_CATEGORY[specialistId];
+  }
+  if (specialistId === 'coins_world') return NUMISTA_TO_EBAY_CATEGORY.coins_world;
+  return null;
+}
+
+// ── eBay Category static fallback list ───────────────────────────────────────
+
+// eBay UK Trading-API-verified leaf categories — universal, niche-spanning list
+// Add categories relevant to all SWISH niches: coins, MX, bicycles, clothing etc.
+const EBAY_CATEGORIES = [
+  // Offline EBAY_GB starter options only. Every selected ID is revalidated against live
+  // eBay Taxonomy at publish time; these labels never override the live category response.
+  // EBAY_GB coin leaf categories from eBay UK's published hierarchy.
   { id: '4738', name: 'Ancient Greek Coins' },
   { id: '122471', name: 'Roman Imperial Coins (27 BC–96 AD)' },
   { id: '3365', name: 'Roman Imperial Coins (96–235 AD)' },
@@ -199,7 +275,7 @@ const NUMISTA_TO_EBAY_CATEGORY: Record<string, { id: string; name: string }> = {
 ];
 
 // Hint shown in the static fallback
-const STATIC_FALLBACK_NOTE = 'Live eBay Taxonomy is unavailable. These are offline starter categories only; SWISH must verify the selected leaf against eBay before publishing. Reconnect eBay if live category browsing keeps failing.';
+const STATIC_FALLBACK_NOTE = 'Live eBay API unavailable — showing fallback list with medal categories. Tap “Retry Live” when connected to browse the full category tree and verify leaf IDs.';
 
 const CONDITION_OPTIONS = [
   { value: 'New',        id: '1000' },
@@ -313,7 +389,7 @@ function CategoryPickerModal({
         error = e;
       }
 
-      if (error || !data?.success || data?.source === 'curated' || data?.source === 'curated_verified' || data?.source === 'db_cache') {
+      if (error || !data?.success || data?.source === 'curated' || data?.source === 'curated_verified') {
         try {
           const fallback = await supabase.functions.invoke('swish-ebay-list', {
             body: { route: 'get_category_children', tenantId, parentId },
@@ -356,7 +432,7 @@ function CategoryPickerModal({
       } else {
         setLiveCategories(data.children ?? []);
         setMode('live');
-        // Curated/offline lists are fallback starters, not proof of current leaf status
+        // curated/curated_verified = pre-verified list served when taxonomy scope not granted
         const isCurated = data.source === 'curated' || data.source === 'curated_verified';
         setCuratedSource(isCurated);
         if (isCurated) {
@@ -816,7 +892,7 @@ function AICategorySuggestModal({
         fnErr = e;
       }
 
-      if (fnErr || !data?.success || data?.source === 'curated' || data?.source === 'curated_verified' || data?.source === 'curated_fallback' || data?.source === 'db_cache_offline' || data?.source === 'db_cache') {
+      if (fnErr || !data?.success || data?.source === 'curated' || data?.source === 'curated_verified' || data?.source === 'curated_fallback' || data?.source === 'db_cache_offline') {
         try {
           const fallback = await supabase.functions.invoke('swish-ebay-list', {
             body: { route: 'get_category_suggestions', tenantId, query: q.trim().slice(0, 100) },
