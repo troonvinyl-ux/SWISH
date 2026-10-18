@@ -354,9 +354,10 @@ function buildKnownAttributesContext(attrs: Record<string, any>): string {
   if (attrs.ruler) hard.push(`Ruler: ${attrs.ruler} — USER-SUPPLIED CATALOGUE CLAIM; cross-check against inscriptions and design`);
   if (attrs.denomination) hard.push(`Denomination: ${attrs.denomination} — USER-SUPPLIED CATALOGUE CLAIM; cross-check against inscriptions and design`);
   if (attrs.catalogueNumber) hard.push(`Catalogue reference: ${attrs.catalogueNumber} — USER-SUPPLIED CLAIM; do not treat as independently verified`);
+  if (attrs.ruler) hard.push(`Ruler: ${attrs.ruler} — USER-SUPPLIED CATALOGUE CLAIM; cross-check against inscriptions and design`);
+  if (attrs.denomination) hard.push(`Denomination: ${attrs.denomination} — USER-SUPPLIED CATALOGUE CLAIM; cross-check against inscriptions and design`);
+  if (attrs.catalogueNumber) hard.push(`Catalogue reference: ${attrs.catalogueNumber} — USER-SUPPLIED CLAIM; do not treat as independently verified`);
   if (attrs.material) hard.push(`Material: ${attrs.material}`);
-  if (attrs.ruler) hard.push(`Ruler: ${attrs.ruler}`);
-  if (attrs.denomination) hard.push(`Denomination: ${attrs.denomination}`);
   if (attrs.frameNumber || attrs.frame_number) hard.push(`Frame number: ${attrs.frameNumber ?? attrs.frame_number}`);
   if (attrs.vin) hard.push(`VIN: ${attrs.vin}`);
 
