@@ -614,11 +614,8 @@ function scoreNumistaIslamic(
   if (hasDeccanCue && !dynasty && !ruler) {
     score += 8; factors.push('Relevant Deccan/Islamic fallback candidate');
   }
-  if (titleLower.includes('falus') || unitText.includes('falus')) {
-    if (physicalData?.weight && Math.abs(physicalData.weight - 11.41) <= 0.75) {
-      score += 8; factors.push('Heavy falus weight is consistent with supplied measurement');
-    }
-  }
+  // Do not special-case a remembered coin/weight here. Every candidate must
+  // earn its score from the supplied measurement against its own catalogue spec.
 
   // Compare physical specs with asymmetric wear tolerance; hard mismatches
   // should penalize rather than be outweighed by a vague family-text match.
@@ -878,7 +875,11 @@ function reconcileCandidatesWithSources(
       if (denom.length > 2 && titleLower.includes(denom)) zenoMatchScore += 1;
 
       if (zenoMatchScore >= 2) {
-        zenoSupport.push(`Zeno #${zc.zenoId}: "${zc.title}" (query: "${zc.query}")`);
+        // The same Zeno record can appear in multiple search queries.
+        // Count a record once; query repetition is not independent corroboration.
+        if (!zenoSupport.some(existing => existing.startsWith(`Zeno #${zc.zenoId}:`))) {
+          zenoSupport.push(`Zeno #${zc.zenoId}: "${zc.title}" (query: "${zc.query}")`);
+        }
         if (!sourceEvidence.includes(`Zeno reference: ${zc.title}`)) {
           sourceEvidence.push(`Zeno reference: ${zc.title} — ${zc.referenceUrl}`);
         }
@@ -906,7 +907,10 @@ function reconcileCandidatesWithSources(
       if (denom.length > 2 && (titleLower.includes(denom) || (nc.denomination ?? '').toLowerCase().includes(denom))) numistaMatchScore += 1;
 
       if (numistaMatchScore >= 2) {
-        numistaSupport.push(`${nc.numistaN}: "${nc.title}"`);
+        // A catalogue type returned by several queries remains one source record.
+        if (!numistaSupport.some(existing => existing.startsWith(`${nc.numistaN}:`))) {
+          numistaSupport.push(`${nc.numistaN}: "${nc.title}"`);
+        }
         if (!sourceEvidence.includes(`Numista: ${nc.title}`)) {
           sourceEvidence.push(`Numista ${nc.numistaN}: "${nc.title}" — ${nc.numistaUrl}`);
         }
