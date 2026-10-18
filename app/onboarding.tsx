@@ -93,8 +93,11 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { showAlert } = useAlert();
-  const { tenant, tenantLoading, reloadTenant, setActiveNiche, activeNicheId } = useApp();
+  const { tenant, tenantLoading, reloadTenant, setActiveNiche, activeNicheId, fixedNicheId } = useApp();
   const { user } = useAuth();
+  const availableOnboardingNiches = fixedNicheId
+    ? ONBOARDING_NICHES.filter(niche => niche.id === fixedNicheId)
+    : ONBOARDING_NICHES;
 
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -594,13 +597,15 @@ export default function OnboardingScreen() {
               <View style={[s.stepIcon, { backgroundColor: Colors.primaryDim }]}>
                 <MaterialIcons name="category" size={32} color={Colors.primary} />
               </View>
-              <Text style={s.stepTitle}>Choose Your Trading Niche</Text>
+              <Text style={s.stepTitle}>{fixedNicheId ? 'Set Up Your Store' : 'Choose Your Trading Niche'}</Text>
               <Text style={s.stepDesc}>
-                Select the type of items you buy and sell. This determines your app experience — SWISH will show you the right identification, valuation, and listing tools for your niche.
+                {fixedNicheId
+                  ? 'Set up your store for this app. Your specialist tools and inventory stay within this product.'
+                  : 'Select the type of items you buy and sell. This determines your app experience — SWISH will show you the right identification, valuation, and listing tools for your niche.'}
               </Text>
 
               <View style={s.nicheGrid}>
-                {ONBOARDING_NICHES.map(niche => {
+                {availableOnboardingNiches.map(niche => {
                   const isSelected = selectedNiche === niche.id;
                   return (
                     <Pressable
@@ -635,7 +640,9 @@ export default function OnboardingScreen() {
               <View style={s.infoCard}>
                 <MaterialIcons name="info-outline" size={14} color={Colors.info} />
                 <Text style={s.infoText}>
-                  You can switch niche at any time from Settings. Your inventory, eBay integration, and data are shared across all niches.
+                  {fixedNicheId
+                  ? 'This branded app is dedicated to one product. Its specialist tools and inventory remain in this product.'
+                  : 'You can switch between your enabled products from Settings. Each product has its own specialist tools and inventory.'}
                 </Text>
               </View>
             </View>
