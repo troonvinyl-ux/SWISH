@@ -351,6 +351,9 @@ function buildKnownAttributesContext(attrs: Record<string, any>): string {
   if (attrs.weight) hard.push(`Weight: ${attrs.weight}g — USER-MEASURED HARD EVIDENCE`);
   if (attrs.diameter) hard.push(`Diameter: ${attrs.diameter}mm — USER-MEASURED HARD EVIDENCE`);
   if (attrs.edgeLegend) hard.push(`Edge legend / inscription transcribed by user: ${attrs.edgeLegend} — EXACT TEXT EVIDENCE; compare with visible coin and do not silently normalize or complete missing characters`);
+  if (attrs.ruler) hard.push(`Ruler: ${attrs.ruler} — USER-SUPPLIED CATALOGUE CLAIM; cross-check against inscriptions and design`);
+  if (attrs.denomination) hard.push(`Denomination: ${attrs.denomination} — USER-SUPPLIED CATALOGUE CLAIM; cross-check against inscriptions and design`);
+  if (attrs.catalogueNumber) hard.push(`Catalogue reference: ${attrs.catalogueNumber} — USER-SUPPLIED CLAIM; do not treat as independently verified`);
   if (attrs.material) hard.push(`Material: ${attrs.material}`);
   if (attrs.ruler) hard.push(`Ruler: ${attrs.ruler}`);
   if (attrs.denomination) hard.push(`Denomination: ${attrs.denomination}`);
@@ -363,7 +366,14 @@ function buildKnownAttributesContext(attrs: Record<string, any>): string {
   if (attrs.countryOfOrigin || attrs.country_of_origin) soft.push(`Country: ${attrs.countryOfOrigin ?? attrs.country_of_origin}`);
   if (attrs.condition) soft.push(`Condition: ${attrs.condition}`);
   if (attrs.existingTitle) soft.push(`Previously identified as: ${attrs.existingTitle} — treat as contextual hint only`);
-  if (attrs.customNotes) soft.push(`Owner notes: ${attrs.customNotes}`);
+  if (attrs.customNotes) soft.push(`Owner notes / additional specification data: ${attrs.customNotes}`);
+  if (attrs.existingAttributes && typeof attrs.existingAttributes === 'object') {
+    const useful = Object.entries(attrs.existingAttributes)
+      .filter(([key, value]) => value != null && String(value).trim() !== '' && !/confidence|valuation|numista_match_score|image|url/i.test(key))
+      .slice(0, 35)
+      .map(([key, value]) => `${key}: ${String(value).slice(0, 180)}`);
+    if (useful.length) soft.push(`Existing listing/inventory specifics (context only; independently verify):\\n${useful.map(v => `  - ${v}`).join('\\n')}`);
+  }
   if (attrs.period) soft.push(`Period: ${attrs.period}`);
   if (attrs.mint) soft.push(`Mint: ${attrs.mint}`);
 
@@ -710,18 +720,24 @@ function enforceEvidenceConstraints(identification: any, vehicleMode: boolean, c
   if (result.hasAlteration) result.attributes['has_alteration'] = true;
   if (result.alterationNotes) result.attributes['alteration_notes'] = result.alterationNotes;
 
-  const supporting = Array.isArray(result.evidenceSupporting) ? result.evidenceSupporting.filter((e: string) => e && e.length > 5).length : 0;
-  const contradictory = Array.isArray(result.evidenceContradictory) ? result.evidenceContradictory.filter((e: string) => e && e.length > 5).length : 0;
-  const missing = Array.isArray(result.missingInformation) ? result.missingInformation.filter((e: string) => e && e.length > 5).length : 0;
+  const supportingEvidence = Array.isArray(result.evidenceSupporting) ? result.evidenceSupporting.filter((e: string) => e && e.length > 5) : [];
+  const contradictoryEvidence = Array.isArray(result.evidenceContradictory) ? result.evidenceContradictory.filter((e: string) => e && e.length > 5) : [];
+  const missingEvidence = Array.isArray(result.missingInformation) ? result.missingInformation.filter((e: string) => e && e.length > 5) : [];
+  const supporting = new Set(supportingEvidence.map((e: string) => e.trim().toLowerCase())).size;
+  const contradictory = new Set(contradictoryEvidence.map((e: string) => e.trim().toLowerCase())).size;
+  const missing = new Set(missingEvidence.map((e: string) => e.trim().toLowerCase())).size;
 
-  const evidenceRatio = supporting / Math.max(1, supporting + contradictory);
+  // Do not treat an empty evidence list as an explicit contradiction: keep the
+  // model's conservative raw assessment and require concrete evidence for higher tiers.
+  const evidenceRatio = supporting + contradictory > 0 ? supporting / (supporting + contradictory) : 1;
   const missingPenalty = Math.min(0.35, missing * 0.05);
   const rawConf = Math.max(0.05, Math.min(1.0, Number(result.confidence ?? 0.3)));
 
   let maxConf = 1.0;
   if (result.objectType === 'unknown') maxConf = 0.25;
   if (result.identificationState === 'observation_only') maxConf = 0.22;
-  if (result.identificationState === 'candidate' && !result.numistaVerification && !vehicleMode && !clothingMode) maxConf = 0.68;
+  const catalogueBacked = ['verified', 'strong_match'].includes(String(result.numistaStatus ?? result.numistaVerification?.status ?? '')) && Number(result.numistaMatchScore ?? result.numistaVerification?.matchScore ?? 0) >= 80;
+  if (result.identificationState === 'candidate' && !result.numistaVerification && !catalogueBacked && !vehicleMode && !clothingMode) maxConf = 0.68;
   if (supporting < MIN_SUPPORTING_EVIDENCE_FOR_MEDIUM) maxConf = Math.min(maxConf, 0.45);
   else if (supporting < MIN_SUPPORTING_EVIDENCE_FOR_HIGH) maxConf = Math.min(maxConf, 0.72);
   if (contradictory > 0 && contradictory >= supporting) maxConf = Math.min(maxConf, 0.45);
@@ -1040,6 +1056,7 @@ Deno.serve(async (req: Request) => {
         '',
         mandatoryFirstStep,
         'Follow the specialist identification pipeline. Use "Not established" for any field without visible evidence.',
+        knownAttrsContext ? 'REFINEMENT MODE: Reassess the candidate from the images from scratch. Explicitly compare each supplied measurement and catalogue claim with visible inscriptions/design and catalogue data. Do not simply repeat the previous identification or confidence. New data must change the result only when it actually supports or contradicts a candidate. Put each independently checked match in evidenceSupporting and each mismatch in evidenceContradictory; identify any unverified user claim as unverified.' : '',
         '',
         OUTPUT_SCHEMA,
         supplementalSchema,
