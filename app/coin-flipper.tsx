@@ -1416,6 +1416,43 @@ const ins = StyleSheet.create({
   periodHintText: { flex: 1, fontSize: Typography.size.xs, color: CF.gold, lineHeight: 16 },
 });
 
+// A render failure in the capture flow must not leave a blank white screen.
+// Keep the failure visible and allow returning home without restarting the app.
+class CaptureTabErrorBoundary extends React.Component<
+  { children: React.ReactNode; onRetry: () => void },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error('[Coin Flipper capture render error]', error);
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <View style={{ flex: 1, backgroundColor: CF.black, padding: Spacing.xl, justifyContent: 'center', gap: Spacing.md }}>
+        <MaterialIcons name="warning" size={36} color={CF.gold} />
+        <Text style={{ color: CF.gold, fontSize: Typography.size.lg, fontWeight: Typography.weight.bold }}>Scanner could not open</Text>
+        <Text selectable style={{ color: CF.textPrimary, fontSize: Typography.size.sm, lineHeight: 20 }}>
+          {this.state.error.message || 'An unexpected error occurred while opening the coin capture screen.'}
+        </Text>
+        <Pressable
+          onPress={() => { this.setState({ error: null }); this.props.onRetry(); }}
+          accessibilityRole="button"
+          style={{ alignSelf: 'flex-start', backgroundColor: CF.gold, borderRadius: Radius.md, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md }}
+        >
+          <Text style={{ color: CF.black, fontWeight: Typography.weight.bold }}>Return to Coin Flipper</Text>
+        </Pressable>
+      </View>
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1838,7 +1875,8 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
         {activeTab === 'home' ? (
           <HomeTab onTabSelect={handleTabSelect} isPremium={isPremium} tenant={tenant} onUpgrade={() => setShowPaywall(true)} onPeriodSelect={p => { setSelectedPeriod(p); const chip = SPECIALIST_CHIPS.find(c => c.periodId === p); if (chip) setSelectedSpecialist(chip); }} selectedPeriod={selectedPeriod} />
         ) : activeTab === 'capture' ? (
-          <CaptureTab
+          <CaptureTabErrorBoundary onRetry={() => setActiveTab('home')}>
+            <CaptureTab
             capturedImages={capturedImages}
             onCapture={handleCapture}
             onRemove={handleRemoveImage}
@@ -1860,7 +1898,8 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
             onClearQuick={handleClearQuick}
             islamicBatchItems={islamicBatchItems}
             onIslamicItemPress={setSelectedIslamicItem}
-          />
+            />
+          </CaptureTabErrorBoundary>
         ) : activeTab === 'identify' ? (
           <IdentifyTab result={idResult} capturedImages={capturedImages} onSave={handleSave} saving={isSaving} savedItemId={savedItemId} uploadProgress={uploadProgress} isUploading={isUploading} onReset={handleReset} onTabSelect={handleTabSelect} />
         ) : activeTab === 'reference' ? (
