@@ -302,6 +302,9 @@ export async function identifyItemWithAI(
     const { data, error } = await supabase.functions.invoke('swish-identify', {
       body: {
         images: base64Images.length > 0 ? base64Images : undefined,
+        // Keep the face/slot labels aligned with image order so the model can
+        // distinguish obverse, reverse, edge and detail rather than guessing.
+        imageLabels: base64Images.length > 0 ? images.map(img => img.slotLabel || img.slotId) : undefined,
         existingImageUrls: options?.existingImageUrls,
         specialistId,
         acquisitionContext,
