@@ -534,7 +534,35 @@ async function fetchNumistaTypeDetail(typeId: number, apiKey: string): Promise<a
 async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<string, any>, isAncient: boolean): Promise<NumistaVerificationResult> {
   const noApiKey: NumistaVerificationResult = { status: 'unavailable', matchScore: 0, matchTier: 'rejected', matchFactors: ['Numista API key not configured'], contradictions: [], physicalMatchGood: false, references: [] };
   const apiKey = Deno.env.get('NUMISTA_API_KEY') ?? '';
-  if (!apiKey) return noApiKey;
+  if (!apiKey) {
+    const suppliedReferenceText = [
+      knownAttributes?.catalogueNumber,
+      knownAttributes?.catalogue_number,
+      knownAttributes?.numistaN,
+      knownAttributes?.numista_n,
+      knownAttributes?.numistaUrl,
+      knownAttributes?.numista_url,
+      knownAttributes?.customNotes,
+      ...Object.entries(knownAttributes?.existingAttributes ?? {})
+        .filter(([key]) => /catalogue.?number|numista.?n|numista.?url/i.test(key))
+        .map(([, value]) => String(value ?? '')),
+    ].filter(Boolean).join(' ');
+    const suppliedReference =
+      suppliedReferenceText.match(/\bN\s*#\s*(\d{1,9})\b/i) ??
+      suppliedReferenceText.match(/numista\.com\/(?:catalogue\/index\.php\?r=)?(\d{1,9})/i) ??
+      suppliedReferenceText.match(/\bnumista\s*(?:type\s*)?(?:id\s*[:#=]?\s*)(\d{1,9})\b/i);
+    const suppliedId = suppliedReference ? Number(suppliedReference[1]) : null;
+    return {
+      ...noApiKey,
+      matchFactors: suppliedId
+        ? [`Reference N#${suppliedId} was supplied, but NUMISTA_API_KEY is not configured; catalogue lookup and verification could not run.`]
+        : noApiKey.matchFactors,
+      ...(suppliedId ? {
+        numistaN: `N#${suppliedId}`,
+        numistaUrl: `https://en.numista.com/catalogue/index.php?r=${suppliedId}`,
+      } : {}),
+    };
+  }
 
   const aiCandidates: any[] = Array.isArray(aiIdentification.coinCandidates) ? aiIdentification.coinCandidates : [];
   const primaryCandidate = aiCandidates[0] ?? {};
