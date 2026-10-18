@@ -538,10 +538,32 @@ export async function saveIdentifiedItem(
   // Valuation is 0 until swish-market-value (Re-Value) runs separately.
   // saleProb30d is null until evidence-based calculation.
   const acquiredCost = options.acquiredCost ?? 0;
+  const catalogue = (result.attributes?.numista_catalogue_suggestions ?? {}) as Record<string, any>;
+  const measuredWeight = Number(result.attributes?.supplied_weight_g ?? result.attributes?.weight_g ?? 0);
+  const measuredDiameter = Number(result.attributes?.supplied_diameter_mm ?? result.attributes?.diameter_mm ?? 0);
+  const yearRange = catalogue.issuedFrom != null || catalogue.issuedTo != null
+    ? `${catalogue.issuedFrom ?? '?'}–${catalogue.issuedTo ?? '?'}`
+    : undefined;
+  const usableText = (value: unknown): string | undefined => {
+    const text = String(value ?? '').trim();
+    return text && !/^(not established|not supplied|unknown|n\/a|—|-)$/i.test(text) ? text : undefined;
+  };
 
   return createItem(tenantId, {
     canonicalTitle: result.canonicalTitle,
     specialistId: result.specialistId,
+    // Catalogue values are proposed metadata; measured fields only use values
+    // explicitly supplied/measured by the user, never Numista standard specs.
+    catalogueNumber: usableText(catalogue.reference ?? result.numistaN ?? result.coinFields?.catalogueHint),
+    ruler: usableText(catalogue.issuer ?? result.coinFields?.issuer),
+    denomination: usableText(catalogue.denomination ?? result.coinFields?.denomination),
+    period: usableText(catalogue.period ?? result.coinFields?.period),
+    mint: usableText(catalogue.mint ?? result.coinFields?.mint),
+    material: usableText(catalogue.material ?? result.coinFields?.composition),
+    countryOfOrigin: usableText(catalogue.country ?? result.coinFields?.country),
+    yearMade: usableText(result.attributes?.user_supplied_year ?? yearRange ?? result.coinFields?.period),
+    weightGrams: Number.isFinite(measuredWeight) && measuredWeight > 0 ? measuredWeight : undefined,
+    diameterMm: Number.isFinite(measuredDiameter) && measuredDiameter > 0 ? measuredDiameter : undefined,
     acquisitionId: options.acquisitionId,
     description: buildDescription(result),
     // v4: status based on objectType + identificationState + confidence
