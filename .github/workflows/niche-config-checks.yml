@@ -1,0 +1,66 @@
+name: SWISH niche routing and branded config
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app.config.js'
+      - 'eas.json'
+      - 'services/nicheRouting.ts'
+      - 'services/__tests__/entryRoutes.test.ts'
+      - 'services/__tests__/brandedBuildConfig.test.ts'
+      - 'contexts/AppContext.tsx'
+      - 'app/index.tsx'
+      - 'app/(tabs)/index.tsx'
+      - 'app/niche-select.tsx'
+      - 'app/onboarding.tsx'
+      - 'supabase/functions/swish-create-checkout/index.ts'
+      - '.github/workflows/niche-config-checks.yml'
+  pull_request:
+    paths:
+      - 'app.config.js'
+      - 'eas.json'
+      - 'services/nicheRouting.ts'
+      - 'services/__tests__/entryRoutes.test.ts'
+      - 'services/__tests__/brandedBuildConfig.test.ts'
+      - 'contexts/AppContext.tsx'
+      - 'app/index.tsx'
+      - 'app/(tabs)/index.tsx'
+      - 'app/niche-select.tsx'
+      - 'app/onboarding.tsx'
+      - 'supabase/functions/swish-create-checkout/index.ts'
+      - '.github/workflows/niche-config-checks.yml'
+
+jobs:
+  niche-routing:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Run routing and build-identity regression tests
+        run: npx jest --runInBand services/__tests__/entryRoutes.test.ts services/__tests__/nicheIsolation.test.ts services/__tests__/brandedBuildConfig.test.ts
+
+      - name: Validate all four Expo branded configurations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for niche in coins motocross bicycles clothing; do
+            echo "Validating branded config: $niche"
+            SWISH_NICHE="$niche" npx expo config --type public >/dev/null
+          done
