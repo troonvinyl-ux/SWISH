@@ -121,14 +121,14 @@ async function searchCanoaCoinTypes(query: string): Promise<{ available: boolean
     const items = raw.map((item: any): CanoaCoinCandidate => ({
       id: Number.isFinite(Number(item.id)) ? Number(item.id) : undefined,
       title: String(item.label ?? item.pref_label ?? "").slice(0, 180),
-      catalogueNumber: String(item.ocre_id ?? "").slice(0, 80) || undefined,
-      ruler: String(item.authority ?? "").slice(0, 100) || undefined,
-      mint: String(item.mint ?? "").slice(0, 100) || undefined,
-      denomination: String(item.denomination ?? "").slice(0, 80) || undefined,
-      material: String(item.material ?? "").slice(0, 80) || undefined,
-      dateFrom: Number.isFinite(Number(item.date_from)) ? Number(item.date_from) : null,
-      dateTo: Number.isFinite(Number(item.date_to)) ? Number(item.date_to) : null,
-      specimenCount: Number.isFinite(Number(item.specimen_count)) ? Number(item.specimen_count) : undefined,
+      catalogueNumber: typeof item.ocre_id === "string" && item.ocre_id ? item.ocre_id.slice(0, 80) : undefined,
+      ruler: typeof item.authority === "string" && item.authority ? item.authority.slice(0, 100) : undefined,
+      mint: typeof item.mint === "string" && item.mint ? item.mint.slice(0, 100) : undefined,
+      denomination: typeof item.denomination === "string" && item.denomination ? item.denomination.slice(0, 80) : undefined,
+      material: typeof item.material === "string" && item.material ? item.material.slice(0, 80) : undefined,
+      dateFrom: item.date_from != null && item.date_from !== "" && Number.isFinite(Number(item.date_from)) ? Number(item.date_from) : null,
+      dateTo: item.date_to != null && item.date_to !== "" && Number.isFinite(Number(item.date_to)) ? Number(item.date_to) : null,
+      specimenCount: item.specimen_count != null && Number.isFinite(Number(item.specimen_count)) ? Number(item.specimen_count) : undefined,
       url: typeof item.url === "string" && item.url.startsWith("/") ? `https://canoanumis.org${item.url}` : (typeof item.url === "string" && item.url.startsWith("https://") ? item.url : undefined),
     })).filter((item: CanoaCoinCandidate) => item.title && item.url);
     return { available: true, query, items: items.slice(0, 8) };
