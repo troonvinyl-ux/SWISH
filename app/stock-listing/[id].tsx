@@ -2666,6 +2666,24 @@ export default function StockListingScreen() {
                 {idConf < 0.50 ? <View style={s.intelWarning}><MaterialIcons name="warning" size={11} color={Colors.warning} /><Text style={s.intelWarningText}>Low confidence — manual verification recommended before listing</Text></View> : null}
               </View>
 
+              {/* Catalogue reference retained as a candidate unless the match is strong enough to promote. */}
+              {item.attributes?.numista_n || item.attributes?.numista_candidate_id ? (
+                <View style={s.intelBlock}>
+                  <Text style={s.intelBlockLabel}>NUMISTA CATALOGUE CANDIDATE</Text>
+                  <DataRow
+                    label="Reference"
+                    value={String(item.attributes.numista_n ?? `N#${item.attributes.numista_candidate_id}`)}
+                  />
+                  {item.attributes.numista_title ? <DataRow label="Catalogue type" value={String(item.attributes.numista_title)} /> : null}
+                  <DataRow
+                    label="Match evidence"
+                    value={`${String(item.attributes.numista_status ?? 'candidate').replace(/_/g, ' ')} · ${Math.round(Number(item.attributes.numista_match_score ?? 0))}/100`}
+                  />
+                  {item.attributes.numista_catalogue_weight ? <DataRow label="Catalogue weight" value={`${item.attributes.numista_catalogue_weight} g`} /> : null}
+                  {item.attributes.numista_catalogue_diameter ? <DataRow label="Catalogue diameter" value={`${item.attributes.numista_catalogue_diameter} mm`} /> : null}
+                </View>
+              ) : null}
+
               {/* Alteration flags */}
               {item.attributes?.has_hole ? (
                 <View style={s.intelAlert}><MaterialIcons name="report" size={12} color={Colors.danger} /><Text style={s.intelAlertText}>Object has been pierced/holed — disclose in listing</Text></View>
@@ -2718,6 +2736,9 @@ export default function StockListingScreen() {
             // Collapsed summary
             <View style={s.intelligenceSummary}>
               <DataRow label="Identification" value={item.canonicalTitle} />
+              {item.attributes?.numista_n || item.attributes?.numista_candidate_id ? (
+                <DataRow label="Numista candidate" value={String(item.attributes.numista_n ?? `N#${item.attributes.numista_candidate_id}`)} />
+              ) : null}
               {item.condition ? <DataRow label="Condition" value={[item.condition, item.conditionGrade].filter(Boolean).join(' · ')} /> : null}
             </View>
           )}
