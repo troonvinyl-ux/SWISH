@@ -37,11 +37,33 @@ serve(async (req) => {
     const user = userData.user;
     console.log(`[create-checkout] User: ${user.id} — ${user.email}`);
 
+    const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing"]);
     let nicheId = "coins";
     try {
       const body = await req.json();
-      if (body?.nicheId) nicheId = body.nicheId;
-    } catch {}
+      if (body?.nicheId !== undefined) {
+        if (typeof body.nicheId !== "string") {
+          return new Response(JSON.stringify({ error: "Invalid nicheId." }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 400,
+          });
+        }
+        nicheId = body.nicheId.trim().toLowerCase();
+        if (!allowedNiches.has(nicheId)) {
+          return new Response(JSON.stringify({ error: "Unsupported nicheId. Choose coins, motocross, bicycles, or clothing." }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 400,
+          });
+        }
+      }
+    } catch (error) {
+      // Empty body retains the legacy Coins checkout default.
+      if (error instanceof SyntaxError) {
+        nicheId = "coins";
+      } else {
+        throw error;
+      }
+    }
 
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY not configured");
