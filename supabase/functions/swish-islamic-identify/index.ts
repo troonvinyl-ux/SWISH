@@ -525,9 +525,12 @@ async function searchNumistaIslamicSilver(
     primaryQuery,
     [denomination, dynasty].filter(Boolean).join(' ').trim(),
     [denomination, ruler].filter(Boolean).join(' ').trim(),
-    'Bijapur Falus Ibrahim Adil Shah II',
+    // Broad query is intentionally not tied to a single dynasty. Specific
+    // Deccan/Bijapur records should be surfaced by source evidence, not injected
+    // as a special-case preferred answer.
     'Islamic copper falus India Deccan',
-    Number.isFinite(weight) && weight > 0 ? `Islamic copper coin ${weight.toFixed(2)}g` : '',
+    'Islamic copper coin',
+    Number.isFinite(weight) && weight > 0 ? `Islamic coin ${weight.toFixed(2)}g` : '',
   ].filter((q, i, all) => q.length > 2 && all.indexOf(q) === i).slice(0, 5);
   const query = queries.join(' | ') || 'Islamic coin';
 
