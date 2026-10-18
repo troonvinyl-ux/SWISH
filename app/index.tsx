@@ -1,22 +1,5 @@
-// SWISH app/index.tsx — Authentication + niche-aware entry router
-//
-// Routing decision tree:
-//   Not logged in          → /login
-//   Logged in, loading     → spinner
-//   Logged in, no onboard  → /onboarding
-//   Logged in, onboarded   → /entry/<niche>  (each niche has its own entry route)
-//
-// The explicit /entry/<niche> redirect ensures that every authenticated subscriber
-// lands in their correct niche shell. The /(tabs) screen is the destination AFTER
-// the entry route enforces the niche. No subscriber is silently dropped into a
-// default niche without an explicit route decision.
-//
-// Niche → entry route mapping:
-//   coins / coin variants  → /entry/coins
-//   motocross              → /entry/motocross
-//   bicycles / cycling     → /entry/bicycles
-//   clothing / fashion     → /entry/clothing
-//   general / unknown      → /niche-select (fail closed; never guess a product)
+// SWISH app/index.tsx — authentication and fail-closed niche routing.
+// Unknown/inactive niche IDs go to product selection, never a guessed product.
 
 import { AuthRouter } from '@/template';
 import { Redirect } from 'expo-router';
@@ -25,13 +8,16 @@ import { View, ActivityIndicator } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { nicheToEntryRoute } from '@/services/nicheRouting';
 
-oins';
-}
-
 function AppRouter() {
-  const { businessConfig, tenantLoading, activeNicheId, nichePreferencesLoading } = useApp();
+  const {
+    businessConfig,
+    tenantLoading,
+    activeNicheId,
+    nichePreferencesLoading,
+  } = useApp();
 
-  // Still loading tenant/config
+  // Do not render a product until both account and account-specific niche
+  // preferences are loaded; this avoids briefly showing the previous account's app.
   if (tenantLoading || nichePreferencesLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center' }}>
@@ -40,14 +26,10 @@ function AppRouter() {
     );
   }
 
-  // businessConfig == null means first-time user who hasn't completed onboarding
-  // onboardingComplete false also triggers onboarding
   if (businessConfig === null || businessConfig?.onboardingComplete === false) {
     return <Redirect href="/onboarding" />;
   }
 
-  // Route to the correct niche-specific entry point.
-  // This prevents all subscribers from silently entering a single shared shell.
   const entryRoute = nicheToEntryRoute(activeNicheId);
   if (!entryRoute) return <Redirect href="/niche-select" />;
   return <Redirect href={entryRoute as any} />;
