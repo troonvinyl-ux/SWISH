@@ -1693,7 +1693,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
         const completed = batchResult.items.filter(i => i.status === 'complete' && i.result);
         if (completed.length > 0) {
           const saveResult = await saveIslamicBatchToInventory(tenant.id, completed, () => {});
-          if (saveResult.saved > 0) triggerInventoryReload();
+          if (saveResult.savedIds.length > 0) triggerInventoryReload();
           if (saveResult.failed > 0) setAiError(`Identified ${completed.length} coin(s), but ${saveResult.failed} could not be saved: ${saveResult.errors.slice(0, 2).join('; ')}`);
         }
         if (batchResult.failed > 0) setAiError(`${batchResult.failed} coin(s) failed identification. Tap each result to review the error.`);
@@ -1715,7 +1715,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
               continue;
             }
             setQuickIdentificationResults(prev => prev.map(entry => entry.id === cap.id ? { ...entry, status: 'complete', result, error: undefined } : entry));
-            const { item, error: saveError } = await saveIdentifiedItem(tenant.id, result, { mediaUris: coinImages.map(img => img.uri) });
+            const { item, error: saveError } = await saveIdentifiedItem(tenant.id, { ...result, specialistId: selectedSpecialist.specialistId }, { mediaUris: coinImages.map(img => img.uri) });
             if (!item) {
               const message = saveError ?? 'Unknown save error';
               setQuickIdentificationResults(prev => prev.map(entry => entry.id === cap.id ? { ...entry, error: `Identified but not saved: ${message}` } : entry));
@@ -1819,7 +1819,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
     isSaveInFlight.current = true;
 
     setIsSaving(true);
-    const { item, error } = await saveIdentifiedItem(tenant.id, idResult, { mediaUris: capturedImages.map(i => i.uri) });
+    const { item, error } = await saveIdentifiedItem(tenant.id, { ...idResult, specialistId: selectedSpecialist.specialistId }, { mediaUris: capturedImages.map(i => i.uri) });
     setIsSaving(false);
     isSaveInFlight.current = false;
 
