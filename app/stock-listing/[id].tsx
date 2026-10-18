@@ -851,6 +851,16 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
     const strongNumistaMatch =
       ['verified', 'strong_match'].includes(String(numistaStatus)) &&
       numistaMatchScore >= 80 && numista.physicalMatchGood === true;
+    const catalogueSuggestions = (r.attributes?.numista_catalogue_suggestions ?? {}) as Record<string, any>;
+    const usableCatalogueText = (value: unknown): string | undefined => {
+      const text = String(value ?? '').trim();
+      return text && !/^(not established|not supplied|unknown|n\\/a|—|-)$/i.test(text) ? text : undefined;
+    };
+    const suggestedYear = catalogueSuggestions.issuedFrom != null || catalogueSuggestions.issuedTo != null
+      ? `${catalogueSuggestions.issuedFrom ?? '?'}–${catalogueSuggestions.issuedTo ?? '?'}`
+      : undefined;
+    const measuredWeight = Number(r.attributes?.supplied_weight_g ?? r.attributes?.weight_g ?? 0);
+    const measuredDiameter = Number(r.attributes?.supplied_diameter_mm ?? r.attributes?.diameter_mm ?? 0);
     setSaving(true); setUploadMsg('Uploading photos...');
     let permanentUrls: string[] = [...(item.media ?? [])];
     if (capturedImages.length > 0) {
@@ -867,17 +877,19 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
       condition: r.condition ?? item.condition, conditionGrade: r.conditionGrade ?? item.conditionGrade,
       conditionNotes: r.conditionNotes ?? item.conditionNotes,
       identificationConfidence: r.confidence ?? item.identificationConfidence,
-      // Do not overwrite the coin's identity fields from a weak catalogue candidate.
-      // Keep the candidate reference and its evidence so Re-Value can use it safely.
-      ...(strongNumistaMatch ? {
-        catalogueNumber: numistaN ?? item.catalogueNumber,
-        ruler: numista.issuer?.name ?? numista.issuer ?? r.coinFields?.issuer ?? item.ruler,
-        denomination: r.coinFields?.denomination ?? item.denomination,
-        period: r.coinFields?.period ?? item.period,
-        mint: numista.mint?.name ?? numista.mint ?? r.coinFields?.mint ?? item.mint,
-        material: numista.composition?.material ?? numista.composition ?? r.coinFields?.composition ?? item.material,
-        countryOfOrigin: r.coinFields?.country ?? item.countryOfOrigin,
-      } : {}),
+      // Fill missing record fields with catalogue/AI suggestions for review, but
+      // never replace an existing value from a weaker candidate. The match tier
+      // and contradictions remain attached in attributes for explicit review.
+      ...(usableCatalogueText(numistaN) && !item.catalogueNumber ? { catalogueNumber: numistaN } : {}),
+      ...(!item.ruler && usableCatalogueText(numista.issuer ?? catalogueSuggestions.issuer ?? r.coinFields?.issuer) ? { ruler: usableCatalogueText(numista.issuer ?? catalogueSuggestions.issuer ?? r.coinFields?.issuer) } : {}),
+      ...(!item.denomination && usableCatalogueText(numista.denomination ?? catalogueSuggestions.denomination ?? r.coinFields?.denomination) ? { denomination: usableCatalogueText(numista.denomination ?? catalogueSuggestions.denomination ?? r.coinFields?.denomination) } : {}),
+      ...(!item.period && usableCatalogueText(catalogueSuggestions.period ?? r.coinFields?.period) ? { period: usableCatalogueText(catalogueSuggestions.period ?? r.coinFields?.period) } : {}),
+      ...(!item.mint && usableCatalogueText(numista.mint ?? catalogueSuggestions.mint ?? r.coinFields?.mint) ? { mint: usableCatalogueText(numista.mint ?? catalogueSuggestions.mint ?? r.coinFields?.mint) } : {}),
+      ...(!item.material && usableCatalogueText(numista.composition ?? catalogueSuggestions.material ?? r.coinFields?.composition) ? { material: usableCatalogueText(numista.composition ?? catalogueSuggestions.material ?? r.coinFields?.composition) } : {}),
+      ...(!item.countryOfOrigin && usableCatalogueText(numista.country ?? catalogueSuggestions.country ?? r.coinFields?.country) ? { countryOfOrigin: usableCatalogueText(numista.country ?? catalogueSuggestions.country ?? r.coinFields?.country) } : {}),
+      ...(!item.yearMade && usableCatalogueText(r.attributes?.user_supplied_year ?? suggestedYear) ? { yearMade: usableCatalogueText(r.attributes?.user_supplied_year ?? suggestedYear) } : {}),
+      ...(item.weightGrams == null && Number.isFinite(measuredWeight) && measuredWeight > 0 ? { weightGrams: measuredWeight } : {}),
+      ...(item.diameterMm == null && Number.isFinite(measuredDiameter) && measuredDiameter > 0 ? { diameterMm: measuredDiameter } : {}),
       valuationLow: r.valuationLow ?? item.valuationLow, valuationMid: r.valuationMid ?? item.valuationMid,
       valuationHigh: r.valuationHigh ?? item.valuationHigh, valuationConfidence: r.valuationConfidence ?? item.valuationConfidence,
       expectedSellingPrice: r.valuationMid ?? item.expectedSellingPrice,
