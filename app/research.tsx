@@ -473,9 +473,6 @@ export default function ResearchScreen() {
       setSummary(newSummary);
       setResults(newResults);
 
-      if (newResults.length === 0 && !newSummary.avgSoldPrice && !newSummary.recentSoldCount && !newSummary.geminiEstimate) {
-        setError('No results found. Try a different search term or add an image for visual research.');
-      }
     } catch (e: any) {
       setError(e?.message ?? 'Research failed');
     } finally {
