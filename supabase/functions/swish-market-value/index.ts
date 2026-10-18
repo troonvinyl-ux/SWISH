@@ -644,7 +644,7 @@ interface VisualSearchResult {
 
 async function runEbayVisualSearch(imageInput: string, appToken: string): Promise<VisualSearchResult> {
   const noResult: VisualSearchResult = { available: false, items: [], totalFound: 0 };
-  if (!appToken || !imageUrl) return noResult;
+  if (!appToken || !imageInput) return noResult;
   try {
     let imageBase64 = '';
     if (/^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(imageInput)) {
