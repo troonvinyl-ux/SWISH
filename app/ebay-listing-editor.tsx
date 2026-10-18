@@ -1956,10 +1956,6 @@ export default function EbayListingEditorScreen() {
           <Text style={s.saveBtnText}>{saving ? 'Saving...' : 'Save'}</Text>
         </Pressable>
 
-        <Pressable onPress={handleReviseSkuOnEbay} disabled={revising || !data.externalListingId} style={[s.saveBtn, { borderColor: Colors.gold, marginLeft: 6 }, (!data.externalListingId || revising) && { opacity: 0.5 }]} hitSlop={4}>
-          <MaterialIcons name="sell" size={14} color={Colors.gold} />
-          <Text style={[s.saveBtnText, { color: Colors.gold }]}>Update SKU only</Text>
-        </Pressable>
         <Pressable onPress={handleReviseOnEbay} disabled={revising} style={[s.reviseBtn, !data.externalListingId && { opacity: 0.5 }]} hitSlop={4}>
           {revising ? <ActivityIndicator size="small" color={Colors.background} style={{ width: 14, height: 14 }} /> : <MaterialIcons name="published-with-changes" size={14} color={Colors.background} />}
           <Text style={s.reviseBtnText}>{revising ? 'Revising...' : 'Revise on eBay'}</Text>
@@ -2270,6 +2266,10 @@ export default function EbayListingEditorScreen() {
             <View style={s.priceField}>
               <FieldLabel label="SKU / SWISH ID" hint="Internal reference on eBay order" />
               <TextInput style={s.input} value={data.sku} onChangeText={v => update('sku', v)} placeholder="KC-0001" placeholderTextColor={Colors.textTertiary} autoCapitalize="characters" />
+              <Pressable onPress={handleReviseSkuOnEbay} disabled={revising || !data.externalListingId} style={[s.saveBtn, { borderColor: Colors.gold, marginTop: 8, alignSelf: 'flex-start' }, (!data.externalListingId || revising) && { opacity: 0.5 }]} hitSlop={4}>
+                {revising ? <ActivityIndicator size="small" color={Colors.gold} style={{ width: 14, height: 14 }} /> : <MaterialIcons name="sell" size={14} color={Colors.gold} />}
+                <Text style={[s.saveBtnText, { color: Colors.gold }]}>{revising ? 'Updating SKU...' : 'Update SKU on eBay only'}</Text>
+              </Pressable>
             </View>
             <View style={s.priceField}>
               <FieldLabel label="QUANTITY" hint="Number available (BIN only)" />
