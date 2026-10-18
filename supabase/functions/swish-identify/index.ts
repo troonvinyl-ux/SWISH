@@ -738,10 +738,21 @@ function enforceEvidenceConstraints(identification: any, vehicleMode: boolean, c
   if (result.identificationState === 'observation_only') maxConf = 0.22;
   const catalogueBacked = ['verified', 'strong_match'].includes(String(result.numistaStatus ?? result.numistaVerification?.status ?? '')) && Number(result.numistaMatchScore ?? result.numistaVerification?.matchScore ?? 0) >= 80;
   if (result.identificationState === 'candidate' && !result.numistaVerification && !catalogueBacked && !vehicleMode && !clothingMode) maxConf = 0.68;
-  if (supporting < MIN_SUPPORTING_EVIDENCE_FOR_MEDIUM) maxConf = Math.min(maxConf, 0.45);
-  else if (supporting < MIN_SUPPORTING_EVIDENCE_FOR_HIGH) maxConf = Math.min(maxConf, 0.72);
-  if (contradictory > 0 && contradictory >= supporting) maxConf = Math.min(maxConf, 0.45);
+  // A candidate needs explicit support. However, catalogue verification itself
+  // is independently scored and must not be discarded just because the model's
+  // prose evidence list is short. Preserve low confidence whenever there are
+  // meaningful contradictions.
+  if (catalogueBacked) {
+    maxConf = Math.max(maxConf, 0.85);
+  } else if (supporting < MIN_SUPPORTING_EVIDENCE_FOR_MEDIUM) {
+    maxConf = Math.min(maxConf, 0.45);
+  } else if (supporting < MIN_SUPPORTING_EVIDENCE_FOR_HIGH) {
+    maxConf = Math.min(maxConf, 0.72);
+  }
+  if (contradictory > 0 && contradictory >= Math.max(1, supporting)) maxConf = Math.min(maxConf, 0.45);
 
+  // When no evidence strings are returned, rely on the model's bounded raw
+  // score rather than multiplying it by zero. This is not a confidence boost.
   const adjustedConf = Math.min(maxConf, rawConf * evidenceRatio - missingPenalty);
   result.confidence = Math.max(0.05, adjustedConf);
 
