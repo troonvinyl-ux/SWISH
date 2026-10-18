@@ -461,18 +461,8 @@ function IslamicBatchMiniCard({ item, onPress }: { item: IslamicBatchItem; onPre
         ) : null}
       </View>
       <View style={{ flex: 1 }}>
-        {r ? (
-          <>
-            <Text style={ibc.title} numberOfLines={1}>{r.canonicalTitle}</Text>
-            <View style={[ibc.confPill, { backgroundColor: confColor + '20' }]}>
-              <Text style={[ibc.confTxt, { color: confColor }]}>{Math.round(r.confidence * 100)}%</Text>
-            </View>
-          </>
-        ) : item.status === 'error' ? (
-          <Text style={ibc.error} numberOfLines={1}>{item.error ?? 'Error'}</Text>
-        ) : (
-          <Text style={ibc.pending}>Pending</Text>
-        )}
+        {r ? <><Text style={ibc.title} numberOfLines={1}>{r.canonicalTitle}</Text><View style={[ibc.confPill, { backgroundColor: confColor + '20' }]}><Text style={[ibc.confTxt, { color: confColor }]}>{Math.round(r.confidence * 100)}%</Text></View></> : item.status === 'error' ? <Text style={ibc.error} numberOfLines={2}>{item.error ?? 'Error'}</Text> : <Text style={ibc.pending}>{item.status === 'processing' ? 'Identifying…' : 'Pending'}</Text>}
+        <Text style={ibc.reviewAction}>{r ? 'Tap to review evidence' : 'Tap to view status'}</Text>
       </View>
       <MaterialIcons name="chevron-right" size={14} color={Colors.textTertiary} />
     </Pressable>
@@ -483,6 +473,7 @@ const ibc = StyleSheet.create({
   imgWrap: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: CF.surfaceHigh, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   img: { width: '100%', height: '100%' },
   title: { fontSize: 11, fontWeight: Typography.weight.semibold, color: CF.textPrimary },
+  reviewAction: { fontSize: 9, color: CF.gold, marginTop: 3, fontWeight: Typography.weight.semibold }
   confPill: { borderRadius: Radius.pill, paddingHorizontal: 5, paddingVertical: 2, alignSelf: 'flex-start', marginTop: 2 },
   confTxt: { fontSize: 9, fontWeight: Typography.weight.bold },
   error: { fontSize: 10, color: Colors.danger },
@@ -510,7 +501,7 @@ function CaptureTab({
   processingStatus: string; aiError: string | null; onTabSelect: (t: CFTab) => void; isPremium: boolean;
   selectedSpecialist: SpecialistChip; onSpecialistChange: (s: SpecialistChip) => void;
   quickMode: boolean; onToggleQuickMode: () => void;
-  quickCaptures: Array<{ id: string; uri: string; label?: string }>;
+  quickCaptures: Array<{ id: string; uri: string; reverseUri?: string; label?: string }>;
   onQuickCapture: () => void; onRunQuickBatch: () => void;
   quickRunning: boolean; quickDone: boolean; onClearQuick: () => void;
   islamicBatchItems: IslamicBatchItem[]; onIslamicItemPress: (item: IslamicBatchItem) => void;
@@ -522,6 +513,8 @@ function CaptureTab({
 }) {
   const router = useRouter();
   const isIslamic = selectedSpecialist.id === 'islamic';
+  const incompleteQuickCoins = quickCaptures.filter(coin => !coin.reverseUri).length;
+  const completeQuickCoins = quickCaptures.length - incompleteQuickCoins;
   const canIdentify = capturedImages.length > 0;
   const hasRequired = COIN_SLOTS.filter(s => s.required).every(s => capturedImages.some(i => i.slotId === s.id));
   const accentColor = selectedSpecialist.color;
@@ -605,6 +598,8 @@ function CaptureTab({
               </Text>
             </View>
 
+            {aiError ? <View style={ct.errorBanner} accessibilityRole="alert"><MaterialIcons name="error-outline" size={15} color={CF.danger} /><Text style={ct.errorText} numberOfLines={5}>{aiError}</Text></View> : null}
+
             {/* Capture button */}
             <Pressable
               onPress={onQuickCapture}
@@ -619,7 +614,7 @@ function CaptureTab({
             >
               <MaterialIcons name="add-a-photo" size={22} color={CF.black} />
               <Text style={ct.quickCaptureBtnText}>
-                {quickCaptures.length === 0 ? 'Capture First Coin' : `Capture Coin #${quickCaptures.length + 1}`}
+                {quickCaptures.length === 0 ? 'Capture Obverse — Coin #1' : incompleteQuickCoins > 0 ? `Capture Reverse — Coin #${quickCaptures.findIndex(coin => !coin.reverseUri) + 1}` : `Capture Obverse — Coin #${quickCaptures.length + 1}`}
               </Text>
             </Pressable>
 
@@ -627,18 +622,17 @@ function CaptureTab({
             {quickCaptures.length > 0 ? (
               <View style={ct.quickThumbs}>
                 <View style={ct.quickThumbsHeader}>
-                  <Text style={ct.quickThumbsTitle}>{quickCaptures.length} coin{quickCaptures.length !== 1 ? 's' : ''} captured</Text>
+                  <Text style={ct.quickThumbsTitle}>{completeQuickCoins} complete · {incompleteQuickCoins} awaiting reverse</Text>
                   <Pressable onPress={onClearQuick} hitSlop={8} accessibilityLabel="Clear all quick captures">
                     <Text style={ct.quickClearText}>Clear</Text>
                   </Pressable>
                 </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm, paddingVertical: Spacing.xs }}>
                   {quickCaptures.map((cap, i) => (
-                    <View key={cap.id} style={ct.quickThumb}>
-                      <Image source={{ uri: cap.uri }} style={ct.quickThumbImg} contentFit="cover" />
-                      <View style={ct.quickThumbNum}>
-                        <Text style={ct.quickThumbNumText}>{i + 1}</Text>
-                      </View>
+                    <View key={cap.id} style={[ct.quickThumb, { flexDirection: 'row' }]}>
+                      <View style={{ flex: 1, overflow: 'hidden' }}><Image source={{ uri: cap.uri }} style={ct.quickThumbImg} contentFit="cover" /><Text style={ct.quickSideLabel}>FRONT</Text></View>
+                      <View style={{ flex: 1, overflow: 'hidden', backgroundColor: CF.surfaceHigh }}>{cap.reverseUri ? <Image source={{ uri: cap.reverseUri }} style={ct.quickThumbImg} contentFit="cover" /> : <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><MaterialIcons name="add-a-photo" size={14} color={CF.textMuted} /></View>}<Text style={ct.quickSideLabel}>{cap.reverseUri ? 'BACK' : 'ADD BACK'}</Text></View>
+                      <View style={ct.quickThumbNum}><Text style={ct.quickThumbNumText}>{i + 1}</Text></View>
                     </View>
                   ))}
                 </ScrollView>
@@ -654,20 +648,29 @@ function CaptureTab({
                     <IslamicBatchMiniCard key={item.id} item={item} onPress={() => onIslamicItemPress(item)} />
                   ))}
                 </View>
+                {selectedIslamicItem ? (
+                  <View style={{ backgroundColor: CF.surface, borderColor: CF.gold + '55', borderWidth: 1, borderRadius: Radius.xl, padding: Spacing.md, gap: Spacing.sm }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}><Text style={{ flex: 1, color: CF.gold, fontWeight: Typography.weight.bold, fontSize: Typography.size.base }}>Review coin</Text><Pressable onPress={() => onIslamicItemPress(null)} accessibilityRole="button" accessibilityLabel="Close coin review"><MaterialIcons name="close" size={18} color={CF.textPrimary} /></Pressable></View>
+                    {selectedIslamicItem.result ? <><Text style={{ color: CF.textPrimary, fontSize: Typography.size.sm, fontWeight: Typography.weight.bold }}>{selectedIslamicItem.result.canonicalTitle}</Text><Text style={{ color: CF.textSub, fontSize: Typography.size.xs }}>{Math.round(selectedIslamicItem.result.confidence * 100)}% confidence · {selectedIslamicItem.result.identificationState.replace(/_/g, ' ')}</Text><Text style={{ color: CF.textSub, fontSize: Typography.size.xs }}>Obverse: {selectedIslamicItem.result.observations.obverse || 'No observation returned'}</Text><Text style={{ color: CF.textSub, fontSize: Typography.size.xs }}>Reverse: {selectedIslamicItem.result.observations.reverse || 'No observation returned'}</Text><Text style={{ color: CF.textSub, fontSize: Typography.size.xs }}>Countermark: {selectedIslamicItem.result.countermark.description || selectedIslamicItem.result.countermark.status}</Text>{selectedIslamicItem.result.warnings.slice(0, 3).map((warning, i) => <Text key={i} style={{ color: Colors.warning, fontSize: Typography.size.xs }}>• {warning}</Text>)}</> : <Text style={{ color: selectedIslamicItem.status === 'error' ? CF.danger : CF.textSub, fontSize: Typography.size.xs }}>{selectedIslamicItem.error ?? (selectedIslamicItem.status === 'processing' ? 'Identification is still running…' : 'No result is available for this coin.')}</Text>}
+                  </View>
+                ) : null}
               </View>
             ) : null}
 
             {/* Run batch */}
-            {quickCaptures.length > 0 && !quickRunning && !quickDone ? (
+            {quickCaptures.length > 0 && incompleteQuickCoins > 0 && !quickRunning ? (
+              <View style={[ct.quickInfoBanner, { borderColor: accentColor + '50', backgroundColor: accentColor + '12' }]}><MaterialIcons name="flip" size={15} color={accentColor} /><Text style={[ct.quickInfoText, { color: accentColor }]}>Capture the reverse side of every coin before identification. {incompleteQuickCoins} coin{incompleteQuickCoins === 1 ? '' : 's'} still need the back.</Text></View>
+            ) : null}
+            {completeQuickCoins > 0 && incompleteQuickCoins === 0 && !quickRunning && !quickDone ? (
               <Pressable
                 onPress={onRunQuickBatch}
                 accessibilityRole="button"
-                accessibilityLabel={`Run AI identification on ${quickCaptures.length} captured coins`}
+                accessibilityLabel={`Run AI identification on ${completeQuickCoins} complete coins`}
                 style={({ pressed }) => [ct.quickRunBtn, pressed && { opacity: 0.85 }]}
               >
                 <MaterialIcons name="auto-awesome" size={18} color={CF.black} />
                 <Text style={ct.quickRunBtnText}>
-                  Identify {quickCaptures.length} Coin{quickCaptures.length !== 1 ? 's' : ''}
+                  Identify {completeQuickCoins} Coin{completeQuickCoins !== 1 ? 's' : ''}
                   {isIslamic ? ' · Islamic Engine' : ''}
                 </Text>
               </Pressable>
@@ -906,6 +909,7 @@ const ct = StyleSheet.create({
   quickClearText: { fontSize: 10, color: Colors.danger, fontWeight: Typography.weight.semibold },
   quickThumb: { width: 64, height: 64, borderRadius: Radius.md, overflow: 'hidden', position: 'relative' },
   quickThumbImg: { width: '100%', height: '100%' },
+  quickSideLabel: { position: 'absolute', bottom: 1, left: 1, right: 1, fontSize: 6, fontWeight: Typography.weight.bold, textAlign: 'center', color: '#fff', backgroundColor: 'rgba(0,0,0,0.65)', paddingVertical: 2 }
   quickThumbNum: { position: 'absolute', bottom: 2, right: 2, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 8, width: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
   quickThumbNumText: { fontSize: 8, fontWeight: Typography.weight.bold, color: '#fff' },
   islamicBatchSection: { gap: Spacing.xs },
@@ -1501,7 +1505,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
   // ── Quick Mode ─────────────────────────────────────────────────────────────
   // Multi-coin rapid-fire capture without leaving the Capture tab.
   const [quickMode, setQuickMode] = useState(false);
-  const [quickCaptures, setQuickCaptures] = useState<Array<{ id: string; uri: string }>>([]);
+  const [quickCaptures, setQuickCaptures] = useState<Array<{ id: string; uri: string; reverseUri?: string }>>([]);
   const [quickRunning, setQuickRunning] = useState(false);
   const [quickDone, setQuickDone] = useState(false);
 
@@ -1602,24 +1606,26 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
   // ── Quick Mode: single-shot capture (fire camera, add to batch) ─────────────
   const handleQuickCapture = useCallback(async () => {
     if (quickRunning) return;
-    const cameraImg = await captureFromCamera();
-    if (cameraImg) {
-      setQuickCaptures(prev => [...prev, { id: `qc_${Date.now()}`, uri: cameraImg.uri }]);
+    const addSideToCoin = (uri: string) => {
+      setQuickCaptures(prev => {
+        const pendingIndex = prev.findIndex(coin => !coin.reverseUri);
+        if (pendingIndex >= 0) {
+          const next = [...prev];
+          next[pendingIndex] = { ...next[pendingIndex], reverseUri: uri };
+          return next;
+        }
+        return [...prev, { id: `qc_${Date.now()}`, uri }];
+      });
       setQuickDone(false);
-      return;
-    }
-    // Fallback: library
-    Alert.alert('Capture Coin', 'Camera cancelled — choose from library?', [
+    };
+    const cameraImg = await captureFromCamera();
+    if (cameraImg) { addSideToCoin(cameraImg.uri); return; }
+    Alert.alert('Capture Coin Side', 'Camera cancelled — choose this side from your library?', [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Choose from Library', onPress: async () => {
-          const libImg = await pickFromLibrary('quick', 'Coin');
-          if (libImg) {
-            setQuickCaptures(prev => [...prev, { id: `qc_${Date.now()}`, uri: libImg.uri }]);
-            setQuickDone(false);
-          }
-        },
-      },
+      { text: 'Choose from Library', onPress: async () => {
+        const libImg = await pickFromLibrary('quick', 'Coin side');
+        if (libImg) addSideToCoin(libImg.uri);
+      } },
     ]);
   }, [quickRunning]);
 
@@ -1632,56 +1638,57 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
   // ── Quick Mode: run batch identification ────────────────────────────────────
   const handleRunQuickBatch = useCallback(async () => {
     if (!tenant || quickCaptures.length === 0 || quickRunning) return;
+    if (quickCaptures.some(coin => !coin.reverseUri)) {
+      setAiError('Capture both the obverse and reverse for every coin before running identification.');
+      return;
+    }
     setQuickRunning(true);
     setQuickDone(false);
+    setAiError(null);
     const isIslamic = selectedSpecialist.id === 'islamic';
-
-    if (isIslamic) {
-      // Islamic pipeline: use processIslamicBatch
-      const batchItems: IslamicBatchItem[] = quickCaptures.map(cap => ({
-        id: newIslamicBatchId(),
-        images: [cap.uri],
-        status: 'pending',
-        label: `Coin ${quickCaptures.indexOf(cap) + 1}`,
-      }));
-      setIslamicBatchItems(batchItems.map(i => ({ ...i })));
-
-      await processIslamicBatch(
-        batchItems,
-        tenant.id,
-        (_processed, _total, updatedItem) => {
+    try {
+      if (isIslamic) {
+        const batchItems: IslamicBatchItem[] = quickCaptures.map((cap, index) => ({
+          id: newIslamicBatchId(), images: [cap.uri, cap.reverseUri!], status: 'pending', label: `Coin ${index + 1}`,
+        }));
+        setIslamicBatchItems(batchItems);
+        const batchResult = await processIslamicBatch(batchItems, tenant.id, (_processed, _total, updatedItem) => {
           setIslamicBatchItems(prev => prev.map(i => i.id === updatedItem.id ? updatedItem : i));
-        },
-      );
-
-      // Auto-save to inventory
-      const completed = batchItems.filter(i => i.status === 'complete');
-      if (completed.length > 0) {
-        await saveIslamicBatchToInventory(tenant.id, completed, () => {});
-      }
-    } else {
-      // General pipeline: identify each capture individually
-      for (const cap of quickCaptures) {
-        if (isIdentifyInFlight.current) { await new Promise(r => setTimeout(r, 300)); continue; }
-        isIdentifyInFlight.current = true;
-        const tempImg: CapturedImage = { uri: cap.uri, slotId: 'obverse', slotLabel: 'Obverse', base64: undefined as any };
-        const { result } = await identifyItemWithAI([tempImg], selectedSpecialist.specialistId, undefined, undefined, { tenantId: tenant.id });
-        isIdentifyInFlight.current = false;
-        if (result) {
-          const { item } = await saveIdentifiedItem(tenant.id, result, { mediaUris: [cap.uri] });
-          if (item && [cap.uri].length > 0) {
-            try {
-              const { urls } = await uploadItemImages(item.id, [tempImg]);
-              if (urls.length > 0) await updateItemMedia(tenant.id, item.id, urls);
-            } catch { /* non-blocking */ }
-          }
+        });
+        setIslamicBatchItems(batchResult.items);
+        const completed = batchResult.items.filter(i => i.status === 'complete' && i.result);
+        if (completed.length > 0) {
+          const saveResult = await saveIslamicBatchToInventory(tenant.id, completed, () => {});
+          if (saveResult.failed > 0) setAiError(`Identified ${completed.length} coin(s), but ${saveResult.failed} could not be saved: ${saveResult.errors.slice(0, 2).join('; ')}`);
         }
-        await new Promise(r => setTimeout(r, 400));
+        if (batchResult.failed > 0) setAiError(`${batchResult.failed} coin(s) failed identification. Tap each result to review the error.`);
+      } else {
+        for (const [index, cap] of quickCaptures.entries()) {
+          const coinImages: CapturedImage[] = [
+            { uri: cap.uri, slotId: 'obverse', slotLabel: 'Obverse' },
+            { uri: cap.reverseUri!, slotId: 'reverse', slotLabel: 'Reverse' },
+          ];
+          try {
+            const { result, error } = await identifyItemWithAI(coinImages, selectedSpecialist.specialistId, undefined, undefined, { tenantId: tenant.id });
+            if (!result) { setAiError(`Coin ${index + 1}: ${error ?? 'Identification failed'}`); continue; }
+            const { item, error: saveError } = await saveIdentifiedItem(tenant.id, result, { mediaUris: coinImages.map(img => img.uri) });
+            if (!item) { setAiError(`Coin ${index + 1} identified but not saved: ${saveError ?? 'Unknown save error'}`); continue; }
+            try {
+              const { urls } = await uploadItemImages(item.id, coinImages);
+              if (urls.length > 0) await updateItemMedia(tenant.id, item.id, urls);
+            } catch { /* identification is saved; media upload can be retried separately */ }
+          } finally {
+            isIdentifyInFlight.current = false;
+          }
+          await new Promise(r => setTimeout(r, 400));
+        }
       }
+    } catch (error: any) {
+      setAiError(error?.message ?? 'Quick identification failed unexpectedly.');
+    } finally {
+      setQuickRunning(false);
+      setQuickDone(true);
     }
-
-    setQuickRunning(false);
-    setQuickDone(true);
   }, [tenant, quickCaptures, quickRunning, selectedSpecialist]);
 
   // ── AI identification (standard mode) ──────────────────────────────────────
@@ -1944,7 +1951,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
       ) : <View style={{ height: insets.bottom }} />}
 
       {/* Islamic batch item detail modal (mini) */}
-      {selectedIslamicItem ? (
+      {selectedIslamicItem && !quickMode ? (
         <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSelectedIslamicItem(null)}>
           <View style={{ flex: 1, backgroundColor: Colors.background }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, padding: Spacing.base, paddingTop: Spacing.lg, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder }}>
