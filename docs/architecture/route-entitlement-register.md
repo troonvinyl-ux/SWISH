@@ -66,14 +66,14 @@ These are configured build profiles, not proof that four release APKs have been 
 
 ## Known risks / open checks
 
-1. The four entry routes change client niche state but do not currently check paid entitlement.
-2. Active/enabled niche state is stored under one device-wide AsyncStorage key; it can survive account changes on a shared device.
-3. Root routing and Home routing duplicate niche mapping logic and use a Coin Flipper fallback for unknown IDs.
-4. `swish-check-subscription` returns one generic subscription result and currently does not filter active subscriptions by niche metadata.
-5. `swish-create-checkout` accepts arbitrary `nicheId` metadata without canonical validation.
-6. The subscription screen's premium feature list is coin-centric even though checkout can target another niche.
-7. Confirm server-side enforcement in the existing AI/valuation Edge Functions and existing database row-level security before claiming inventory isolation is complete.
-8. This is a source audit only; build, live deployment, Stripe webhook behaviour and real subscriber flows have not yet been verified.
+1. The root and Home routers now use a shared resolver and fail closed to niche selection for unknown/inactive IDs.
+2. Niche preferences are stored under a per-user AsyncStorage key, validated against the four production niches, and reset on account change/logout.
+3. Branded builds are pinned to their configured niche at runtime; the shared development/legacy build can still switch between enabled production niches.
+4. `swish-check-subscription` now returns `niche_entitlements` from active Stripe subscription metadata; legacy subscriptions without metadata are mapped to Coins. Client premium badges evaluate the active niche.
+5. `swish-create-checkout` validates canonical niche IDs and checks the supplied branded scheme against that niche; legacy clients retain the old callback.
+6. The subscription screen presents product-specific labels and feature lists.
+7. Server-side valuation/listing entitlement enforcement and database row-level security still need a separate endpoint-by-endpoint audit.
+8. Four EAS build profiles and a CI workflow now exist, but no successful test/build run or live deployment has yet been confirmed.
 
 ## Implementation sequence
 
@@ -94,3 +94,8 @@ These are configured build profiles, not proof that four release APKs have been 
 - 2026-10-18: Dedicated Islamic identification now requires Coins entitlement or an existing global premium tier (commit `a3cb14a6ed0caf3c2686972e0f1c27ef12a16415`).
 - 2026-10-18: Subscription status endpoint returns active niche entitlements (commit `e62c81484e9f144dcda8de66fb868353507fa40c`); client model and hook use active niche entitlement (commits `1a7bd9522c6bef70bd2479cd5605ef56c16d67e` and `b9c0d1e880846ce5792a4cdb926458f47ff59355`).
 - 2026-10-18: Subscription screen now presents niche-specific premium features and product labels (commit `5126ec9c7efb1b30b6a2c25091c08d89d3c2739d`).
+- 2026-10-18: Added canonical fail-closed niche routing; root and Home route unknown values to product selection (commits `107e8812942f3b08dc15082a09b20b8da5f03387`, `9516ad81941d54f1614657d7de91adbd9e8d2b6b`, `96bdb897d320b2dbbe9502e2bc1ae9154c17a929`).
+- 2026-10-18: Niche preferences are account-scoped and routing waits for account preference loading (commits `34e51aee21eb8533dde632ae775ad9bbdabb534a`, `85ac42ea5651fc5ebdc513ce8a6e3c249b50304e`, `da21ac397a09e834fdc15161fb9075b60930b96f`).
+- 2026-10-18: Added dynamic branded app identities and four EAS profiles; branded runtime and onboarding are pinned to their configured niche (commits `e78591a2024ae3b0ebe878e578e62edcc462515c`, `daf136f928ad868aefe8da870dcce72b3ce83373`, `e895c79d42767cbfc9782bdd01be78e438066d47`, `cfd9741a06b1df3b448b4568f94d621b1716aedd`, `2d7d40e5a5ef2f8ebb49edc54ea034e2d09ee348`).
+- 2026-10-18: Branded checkout callback uses a scheme matched to the selected niche; legacy callback retained (commits `01033ef3c95d5b76665610d45e54748ddff9fa52`, `ad4c8be75a17fce7f85728c4e5d6d1a0a5e5438c`, `713f951e73bc43e47203b2b1a107f02477068760`, `fdaefcd79acb36762887bb1d103016d52403f27e`, `1d05e4cc08ac12ec35af8065097b0104ae8babda`).
+- 2026-10-18: Added route/build config regression tests and CI workflow; execution still needs confirmation (commits `b55d302756044e2c329dea24c53619accd5b72c3`, `f7157118445b7117e3c2ddd90bd5a00c563604fd`, `df69ff99d08bc8e15ef05ed0c7751f567de37424`).
