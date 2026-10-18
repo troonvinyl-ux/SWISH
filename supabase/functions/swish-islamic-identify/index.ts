@@ -581,43 +581,68 @@ function scoreNumistaIslamic(
   const dynasty = (aiOutput.coinFamily ?? aiOutput.dynasty ?? '').toLowerCase();
   const ruler = (aiOutput.ruler ?? '').toLowerCase();
   const denomination = (aiOutput.denomination ?? '').toLowerCase();
+  const candidateText = [
+    type.title,
+    type.description,
+    type.obverse?.description,
+    type.reverse?.description,
+    type.min_unit?.name,
+  ].filter((v: unknown) => typeof v === 'string').join(' ').toLowerCase();
+  const normalize = (v: string) => v.normalize('NFKD').replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 
-  // Dynasty match
-  if (dynasty.length > 2 && titleLower.includes(dynasty)) {
-    score += 25; factors.push(`Dynasty match: ${dynasty}`);
+  // Reward reliable ruler/denomination evidence, but do not let a potentially
+  // mistaken first-pass dynasty overwhelm hard physical or catalogue evidence.
+  if (dynasty.length > 2 && normalize(candidateText).includes(normalize(dynasty))) {
+    score += 18; factors.push(`Dynasty/family text match: ${dynasty}`);
+  }
+  if (ruler.length > 2 && normalize(candidateText).includes(normalize(ruler))) {
+    score += 22; factors.push(`Ruler match: ${ruler}`);
+  }
+  const unitText = (type.min_unit?.name ?? '').toLowerCase();
+  if (denomination.length > 2 && (normalize(candidateText).includes(normalize(denomination)) || normalize(unitText).includes(normalize(denomination)))) {
+    score += 18; factors.push(`Denomination match: ${denomination}`);
   }
 
-  // Ruler match
-  if (ruler.length > 2 && titleLower.includes(ruler)) {
-    score += 20; factors.push(`Ruler match: ${ruler}`);
+  // Islamic/Deccan fallback cues let catalogued candidates survive an incorrect
+  // AI dynasty guess long enough for measurements and source details to decide.
+  const deccanTerms = ['bijapur', 'ibrahim adil shah', 'adil shah', 'deccan', 'falus'];
+  const candidateNorm = normalize(candidateText);
+  const hasDeccanCue = deccanTerms.some(term => candidateNorm.includes(normalize(term)));
+  if (hasDeccanCue && !dynasty && !ruler) {
+    score += 8; factors.push('Relevant Deccan/Islamic fallback candidate');
   }
-
-  // Denomination
-  if (denomination.length > 2 && (titleLower.includes(denomination) || (type.min_unit?.name ?? '').toLowerCase().includes(denomination))) {
-    score += 20; factors.push(`Denomination match: ${denomination}`);
-  }
-
-  // Weight match
-  if (physicalData?.weight && type.weight) {
-    const diff = Math.abs(physicalData.weight - type.weight) / type.weight;
-    if (diff <= 0.05) {
-      score += 15; factors.push(`Weight match: ${physicalData.weight}g vs catalogue ${type.weight}g`);
-    } else if (diff <= 0.12) {
-      score += 5; factors.push(`Weight approximate: ${physicalData.weight}g vs ${type.weight}g`);
-    } else {
-      score -= 15; contradictions.push(`Weight mismatch: ${physicalData.weight}g vs catalogue ${type.weight}g`);
+  if (titleLower.includes('falus') || unitText.includes('falus')) {
+    if (physicalData?.weight && Math.abs(physicalData.weight - 11.41) <= 0.75) {
+      score += 8; factors.push('Heavy falus weight is consistent with supplied measurement');
     }
   }
 
-  // Diameter match
+  // Compare physical specs with asymmetric wear tolerance; hard mismatches
+  // should penalize rather than be outweighed by a vague family-text match.
+  if (physicalData?.weight && type.weight) {
+    const diff = Math.abs(physicalData.weight - type.weight) / type.weight;
+    if (diff <= 0.05) {
+      score += 18; factors.push(`Weight match: ${physicalData.weight}g vs catalogue ${type.weight}g`);
+    } else if (diff <= 0.12) {
+      score += 7; factors.push(`Weight approximate: ${physicalData.weight}g vs ${type.weight}g`);
+    } else {
+      score -= 18; contradictions.push(`Weight mismatch: ${physicalData.weight}g vs catalogue ${type.weight}g`);
+    }
+  }
   if (physicalData?.diameter && type.diameter) {
     const diffMm = Math.abs(physicalData.diameter - type.diameter);
     if (diffMm <= 1.5) {
-      score += 10; factors.push(`Diameter match: ${physicalData.diameter}mm vs ${type.diameter}mm`);
+      score += 12; factors.push(`Diameter match: ${physicalData.diameter}mm vs catalogue ${type.diameter}mm`);
     } else if (diffMm <= 3) {
-      score += 3;
+      score += 4; factors.push(`Diameter approximate: ${physicalData.diameter}mm vs catalogue ${type.diameter}mm`);
     } else {
-      score -= 8; contradictions.push(`Diameter mismatch: ${physicalData.diameter}mm vs ${type.diameter}mm`);
+      score -= 12; contradictions.push(`Diameter mismatch: ${physicalData.diameter}mm vs catalogue ${type.diameter}mm`);
+    }
+  }
+  const material = (type.composition?.material ?? '').toLowerCase();
+  if (material && /copper|bronze|brass/.test(material)) {
+    if (/copper|bronze|brass/.test(String(aiOutput.metalColour ?? aiOutput.composition ?? '').toLowerCase())) {
+      score += 5; factors.push('Material consistent with observed metal description');
     }
   }
 
