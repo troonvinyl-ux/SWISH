@@ -1035,6 +1035,22 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
                       <View style={reid.comparisonRow}><View style={[reid.confBadge, { borderColor: result.confidence >= 0.8 ? Colors.success : Colors.warning }]}><Text style={[reid.confidencePct, { color: result.confidence >= 0.8 ? Colors.success : Colors.warning, fontSize: 12 }]}>{Math.round(result.confidence * 100)}%</Text></View><Text style={reid.comparisonTitle} numberOfLines={2}>{result.canonicalTitle}</Text></View>
                       <View style={reid.comparisonDivider}><MaterialIcons name="arrow-downward" size={14} color={Colors.primary} /><Text style={reid.comparisonDividerText}>REFINED WITH YOUR DATA</Text></View>
                       <View style={reid.comparisonRow}><View style={[reid.confBadge, { borderColor: refinedResult.confidence >= 0.8 ? Colors.success : Colors.warning, backgroundColor: Colors.primaryDim }]}><Text style={[reid.confidencePct, { color: refinedResult.confidence >= 0.8 ? Colors.success : Colors.primary, fontSize: 12 }]}>{Math.round(refinedResult.confidence * 100)}%</Text></View><Text style={[reid.comparisonTitle, { color: Colors.primary }]} numberOfLines={2}>{refinedResult.canonicalTitle}</Text></View>
+                      {refinedResult.numistaVerification ? (
+                        <View style={{ marginTop: 10, marginBottom: 10, padding: 10, borderRadius: 10, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.surfaceBorder, gap: 5 }}>
+                          <Text style={{ fontSize: 10, fontWeight: Typography.weight.bold, letterSpacing: 0.6, color: Colors.info }}>NUMISTA CATALOGUE CHECK</Text>
+                          <Text style={{ fontSize: 12, fontWeight: Typography.weight.semibold, color: Colors.textPrimary }}>
+                            {refinedResult.numistaVerification.numistaN ?? 'No catalogue number'} · {refinedResult.numistaVerification.status ?? 'not checked'} · {Math.round(Number(refinedResult.numistaVerification.matchScore ?? 0))}/100
+                          </Text>
+                          {refinedResult.numistaVerification.title ? <Text style={{ fontSize: 12, color: Colors.textSecondary }}>{refinedResult.numistaVerification.title}</Text> : null}
+                          {(refinedResult.numistaVerification.matchFactors ?? []).slice(0, 3).map((factor: string, index: number) => (
+                            <Text key={`numista-factor-${index}`} style={{ fontSize: 10, color: Colors.success }}>✓ {factor}</Text>
+                          ))}
+                          {(refinedResult.numistaVerification.contradictions ?? []).slice(0, 3).map((contradiction: string, index: number) => (
+                            <Text key={`numista-conflict-${index}`} style={{ fontSize: 10, color: Colors.danger }}>! {contradiction}</Text>
+                          ))}
+                          {refinedResult.numistaVerification.numistaUrl ? <Text onPress={() => Linking.openURL(refinedResult.numistaVerification.numistaUrl)} style={{ fontSize: 10, color: Colors.info, textDecorationLine: 'underline' }}>Open Numista catalogue entry</Text> : null}
+                        </View>
+                      ) : null}
                       <View style={reid.comparisonActions}><Pressable onPress={() => setRefinedResult(null)} style={reid.comparisonRejectBtn}><MaterialIcons name="close" size={14} color={Colors.textSecondary} /><Text style={reid.comparisonRejectText}>Keep Original</Text></Pressable><Pressable onPress={handleAcceptRefined} style={reid.comparisonAcceptBtn}><MaterialIcons name="check" size={14} color={Colors.background} /><Text style={reid.comparisonAcceptText}>Use Refined</Text></Pressable></View>
                     </View>
                   ) : null}
