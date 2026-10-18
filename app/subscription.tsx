@@ -26,17 +26,42 @@ const FREE_FEATURES = [
   'Basic photo capture',
 ];
 
-const PREMIUM_FEATURES = [
-  { label: 'Unlimited AI identifications', icon: 'auto-awesome' },
-  { label: 'Advanced specialist engines', icon: 'psychology' },
-  { label: 'Market valuations with evidence', icon: 'analytics' },
-  { label: 'eBay listing generation', icon: 'storefront' },
-  { label: 'Numista catalogue & references', icon: 'menu-book' },
-  { label: 'Islamic specialist engine', icon: 'toll' },
-  { label: 'Quick Capture Station', icon: 'camera' },
-  { label: 'Profit analytics & insights', icon: 'trending-up' },
-  { label: 'Priority AI processing', icon: 'bolt' },
-];
+const PREMIUM_FEATURES_BY_NICHE: Record<string, Array<{ label: string; icon: string }>> = {
+  coins: [
+    { label: 'Advanced coin identification', icon: 'toll' },
+    { label: 'Numista and specialist references', icon: 'menu-book' },
+    { label: 'Evidence-led market valuations', icon: 'analytics' },
+    { label: 'eBay listing tools', icon: 'storefront' },
+    { label: 'Collection and profit insights', icon: 'trending-up' },
+  ],
+  motocross: [
+    { label: 'Motocross and enduro identification', icon: 'two-wheeler' },
+    { label: 'Condition and repair assessment', icon: 'build' },
+    { label: 'Evidence-led market valuations', icon: 'analytics' },
+    { label: 'Buying and resale analysis', icon: 'price-check' },
+    { label: 'Listing tools and profit tracking', icon: 'trending-up' },
+  ],
+  bicycles: [
+    { label: 'Bicycle model identification', icon: 'pedal-bike' },
+    { label: 'Component and upgrade compatibility', icon: 'settings' },
+    { label: 'Condition and repair assessment', icon: 'build' },
+    { label: 'Evidence-led market valuations', icon: 'analytics' },
+    { label: 'Listing tools and profit tracking', icon: 'trending-up' },
+  ],
+  clothing: [
+    { label: 'Brand, garment and era identification', icon: 'checkroom' },
+    { label: 'Authenticity and condition assessment', icon: 'verified' },
+    { label: 'Evidence-led market valuations', icon: 'analytics' },
+    { label: 'eBay listing tools', icon: 'storefront' },
+    { label: 'Resale and profit insights', icon: 'trending-up' },
+  ],
+};
+const PRODUCT_LABELS: Record<string, string> = {
+  coins: 'Coin Flipper',
+  motocross: 'Flipper MX',
+  bicycles: 'Bike Flipper',
+  clothing: 'Threads Flip',
+};
 
 // ── Components ────────────────────────────────────────────────────────────────
 
@@ -73,6 +98,8 @@ export default function SubscriptionScreen() {
   const { showAlert } = useAlert();
   const { status, loading, isPremium, refresh } = useSubscription();
   const { activeNicheId } = useApp();
+  const productLabel = PRODUCT_LABELS[activeNicheId] ?? 'SWISH';
+  const premiumFeatures = PREMIUM_FEATURES_BY_NICHE[activeNicheId] ?? PREMIUM_FEATURES_BY_NICHE.coins;
 
   const [checkingOut, setCheckingOut] = useState(false);
   const [openingPortal, setOpeningPortal] = useState(false);
@@ -130,7 +157,7 @@ export default function SubscriptionScreen() {
         </Pressable>
         <View style={s.flex}>
           <Text style={s.title}>Subscription</Text>
-          <Text style={s.subtitle}>SWISH Niche Premium</Text>
+          <Text style={s.subtitle}>{productLabel} Premium</Text>
         </View>
         <Pressable
           onPress={refresh}
@@ -170,7 +197,7 @@ export default function SubscriptionScreen() {
           </View>
 
           <Text style={s.planName}>
-            {isPremium ? 'SWISH Niche Premium' : 'SWISH Free'}
+            {isPremium ? `${productLabel} Premium` : `${productLabel} Free`}
           </Text>
           <Text style={s.planPrice}>
             {isPremium ? '£9.99 / month' : 'Free forever'}
@@ -232,7 +259,7 @@ export default function SubscriptionScreen() {
           <Text style={s.sectionTitle}>PREMIUM FEATURES</Text>
         </View>
         <View style={s.featuresCard}>
-          {PREMIUM_FEATURES.map((f, i) => (
+          {premiumFeatures.map((f, i) => (
             <View key={f.label}>
               {i > 0 ? <View style={s.featureDivider} /> : null}
               <PremiumFeatureRow label={f.label} icon={f.icon} />
