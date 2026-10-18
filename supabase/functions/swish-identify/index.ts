@@ -565,9 +565,9 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
       .map(([, value]) => String(value ?? '')),
   ].filter(Boolean).join(' ');
   const directReferenceMatch =
-    referenceText.match(/\\bN\\s*#\\s*(\\d{1,9})\\b/i) ??
-    referenceText.match(/numista\\.com\\/(?:catalogue\\/index\\.php\\?r=)?(\\d{1,9})/i) ??
-    referenceText.match(/\\bnumista\\s*(?:type\\s*)?(?:id\\s*[:#=]?\\s*)(\\d{1,9})\\b/i);
+    referenceText.match(/\bN\s*#\s*(\d{1,9})\b/i) ??
+    referenceText.match(/numista\.com\/(?:catalogue\/index\.php\?r=)?(\d{1,9})/i) ??
+    referenceText.match(/\bnumista\s*(?:type\s*)?(?:id\s*[:#=]?\s*)(\d{1,9})\b/i);
   const directNumistaId = directReferenceMatch ? Number(directReferenceMatch[1]) : null;
 
   if (directNumistaId && Number.isSafeInteger(directNumistaId) && directNumistaId > 0) {
