@@ -1771,14 +1771,49 @@ async function handleRequest(req: Request): Promise<Response> {
 
   // ── Route: end ────────────────────────────────────────────────────────────
   if (route === 'end') {
-    const { listingId, itemId, externalListingId } = body;
-    if (!externalListingId) return jsonResponse({ error: 'externalListingId required' }, 400);
+    const { listingId, externalListingId: requestedExternalListingId } = body;
+    if (!listingId) return jsonResponse({ error: 'listingId required' }, 400);
+
+    // Never trust a client-supplied external ID or item ID for a service-role write.
+    // Resolve both from a listing owned by this tenant before calling eBay.
+    const { data: ownedListing, error: ownedListingError } = await supabase
+      .from('listings')
+      .select('id, item_id, external_listing_id')
+      .eq('id', listingId)
+      .eq('tenant_id', tenantId)
+      .eq('marketplace_id', 'ebay')
+      .maybeSingle();
+
+    if (ownedListingError || !ownedListing) {
+      return jsonResponse({ error: 'Listing not found or access denied.' }, 404);
+    }
+
+    const savedExternalListingId = String(ownedListing.external_listing_id ?? '').trim();
+    if (!savedExternalListingId) {
+      return jsonResponse({ error: 'The saved listing has no eBay listing ID.' }, 400);
+    }
+    if (requestedExternalListingId && String(requestedExternalListingId).trim() !== savedExternalListingId) {
+      return jsonResponse({ error: 'The requested eBay listing ID does not match this saved listing.' }, 403);
+    }
+
+    const savedItemId = String(ownedListing.item_id ?? '').trim();
+    if (!savedItemId) return jsonResponse({ error: 'The saved listing has no linked inventory item.' }, 400);
+    const { data: ownedItem, error: ownedItemError } = await supabase
+      .from('items')
+      .select('id')
+      .eq('id', savedItemId)
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+    if (ownedItemError || !ownedItem) {
+      return jsonResponse({ error: 'Linked inventory item not found or access denied.' }, 404);
+    }
+
     const creds = await getEbayCredentials(supabase, tenantId, true);
     if ('error' in creds) return jsonResponse({ error: creds.error }, 400);
     const endXml = `<?xml version="1.0" encoding="utf-8"?>
 <EndFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <RequesterCredentials><eBayAuthToken>${creds.accessToken}</eBayAuthToken></RequesterCredentials>
-  <ItemID>${xmlEscape(externalListingId)}</ItemID>
+  <ItemID>${xmlEscape(savedExternalListingId)}</ItemID>
   <EndingReason>NotAvailable</EndingReason>
 </EndFixedPriceItemRequest>`;
     const { xml: endResp, ok: endOk } = await callEbayTradingApi(endXml, 'EndFixedPriceItem', creds.clientId);
@@ -1786,13 +1821,26 @@ async function handleRequest(req: Request): Promise<Response> {
       const errors = parseErrors(endResp);
       return jsonResponse({ success: false, error: friendlyError(errors, 'Failed to end eBay listing') });
     }
-    if (listingId) {
-      await supabase.from('listings').update({ status: 'ended', ended_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', listingId);
+
+    const now = new Date().toISOString();
+    const { error: listingUpdateError } = await supabase.from('listings')
+      .update({ status: 'ended', ended_at: now, updated_at: now })
+      .eq('id', ownedListing.id)
+      .eq('tenant_id', tenantId);
+    const { error: itemUpdateError } = await supabase.from('items')
+      .update({ status: 'identified', updated_at: now })
+      .eq('id', ownedItem.id)
+      .eq('tenant_id', tenantId);
+
+    if (listingUpdateError || itemUpdateError) {
+      console.error(`[SWISH end] eBay listing ended but local state update failed (tenant scoped): listingError=${listingUpdateError?.message ?? 'none'} itemError=${itemUpdateError?.message ?? 'none'}`);
+      return jsonResponse({
+        success: true,
+        externalListingId: savedExternalListingId,
+        warning: 'The eBay listing was ended, but SWISH could not fully update its local status. Run eBay sync to reconcile.',
+      });
     }
-    if (itemId) {
-      await supabase.from('items').update({ status: 'identified', updated_at: new Date().toISOString() }).eq('id', itemId);
-    }
-    return jsonResponse({ success: true });
+    return jsonResponse({ success: true, externalListingId: savedExternalListingId });
   }
 
   // ── Route: revise ─────────────────────────────────────────────────────────
