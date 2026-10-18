@@ -703,6 +703,16 @@ function buildSearchQueries(title: string, attributes: Record<string, any>, spec
     const titleLower = sanitised.toLowerCase();
     const coinQueries = [sanitised];
     if (!/\bcoin\b/i.test(sanitised)) coinQueries.push(`${sanitised} coin`);
+    // Generic rupee searches need broad denomination variants: eBay titles often
+    // say "Indian", "British India", or "1 Rupee" rather than "silver rupee coin".
+    if (/\brupees?\b/i.test(titleLower)) {
+      coinQueries.push(
+        'Indian silver rupee coin',
+        'British India silver 1 rupee',
+        'silver 1 rupee coin',
+        'India 1 rupee silver'
+      );
+    }
 
     // Keep deterministic, domain-specific variants before Gemini terms. The
     // function only sends five queries, so fallbacks added later can otherwise
