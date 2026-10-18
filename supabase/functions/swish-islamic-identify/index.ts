@@ -1119,6 +1119,11 @@ Deno.serve(async (req: Request) => {
               if (subsRes.ok) {
                 const subsData = await subsRes.json();
                 for (const sub of subsData.data ?? []) {
+                  // This dedicated endpoint belongs to Coin Flipper. A paid
+                  // subscription for MX, bikes, or clothing must not unlock it.
+                  // Legacy subscriptions without niche metadata remain Coins.
+                  const subscribedNiche = String(sub.metadata?.niche_id ?? 'coins').toLowerCase();
+                  if (subscribedNiche !== 'coins') continue;
                   for (const item of sub.items?.data ?? []) {
                     if (item.price?.product === STRIPE_PRODUCT_ID_ISLAMIC) { isPremiumIslamic = true; break; }
                   }
