@@ -496,9 +496,9 @@ async function searchEbaySoldListings(appToken: string | null, query: string, ma
   if (!appToken || query.trim().length < 3) return { ...empty, error: 'Missing app token or query' };
   const params = new URLSearchParams({ q: query.slice(0, 100), limit: String(Math.min(maxResults, 100)) });
   try {
-    const resp = await fetch(\`https://api.ebay.com/buy/marketplace_insights/v1_beta/item_sales/search?\${params.toString()}\`, {
+    const resp = await fetch(`https://api.ebay.com/buy/marketplace_insights/v1_beta/item_sales/search?${params.toString()}`, {
       headers: {
-        Authorization: \`Bearer \${appToken}\`,
+        Authorization: `Bearer ${appToken}`,
         Accept: 'application/json',
         'X-EBAY-C-MARKETPLACE-ID': EBAY_GLOBAL_ID,
       },
@@ -506,10 +506,10 @@ async function searchEbaySoldListings(appToken: string | null, query: string, ma
     });
     if (!resp.ok) {
       const message = (await resp.text()).slice(0, 220);
-      console.log(\`[SWISH Market] Marketplace Insights HTTP \${resp.status}: \${message}\`);
+      console.log(`[SWISH Market] Marketplace Insights HTTP ${resp.status}: ${message}`);
       return { ...empty, httpStatus: resp.status, error: resp.status === 403
         ? 'Marketplace Insights sold-item API access is not enabled for this eBay developer application'
-        : \`Marketplace Insights \${resp.status}\` };
+        : `Marketplace Insights ${resp.status}` };
     }
     const data = await resp.json();
     const raw = data.itemSales ?? data.itemSummaries ?? data.items ?? data.sales ?? [];
@@ -529,7 +529,7 @@ async function searchEbaySoldListings(appToken: string | null, query: string, ma
     }).filter((item: any) => item.title && item.price > 0);
     return { available: true, items, totalFound: Number(data.total ?? data.totalItems ?? items.length) };
   } catch (e: any) {
-    return { ...empty, error: \`Marketplace Insights: \${e?.message ?? 'request failed'}\` };
+    return { ...empty, error: `Marketplace Insights: ${e?.message ?? 'request failed'}` };
   }
 }
 
