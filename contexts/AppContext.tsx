@@ -14,10 +14,10 @@ import { BusinessConfig, getBusinessConfig } from '@/services/businessConfigServ
 import {
   fetchAndStoreEbayImages, tenantNeedsImageSync,
 } from '@/services/ebayImageService';
-import { NicheId, NicheConfig, NICHES, getPrimaryNiche } from '@/constants/niches';
+import { NicheId, NicheConfig, NICHES, getPrimaryNiche, isProductionNiche } from '@/constants/niches';
 import { checkSubscription, SubscriptionStatus, PREMIUM_TIERS } from '@/services/subscriptionService';
 
-const NICHE_STORAGE_KEY = '@swish_active_niches';
+const NICHE_STORAGE_PREFIX = '@swish_active_niches';
 
 interface AppContextType {
   // Subscription
@@ -76,46 +76,75 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [enabledNiches, setEnabledNiches] = useState<NicheId[]>(['general']);
   const [activeNicheId, setActiveNicheId] = useState<NicheId>('general');
 
-  // Load persisted niche preferences
+  // Niche preferences are account-scoped. Device-wide niche state allowed one
+  // signed-in account to inherit another account's selected product on shared devices.
   useEffect(() => {
-    AsyncStorage.getItem(NICHE_STORAGE_KEY).then(val => {
-      if (val) {
-        try {
-          const parsed = JSON.parse(val) as { active: NicheId; enabled: NicheId[] };
-          if (parsed.active) setActiveNicheId(parsed.active);
-          if (parsed.enabled && parsed.enabled.length > 0) setEnabledNiches(parsed.enabled);
-        } catch {}
+    let cancelled = false;
+    const loadForAccount = async () => {
+      if (!user?.id) {
+        setActiveNicheId('general');
+        setEnabledNiches(['general']);
+        setSubscriptionStatus(null);
+        setSubscriptionLoading(false);
+        return;
       }
-    }).catch(() => {});
-  }, []);
+
+      const storageKey = `${NICHE_STORAGE_PREFIX}:${user.id}`;
+      try {
+        const val = await AsyncStorage.getItem(storageKey);
+        if (cancelled || !val) return;
+        const parsed = JSON.parse(val) as { active?: string; enabled?: string[] };
+        const active = isProductionNiche(parsed.active) ? parsed.active : 'general';
+        const enabled = Array.isArray(parsed.enabled)
+          ? parsed.enabled.filter((id): id is NicheId => isProductionNiche(id))
+          : [];
+        if (!cancelled) {
+          setActiveNicheId(active);
+          setEnabledNiches(enabled.length > 0 ? enabled : ['general']);
+        }
+      } catch {
+        // Corrupt preferences fail closed; they never select a product implicitly.
+        if (!cancelled) {
+          setActiveNicheId('general');
+          setEnabledNiches(['general']);
+        }
+      }
+    };
+    loadForAccount().catch(() => {});
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   const persistNiches = (active: NicheId, enabled: NicheId[]) => {
-    AsyncStorage.setItem(NICHE_STORAGE_KEY, JSON.stringify({ active, enabled })).catch(() => {});
+    if (!user?.id) return;
+    const storageKey = `${NICHE_STORAGE_PREFIX}:${user.id}`;
+    AsyncStorage.setItem(storageKey, JSON.stringify({ active, enabled })).catch(() => {});
   };
 
   const setActiveNiche = (id: NicheId) => {
+    if (!isProductionNiche(id)) return;
     setActiveNicheId(id);
-    // Also ensure it's in the enabled list — use single update via functional setter
     setEnabledNiches(prev => {
-      const next = prev.includes(id) ? prev : [id, ...prev];
-      persistNiches(id, next); // persist with the correct, up-to-date enabled list
+      const next = prev.includes(id) ? prev : [id, ...prev.filter(isProductionNiche)];
+      persistNiches(id, next);
       return next;
     });
   };
 
   const enableNiche = (id: NicheId) => {
+    if (!isProductionNiche(id)) return;
     setEnabledNiches(prev => {
-      const next = prev.includes(id) ? prev : [...prev, id];
+      const next = prev.includes(id) ? prev : [...prev.filter(isProductionNiche), id];
       persistNiches(activeNicheId, next);
       return next;
     });
   };
 
   const disableNiche = (id: NicheId) => {
+    if (!isProductionNiche(id)) return;
     setEnabledNiches(prev => {
-      const next = prev.filter(n => n !== id);
-      const safeNext = next.length > 0 ? next : ['general' as NicheId];
-      const newActive = safeNext.includes(activeNicheId) ? activeNicheId : safeNext[0];
+      const next = prev.filter(n => n !== id && isProductionNiche(n));
+      const safeNext: NicheId[] = next.length > 0 ? next : ['general'];
+      const newActive = safeNext.includes(activeNicheId) ? activeNicheId : (safeNext[0] ?? 'general');
       setActiveNicheId(newActive);
       persistNiches(newActive, safeNext);
       return safeNext;
