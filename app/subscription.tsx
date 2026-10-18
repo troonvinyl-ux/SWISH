@@ -2,6 +2,7 @@
 // Shows current subscription status, plan details, and handles upgrade/management.
 
 import React, { useCallback, useEffect, useState } from 'react';
+import Constants from 'expo-constants';
 import {
   View, Text, StyleSheet, ScrollView, Pressable,
   ActivityIndicator, Linking,
@@ -123,7 +124,9 @@ export default function SubscriptionScreen() {
     // Checkout metadata must identify the niche the subscriber is viewing.
     // This does not replace server-side entitlement enforcement; it prevents
     // every niche's upgrade button from incorrectly purchasing the coins niche.
-    const { opened, error } = await startCheckout(activeNicheId);
+    const configuredScheme = Constants.expoConfig?.extra?.swishAppScheme ?? Constants.expoConfig?.scheme;
+    const appScheme = Array.isArray(configuredScheme) ? configuredScheme[0] : configuredScheme;
+    const { opened, error } = await startCheckout(activeNicheId, typeof appScheme === 'string' ? appScheme : undefined);
     setCheckingOut(false);
     if (error) {
       showAlert('Checkout Failed', error);
