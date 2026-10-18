@@ -18,6 +18,8 @@ on:
       - 'supabase/functions/swish-ebay-list/index.ts'
       - 'supabase/functions/swish-ebay-sync/index.ts'
       - 'supabase/functions/swish-ebay-orders/index.ts'
+      - 'supabase/functions/swish-ebay-post-order/index.ts'
+      - 'supabase/functions/swish-ebay-finances/index.ts'
       - '.github/workflows/niche-config-checks.yml'
   pull_request:
     paths:
@@ -35,6 +37,8 @@ on:
       - 'supabase/functions/swish-ebay-list/index.ts'
       - 'supabase/functions/swish-ebay-sync/index.ts'
       - 'supabase/functions/swish-ebay-orders/index.ts'
+      - 'supabase/functions/swish-ebay-post-order/index.ts'
+      - 'supabase/functions/swish-ebay-finances/index.ts'
       - '.github/workflows/niche-config-checks.yml'
 
 jobs:
