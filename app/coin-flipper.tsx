@@ -1570,7 +1570,9 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
 
   // Fetch valuation when entering Value tab
   useEffect(() => {
-    if (activeTab !== 'value' || !idResult || !tenant) return;
+    // Start market research as soon as a coin is identified, so the value is ready
+    // when the user opens the Value tab. Keep the existing Pro gate intact.
+    if (!idResult || !tenant || !isPremium) return;
     if (valuationResult || valuationLoading) return;
     if (!idResult.canonicalTitle || idResult.canonicalTitle.length < 3) return;
     setValuationLoading(true);
@@ -1592,7 +1594,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
       if (error || !result) setValuationError(error ?? 'Valuation unavailable');
       else setValuationResult(result);
     });
-  }, [activeTab, idResult, tenant, selectedSpecialist.specialistId]);
+  }, [activeTab, idResult, tenant, selectedSpecialist.specialistId, isPremium]);
 
   // ── Capture handler ─────────────────────────────────────────────────────────
   const handleCapture = useCallback(async (slotId: string, slotLabel: string) => {
