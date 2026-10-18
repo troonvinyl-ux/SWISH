@@ -118,6 +118,7 @@ let _islamicBatchCounter = 0;
 function newIslamicBatchId() { return `islamic_${++_islamicBatchCounter}_${Date.now()}`; }
 
 type CFTab = 'home' | 'capture' | 'identify' | 'reference' | 'value' | 'list_sell' | 'insights';
+type QuickCoinResult = { id: string; label: string; images: string[]; status: 'pending' | 'complete' | 'error'; result?: AIIdentificationResult; error?: string; itemId?: string };
 
 const TABS: Array<{ id: CFTab; label: string; icon: string }> = [
   { id: 'capture',   label: 'Capture',   icon: 'photo-camera'  },
@@ -489,6 +490,7 @@ function CaptureTab({
   // Quick mode
   quickMode, onToggleQuickMode, quickCaptures, onQuickCapture, onRunQuickBatch,
   quickRunning, quickDone, onClearQuick,
+  quickIdentificationResults, selectedQuickResult, onQuickResultSelect, onCloseQuickResult,
   // Islamic batch results
   islamicBatchItems, onIslamicItemPress,
   // Optional physical evidence passed into the AI identification request
@@ -504,6 +506,8 @@ function CaptureTab({
   quickCaptures: Array<{ id: string; uri: string; reverseUri?: string; label?: string }>;
   onQuickCapture: () => void; onRunQuickBatch: () => void;
   quickRunning: boolean; quickDone: boolean; onClearQuick: () => void;
+  quickIdentificationResults: QuickCoinResult[]; selectedQuickResult: QuickCoinResult | null;
+  onQuickResultSelect: (result: QuickCoinResult) => void; onCloseQuickResult: () => void;
   islamicBatchItems: IslamicBatchItem[]; onIslamicItemPress: (item: IslamicBatchItem) => void;
   weightInput: string; setWeightInput: (value: string) => void;
   diameterInput: string; setDiameterInput: (value: string) => void;
@@ -628,14 +632,35 @@ function CaptureTab({
                   </Pressable>
                 </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm, paddingVertical: Spacing.xs }}>
-                  {quickCaptures.map((cap, i) => (
-                    <View key={cap.id} style={[ct.quickThumb, { flexDirection: 'row' }]}>
-                      <View style={{ flex: 1, overflow: 'hidden' }}><Image source={{ uri: cap.uri }} style={ct.quickThumbImg} contentFit="cover" /><Text style={ct.quickSideLabel}>FRONT</Text></View>
-                      <View style={{ flex: 1, overflow: 'hidden', backgroundColor: CF.surfaceHigh }}>{cap.reverseUri ? <Image source={{ uri: cap.reverseUri }} style={ct.quickThumbImg} contentFit="cover" /> : <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><MaterialIcons name="add-a-photo" size={14} color={CF.textMuted} /></View>}<Text style={ct.quickSideLabel}>{cap.reverseUri ? 'BACK' : 'ADD BACK'}</Text></View>
-                      <View style={ct.quickThumbNum}><Text style={ct.quickThumbNumText}>{i + 1}</Text></View>
-                    </View>
-                  ))}
+                  {quickCaptures.map((cap, i) => {
+                    const result = quickIdentificationResults.find(entry => entry.id === cap.id);
+                    return (
+                      <Pressable key={cap.id} onPress={() => { if (result) onQuickResultSelect(result); }} accessibilityRole="button" accessibilityLabel={result ? `Review ${result.label} identification` : `Coin ${i + 1}, ${cap.reverseUri ? 'awaiting identification' : 'reverse needed'}`} style={[ct.quickThumb, { flexDirection: 'row' }]}>
+                        <View style={{ flex: 1, overflow: 'hidden' }}><Image source={{ uri: cap.uri }} style={ct.quickThumbImg} contentFit="cover" /><Text style={ct.quickSideLabel}>FRONT</Text></View>
+                        <View style={{ flex: 1, overflow: 'hidden', backgroundColor: CF.surfaceHigh }}>{cap.reverseUri ? <Image source={{ uri: cap.reverseUri }} style={ct.quickThumbImg} contentFit="cover" /> : <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><MaterialIcons name="add-a-photo" size={14} color={CF.textMuted} /></View>}<Text style={ct.quickSideLabel}>{cap.reverseUri ? 'BACK' : 'ADD BACK'}</Text></View>
+                        <View style={ct.quickThumbNum}><Text style={ct.quickThumbNumText}>{i + 1}</Text></View>
+                        {result ? <View style={{ position: 'absolute', top: 2, right: 2, borderRadius: 8, backgroundColor: result.status === 'error' ? CF.danger : result.status === 'complete' ? CF.success : CF.gold, paddingHorizontal: 3, paddingVertical: 1 }}><Text style={{ fontSize: 7, fontWeight: Typography.weight.bold, color: CF.black }}>{result.status === 'error' ? '!' : result.status === 'complete' ? '✓' : '…'}</Text></View> : null}
+                      </Pressable>
+                    );
+                  })}
                 </ScrollView>
+              </View>
+            ) : null}
+
+            {selectedQuickResult ? (
+              <View style={{ backgroundColor: CF.surface, borderColor: CF.gold + '55', borderWidth: 1, borderRadius: Radius.xl, padding: Spacing.md, gap: Spacing.sm }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+                  <Text style={{ flex: 1, color: CF.gold, fontWeight: Typography.weight.bold, fontSize: Typography.size.base }}>{selectedQuickResult.label} · Review</Text>
+                  <Pressable onPress={onCloseQuickResult} accessibilityRole="button" accessibilityLabel="Close coin review"><MaterialIcons name="close" size={18} color={CF.textPrimary} /></Pressable>
+                </View>
+                {selectedQuickResult.result ? <>
+                  <Text style={{ color: CF.textPrimary, fontSize: Typography.size.sm, fontWeight: Typography.weight.bold }}>{selectedQuickResult.result.canonicalTitle}</Text>
+                  <Text style={{ color: CF.textSub, fontSize: Typography.size.xs }}>{Math.round(selectedQuickResult.result.confidence * 100)}% confidence · {selectedQuickResult.result.identificationState ?? 'Candidate'}</Text>
+                  <Text style={{ color: CF.textSub, fontSize: Typography.size.xs }}>Condition: {selectedQuickResult.result.condition || 'Not established'}</Text>
+                  {selectedQuickResult.result.evidenceSupporting.slice(0, 3).map((evidence, i) => <Text key={i} style={{ color: CF.textSub, fontSize: Typography.size.xs }}>• {evidence}</Text>)}
+                  {selectedQuickResult.itemId ? <Text style={{ color: CF.success, fontSize: Typography.size.xs }}>Saved to inventory</Text> : null}
+                </> : <Text style={{ color: CF.textSub, fontSize: Typography.size.xs }}>{selectedQuickResult.error ?? 'Identification pending…'}</Text>}
+                {selectedQuickResult.error && selectedQuickResult.result ? <Text style={{ color: Colors.warning, fontSize: Typography.size.xs }}>{selectedQuickResult.error}</Text> : null}
               </View>
             ) : null}
 
@@ -1506,6 +1531,8 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
   // Multi-coin rapid-fire capture without leaving the Capture tab.
   const [quickMode, setQuickMode] = useState(false);
   const [quickCaptures, setQuickCaptures] = useState<Array<{ id: string; uri: string; reverseUri?: string }>>([]);
+  const [quickIdentificationResults, setQuickIdentificationResults] = useState<QuickCoinResult[]>([]);
+  const [selectedQuickResult, setSelectedQuickResult] = useState<QuickCoinResult | null>(null);
   const [quickRunning, setQuickRunning] = useState(false);
   const [quickDone, setQuickDone] = useState(false);
 
@@ -1606,6 +1633,8 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
   // ── Quick Mode: single-shot capture (fire camera, add to batch) ─────────────
   const handleQuickCapture = useCallback(async () => {
     if (quickRunning) return;
+    setQuickIdentificationResults([]);
+    setSelectedQuickResult(null);
     const addSideToCoin = (uri: string) => {
       setQuickCaptures(prev => {
         const pendingIndex = prev.findIndex(coin => !coin.reverseUri);
@@ -1663,6 +1692,8 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
         }
         if (batchResult.failed > 0) setAiError(`${batchResult.failed} coin(s) failed identification. Tap each result to review the error.`);
       } else {
+        const pendingResults: QuickCoinResult[] = quickCaptures.map((cap, index) => ({ id: cap.id, label: `Coin ${index + 1}`, images: [cap.uri, cap.reverseUri!], status: 'pending', error: 'Waiting for identification…' }));
+        setQuickIdentificationResults(pendingResults);
         for (const [index, cap] of quickCaptures.entries()) {
           const coinImages: CapturedImage[] = [
             { uri: cap.uri, slotId: 'obverse', slotLabel: 'Obverse' },
@@ -1670,9 +1701,21 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
           ];
           try {
             const { result, error } = await identifyItemWithAI(coinImages, selectedSpecialist.specialistId, undefined, undefined, { tenantId: tenant.id });
-            if (!result) { setAiError(`Coin ${index + 1}: ${error ?? 'Identification failed'}`); continue; }
+            if (!result) {
+              const message = error ?? 'Identification failed';
+              setQuickIdentificationResults(prev => prev.map(entry => entry.id === cap.id ? { ...entry, status: 'error', error: message } : entry));
+              setAiError(`Coin ${index + 1}: ${message}`);
+              continue;
+            }
+            setQuickIdentificationResults(prev => prev.map(entry => entry.id === cap.id ? { ...entry, status: 'complete', result, error: undefined } : entry));
             const { item, error: saveError } = await saveIdentifiedItem(tenant.id, result, { mediaUris: coinImages.map(img => img.uri) });
-            if (!item) { setAiError(`Coin ${index + 1} identified but not saved: ${saveError ?? 'Unknown save error'}`); continue; }
+            if (!item) {
+              const message = saveError ?? 'Unknown save error';
+              setQuickIdentificationResults(prev => prev.map(entry => entry.id === cap.id ? { ...entry, error: `Identified but not saved: ${message}` } : entry));
+              setAiError(`Coin ${index + 1} identified but not saved: ${message}`);
+              continue;
+            }
+            setQuickIdentificationResults(prev => prev.map(entry => entry.id === cap.id ? { ...entry, itemId: item.id } : entry));
             try {
               const { urls } = await uploadItemImages(item.id, coinImages);
               if (urls.length > 0) await updateItemMedia(tenant.id, item.id, urls);
@@ -1907,6 +1950,10 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
             quickMode={quickMode}
             onToggleQuickMode={() => { setQuickMode(v => !v); setQuickDone(false); }}
             quickCaptures={quickCaptures}
+            quickIdentificationResults={quickIdentificationResults}
+            selectedQuickResult={selectedQuickResult}
+            onQuickResultSelect={setSelectedQuickResult}
+            onCloseQuickResult={() => setSelectedQuickResult(null)}
             onQuickCapture={handleQuickCapture}
             onRunQuickBatch={handleRunQuickBatch}
             quickRunning={quickRunning}
