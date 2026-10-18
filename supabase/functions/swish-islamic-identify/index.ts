@@ -1297,7 +1297,7 @@ Deno.serve(async (req: Request) => {
           {
             role: 'system',
             content: `${ISLAMIC_SILVER_SYSTEM_PROMPT}\n${ISLAMIC_OUTPUT_SCHEMA}${compactRetry
-              ? '\\nRETRY: The previous response was truncated. Return compact valid JSON only. Limit to 3 candidates, keep every description to one short sentence, use short arrays, and do not repeat the schema or add prose.'
+              ? '\nRETRY: The previous response was truncated. Return compact valid JSON only. Limit to 3 candidates, keep every description to one short sentence, use short arrays, and do not repeat the schema or add prose.'
               : ''}`,
           },
           { role: 'user', content: userContent },
