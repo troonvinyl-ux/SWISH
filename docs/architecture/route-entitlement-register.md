@@ -102,3 +102,4 @@ These are configured build profiles, not proof that four release APKs have been 
 - 2026-10-18: Market valuation now checks that any supplied item ID belongs to the authenticated tenant and matches the requested product's specialist family, even when the caller supplies external image URLs (commit `ca22b3ccd7a99ffc66e4083b850ba5c88473a89b`).
 - 2026-10-18: eBay listing end route validates tenant-owned listing/item records and the saved external listing ID before ending; all local writes are tenant-scoped (commit `a6be2707b8becbdcc7b2923cd4b40ea594d71a89`).
 - 2026-10-18: eBay full sync listing and item updates now explicitly include `tenant_id` in every affected write path (commit `e06f0db2e929bc2cf2f36a3e80d1cb800c2280bd`).
+- 2026-10-18: eBay order import now scopes linked item reads and item/listing sold-status writes by `tenant_id` in both Fulfillment and Trading API paths (commit `2c8080033a6bb071346b162d0935f5c5f0db253a`).
