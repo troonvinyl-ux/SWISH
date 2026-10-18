@@ -1875,11 +1875,12 @@ async function handleRequest(req: Request): Promise<Response> {
     if (listingId) {
       try {
         const { data: listingRow } = await supabase.from('listings')
-          .select('item_id')
+          .select('items(id)')
           .eq('id', listingId)
           .eq('tenant_id', tenantId)
           .maybeSingle();
-        const itemId = listingRow?.item_id ?? body.itemId;
+        const relatedItems = (listingRow as any)?.items;
+        const itemId = (Array.isArray(relatedItems) ? relatedItems[0]?.id : relatedItems?.id) ?? body.itemId;
         if (itemId) {
           await supabase.from('items').update({
             inventory_id: sku,
