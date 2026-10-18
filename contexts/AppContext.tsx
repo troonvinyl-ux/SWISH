@@ -40,6 +40,7 @@ interface AppContextType {
   activeNiche: NicheConfig;
   activeNicheId: NicheId;
   enabledNiches: NicheId[];
+  nichePreferencesLoading: boolean;
   setActiveNiche: (id: NicheId) => void;
   enableNiche: (id: NicheId) => void;
   disableNiche: (id: NicheId) => void;
@@ -75,17 +76,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Niche state — persisted to AsyncStorage
   const [enabledNiches, setEnabledNiches] = useState<NicheId[]>(['general']);
   const [activeNicheId, setActiveNicheId] = useState<NicheId>('general');
+  const [nichePreferencesLoading, setNichePreferencesLoading] = useState(true);
 
   // Niche preferences are account-scoped. Device-wide niche state allowed one
   // signed-in account to inherit another account's selected product on shared devices.
   useEffect(() => {
     let cancelled = false;
+    setNichePreferencesLoading(true);
+    setActiveNicheId('general');
+    setEnabledNiches(['general']);
     const loadForAccount = async () => {
       if (!user?.id) {
         setActiveNicheId('general');
         setEnabledNiches(['general']);
         setSubscriptionStatus(null);
         setSubscriptionLoading(false);
+        setNichePreferencesLoading(false);
         return;
       }
 
@@ -108,9 +114,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setActiveNicheId('general');
           setEnabledNiches(['general']);
         }
+      } finally {
+        if (!cancelled) setNichePreferencesLoading(false);
       }
     };
-    loadForAccount().catch(() => {});
+    loadForAccount().catch(() => {
+      if (!cancelled) setNichePreferencesLoading(false);
+    });
     return () => { cancelled = true; };
   }, [user?.id]);
 
@@ -288,6 +298,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         activeNiche,
         activeNicheId,
         enabledNiches,
+        nichePreferencesLoading,
         setActiveNiche,
         enableNiche,
         disableNiche,
