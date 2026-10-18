@@ -434,7 +434,7 @@ export interface NumistaVerificationResult {
   matchFactors: string[]; contradictions: string[];
   issuedFrom?: number; issuedTo?: number;
   composition?: string; weight?: number; diameter?: number; thickness?: number;
-  mint?: string; issuer?: string; obverse?: string; reverse?: string;
+  mint?: string; issuer?: string; denomination?: string; country?: string; obverse?: string; reverse?: string;
   references: string[];
   suppliedWeight?: number; suppliedDiameter?: number;
   weightDifferencePercent?: number; diameterDifferenceMm?: number;
@@ -667,11 +667,15 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
       issuedFrom: directDetail.issued_from,
       issuedTo: directDetail.issued_to,
       composition: directDetail.composition?.material ?? directDetail.material ?? '',
+      denomination: directDetail.min_unit?.name ?? directDetail.denomination?.name ?? directDetail.denomination_name ?? '',
+      country: directDetail.country?.name ?? directDetail.country ?? directDetail.issuer?.country?.name ?? '',
       weight: directDetail.weight ?? null,
       diameter: directDetail.diameter ?? null,
       thickness: directDetail.thickness ?? null,
       mint: directDetail.mint?.name ?? directDetail.mint ?? '',
       issuer: directDetail.issuer?.name ?? directDetail.issuer ?? '',
+      denomination: directDetail.min_unit?.name ?? directDetail.denomination?.name ?? directDetail.denomination_name ?? '',
+      country: directDetail.country?.name ?? directDetail.country ?? directDetail.issuer?.country?.name ?? '',
       obverse: directDetail.obverse?.description ?? directDetail.obverse?.lettering ?? '',
       reverse: directDetail.reverse?.description ?? directDetail.reverse?.lettering ?? '',
       references: directReferences,
@@ -761,6 +765,8 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
     composition: src.composition?.material ?? src.material ?? '',
     weight: src.weight ?? null, diameter: src.diameter ?? null, thickness: src.thickness ?? null,
     mint: src.mint?.name ?? src.mint ?? '', issuer: src.issuer?.name ?? src.issuer ?? '',
+    denomination: src.min_unit?.name ?? src.denomination?.name ?? src.denomination_name ?? '',
+    country: src.country?.name ?? src.country ?? src.issuer?.country?.name ?? '',
     obverse: typeDetail?.obverse?.description ?? typeDetail?.obverse?.lettering ?? '',
     reverse: typeDetail?.reverse?.description ?? typeDetail?.reverse?.lettering ?? '',
     references, suppliedWeight: suppliedWeight ?? undefined, suppliedDiameter: suppliedDiameter ?? undefined,
@@ -780,8 +786,27 @@ function applyNumistaToIdentification(identification: any, numista: NumistaVerif
   result.numistaUrl = numista.numistaUrl ?? null;
   result.numistaMatchScore = numista.matchScore;
   result.numistaMatchTier = numista.matchTier;
+  // Keep catalogue fields as explicit suggestions even when the match is not
+  // strong enough to confirm the coin identity. Consumers can review these
+  // without confusing them with user-measured or user-confirmed attributes.
+  result.attributes = result.attributes ?? {};
+  if (numista.typeId || numista.numistaN) {
+    result.attributes.numista_catalogue_suggestions = {
+      reference: numista.numistaN ?? (numista.typeId ? `N#${numista.typeId}` : null),
+      url: numista.numistaUrl ?? null, title: numista.title ?? null,
+      matchScore: numista.matchScore, matchTier: numista.matchTier, status: numista.status,
+      denomination: numista.denomination || null, issuer: numista.issuer || null,
+      country: numista.country || null, issuedFrom: numista.issuedFrom ?? null,
+      issuedTo: numista.issuedTo ?? null,
+      period: numista.issuedFrom != null || numista.issuedTo != null ? `${numista.issuedFrom ?? '?'}–${numista.issuedTo ?? '?'}` : null,
+      mint: numista.mint || null, material: numista.composition || null,
+      catalogueWeightGrams: numista.weight ?? null, catalogueDiameterMm: numista.diameter ?? null,
+      catalogueThicknessMm: numista.thickness ?? null, catalogueReferences: numista.references ?? [],
+      contradictions: numista.contradictions ?? [],
+    };
+  }
 
-  if (!Array.isArray(result.warnings)) result.warnings = [];
+  if (!Array.isArray(result.warnings)) result.warnings = []
   for (const contra of numista.contradictions) { if (!result.warnings.includes(contra)) result.warnings.push(contra); }
 
   if (numista.status === 'verified' || numista.status === 'strong_match') {
