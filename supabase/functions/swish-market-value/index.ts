@@ -79,6 +79,22 @@ async function verifyTenantAccess(
   } catch (e: any) { return { ok: false, error: `Auth error: ${e.message}` }; }
 }
 
+// Resolve item specialists to the four production product boundaries.
+// Legacy collectible records remain in Coins for compatibility; unknown IDs
+// do not gain access to an item's valuation context.
+function productForSpecialist(specialistId: string | null | undefined): string | null {
+  const id = String(specialistId ?? '').trim().toLowerCase();
+  if ([
+    'coins', 'coins_uk', 'coins_world', 'coins_currency', 'islamic_silver',
+    'banknotes', 'gold', 'silver', 'ancient_artefacts',
+    'jewellery_precious_metals', 'curiosities_collectibles',
+  ].includes(id) || id.includes('coin')) return 'coins';
+  if (id === 'motocross' || id === 'mx' || id === 'flipper_mx') return 'motocross';
+  if (id === 'bicycles' || id === 'cycling' || id === 'bike_flipper') return 'bicycles';
+  if (id === 'clothing' || id === 'trainers_sneakers' || id === 'trainers') return 'clothing';
+  return null;
+}
+
 // ── Currency ──────────────────────────────────────────────────────────────────
 function toGBP(price: number, currency: string): number {
   const rates: Record<string, number> = {
@@ -1113,7 +1129,8 @@ Deno.serve(async (req: Request) => {
   } = body;
 
   if (!tenantId) return jsonResponse({ error: 'tenantId is required' }, 400);
-  if (!title || title.trim().length < 3) return jsonResponse({ error: 'title is required (min 3 chars)' }, 400);
+  if (typeof title !== 'string' || title.trim().length < 3) return jsonResponse({ error: 'title is required (min 3 chars)' }, 400);
+  if (typeof specialistId !== 'string' || !specialistId.trim()) return jsonResponse({ error: 'specialistId must be a non-empty string' }, 400);
 
   const supabase = adminClient();
   const authHeader = req.headers.get('Authorization');
@@ -1130,12 +1147,32 @@ Deno.serve(async (req: Request) => {
   }
   console.log(`[SWISH Market v7] Token: expires=${creds.expiresAt} hasAnalyticsScope=${creds.hasAnalyticsScope}`);
 
+  // ── Item ownership and niche isolation ─────────────────────────────────────
+  // Always verify an item ID, even when the caller also supplies image URLs.
+  // Otherwise a request could attach another niche's item ID to a different
+  // specialist context while still passing tenant-level access checks.
+  let itemRow: any = null;
+  if (itemId) {
+    const { data, error } = await supabase.from('items')
+      .select('media, specialist_id')
+      .eq('id', itemId)
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+    if (error || !data) return jsonResponse({ error: 'Item not found in this tenant.' }, 404);
+    itemRow = data;
+
+    const itemProduct = productForSpecialist(itemRow.specialist_id);
+    const requestedProduct = productForSpecialist(specialistId);
+    if (!itemProduct || !requestedProduct || itemProduct !== requestedProduct) {
+      return jsonResponse({ error: 'Item and valuation specialist belong to different products.' }, 403);
+    }
+  }
+
   // ── Item images ────────────────────────────────────────────────────────────
   let imageUrls: string[] = [];
   if (Array.isArray(callerImageUrls) && callerImageUrls.length > 0) {
     imageUrls = callerImageUrls.filter((u: string) => typeof u === 'string' && u.startsWith('https://'));
   } else if (itemId) {
-    const { data: itemRow } = await supabase.from('items').select('media').eq('id', itemId).eq('tenant_id', tenantId).maybeSingle();
     imageUrls = ((itemRow?.media ?? []) as string[]).filter(u => typeof u === 'string' && u.startsWith('https://'));
   }
   // Research Centre sends a local image as a data URL. Keep it in-memory only:
