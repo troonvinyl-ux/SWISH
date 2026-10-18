@@ -29,10 +29,10 @@ oins';
 }
 
 function AppRouter() {
-  const { businessConfig, tenantLoading, activeNicheId } = useApp();
+  const { businessConfig, tenantLoading, activeNicheId, nichePreferencesLoading } = useApp();
 
   // Still loading tenant/config
-  if (tenantLoading) {
+  if (tenantLoading || nichePreferencesLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" color={Colors.primary} />
