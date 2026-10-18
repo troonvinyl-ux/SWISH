@@ -440,6 +440,7 @@ async function searchEbayBrowse(
   query: string,
   maxResults = 50,
   skipMarketplaceFilter = false,
+  fallbackToken?: string | null,
 ): Promise<BrowseSearchResult> {
   const noResult: BrowseSearchResult = { available: false, items: [], totalFound: 0, query };
   if (!accessToken || !query || query.length < 3) return noResult;
@@ -456,10 +457,26 @@ async function searchEbayBrowse(
     // Only add marketplace restriction when not doing a global fallback search
     if (!skipMarketplaceFilter) headers['X-EBAY-C-MARKETPLACE-ID'] = EBAY_GLOBAL_ID;
 
-    const resp = await fetch(`${EBAY_BROWSE_BASE}/item_summary/search?${params}`, {
+    let resp = await fetch(`${EBAY_BROWSE_BASE}/item_summary/search?${params}`, {
       headers,
       signal: AbortSignal.timeout(15000),
     });
+
+    // Retry authentication failures with the application token before reporting a dead search.
+    if (!resp.ok && (resp.status === 401 || resp.status === 403) && fallbackToken && fallbackToken !== accessToken) {
+      const firstStatus = resp.status;
+      await resp.text();
+      console.log(`[SWISH Market v8] Browse user-token request returned ${firstStatus}; retrying with application token`);
+      const fallbackHeaders: Record<string, string> = {
+        Authorization: `Bearer ${fallbackToken}`,
+        'Content-Type': 'application/json',
+      };
+      if (!skipMarketplaceFilter) fallbackHeaders['X-EBAY-C-MARKETPLACE-ID'] = EBAY_GLOBAL_ID;
+      resp = await fetch(`${EBAY_BROWSE_BASE}/item_summary/search?${params}`, {
+        headers: fallbackHeaders,
+        signal: AbortSignal.timeout(15000),
+      });
+    }
     if (!resp.ok) {
       const errText = await resp.text();
       console.log(`[SWISH Market v8] Browse API ${resp.status}: ${errText.slice(0, 200)}`);
@@ -1070,7 +1087,7 @@ Deno.serve(async (req: Request) => {
 
   const [teapeakResult, firstBrowseResult, visualSearch, firstSoldSearch] = await Promise.all([
     callTerapeak(creds.accessToken, primaryQuery, 'PREVIOUS_3_MONTHS'),
-    searchEbayBrowse(creds.accessToken, primaryQuery, 50),
+    searchEbayBrowse(creds.accessToken, primaryQuery, 50, false, appToken),
     (appToken && (inlineImageBase64 || imageUrls.length > 0)) ? runEbayVisualSearch(inlineImageBase64 || imageUrls[0], appToken) : Promise.resolve<VisualSearchResult>({ available: false, items: [], totalFound: 0 }),
     searchEbaySoldListings(appToken, primaryQuery, 50),
   ]);
@@ -1098,7 +1115,7 @@ Deno.serve(async (req: Request) => {
   if (needsMoreBrowse) {
     for (const query of searchQueries.slice(1)) {
       await sleep(500);
-      const result = await searchEbayBrowse(creds.accessToken, query, 40);
+      const result = await searchEbayBrowse(creds.accessToken, query, 40, false, appToken);
       browseResults.push(result);
       const totalSoFar = browseResults.reduce((sum, r) => sum + r.items.length, 0);
       if (totalSoFar >= 12) break;
@@ -1110,7 +1127,7 @@ Deno.serve(async (req: Request) => {
       const broadQuery = searchQueries[searchQueries.length - 1]; // last = broadest
       console.log(`[SWISH Market v8] Very thin results (${totalAfterFallbacks}) — trying global Browse (no marketplace filter): "${broadQuery}"`);
       await sleep(400);
-      const globalResult = await searchEbayBrowse(creds.accessToken, broadQuery, 30, true);
+      const globalResult = await searchEbayBrowse(creds.accessToken, broadQuery, 30, true, appToken);
       if (globalResult.items.length > 0) {
         browseResults.push(globalResult);
         console.log(`[SWISH Market v8] Global Browse returned ${globalResult.items.length} additional items`);
