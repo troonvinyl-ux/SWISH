@@ -1288,20 +1288,28 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const aiResp = await fetch(`${baseUrl}/chat/completions`, {
+    const requestIdentification = async (compactRetry = false) => fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: 'google/gemini-2.5-flash',
         messages: [
-          { role: 'system', content: `${ISLAMIC_SILVER_SYSTEM_PROMPT}\n${ISLAMIC_OUTPUT_SCHEMA}` },
+          {
+            role: 'system',
+            content: `${ISLAMIC_SILVER_SYSTEM_PROMPT}\n${ISLAMIC_OUTPUT_SCHEMA}${compactRetry
+              ? '\\nRETRY: The previous response was truncated. Return compact valid JSON only. Limit to 3 candidates, keep every description to one short sentence, use short arrays, and do not repeat the schema or add prose.'
+              : ''}`,
+          },
           { role: 'user', content: userContent },
         ],
         temperature: 0.05,
-        max_tokens: 3500,
+        // The schema is intentionally detailed; leave enough room for a complete
+        // response when four stored photos and full listing data are supplied.
+        max_tokens: compactRetry ? 6000 : 5000,
       }),
     });
 
+    let aiResp = await requestIdentification(false);
     if (!aiResp.ok) {
       const errText = await aiResp.text();
       return new Response(
@@ -1310,7 +1318,22 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const aiData = await aiResp.json();
+    let aiData = await aiResp.json();
+    // Gemini can hit the output-token ceiling on large listing re-identifications.
+    // Retry once with a compact-output instruction rather than passing truncated
+    // JSON into the evidence pipeline.
+    if (aiData.choices?.[0]?.finish_reason === 'length') {
+      console.warn('[swish-islamic-identify] AI output truncated; retrying with compact JSON');
+      aiResp = await requestIdentification(true);
+      if (!aiResp.ok) {
+        const errText = await aiResp.text();
+        return new Response(
+          JSON.stringify({ error: `OnSpace AI retry error: ${errText}` }),
+          { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      aiData = await aiResp.json();
+    }
     const rawContent = aiData.choices?.[0]?.message?.content ?? '';
 
     let aiOutput: any;
