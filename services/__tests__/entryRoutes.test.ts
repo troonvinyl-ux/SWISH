@@ -11,37 +11,7 @@
 // Run with: npx jest services/__tests__/entryRoutes.test.ts
 // (No native modules required — pure TypeScript logic tests.)
 
-// ── Inline implementation of nicheToEntryRoute (mirrors app/index.tsx) ──────
-// We inline the function here so tests remain independent of the React
-// component tree and can run in a plain Node/Jest environment.
-
-type NicheId =
-  | 'coins' | 'trading_cards' | 'antiques' | 'bicycles' | 'motocross'
-  | 'fossils' | 'clothing' | 'beauty' | 'general';
-
-function nicheToEntryRoute(nicheId: NicheId | null | undefined): string {
-  if (!nicheId) return '/entry/coins';
-
-  const id = nicheId.toLowerCase();
-
-  if (
-    id === 'coins' || id === 'coins_uk' || id === 'coins_world' ||
-    id === 'banknotes' || id === 'gold' || id === 'silver' ||
-    id === 'islamic_silver' || id === 'ancient_artefacts' ||
-    id === 'curiosities_collectibles' || id.includes('coin')
-  ) return '/entry/coins';
-
-  if (id === 'motocross' || id === 'mx') return '/entry/motocross';
-
-  if (id === 'bicycles' || id === 'cycling' || id === 'bikes') return '/entry/bicycles';
-
-  if (
-    id === 'clothing' || id === 'fashion' ||
-    id === 'trainers_sneakers' || id === 'trainers' || id === 'threads_flip'
-  ) return '/entry/clothing';
-
-  return '/entry/coins'; // fallback
-}
+import { nicheToEntryRoute } from '@/services/nicheRouting';
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
@@ -1568,14 +1538,17 @@ describe('SWISH-030 Issue 3: Android CI/CD Signing (Static Config Inspection)', 
     test('silver → /entry/coins', () => {
       expect(nicheToEntryRoute('silver' as any)).toBe('/entry/coins');
     });
-    test('null → /entry/coins (fallback)', () => {
-      expect(nicheToEntryRoute(null)).toBe('/entry/coins');
+    test('null → null (fail closed)', () => {
+      expect(nicheToEntryRoute(null)).toBeNull();
     });
-    test('undefined → /entry/coins (fallback)', () => {
-      expect(nicheToEntryRoute(undefined)).toBe('/entry/coins');
+    test('undefined → null (fail closed)', () => {
+      expect(nicheToEntryRoute(undefined)).toBeNull();
     });
-    test('general → /entry/coins (unknown niche fallback)', () => {
-      expect(nicheToEntryRoute('general')).toBe('/entry/coins');
+    test('general → null (inactive niche must not fall back to Coins)', () => {
+      expect(nicheToEntryRoute('general')).toBeNull();
+    });
+    test('unknown niche → null (fail closed)', () => {
+      expect(nicheToEntryRoute('made_up_niche')).toBeNull();
     });
   });
 
