@@ -9,6 +9,7 @@
 
 import { getSupabaseClient } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
+import { prepareImageForAI } from '@/services/aiIdentificationService';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -196,9 +197,12 @@ export async function identifyIslamicSilver(
   const supabase = getSupabaseClient();
 
   try {
+    const preparedImages = input.images?.length
+      ? await Promise.all(input.images.map(prepareImageForAI))
+      : undefined;
     const { data, error } = await supabase.functions.invoke('swish-islamic-identify', {
       body: {
-        images: input.images,
+        images: preparedImages,
         existingImageUrls: input.existingImageUrls,
         weight: input.weight,
         diameter: input.diameter,
