@@ -32,19 +32,16 @@ import { upsertBusinessConfig } from '@/services/businessConfigService';
 import { getSupabaseClient } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import type { NicheId } from '@/constants/niches';
+import { nicheToEntryRoute as resolveNicheEntryRoute } from '@/services/nicheRouting';
 import { classifyListing, nicheToSpecialistId } from '@/services/nicheCategoryService';
 import type { SpecialistId } from '@/constants/specialists';
 
 const TOTAL_STEPS = 3;
 const STEP_LABELS = ['Your Niche', 'Your Store', 'Connect eBay'];
 
-// Niche → entry route mapping (mirrors app/index.tsx)
+// Onboarding shares the same fail-closed route resolver as the root router.
 function nicheToEntryRoute(nicheId: NicheId): string {
-  const id = nicheId.toLowerCase();
-  if (id === 'motocross') return '/entry/motocross';
-  if (id === 'bicycles' || id === 'cycling') return '/entry/bicycles';
-  if (id === 'clothing' || id === 'fashion') return '/entry/clothing';
-  return '/entry/coins';
+  return resolveNicheEntryRoute(nicheId) ?? '/niche-select';
 }
 
 // The four primary subscriber niches available at onboarding
