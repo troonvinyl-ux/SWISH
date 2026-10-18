@@ -15,6 +15,9 @@ on:
       - 'app/niche-select.tsx'
       - 'app/onboarding.tsx'
       - 'supabase/functions/swish-create-checkout/index.ts'
+      - 'supabase/functions/swish-ebay-list/index.ts'
+      - 'supabase/functions/swish-ebay-sync/index.ts'
+      - 'supabase/functions/swish-ebay-orders/index.ts'
       - '.github/workflows/niche-config-checks.yml'
   pull_request:
     paths:
@@ -29,6 +32,9 @@ on:
       - 'app/niche-select.tsx'
       - 'app/onboarding.tsx'
       - 'supabase/functions/swish-create-checkout/index.ts'
+      - 'supabase/functions/swish-ebay-list/index.ts'
+      - 'supabase/functions/swish-ebay-sync/index.ts'
+      - 'supabase/functions/swish-ebay-orders/index.ts'
       - '.github/workflows/niche-config-checks.yml'
 
 jobs:
