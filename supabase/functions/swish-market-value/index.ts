@@ -686,16 +686,16 @@ function buildSearchQueries(title: string, attributes: Record<string, any>, spec
     const titleLower = sanitised.toLowerCase();
     const coinQueries = [
       sanitised,
-      /\\bcoin\\b/i.test(sanitised) ? sanitised : `${sanitised} coin`,
+      /\bcoin\b/i.test(sanitised) ? sanitised : `${sanitised} coin`,
     ];
-    if (/\\btanka?s?\\b/i.test(titleLower)) {
+    if (/\btanka?s?\b/i.test(titleLower)) {
       coinQueries.push(
         `${sanitised} silver coin`,
         'Islamic silver tanka coin',
         'silver tanka coin'
       );
     }
-    if (/\\bdirham?s?\\b/i.test(titleLower)) {
+    if (/\bdirham?s?\b/i.test(titleLower)) {
       coinQueries.push(`${sanitised} Islamic silver coin`, 'Islamic silver dirham coin');
     }
     if (/jammu/.test(titleLower) && /kashmir/.test(titleLower)) {
