@@ -89,6 +89,54 @@ function toGBP(price: number, currency: string): number {
 }
 
 // ── Title sanitisation ────────────────────────────────────────────────────────
+// ── Supplemental structured reference: CANOA ancient coin catalogue ───────────
+// Public JSON catalogue only; reference candidates never count as sold-price data.
+// Museum image URLs are intentionally not copied into SWISH because image rights
+// remain with the holding institutions. Failures are non-fatal and time-bounded.
+interface CanoaCoinCandidate {
+  id?: number;
+  title: string;
+  catalogueNumber?: string;
+  ruler?: string;
+  mint?: string;
+  denomination?: string;
+  material?: string;
+  dateFrom?: number | null;
+  dateTo?: number | null;
+  specimenCount?: number;
+  url?: string;
+}
+async function searchCanoaCoinTypes(query: string): Promise<{ available: boolean; query: string; items: CanoaCoinCandidate[]; error?: string }> {
+  const empty = { available: false, query, items: [] as CanoaCoinCandidate[] };
+  if (!query || query.trim().length < 3) return empty;
+  try {
+    const params = new URLSearchParams({ q: query.trim().slice(0, 100), per_page: "8" });
+    const response = await fetch(`https://canoanumis.org/api/coins?${params.toString()}`, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(7000),
+    });
+    if (!response.ok) return { ...empty, error: `CANOA HTTP ${response.status}` };
+    const data = await response.json();
+    const raw = Array.isArray(data.results) ? data.results : [];
+    const items = raw.map((item: any): CanoaCoinCandidate => ({
+      id: Number.isFinite(Number(item.id)) ? Number(item.id) : undefined,
+      title: String(item.label ?? item.pref_label ?? "").slice(0, 180),
+      catalogueNumber: String(item.ocre_id ?? "").slice(0, 80) || undefined,
+      ruler: String(item.authority ?? "").slice(0, 100) || undefined,
+      mint: String(item.mint ?? "").slice(0, 100) || undefined,
+      denomination: String(item.denomination ?? "").slice(0, 80) || undefined,
+      material: String(item.material ?? "").slice(0, 80) || undefined,
+      dateFrom: Number.isFinite(Number(item.date_from)) ? Number(item.date_from) : null,
+      dateTo: Number.isFinite(Number(item.date_to)) ? Number(item.date_to) : null,
+      specimenCount: Number.isFinite(Number(item.specimen_count)) ? Number(item.specimen_count) : undefined,
+      url: typeof item.url === "string" && item.url.startsWith("/") ? `https://canoanumis.org${item.url}` : (typeof item.url === "string" && item.url.startsWith("https://") ? item.url : undefined),
+    })).filter((item: CanoaCoinCandidate) => item.title && item.url);
+    return { available: true, query, items: items.slice(0, 8) };
+  } catch (error: any) {
+    return { ...empty, error: error?.name === "TimeoutError" ? "CANOA request timed out" : "CANOA reference search unavailable" };
+  }
+}
+
 function sanitiseTitle(raw: string): string {
   return raw
     .replace(/PROVISIONAL\s*/gi, '')
@@ -1088,6 +1136,14 @@ Deno.serve(async (req: Request) => {
   ]);
   console.log(`[SWISH Market v7] Gemini: available=${gemini.available} mid=£${gemini.estimatedMid} conf=${gemini.confidence}`);
 
+  // CANOA covers ancient-world reference catalogues; keep it supplementary and
+  // non-blocking. Modern/princely-state and Islamic coin coverage may be absent.
+  const isCoinResearch = specialistId.toLowerCase().includes('coin')
+    || ['islamic_silver', 'ancient_artefacts', 'gold', 'silver', 'banknotes'].includes(specialistId);
+  const canoaPromise = isCoinResearch
+    ? searchCanoaCoinTypes(cleanTitle)
+    : Promise.resolve({ available: false, query: cleanTitle, items: [] as CanoaCoinCandidate[] });
+
   // ── Build search queries ───────────────────────────────────────────────────
   const searchQueries = buildSearchQueries(cleanTitle, attributes, specialistId, gemini.searchTerms);
   console.log(`[SWISH Market v7] Queries: ${searchQueries.map((q, i) => `[${i + 1}] "${q}"`).join(', ')}`);
@@ -1259,7 +1315,7 @@ Deno.serve(async (req: Request) => {
   // ── Build response ─────────────────────────────────────────────────────────
   return jsonResponse({
     success: true,
-    version: 'v8',
+    version: 'v9',
     searchQuery: searchQueries[0],
     searchQueriesUsed: searchQueries,
     valuation,
@@ -1380,6 +1436,9 @@ Deno.serve(async (req: Request) => {
       totalFound: visualSearch.totalFound,
       items: visualSearch.items.slice(0, 6).map(i => ({ title: i.title.slice(0, 80), price: i.price, currency: i.currency, imageUrl: i.imageUrl, url: i.url })),
     },
+
+    // CANOA is catalogue evidence only: never a price source and never a confirmed attribution.
+    canoaReference: await canoaPromise,
 
     numistaSales: null,
 
