@@ -17,6 +17,8 @@ export interface SubscriptionStatus {
   productId: string | null;
   priceId: string | null;
   subscriptionEnd: string | null;
+  // null means an older check-subscription response without niche entitlements.
+  nicheEntitlements: string[] | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -55,6 +57,7 @@ export async function checkSubscription(): Promise<{
     product_id: string | null;
     price_id: string | null;
     subscription_end: string | null;
+    niche_entitlements?: string[];
   }>('swish-check-subscription');
 
   if (error || !data) {
@@ -67,6 +70,7 @@ export async function checkSubscription(): Promise<{
       productId: data.product_id,
       priceId: data.price_id,
       subscriptionEnd: data.subscription_end,
+      nicheEntitlements: Array.isArray(data.niche_entitlements) ? data.niche_entitlements : null,
     },
     error: null,
   };
@@ -80,13 +84,20 @@ export const PREMIUM_TIERS = ['professional', 'business', 'enterprise', 'lifetim
 export function isPremiumSubscriber(
   status: SubscriptionStatus | null,
   subscriptionTier?: string | null,
+  activeNicheId = 'coins',
 ): boolean {
-  // Lifetime / enterprise tiers set directly on the tenant always grant premium
+  // Existing tenant-level premium tiers intentionally remain global.
   if (subscriptionTier && PREMIUM_TIERS.includes(subscriptionTier)) return true;
-  // Otherwise fall back to active Stripe subscription
-  if (!status?.subscribed) return false;
-  if (!status.productId) return false;
-  return status.productId === STRIPE_PRODUCT_ID;
+  if (!status?.subscribed || status.productId !== STRIPE_PRODUCT_ID) return false;
+
+  // New endpoint responses explicitly scope access to the purchased niche(s).
+  if (status.nicheEntitlements !== null) {
+    return status.nicheEntitlements.includes(activeNicheId);
+  }
+
+  // Backward compatibility while an older deployed Edge Function is still live:
+  // an unscoped legacy response may unlock Coins only, never another niche.
+  return activeNicheId === 'coins';
 }
 
 // ── Start Stripe Checkout ─────────────────────────────────────────────────────
