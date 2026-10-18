@@ -549,13 +549,15 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
   const apiKey = Deno.env.get('NUMISTA_API_KEY') ?? '';
   if (!apiKey) {
     const suppliedReferenceText = [
+      // Explicit notes entered during re-identification take priority over a
+      // possibly stale catalogue number already stored on the inventory item.
+      knownAttributes?.customNotes,
       knownAttributes?.catalogueNumber,
       knownAttributes?.catalogue_number,
       knownAttributes?.numistaN,
       knownAttributes?.numista_n,
       knownAttributes?.numistaUrl,
       knownAttributes?.numista_url,
-      knownAttributes?.customNotes,
       ...Object.entries(knownAttributes?.existingAttributes ?? {})
         .filter(([key]) => /catalogue.?number|numista.?n|numista.?url/i.test(key))
         .map(([, value]) => String(value ?? '')),
@@ -594,13 +596,15 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
   // ordinary prompt text. Resolve it directly before broad text search so the
   // exact type is checked even when the AI's current denomination/ruler is wrong.
   const referenceText = [
+    // Re-identification's explicit user-entered reference must override an old
+    // catalogue number on the item; otherwise stale IDs hijack direct lookup.
+    knownAttributes?.customNotes,
     knownAttributes?.catalogueNumber,
     knownAttributes?.catalogue_number,
     knownAttributes?.numistaN,
     knownAttributes?.numista_n,
     knownAttributes?.numistaUrl,
     knownAttributes?.numista_url,
-    knownAttributes?.customNotes,
     ...Object.entries(knownAttributes?.existingAttributes ?? {})
       .filter(([key]) => /catalogue.?number|numista.?n|numista.?url/i.test(key))
       .map(([, value]) => String(value ?? '')),
