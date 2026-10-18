@@ -6,13 +6,14 @@ import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { PRODUCTION_NICHES, NICHE_LIST, NicheId, NicheConfig } from '@/constants/niches';
+import { nicheToEntryRoute } from '@/services/nicheRouting';
 
 function NicheCard({
   niche,
@@ -105,7 +106,7 @@ function NicheCard({
 export default function NicheSelectScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { activeNicheId, enabledNiches, setActiveNiche, enableNiche, disableNiche } = useApp();
+  const { activeNicheId, fixedNicheId, enabledNiches, setActiveNiche, enableNiche, disableNiche } = useApp();
 
   const handleSetActive = (id: NicheId) => {
     setActiveNiche(id);
@@ -120,6 +121,12 @@ export default function NicheSelectScreen() {
       enableNiche(id);
     }
   };
+
+  // Branded builds are single-product apps, not a multi-niche switcher.
+  if (fixedNicheId) {
+    const route = nicheToEntryRoute(fixedNicheId);
+    if (route) return <Redirect href={route as any} />;
+  }
 
   return (
     <View style={s.container}>
