@@ -71,6 +71,7 @@ module.exports = ({ config }) => {
     extra: {
       ...config.extra,
       swishNicheId: niche.id,
+      swishAppScheme: niche.scheme,
     },
   };
 };
