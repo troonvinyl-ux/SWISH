@@ -159,6 +159,8 @@ export async function getMarketValue(params: {
   applyToItem?: boolean;
   /** Stored item image URLs to pass for Gemini vision + eBay visual search */
   imageUrls?: string[];
+  /** Optional in-memory image data URL for research; never persisted by this service */
+  imageBase64?: string;
 }): Promise<{ result: MarketValueResult | null; error: string | null }> {
   try {
     const supabase = getSupabaseClient();
