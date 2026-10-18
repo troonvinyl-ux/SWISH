@@ -123,12 +123,14 @@ export async function listOrders(
   return { orders: (data ?? []).map(mapOrder), error: null };
 }
 
-export async function getOrder(id: string): Promise<{ order: Order | null; error: string | null }> {
+export async function getOrder(id: string, tenantId: string): Promise<{ order: Order | null; error: string | null }> {
+  if (!tenantId) return { order: null, error: 'tenantId is required.' };
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from('orders')
     .select('*, items(canonical_title), listings(title)')
     .eq('id', id)
+    .eq('tenant_id', tenantId)
     .single();
 
   if (error) return { order: null, error: error.message };
@@ -152,6 +154,24 @@ export async function createOrder(
   }
 ): Promise<{ order: Order | null; error: string | null }> {
   const supabase = getSupabaseClient();
+
+  if (!tenantId) return { order: null, error: 'tenantId is required.' };
+
+  // Validate linked records before creating a tenant-owned order. This prevents
+  // a caller from linking another tenant's item or listing by supplying its ID.
+  if (input.itemId) {
+    const { data: linkedItem, error: linkedItemError } = await supabase
+      .from('items').select('id').eq('id', input.itemId).eq('tenant_id', tenantId).maybeSingle();
+    if (linkedItemError || !linkedItem) return { order: null, error: 'Inventory item not found or access denied.' };
+  }
+  if (input.listingId) {
+    const { data: linkedListing, error: linkedListingError } = await supabase
+      .from('listings').select('id, item_id').eq('id', input.listingId).eq('tenant_id', tenantId).maybeSingle();
+    if (linkedListingError || !linkedListing) return { order: null, error: 'Listing not found or access denied.' };
+    if (input.itemId && linkedListing.item_id && linkedListing.item_id !== input.itemId) {
+      return { order: null, error: 'The selected listing does not belong to the selected inventory item.' };
+    }
+  }
 
   // Use actual marketplace fee when provided. The fallback (12.75%) is an indicative
   // estimate for eBay UK — actual fees vary by category, price tier and seller level.
@@ -191,7 +211,8 @@ export async function createOrder(
     await supabase
       .from('items')
       .update({ status: 'sold', sold_price: input.salePrice, sold_at: new Date().toISOString(), marketplace: input.marketplaceId })
-      .eq('id', input.itemId);
+      .eq('id', input.itemId)
+      .eq('tenant_id', tenantId);
   }
 
   return { order: mapOrder(data), error: null };
@@ -199,6 +220,7 @@ export async function createOrder(
 
 export async function updateOrderStatus(
   orderId: string,
+  tenantId: string,
   status: OrderStatus,
   extra?: {
     trackingNumber?: string;
@@ -238,7 +260,8 @@ export async function updateOrderStatus(
     updates.requires_action = false;
   }
 
-  const { error } = await supabase.from('orders').update(updates).eq('id', orderId);
+  if (!tenantId) return { error: 'tenantId is required.' };
+  const { error } = await supabase.from('orders').update(updates).eq('id', orderId).eq('tenant_id', tenantId);
   return { error: error?.message ?? null };
 }
 
