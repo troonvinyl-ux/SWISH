@@ -84,11 +84,11 @@ jobs:
           echo "No TypeScript diagnostics in the coin scanner or AI services."
           echo "The existing project-wide check also reports unrelated errors in other files; those are not used as a gate here."
 
-      - name: Install matching Expo Jest runner for regression tests
-        run: pnpm add -D jest@29.7.0 jest-expo@~53.0.10
+      - name: Install Jest runner for pure service regression tests
+        run: pnpm add -D jest@29.7.0
 
       - name: Run routing and build-identity regression tests
-        run: npx jest --runInBand services/__tests__/entryRoutes.test.ts services/__tests__/nicheIsolation.test.ts services/__tests__/brandedBuildConfig.test.ts
+        run: npx jest --config jest.config.ci.js --runInBand services/__tests__/entryRoutes.test.ts services/__tests__/nicheIsolation.test.ts services/__tests__/brandedBuildConfig.test.ts
 
       - name: Validate all four Expo branded configurations
         shell: bash
