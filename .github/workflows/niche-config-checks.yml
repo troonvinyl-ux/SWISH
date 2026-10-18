@@ -21,6 +21,9 @@ on:
       - 'supabase/functions/swish-ebay-post-order/index.ts'
       - 'supabase/functions/swish-ebay-finances/index.ts'
       - 'services/orderService.ts'
+      - 'app/coin-flipper.tsx'
+      - 'services/aiIdentificationService.ts'
+      - 'services/islamicIdentificationService.ts'
       - '.github/workflows/niche-config-checks.yml'
   pull_request:
     paths:
@@ -41,6 +44,9 @@ on:
       - 'supabase/functions/swish-ebay-post-order/index.ts'
       - 'supabase/functions/swish-ebay-finances/index.ts'
       - 'services/orderService.ts'
+      - 'app/coin-flipper.tsx'
+      - 'services/aiIdentificationService.ts'
+      - 'services/islamicIdentificationService.ts'
       - '.github/workflows/niche-config-checks.yml'
 
 jobs:
@@ -64,6 +70,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
+
+      - name: Type-check application and services
+        run: npx tsc --noEmit
 
       - name: Run routing and build-identity regression tests
         run: npx jest --runInBand services/__tests__/entryRoutes.test.ts services/__tests__/nicheIsolation.test.ts services/__tests__/brandedBuildConfig.test.ts
