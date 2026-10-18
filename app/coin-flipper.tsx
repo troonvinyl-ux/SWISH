@@ -1810,8 +1810,8 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
       ...result,
       attributes: {
         ...(result.attributes ?? {}),
-        ...(Number.isFinite(suppliedWeight) && (suppliedWeight ?? 0) > 0 ? { weight_g: suppliedWeight, supplied_weight_g: suppliedWeight } : {}),
-        ...(Number.isFinite(suppliedDiameter) && (suppliedDiameter ?? 0) > 0 ? { diameter_mm: suppliedDiameter, supplied_diameter_mm: suppliedDiameter } : {}),
+        ...(suppliedWeight !== undefined && Number.isFinite(suppliedWeight) && suppliedWeight > 0 ? { weight_g: suppliedWeight, supplied_weight_g: suppliedWeight } : {}),
+        ...(suppliedDiameter !== undefined && Number.isFinite(suppliedDiameter) && suppliedDiameter > 0 ? { diameter_mm: suppliedDiameter, supplied_diameter_mm: suppliedDiameter } : {}),
         ...(yearInput.trim() ? { user_supplied_year: yearInput.trim() } : {}),
         ...(materialInput.trim() ? { user_supplied_material: materialInput.trim() } : {}),
         ...(edgeLegendInput.trim() ? { user_supplied_edge_or_legend: edgeLegendInput.trim() } : {}),
