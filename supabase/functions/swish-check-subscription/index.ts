@@ -51,7 +51,7 @@ serve(async (req) => {
     if (customers.data.length === 0) {
       logStep("No Stripe customer found — user not subscribed");
       return new Response(
-        JSON.stringify({ subscribed: false, product_id: null, subscription_end: null }),
+        JSON.stringify({ subscribed: false, product_id: null, price_id: null, subscription_end: null, niche_entitlements: [] }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
       );
     }
@@ -62,30 +62,41 @@ serve(async (req) => {
     const subscriptions = await stripe.subscriptions.list({
       customer: customerId,
       status: "active",
-      limit: 10,
+      limit: 100,
     });
 
-    const hasActiveSub = subscriptions.data.length > 0;
+    // A single active subscription unlocks only the niche stored in its verified
+    // Stripe metadata. Legacy subscriptions without niche metadata remain Coins.
+    const nicheEntitlements = new Set<string>();
     let productId: string | null = null;
     let subscriptionEnd: string | null = null;
     let priceId: string | null = null;
+    const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing"]);
 
-    if (hasActiveSub) {
-      const sub = subscriptions.data[0];
-      subscriptionEnd = new Date(sub.current_period_end * 1000).toISOString();
-      productId = sub.items.data[0]?.price?.product as string ?? null;
-      priceId = sub.items.data[0]?.price?.id ?? null;
-      logStep("Active subscription found", { subscriptionId: sub.id, productId, subscriptionEnd });
-    } else {
-      logStep("No active subscription found");
+    for (const sub of subscriptions.data) {
+      const subProductId = sub.items.data[0]?.price?.product as string | undefined;
+      if (subProductId !== "prod_VQ0JxUCL29SZPQ") continue;
+
+      const nicheId = String(sub.metadata?.niche_id ?? "coins").toLowerCase();
+      if (!allowedNiches.has(nicheId)) continue;
+      nicheEntitlements.add(nicheId);
+
+      if (!productId) {
+        productId = subProductId;
+        priceId = sub.items.data[0]?.price?.id ?? null;
+        subscriptionEnd = new Date(sub.current_period_end * 1000).toISOString();
+      }
+      logStep("Niche subscription found", { subscriptionId: sub.id, nicheId });
     }
 
+    const entitlements = [...nicheEntitlements];
     return new Response(
       JSON.stringify({
-        subscribed: hasActiveSub,
+        subscribed: entitlements.length > 0,
         product_id: productId,
         price_id: priceId,
         subscription_end: subscriptionEnd,
+        niche_entitlements: entitlements,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
     );
