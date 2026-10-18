@@ -112,7 +112,7 @@ async function searchCanoaCoinTypes(query: string): Promise<{ available: boolean
 
   // Try the full label first; if its extra detail is too restrictive for CANOA's
   // token search, retry once with a shorter phrase. Never loop or bulk-crawl.
-  const words = query.trim().split(/\s+/).filter(Boolean);
+  const words = query.trim().split(" ").filter(Boolean);
   const fallbackQuery = words.slice(0, Math.min(4, words.length)).join(" ");
   const queries = [query.trim().slice(0, 100)];
   if (fallbackQuery.length >= 3 && fallbackQuery.toLowerCase() !== queries[0].toLowerCase()) {
