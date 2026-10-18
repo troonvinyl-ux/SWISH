@@ -1,11 +1,76 @@
-// app.config.js — SWISH
-// The Metro duplicate-package validator scans all node_modules paths.
-// We DO NOT delete .pnpm stubs here — instead metro.config.js blockList
-// prevents Metro from traversing .pnpm/metro-* at all, so the validator
-// only ever sees the top-level stubs and counts exactly 1 of each.
-// Deleting .pnpm stubs caused a race: the top-level stubs forward to .pnpm
-// at require() time, but if .pnpm was already deleted, forwarding fails
-// and metro-config returns {}, making resolveConfig undefined → TypeError.
+// app.config.js — SWISH dynamic Expo configuration.
+//
+// Metro duplicate-package handling is configured in metro.config.js. Do not
+// delete .pnpm stubs here: Metro resolves through those package links.
+//
+// When SWISH_NICHE is set by a branded EAS profile, give that build its own
+// app identity and embed the fixed product ID for runtime routing. If unset,
+// preserve the existing OnSpace/legacy configuration unchanged.
 
-// Export using the Expo dynamic config function signature.
-module.exports = ({ config }) => config;
+const NICHE_BUILDS = {
+  coins: {
+    id: "coins",
+    name: "Coin Flipper",
+    slug: "swish-coin-flipper",
+    scheme: "coinflipper",
+    androidPackage: "com.swish.coinflipper",
+    iosBundleIdentifier: "com.swish.coinflipper",
+  },
+  motocross: {
+    id: "motocross",
+    name: "Flipper MX",
+    slug: "swish-flipper-mx",
+    scheme: "flippermx",
+    androidPackage: "com.swish.flippermx",
+    iosBundleIdentifier: "com.swish.flippermx",
+  },
+  bicycles: {
+    id: "bicycles",
+    name: "Bike Flipper",
+    slug: "swish-bike-flipper",
+    scheme: "bikeflipper",
+    androidPackage: "com.swish.bikeflipper",
+    iosBundleIdentifier: "com.swish.bikeflipper",
+  },
+  clothing: {
+    id: "clothing",
+    name: "Threads Flip",
+    slug: "swish-threads-flip",
+    scheme: "threadsflip",
+    androidPackage: "com.swish.threadsflip",
+    iosBundleIdentifier: "com.swish.threadsflip",
+  },
+};
+
+module.exports = ({ config }) => {
+  const selected = process.env.SWISH_NICHE;
+  // Preserve the existing app identity for OnSpace/legacy workflows unless
+  // an explicit branded build profile requests one of the four products.
+  if (!selected) return config;
+
+  const niche = NICHE_BUILDS[selected];
+  if (!niche) {
+    throw new Error(
+      `Unsupported SWISH_NICHE "${selected}". Choose coins, motocross, bicycles, or clothing.`,
+    );
+  }
+
+  return {
+    ...config,
+    name: niche.name,
+    slug: niche.slug,
+    scheme: niche.scheme,
+    ios: {
+      ...config.ios,
+      bundleIdentifier: niche.iosBundleIdentifier,
+    },
+    android: {
+      ...config.android,
+      package: niche.androidPackage,
+    },
+    extra: {
+      ...config.extra,
+      swishNicheId: niche.id,
+    },
+  };
+};
