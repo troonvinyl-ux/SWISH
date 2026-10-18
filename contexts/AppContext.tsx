@@ -92,19 +92,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveNicheId(FIXED_BUILD_NICHE_ID ?? 'general');
     setEnabledNiches(FIXED_BUILD_NICHE_ID ? [FIXED_BUILD_NICHE_ID] : ['general']);
     const loadForAccount = async () => {
+      if (!user?.id) {
+        setActiveNicheId(FIXED_BUILD_NICHE_ID ?? 'general');
+        setEnabledNiches(FIXED_BUILD_NICHE_ID ? [FIXED_BUILD_NICHE_ID] : ['general']);
+        setSubscriptionStatus(null);
+        setSubscriptionLoading(false);
+        setNichePreferencesLoading(false);
+        return;
+      }
+
       // Branded builds are pinned to their product and do not load switchable
       // niche preferences from local storage.
       if (FIXED_BUILD_NICHE_ID) {
         setActiveNicheId(FIXED_BUILD_NICHE_ID);
         setEnabledNiches([FIXED_BUILD_NICHE_ID]);
-        setNichePreferencesLoading(false);
-        return;
-      }
-      if (!user?.id) {
-        setActiveNicheId('general');
-        setEnabledNiches(['general']);
-        setSubscriptionStatus(null);
-        setSubscriptionLoading(false);
         setNichePreferencesLoading(false);
         return;
       }
