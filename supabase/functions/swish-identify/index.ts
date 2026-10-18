@@ -549,6 +549,114 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
   const suppliedDiameter = knownAttributes?.diameter ? Number(knownAttributes.diameter) : null;
   const suppliedMaterial = String(knownAttributes?.material ?? (coinFields.composition !== 'Not established' ? coinFields.composition : '') ?? primaryCandidate.composition ?? '').trim().replace(/not established/gi, '') || null;
 
+  // A user-entered Numista reference is a catalogue lookup instruction, not
+  // ordinary prompt text. Resolve it directly before broad text search so the
+  // exact type is checked even when the AI's current denomination/ruler is wrong.
+  const referenceText = [
+    knownAttributes?.catalogueNumber,
+    knownAttributes?.catalogue_number,
+    knownAttributes?.numistaN,
+    knownAttributes?.numista_n,
+    knownAttributes?.numistaUrl,
+    knownAttributes?.numista_url,
+    knownAttributes?.customNotes,
+    ...Object.entries(knownAttributes?.existingAttributes ?? {})
+      .filter(([key]) => /catalogue.?number|numista.?n|numista.?url/i.test(key))
+      .map(([, value]) => String(value ?? '')),
+  ].filter(Boolean).join(' ');
+  const directReferenceMatch =
+    referenceText.match(/\\bN\\s*#\\s*(\\d{1,9})\\b/i) ??
+    referenceText.match(/numista\\.com\\/(?:catalogue\\/index\\.php\\?r=)?(\\d{1,9})/i) ??
+    referenceText.match(/\\bnumista\\s*(?:type\\s*)?(?:id\\s*[:#=]?\\s*)(\\d{1,9})\\b/i);
+  const directNumistaId = directReferenceMatch ? Number(directReferenceMatch[1]) : null;
+
+  if (directNumistaId && Number.isSafeInteger(directNumistaId) && directNumistaId > 0) {
+    const directDetail = await fetchNumistaTypeDetail(directNumistaId, apiKey);
+    if (!directDetail || !directDetail.id) {
+      return {
+        status: 'unavailable', matchScore: 0, matchTier: 'rejected',
+        matchFactors: [`Direct Numista reference N#${directNumistaId} was supplied, but the catalogue type could not be retrieved; it has NOT been verified.`],
+        contradictions: [], physicalMatchGood: false, references: [],
+        numistaN: `N#${directNumistaId}`,
+        numistaUrl: `https://en.numista.com/catalogue/index.php?r=${directNumistaId}`,
+      };
+    }
+
+    const directCandidate = {
+      id: directDetail.id,
+      title: directDetail.title ?? '',
+      issued_from: directDetail.issued_from,
+      issued_to: directDetail.issued_to,
+      weight: directDetail.weight,
+      diameter: directDetail.diameter,
+      composition: directDetail.composition,
+      issuer: directDetail.issuer,
+      mint: directDetail.mint,
+    };
+    const directScore = scoreNumistaCandidate(
+      directCandidate, directDetail, suppliedWeight, suppliedDiameter, suppliedMaterial,
+      denomination, issuer, year, period, mint, aiCandidates,
+    );
+    let directPoints = directScore.score;
+    const directFactors = [...directScore.factors];
+    const directContradictions = [...directScore.contradictions];
+    const titleWords = (value: unknown) => String(value ?? '').toLowerCase()
+      .replace(/[^a-z0-9\\s]/g, ' ').split(/\\s+/)
+      .filter((word: string) => word.length > 3 && !['coin', 'type', 'silver', 'copper', 'bronze'].includes(word));
+    const catalogueWords = new Set(titleWords(directDetail.title));
+    const aiTitles = [
+      aiIdentification.canonicalTitle,
+      ...aiCandidates.map((candidate: any) => candidate.title ?? candidate.name ?? ''),
+    ];
+    const aiTitleWords = new Set(aiTitles.flatMap((title: unknown) => titleWords(title)));
+    const sharedTitleWords = [...catalogueWords].filter(word => aiTitleWords.has(word));
+    if (sharedTitleWords.length > 0) {
+      const titlePoints = Math.min(25, sharedTitleWords.length * 8);
+      directPoints += titlePoints;
+      directFactors.push(`Catalogue title agrees with AI candidate on: ${sharedTitleWords.join(', ')} (+${titlePoints})`);
+    } else {
+      directContradictions.push('Catalogue title does not share identifying terms with the AI candidate/title');
+      directPoints -= 10;
+    }
+    directPoints = Math.max(-50, Math.min(100, directPoints));
+    const directTier = scoreToMatchTier(directPoints);
+    const directStatus = matchTierToStatus(directTier);
+    const directPhysicalMatchGood = !directContradictions.some(c => /MAJOR|CONTRADICTION/i.test(c));
+    const directReferences: string[] = (directDetail.references ?? [])
+      .map((r: any) => `${r.catalogue?.code ?? r.code ?? ''} ${r.number ?? ''}`.trim())
+      .filter(Boolean);
+    return {
+      status: directStatus,
+      typeId: directDetail.id,
+      numistaId: directDetail.id,
+      numistaN: `N#${directDetail.id}`,
+      numistaUrl: `https://en.numista.com/catalogue/index.php?r=${directDetail.id}`,
+      title: directDetail.title ?? '',
+      matchScore: Math.round(Math.max(0, directPoints)),
+      matchTier: directTier,
+      matchFactors: [`Exact user-supplied catalogue reference N#${directDetail.id} retrieved directly from Numista API`, ...directFactors],
+      contradictions: directContradictions,
+      issuedFrom: directDetail.issued_from,
+      issuedTo: directDetail.issued_to,
+      composition: directDetail.composition?.material ?? directDetail.material ?? '',
+      weight: directDetail.weight ?? null,
+      diameter: directDetail.diameter ?? null,
+      thickness: directDetail.thickness ?? null,
+      mint: directDetail.mint?.name ?? directDetail.mint ?? '',
+      issuer: directDetail.issuer?.name ?? directDetail.issuer ?? '',
+      obverse: directDetail.obverse?.description ?? directDetail.obverse?.lettering ?? '',
+      reverse: directDetail.reverse?.description ?? directDetail.reverse?.lettering ?? '',
+      references: directReferences,
+      suppliedWeight: suppliedWeight ?? undefined,
+      suppliedDiameter: suppliedDiameter ?? undefined,
+      weightDifferencePercent: (suppliedWeight && directDetail.weight)
+        ? Math.round(Math.abs(suppliedWeight - directDetail.weight) / directDetail.weight * 1000) / 10 : undefined,
+      diameterDifferenceMm: (suppliedDiameter && directDetail.diameter)
+        ? Math.round(Math.abs(suppliedDiameter - directDetail.diameter) * 10) / 10 : undefined,
+      physicalMatchGood: directPhysicalMatchGood,
+    };
+  }
+
   const searchParts: string[] = [];
   if (denomination && denomination.length > 1) searchParts.push(denomination);
   if (issuer && issuer.length > 2) searchParts.push(issuer);
