@@ -708,6 +708,23 @@ function buildSearchQueries(title: string, attributes: Record<string, any>, spec
     if (brand) { const q = `vintage ${brand} ${garment || 'clothing'}`.slice(0, 80); if (!queries.includes(q)) queries.push(q); }
   }
   if (isCoin) {
+    // Place/state-only searches are common in coin research. Convert geographic
+    // labels into useful numismatic queries instead of searching the raw label
+    // (which often produces no eBay matches, e.g. "Jammu & Kashmir (Princely State)").
+    if (!attributes?.ruler && !attributes?.denomination) {
+      const titleLower = sanitised.toLowerCase();
+      if (/jammu/.test(titleLower) && /kashmir/.test(titleLower)) {
+        for (const q of [
+          'Jammu Kashmir coin',
+          'Kashmir rupee silver coin',
+          'Ranbir Singh Kashmir rupee',
+        ]) if (!queries.includes(q)) queries.push(q);
+      } else if (/kashmir/.test(titleLower)) {
+        for (const q of ['Kashmir coin', 'Kashmir rupee silver coin']) {
+          if (!queries.includes(q)) queries.push(q);
+        }
+      }
+    }
     if (specialistId === 'islamic_silver') {
       const dynasty = String(attributes?.dynasty ?? attributes?.period ?? '').trim();
       const denom = String(attributes?.denomination ?? attributes?.coin_type ?? '').trim();
