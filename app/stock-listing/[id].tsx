@@ -854,7 +854,7 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
     const catalogueSuggestions = (r.attributes?.numista_catalogue_suggestions ?? {}) as Record<string, any>;
     const usableCatalogueText = (value: unknown): string | undefined => {
       const text = String(value ?? '').trim();
-      return text && !/^(not established|not supplied|unknown|n\\/a|—|-)$/i.test(text) ? text : undefined;
+      return text && !/^(not established|not supplied|unknown|n.a|—|-)$/i.test(text) ? text : undefined;
     };
     const suggestedYear = catalogueSuggestions.issuedFrom != null || catalogueSuggestions.issuedTo != null
       ? `${catalogueSuggestions.issuedFrom ?? '?'}–${catalogueSuggestions.issuedTo ?? '?'}`
