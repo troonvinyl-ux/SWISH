@@ -1788,9 +1788,20 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
             <Text style={[main.specialistIndicatorText, { color: selectedSpecialist.color }]}>{selectedSpecialist.label}</Text>
           </View>
         ) : (
-          <Pressable onPress={() => router.push('/(tabs)/inventory' as any)} style={main.myCoinsBtn} hitSlop={6} accessibilityLabel="View my coin inventory" accessibilityRole="button">
-            <MaterialIcons name="inventory-2" size={16} color={CF.gold} />
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.xs }}>
+            <Pressable
+              onPress={() => router.push('/deep-id-lab' as any)}
+              style={main.myCoinsBtn}
+              hitSlop={6}
+              accessibilityLabel="Open Deep ID and Re-ID Lab"
+              accessibilityRole="button"
+            >
+              <MaterialIcons name="science" size={17} color={CF.gold} />
+            </Pressable>
+            <Pressable onPress={() => router.push('/(tabs)/inventory' as any)} style={main.myCoinsBtn} hitSlop={6} accessibilityLabel="View my coin inventory" accessibilityRole="button">
+              <MaterialIcons name="inventory-2" size={16} color={CF.gold} />
+            </Pressable>
+          </View>
         )}
       </View>
 
