@@ -500,6 +500,10 @@ function CaptureTab({
   quickRunning, quickDone, onClearQuick,
   // Islamic batch results
   islamicBatchItems, onIslamicItemPress,
+  // Optional physical evidence passed into the AI identification request
+  weightInput, setWeightInput, diameterInput, setDiameterInput,
+  yearInput, setYearInput, materialInput, setMaterialInput,
+  edgeLegendInput, setEdgeLegendInput,
 }: {
   capturedImages: CapturedImage[]; onCapture: (slotId: string, slotLabel: string) => void;
   onRemove: (slotId: string) => void; onIdentify: () => void; identifying: boolean;
@@ -510,6 +514,11 @@ function CaptureTab({
   onQuickCapture: () => void; onRunQuickBatch: () => void;
   quickRunning: boolean; quickDone: boolean; onClearQuick: () => void;
   islamicBatchItems: IslamicBatchItem[]; onIslamicItemPress: (item: IslamicBatchItem) => void;
+  weightInput: string; setWeightInput: (value: string) => void;
+  diameterInput: string; setDiameterInput: (value: string) => void;
+  yearInput: string; setYearInput: (value: string) => void;
+  materialInput: string; setMaterialInput: (value: string) => void;
+  edgeLegendInput: string; setEdgeLegendInput: (value: string) => void;
 }) {
   const router = useRouter();
   const isIslamic = selectedSpecialist.id === 'islamic';
@@ -1898,6 +1907,16 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
             onClearQuick={handleClearQuick}
             islamicBatchItems={islamicBatchItems}
             onIslamicItemPress={setSelectedIslamicItem}
+            weightInput={weightInput}
+            setWeightInput={setWeightInput}
+            diameterInput={diameterInput}
+            setDiameterInput={setDiameterInput}
+            yearInput={yearInput}
+            setYearInput={setYearInput}
+            materialInput={materialInput}
+            setMaterialInput={setMaterialInput}
+            edgeLegendInput={edgeLegendInput}
+            setEdgeLegendInput={setEdgeLegendInput}
             />
           </CaptureTabErrorBoundary>
         ) : activeTab === 'identify' ? (
