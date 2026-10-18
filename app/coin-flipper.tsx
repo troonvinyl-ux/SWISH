@@ -1725,6 +1725,10 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
               const { urls } = await uploadItemImages(item.id, coinImages);
               if (urls.length > 0) await updateItemMedia(tenant.id, item.id, urls);
             } catch { /* identification is saved; media upload can be retried separately */ }
+          } catch (error: any) {
+            const message = error?.message ?? 'Unexpected error while processing this coin';
+            setQuickIdentificationResults(prev => prev.map(entry => entry.id === cap.id ? { ...entry, status: 'error', error: message } : entry));
+            setAiError(`Coin ${index + 1}: ${message}`);
           } finally {
             isIdentifyInFlight.current = false;
           }
