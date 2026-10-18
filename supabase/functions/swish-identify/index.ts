@@ -53,6 +53,19 @@ function isVehicleSpecialist(sid: string): boolean { return sid === 'motocross';
 function isClothingSpecialist(sid: string): boolean { return sid === 'clothing' || sid === 'trainers_sneakers'; }
 function shouldRunNumista(objectType: ObjectType): boolean { return objectType === 'coin'; }
 
+// Numista responses can expose country/issuer values as either a string or an
+// object. Keep persisted catalogue metadata scalar and display-safe.
+function catalogueName(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (value && typeof value === 'object') {
+    const item = value as Record<string, unknown>;
+    for (const key of ['name', 'title', 'label', 'country']) {
+      if (typeof item[key] === 'string' && (item[key] as string).trim()) return (item[key] as string).trim();
+    }
+  }
+  return '';
+}
+
 // ── COINS: 10-step identification pipeline prompt ─────────────────────────────
 const COINS_SYSTEM_PROMPT = `You are an expert numismatist. Identification follows a strict 10-step priority pipeline.
 
@@ -668,7 +681,7 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
       issuedTo: directDetail.issued_to,
       composition: directDetail.composition?.material ?? directDetail.material ?? '',
       denomination: directDetail.min_unit?.name ?? directDetail.denomination?.name ?? directDetail.denomination_name ?? '',
-      country: directDetail.country?.name ?? directDetail.country ?? directDetail.issuer?.country?.name ?? '',
+      country: catalogueName(directDetail.country) || catalogueName(directDetail.issuer?.country),
       weight: directDetail.weight ?? null,
       diameter: directDetail.diameter ?? null,
       thickness: directDetail.thickness ?? null,
@@ -764,7 +777,7 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
     weight: src.weight ?? null, diameter: src.diameter ?? null, thickness: src.thickness ?? null,
     mint: src.mint?.name ?? src.mint ?? '', issuer: src.issuer?.name ?? src.issuer ?? '',
     denomination: src.min_unit?.name ?? src.denomination?.name ?? src.denomination_name ?? '',
-    country: src.country?.name ?? src.country ?? src.issuer?.country?.name ?? '',
+    country: catalogueName(src.country) || catalogueName(src.issuer?.country),
     obverse: typeDetail?.obverse?.description ?? typeDetail?.obverse?.lettering ?? '',
     reverse: typeDetail?.reverse?.description ?? typeDetail?.reverse?.lettering ?? '',
     references, suppliedWeight: suppliedWeight ?? undefined, suppliedDiameter: suppliedDiameter ?? undefined,
