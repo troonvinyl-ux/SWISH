@@ -39,6 +39,16 @@ function isCoinLikeSpecialist(sid: string): boolean {
     (sid?.includes('coin') && sid !== 'curiosities_collectibles') ||
     sid?.includes('numismatic');
 }
+
+// Resolve the paid product from the requested specialist, never from a client-supplied
+// nicheId. Generic/unknown specialists do not inherit another niche's subscription.
+function nicheForSpecialist(sid: string): 'coins' | 'motocross' | 'bicycles' | 'clothing' | null {
+  if (isCoinLikeSpecialist(sid)) return 'coins';
+  if (sid === 'motocross') return 'motocross';
+  if (sid === 'bicycles') return 'bicycles';
+  if (sid === 'clothing' || sid === 'trainers_sneakers') return 'clothing';
+  return null;
+}
 function isVehicleSpecialist(sid: string): boolean { return sid === 'motocross'; }
 function isClothingSpecialist(sid: string): boolean { return sid === 'clothing' || sid === 'trainers_sneakers'; }
 function shouldRunNumista(objectType: ObjectType): boolean { return objectType === 'coin'; }
@@ -864,7 +874,8 @@ async function resolveTenantTier(
  * Check Stripe subscription as a secondary entitlement source.
  * Returns false on any error — does NOT throw.
  */
-async function checkStripeSubscription(userEmail: string): Promise<boolean> {
+async function checkStripeSubscription(userEmail: string, nicheId: string | null): Promise<boolean> {
+  if (!nicheId) return false;
   const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
   if (!stripeKey) return false;
   try {
@@ -884,6 +895,10 @@ async function checkStripeSubscription(userEmail: string): Promise<boolean> {
     if (!subsRes.ok) return false;
     const subsData = await subsRes.json();
     for (const sub of subsData.data ?? []) {
+      // Existing subscriptions without metadata remain mapped to Coins so
+      // legacy Coin Flipper subscribers do not lose access during migration.
+      const subscribedNiche = String(sub.metadata?.niche_id ?? 'coins').toLowerCase();
+      if (subscribedNiche !== nicheId) continue;
       for (const item of sub.items?.data ?? []) {
         if (item.price?.product === STRIPE_PRODUCT_ID) return true;
       }
@@ -904,6 +919,7 @@ async function determineIsPremium(
   userId: string,
   userEmail: string | undefined,
   tenantId: string,
+  nicheId: string | null,
 ): Promise<{ isPremium: boolean; source: string; tier: string | null }> {
   // Step 1: Check tenant tier (authoritative, server-side, cannot be spoofed)
   const tier = await resolveTenantTier(admin, userId, tenantId);
@@ -914,7 +930,7 @@ async function determineIsPremium(
 
   // Step 2: Check Stripe (secondary — only if no qualifying tier)
   if (userEmail) {
-    const stripeActive = await checkStripeSubscription(userEmail);
+    const stripeActive = await checkStripeSubscription(userEmail, nicheId);
     if (stripeActive) {
       console.log(`[swish-identify] Premium via Stripe subscription (user=${userId})`);
       return { isPremium: true, source: 'stripe', tier };
@@ -979,6 +995,8 @@ Deno.serve(async (req: Request) => {
 
     const body = await req.json();
     const { images, existingImageUrls, specialistId, acquisitionContext, knownAttributes, tenantId: bodyTenantId } = body;
+    const specialist = specialistId ?? 'curiosities_collectibles';
+    const requestedNiche = nicheForSpecialist(specialist);
 
     const adminClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -991,7 +1009,7 @@ Deno.serve(async (req: Request) => {
     // ── AUTHORITATIVE PREMIUM CHECK ────────────────────────────────────────────
     // Read current usage in parallel with premium determination
     const [entitlement, currentUsage] = await Promise.all([
-      determineIsPremium(adminClient, user.id, user.email, tenantId),
+      determineIsPremium(adminClient, user.id, user.email, tenantId, requestedNiche),
       tenantId
         ? getUsage(adminClient, tenantId, user.id, monthKey)
         : Promise.resolve(0),
@@ -1031,7 +1049,6 @@ Deno.serve(async (req: Request) => {
     const hasExistingUrls = Array.isArray(existingImageUrls) && existingImageUrls.length > 0;
     if (!hasNewImages && !hasExistingUrls) return new Response(JSON.stringify({ error: 'At least one image is required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-    const specialist = specialistId ?? 'curiosities_collectibles';
     const specialistSystemPrompt = SPECIALIST_SYSTEM_PROMPTS[specialist] ?? SPECIALIST_SYSTEM_PROMPTS['curiosities_collectibles'];
     const fullSystemPrompt = specialistSystemPrompt + MASTER_EVIDENCE_RULES;
     const coinMode = isCoinLikeSpecialist(specialist);
