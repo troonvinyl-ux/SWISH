@@ -454,6 +454,19 @@ export interface NumistaVerificationResult {
   physicalMatchGood: boolean;
 }
 
+function catalogueText(value: unknown): string {
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  if (Array.isArray(value)) return value.map(catalogueText).filter(Boolean).join(' ');
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    for (const key of ['name', 'title', 'material', 'composition', 'description', 'label', 'value']) {
+      const candidate = record[key];
+      if (typeof candidate === 'string' || typeof candidate === 'number') return String(candidate);
+    }
+  }
+  return '';
+}
+
 function scoreNumistaCandidate(
   candidate: any, typeDetail: any | null,
   suppliedWeight: number | null, suppliedDiameter: number | null, suppliedMaterial: string | null,
@@ -507,7 +520,9 @@ function scoreNumistaCandidate(
   }
   if (suppliedMaterial && suppliedMaterial.length > 2) {
     const matLower = suppliedMaterial.toLowerCase();
-    const candComp = (src.composition?.material ?? src.material ?? candidate.composition ?? '').toLowerCase();
+    // Numista responses can encode material/composition as an object or a
+    // string depending on the endpoint/type. Normalise before string methods.
+    const candComp = catalogueText(src.composition?.material ?? src.material ?? candidate.composition).toLowerCase();
     if (candComp.includes(matLower) || matLower.includes(candComp.slice(0, 4))) { score += 5; factors.push(`Composition match: ${suppliedMaterial}`); }
   }
   if (mint && mint.length > 1 && mint !== 'Not established') {
