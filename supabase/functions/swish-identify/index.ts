@@ -674,8 +674,6 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
       thickness: directDetail.thickness ?? null,
       mint: directDetail.mint?.name ?? directDetail.mint ?? '',
       issuer: directDetail.issuer?.name ?? directDetail.issuer ?? '',
-      denomination: directDetail.min_unit?.name ?? directDetail.denomination?.name ?? directDetail.denomination_name ?? '',
-      country: directDetail.country?.name ?? directDetail.country ?? directDetail.issuer?.country?.name ?? '',
       obverse: directDetail.obverse?.description ?? directDetail.obverse?.lettering ?? '',
       reverse: directDetail.reverse?.description ?? directDetail.reverse?.lettering ?? '',
       references: directReferences,
@@ -806,7 +804,7 @@ function applyNumistaToIdentification(identification: any, numista: NumistaVerif
     };
   }
 
-  if (!Array.isArray(result.warnings)) result.warnings = []
+  if (!Array.isArray(result.warnings)) result.warnings = [];
   for (const contra of numista.contradictions) { if (!result.warnings.includes(contra)) result.warnings.push(contra); }
 
   if (numista.status === 'verified' || numista.status === 'strong_match') {
