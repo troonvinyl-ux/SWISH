@@ -492,7 +492,7 @@ function CaptureTab({
   quickRunning, quickDone, onClearQuick,
   quickIdentificationResults, selectedQuickResult, onQuickResultSelect, onCloseQuickResult,
   // Islamic batch results
-  islamicBatchItems, onIslamicItemPress,
+  islamicBatchItems, selectedIslamicItem, onIslamicItemPress,
   // Optional physical evidence passed into the AI identification request
   weightInput, setWeightInput, diameterInput, setDiameterInput,
   yearInput, setYearInput, materialInput, setMaterialInput,
@@ -508,7 +508,7 @@ function CaptureTab({
   quickRunning: boolean; quickDone: boolean; onClearQuick: () => void;
   quickIdentificationResults: QuickCoinResult[]; selectedQuickResult: QuickCoinResult | null;
   onQuickResultSelect: (result: QuickCoinResult) => void; onCloseQuickResult: () => void;
-  islamicBatchItems: IslamicBatchItem[]; onIslamicItemPress: (item: IslamicBatchItem | null) => void;
+  islamicBatchItems: IslamicBatchItem[]; selectedIslamicItem: IslamicBatchItem | null; onIslamicItemPress: (item: IslamicBatchItem | null) => void;
   weightInput: string; setWeightInput: (value: string) => void;
   diameterInput: string; setDiameterInput: (value: string) => void;
   yearInput: string; setYearInput: (value: string) => void;
@@ -1969,6 +1969,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
             quickDone={quickDone}
             onClearQuick={handleClearQuick}
             islamicBatchItems={islamicBatchItems}
+            selectedIslamicItem={selectedIslamicItem}
             onIslamicItemPress={setSelectedIslamicItem}
             weightInput={weightInput}
             setWeightInput={setWeightInput}
