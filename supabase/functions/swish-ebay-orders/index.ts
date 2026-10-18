@@ -380,10 +380,10 @@ async function importFulfillmentOrders(
       }
 
       if (matchedItemId) {
-        const { data: curItem } = await supabase.from('items').select('status, acquired_cost').eq('id', matchedItemId).maybeSingle();
+        const { data: curItem } = await supabase.from('items').select('status, acquired_cost').eq('id', matchedItemId).eq('tenant_id', tenantId).maybeSingle();
         const acquiredCost = Number(curItem?.acquired_cost ?? 0);
-        await supabase.from('items').update({ status: 'sold', sold_price: salePrice, sold_at: order.createdAt, marketplace: 'ebay', updated_at: new Date().toISOString() }).eq('id', matchedItemId);
-        if (matchedListingId) await supabase.from('listings').update({ status: 'sold', ended_at: order.createdAt, updated_at: new Date().toISOString() }).eq('id', matchedListingId);
+        await supabase.from('items').update({ status: 'sold', sold_price: salePrice, sold_at: order.createdAt, marketplace: 'ebay', updated_at: new Date().toISOString() }).eq('id', matchedItemId).eq('tenant_id', tenantId);
+        if (matchedListingId) await supabase.from('listings').update({ status: 'sold', ended_at: order.createdAt, updated_at: new Date().toISOString() }).eq('id', matchedListingId).eq('tenant_id', tenantId);
         await supabase.from('sales').insert({
           tenant_id: tenantId, item_id: matchedItemId, listing_id: matchedListingId,
           marketplace_id: 'ebay', sale_price: salePrice, marketplace_fee: marketplaceFee,
@@ -459,11 +459,11 @@ async function importTradingOrders(
       }
 
       if (matchedItemId) {
-        const { data: curItem } = await supabase.from('items').select('status, acquired_cost').eq('id', matchedItemId).maybeSingle();
+        const { data: curItem } = await supabase.from('items').select('status, acquired_cost').eq('id', matchedItemId).eq('tenant_id', tenantId).maybeSingle();
         const acquiredCost = Number(curItem?.acquired_cost ?? 0);
         const profit = Math.round((netRevenue - acquiredCost) * 100) / 100;
-        await supabase.from('items').update({ status: 'sold', sold_price: salePrice, sold_at: order.createdAt, marketplace: 'ebay', updated_at: new Date().toISOString() }).eq('id', matchedItemId);
-        if (matchedListingId) await supabase.from('listings').update({ status: 'sold', ended_at: order.createdAt, updated_at: new Date().toISOString() }).eq('id', matchedListingId);
+        await supabase.from('items').update({ status: 'sold', sold_price: salePrice, sold_at: order.createdAt, marketplace: 'ebay', updated_at: new Date().toISOString() }).eq('id', matchedItemId).eq('tenant_id', tenantId);
+        if (matchedListingId) await supabase.from('listings').update({ status: 'sold', ended_at: order.createdAt, updated_at: new Date().toISOString() }).eq('id', matchedListingId).eq('tenant_id', tenantId);
         await supabase.from('sales').insert({
           tenant_id: tenantId, item_id: matchedItemId, listing_id: matchedListingId,
           marketplace_id: 'ebay', sale_price: salePrice, marketplace_fee: marketplaceFee,
