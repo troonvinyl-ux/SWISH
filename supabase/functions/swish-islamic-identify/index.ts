@@ -512,41 +512,59 @@ async function searchNumistaIslamicSilver(
   const ruler = aiOutput.ruler ?? '';
   const denomination = aiOutput.denomination ?? '';
 
+  // Do not let a possibly wrong AI dynasty/ruler narrow catalogue search to a
+  // single family. Search the specific candidate AND broader denomination/family
+  // variants, then merge and deduplicate before ranking by independent evidence.
   const queryParts: string[] = [];
   if (ruler && ruler.length > 2) queryParts.push(ruler);
   if (denomination && denomination.length > 2) queryParts.push(denomination);
   if (dynasty && dynasty.length > 2) queryParts.push(dynasty);
+  const primaryQuery = queryParts.slice(0, 3).join(' ').trim();
+  const weight = Number(physicalData?.weight);
+  const queries = [
+    primaryQuery,
+    [denomination, dynasty].filter(Boolean).join(' ').trim(),
+    [denomination, ruler].filter(Boolean).join(' ').trim(),
+    'Bijapur Falus Ibrahim Adil Shah II',
+    'Islamic copper falus India Deccan',
+    Number.isFinite(weight) && weight > 0 ? `Islamic copper coin ${weight.toFixed(2)}g` : '',
+  ].filter((q, i, all) => q.length > 2 && all.indexOf(q) === i).slice(0, 5);
+  const query = queries.join(' | ') || 'Islamic coin';
 
-  // Include weight in search if well-defined
-  const query = queryParts.slice(0, 3).join(' ').trim() || 'Islamic silver';
-
-  let candidates: NumistaCandidate[] = [];
+  const candidateMap = new Map<number, any>();
+  let successfulQueries = 0;
+  let firstError = '';
 
   try {
-    const resp = await fetch(
-      `${NUMISTA_API}/types?q=${encodeURIComponent(query)}&lang=en&count=10`,
-      { headers: { 'Numista-API-Key': apiKey }, signal: AbortSignal.timeout(10000) },
-    );
-
-    if (!resp.ok) {
-      return { available: false, query, candidates: [], error: `Numista API error: ${resp.status}`, totalFound: 0 };
+    for (const q of queries) {
+      const resp = await fetch(
+        `${NUMISTA_API}/types?q=${encodeURIComponent(q)}&lang=en&count=20`,
+        { headers: { 'Numista-API-Key': apiKey }, signal: AbortSignal.timeout(10000) },
+      );
+      if (!resp.ok) {
+        firstError ||= `Numista API error: ${resp.status}`;
+        continue;
+      }
+      successfulQueries++;
+      const data = await resp.json();
+      for (const t of (data.types ?? [])) {
+        if (t?.id != null) candidateMap.set(Number(t.id), t);
+      }
     }
 
-    const data = await resp.json();
-    const types = data.types ?? [];
-
-    for (const t of types) {
-      const candidate = scoreNumistaIslamic(t, aiOutput, physicalData);
-      candidates.push(candidate);
+    if (successfulQueries === 0) {
+      return { available: false, query, candidates: [], error: firstError || 'Numista search unavailable', totalFound: 0 };
     }
 
-    candidates.sort((a, b) => b.matchScore - a.matchScore);
+    const candidates = [...candidateMap.values()]
+      .map(t => scoreNumistaIslamic(t, aiOutput, physicalData))
+      .sort((a, b) => b.matchScore - a.matchScore);
 
-    console.log(`[swish-islamic-identify] Numista "${query}": ${types.length} found, top score=${candidates[0]?.matchScore ?? 0}`);
+    console.log(`[swish-islamic-identify] Numista multi-query search: ${queries.length} queries, ${candidateMap.size} unique types, top score=${candidates[0]?.matchScore ?? 0}`);
 
-    return { available: true, query, candidates: candidates.slice(0, 6), totalFound: types.length };
+    return { available: true, query, candidates: candidates.slice(0, 12), totalFound: candidateMap.size };
   } catch (e: any) {
-    return { available: false, query, candidates: [], error: `Numista error: ${e.message}`, totalFound: 0 };
+    return { available: successfulQueries > 0, query, candidates: [...candidateMap.values()].map(t => scoreNumistaIslamic(t, aiOutput, physicalData)).sort((a, b) => b.matchScore - a.matchScore).slice(0, 12), error: `Numista error: ${e.message}`, totalFound: candidateMap.size };
   }
 }
 
