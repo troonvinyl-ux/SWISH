@@ -1606,6 +1606,7 @@ Deno.serve(async (req: Request) => {
       ].filter(Boolean),
       warningFlags: valuation.valuationWarnings,
     },
+  });
   } catch (err: any) {
     // Keep unexpected runtime failures observable to the client without leaking credentials.
     const detail = String(err?.message ?? err ?? 'Unknown runtime error')
@@ -1615,5 +1616,4 @@ Deno.serve(async (req: Request) => {
     console.error('[SWISH Market v8] Unhandled valuation error:', detail);
     return jsonResponse({ error: 'Market valuation failed', details: detail }, 500);
   }
-  });
 });
