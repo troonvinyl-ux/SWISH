@@ -521,6 +521,15 @@ async function searchNumistaIslamicSilver(
   if (dynasty && dynasty.length > 2) queryParts.push(dynasty);
   const primaryQuery = queryParts.slice(0, 3).join(' ').trim();
   const weight = Number(physicalData?.weight);
+  // An explicit catalogue number is a direct lookup instruction, not just a
+  // keyword. Search results can rank a different denomination first, so resolve
+  // the supplied Numista type independently and keep it visible in the results.
+  const referenceText = String(physicalData?.notes ?? '');
+  const referenceMatch =
+    referenceText.match(/\\bN\\s*#\\s*(\\d{1,9})\\b/i) ??
+    referenceText.match(/numista\\.com\\/(?:catalogue\\/index\\.php\\?r=)?(\\d{1,9})/i) ??
+    referenceText.match(/\\bnumista\\s*(?:type\\s*)?(?:id\\s*[:#=]?\\s*)(\\d{1,9})\\b/i);
+  const suppliedReferenceId = referenceMatch ? Number(referenceMatch[1]) : null;
   const queries = [
     primaryQuery,
     [denomination, dynasty].filter(Boolean).join(' ').trim(),
@@ -539,6 +548,31 @@ async function searchNumistaIslamicSilver(
   let firstError = '';
 
   try {
+    // Fetch the user-supplied reference directly before broad discovery queries.
+    // Keep the actual catalogue fields/specifications; never manufacture a match
+    // merely because the number was supplied.
+    if (suppliedReferenceId && Number.isSafeInteger(suppliedReferenceId) && suppliedReferenceId > 0) {
+      try {
+        const directResp = await fetch(
+          `${NUMISTA_API}/types/${suppliedReferenceId}?lang=en`,
+          { headers: { 'Numista-API-Key': apiKey }, signal: AbortSignal.timeout(10000) },
+        );
+        if (directResp.ok) {
+          const directType = await directResp.json();
+          if (directType?.id != null) {
+            candidateMap.set(Number(directType.id), directType);
+            successfulQueries++;
+          } else {
+            firstError ||= `Numista direct lookup for N#${suppliedReferenceId} returned no type ID`;
+          }
+        } else {
+          firstError ||= `Numista direct lookup for N#${suppliedReferenceId} returned HTTP ${directResp.status}`;
+        }
+      } catch (e: any) {
+        firstError ||= `Numista direct lookup failed: ${e.message}`;
+      }
+    }
+
     for (const q of queries) {
       const resp = await fetch(
         `${NUMISTA_API}/types?q=${encodeURIComponent(q)}&lang=en&count=20`,
@@ -559,15 +593,26 @@ async function searchNumistaIslamicSilver(
       return { available: false, query, candidates: [], error: firstError || 'Numista search unavailable', totalFound: 0 };
     }
 
-    const candidates = [...candidateMap.values()]
+    const scoredCandidates = [...candidateMap.values()]
       .map(t => scoreNumistaIslamic(t, aiOutput, physicalData))
       .sort((a, b) => b.matchScore - a.matchScore);
+    // Keep an explicitly supplied reference first for the catalogue-check UI,
+    // while retaining its honest evidence score and all other ranked candidates.
+    const directCandidate = suppliedReferenceId
+      ? scoredCandidates.find(candidate => candidate.typeId === suppliedReferenceId)
+      : undefined;
+    const candidates = directCandidate
+      ? [directCandidate, ...scoredCandidates.filter(candidate => candidate.typeId !== suppliedReferenceId)]
+      : scoredCandidates;
 
-    console.log(`[swish-islamic-identify] Numista multi-query search: ${queries.length} queries, ${candidateMap.size} unique types, top score=${candidates[0]?.matchScore ?? 0}`);
+    console.log(`[swish-islamic-identify] Numista multi-query search: ${queries.length} queries, ${candidateMap.size} unique types, supplied reference=${suppliedReferenceId ?? 'none'}, top score=${candidates[0]?.matchScore ?? 0}`);
 
     return { available: true, query, candidates: candidates.slice(0, 12), totalFound: candidateMap.size };
   } catch (e: any) {
-    return { available: successfulQueries > 0, query, candidates: [...candidateMap.values()].map(t => scoreNumistaIslamic(t, aiOutput, physicalData)).sort((a, b) => b.matchScore - a.matchScore).slice(0, 12), error: `Numista error: ${e.message}`, totalFound: candidateMap.size };
+    const scoredCandidates = [...candidateMap.values()].map(t => scoreNumistaIslamic(t, aiOutput, physicalData)).sort((a, b) => b.matchScore - a.matchScore);
+    const directCandidate = suppliedReferenceId ? scoredCandidates.find(candidate => candidate.typeId === suppliedReferenceId) : undefined;
+    const candidates = directCandidate ? [directCandidate, ...scoredCandidates.filter(candidate => candidate.typeId !== suppliedReferenceId)] : scoredCandidates;
+    return { available: successfulQueries > 0, query, candidates: candidates.slice(0, 12), error: `Numista error: ${e.message}`, totalFound: candidateMap.size };
   }
 }
 
