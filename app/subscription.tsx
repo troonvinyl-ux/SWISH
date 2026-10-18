@@ -124,8 +124,9 @@ export default function SubscriptionScreen() {
     // Checkout metadata must identify the niche the subscriber is viewing.
     // This does not replace server-side entitlement enforcement; it prevents
     // every niche's upgrade button from incorrectly purchasing the coins niche.
-    const configuredScheme = Constants.expoConfig?.extra?.swishAppScheme ?? Constants.expoConfig?.scheme;
-    const appScheme = Array.isArray(configuredScheme) ? configuredScheme[0] : configuredScheme;
+    // Only branded builds send an explicit scheme. Legacy builds omit it so
+    // the server keeps the existing onspaceapp:// callback.
+    const appScheme = Constants.expoConfig?.extra?.swishAppScheme;
     const { opened, error } = await startCheckout(activeNicheId, typeof appScheme === 'string' ? appScheme : undefined);
     setCheckingOut(false);
     if (error) {
