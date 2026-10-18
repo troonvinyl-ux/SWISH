@@ -68,7 +68,6 @@ import {
   type ItemCommercialIntelligence,
 } from '@/services/commercialEngine';
 import { CommercialIntelligenceCard } from '@/components/feature/CommercialIntelligenceCard';
-import NicheValuationPanel from '@/components/feature/NicheValuationPanel';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const GALLERY_HEIGHT = 320;
@@ -839,6 +838,15 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
   const handleApply = useCallback(async (applyResult?: any) => {
     const r = applyResult ?? result;
     if (!r) return;
+    const numista = r.numistaVerification ?? {};
+    const numistaTypeId = r.numistaTypeId ?? numista.typeId ?? null;
+    const numistaN = r.numistaN ?? numista.numistaN ?? (numistaTypeId ? `N#${numistaTypeId}` : null);
+    const numistaStatus = r.numistaStatus ?? numista.status ?? null;
+    const numistaMatchScore = Number(r.numistaMatchScore ?? numista.matchScore ?? 0);
+    const numistaMatchTier = r.numistaMatchTier ?? numista.matchTier ?? null;
+    const strongNumistaMatch =
+      ['verified', 'strong_match'].includes(String(numistaStatus)) &&
+      numistaMatchScore >= 80 && numista.physicalMatchGood === true;
     setSaving(true); setUploadMsg('Uploading photos...');
     let permanentUrls: string[] = [...(item.media ?? [])];
     if (capturedImages.length > 0) {
@@ -855,13 +863,43 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
       condition: r.condition ?? item.condition, conditionGrade: r.conditionGrade ?? item.conditionGrade,
       conditionNotes: r.conditionNotes ?? item.conditionNotes,
       identificationConfidence: r.confidence ?? item.identificationConfidence,
+      // Do not overwrite the coin's identity fields from a weak catalogue candidate.
+      // Keep the candidate reference and its evidence so Re-Value can use it safely.
+      ...(strongNumistaMatch ? {
+        catalogueNumber: numistaN ?? item.catalogueNumber,
+        ruler: numista.issuer?.name ?? numista.issuer ?? r.coinFields?.issuer ?? item.ruler,
+        denomination: r.coinFields?.denomination ?? item.denomination,
+        period: r.coinFields?.period ?? item.period,
+        mint: numista.mint?.name ?? numista.mint ?? r.coinFields?.mint ?? item.mint,
+        material: numista.composition?.material ?? numista.composition ?? r.coinFields?.composition ?? item.material,
+        countryOfOrigin: r.coinFields?.country ?? item.countryOfOrigin,
+      } : {}),
       valuationLow: r.valuationLow ?? item.valuationLow, valuationMid: r.valuationMid ?? item.valuationMid,
       valuationHigh: r.valuationHigh ?? item.valuationHigh, valuationConfidence: r.valuationConfidence ?? item.valuationConfidence,
       expectedSellingPrice: r.valuationMid ?? item.expectedSellingPrice,
       expectedNet: (r.valuationMid ?? item.expectedSellingPrice) * 0.8725,
       expectedProfit: (r.valuationMid ?? item.expectedSellingPrice) * 0.8725 - (item.acquiredCost ?? 0),
       saleProb30d: r.saleProb30d ?? item.saleProb30d,
-      attributes: { ...item.attributes, ...r.attributes }, warnings: r.warnings ?? item.warnings, media: permanentUrls,
+      attributes: {
+        ...item.attributes,
+        ...r.attributes,
+        ...(numistaTypeId ? {
+          numista_candidate_id: numistaTypeId,
+          numista_n: numistaN,
+          numista_url: r.numistaUrl ?? numista.numistaUrl ?? `https://en.numista.com/catalogue/index.php?r=${numistaTypeId}`,
+          numista_title: r.numistaTitle ?? numista.title ?? null,
+          numista_status: numistaStatus ?? 'candidate',
+          numista_match_score: numistaMatchScore,
+          numista_match_tier: numistaMatchTier ?? 'weak',
+          numista_catalogue_weight: numista.weight ?? null,
+          numista_catalogue_diameter: numista.diameter ?? null,
+          numista_catalogue_composition: numista.composition?.material ?? numista.composition ?? null,
+          numista_issuer: numista.issuer?.name ?? numista.issuer ?? null,
+          numista_mint: numista.mint?.name ?? numista.mint ?? null,
+          ...(strongNumistaMatch ? { numista_type_id: numistaTypeId } : {}),
+        } : {}),
+      },
+      warnings: r.warnings ?? item.warnings, media: permanentUrls,
     };
     await updateItem(item.id, updates, tenantId);
     setSaving(false); onComplete(updates, permanentUrls);
@@ -1765,7 +1803,6 @@ export default function StockListingScreen() {
   const [pushingToEbay, setPushingToEbay] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
-  const [reValuing, setReValuing] = useState(false);
   const [reValueResult, setReValueResult] = useState<MarketValueResult | null>(null);
   const [commercialIntel, setCommercialIntel] = useState<ItemCommercialIntelligence | null>(null);
 
@@ -1850,37 +1887,6 @@ export default function StockListingScreen() {
     });
     if (mv) setReValueResult(mv);
   }, []);
-
-  const handleReValueFromBar = useCallback(async () => {
-    if (!item || !tenant) return;
-    setReValuing(true);
-    const attrs = item.attributes ?? {};
-    const coinNiche = isCoinNiche(item.specialistId);
-    const numistaTypeId = coinNiche && attrs['numista_type_id'] ? Number(attrs['numista_type_id']) : (coinNiche && attrs['numista_candidate_id'] ? Number(attrs['numista_candidate_id']) : null);
-    const numistaMatchTier = coinNiche ? (attrs['numista_status'] ?? (numistaTypeId ? 'candidate' : 'no_match')) : 'unavailable';
-    const { result: mv, error: mvErr } = await getMarketValue({
-      tenantId: tenant.id, itemId: item.id, title: item.canonicalTitle, specialistId: item.specialistId,
-      attributes: { ...(item.attributes ?? {}), ruler: item.ruler, denomination: item.denomination, year_made: item.yearMade, period: item.period, mint: item.mint, material: item.material, weight: item.weightGrams, diameter: item.diameterMm, country: item.countryOfOrigin },
-      condition: item.condition, identificationConfidence: item.identificationConfidence,
-      identificationTier: item.valuationConfidence as string ?? 'medium',
-      numistaTypeId, numistaMatchScore: 0, numistaMatchTier, applyToItem: true,
-      imageUrls: (item.media ?? []).filter((u: string) => typeof u === 'string' && u.startsWith('https://')),
-    });
-    setReValuing(false);
-    if (mvErr || !mv) { showAlert('Re-Value Failed', mvErr ?? 'Market value lookup failed'); return; }
-    setReValueResult(mv);
-    const val = mv.valuation;
-    const listPrice = val.recommendedListingPrice ?? val.valuationMid;
-    const updates: Partial<Item> = {
-      valuationLow: val.valuationLow, valuationMid: val.valuationMid, valuationHigh: val.valuationHigh,
-      valuationConfidence: val.valuationConfidence as any, expectedSellingPrice: listPrice,
-      expectedNet: listPrice * 0.8725, expectedProfit: listPrice * 0.8725 - (item.acquiredCost ?? 0),
-      saleProb30d: val.saleProb30d ?? item.saleProb30d,
-    };
-    await updateItem(item.id, updates, tenant?.id);
-    setItem(prev => prev ? { ...prev, ...updates } : prev);
-    showAlert('Re-Value Complete', `Market value: £${val.valuationLow.toFixed(0)}–£${val.valuationHigh.toFixed(0)} · ${val.valuationConfidence} confidence`);
-  }, [item, tenant, showAlert]);
 
   const handleReIdComplete = useCallback((updates: Partial<Item>, newMedia: string[]) => {
     setItem(prev => prev ? { ...prev, ...updates, media: newMedia } : prev);
@@ -2377,10 +2383,7 @@ export default function StockListingScreen() {
               {hasMarketValue ? (
                 <Text style={[s.pricingItemValue, { color: Colors.gold }]}>£{item.valuationLow.toFixed(0)}–£{item.valuationHigh.toFixed(0)}</Text>
               ) : (
-                <Pressable onPress={handleReValueFromBar} disabled={reValuing} style={s.pricingSetBtn}>
-                  {reValuing ? <ActivityIndicator size="small" color={Colors.primary} style={{ width: 12, height: 12 }} /> : <MaterialIcons name="travel-explore" size={12} color={Colors.primary} />}
-                  <Text style={s.pricingSetBtnText}>{reValuing ? '...' : 'Run Re-Value'}</Text>
-                </Pressable>
+                <Text style={[s.pricingItemValue, { color: Colors.textTertiary }]}>Not valued yet</Text>
               )}
             </View>
             <View style={s.pricingDivider} />
@@ -2452,51 +2455,6 @@ export default function StockListingScreen() {
             tenantId={tenant.id}
             onUpdated={handleMarketValueUpdated}
             externalResult={reValueResult}
-          />
-        ) : null}
-
-        {/* ── NICHE VALUATION PANEL ── */}
-        {tenant && item ? (
-          <NicheValuationPanel
-            tenantId={tenant.id}
-            itemId={item.id}
-            title={item.canonicalTitle}
-            specialistId={item.specialistId ?? 'curiosities_collectibles'}
-            attributes={{
-              ...(item.attributes ?? {}),
-              ruler: item.ruler,
-              denomination: item.denomination,
-              year_made: item.yearMade,
-              period: item.period,
-              mint: item.mint,
-              material: item.material,
-              weight: item.weightGrams,
-              diameter: item.diameterMm,
-              country: item.countryOfOrigin,
-            }}
-            condition={item.condition ?? ''}
-            identificationConfidence={item.identificationConfidence ?? 0.5}
-            identificationTier={item.valuationConfidence as string ?? 'medium'}
-            numistaTypeId={
-              item.attributes?.numista_type_id
-                ? Number(item.attributes.numista_type_id)
-                : item.attributes?.numista_candidate_id
-                ? Number(item.attributes.numista_candidate_id)
-                : null
-            }
-            numistaMatchScore={
-              item.attributes?.numista_match_score
-                ? Number(item.attributes.numista_match_score)
-                : 0
-            }
-            numistaMatchTier={
-              (item.attributes?.numista_status as string) ??
-              (item.attributes?.numista_type_id ? 'candidate' : 'no_match')
-            }
-            applyToItem={true}
-            initialResult={reValueResult}
-            autoFetch={!item.valuationMid || item.valuationMid <= 0}
-            imageUrls={(item.media ?? []).filter((u: string) => typeof u === 'string' && u.startsWith('https://'))}
           />
         ) : null}
 
@@ -2868,10 +2826,6 @@ export default function StockListingScreen() {
         <Pressable onPress={() => setReIdVisible(true)} style={[s.actionBtn, s.actionBtnReId]}>
           <MaterialIcons name="auto-awesome" size={15} color={Colors.accent} />
           <Text style={s.actionBtnReIdText}>Re-ID</Text>
-        </Pressable>
-        <Pressable onPress={handleReValueFromBar} disabled={reValuing} style={[s.actionBtn, s.actionBtnReValue]}>
-          {reValuing ? <ActivityIndicator size="small" color={Colors.gold} style={{ width: 15, height: 15 }} /> : <MaterialIcons name="travel-explore" size={15} color={Colors.gold} />}
-          <Text style={s.actionBtnReValueText}>{reValuing ? '...' : 'Re-Value'}</Text>
         </Pressable>
         <Pressable
           onPress={() => router.push(`/research?q=${encodeURIComponent(item.canonicalTitle ?? '')}` as any)}
