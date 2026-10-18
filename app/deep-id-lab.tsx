@@ -15,7 +15,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { Colors, Typography, Spacing, Radius } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import {
-  CapturedImage, AIIdentificationResult, pickFromLibrary, identifyItemWithAI,
+  CapturedImage, AIIdentificationResult, KnownItemAttributes, pickFromLibrary, identifyItemWithAI,
 } from '@/services/aiIdentificationService';
 import { getMarketValue, MarketValueResult } from '@/services/marketValueService';
 
@@ -82,7 +82,7 @@ export default function DeepIdLabScreen() {
     try {
       const measuredWeight = Number.parseFloat(weight);
       const measuredDiameter = Number.parseFloat(diameter);
-      const knownAttributes: Record<string, any> = {
+      const knownAttributes: KnownItemAttributes = {
         ...(Number.isFinite(measuredWeight) && measuredWeight > 0 ? { weight: measuredWeight } : {}),
         ...(Number.isFinite(measuredDiameter) && measuredDiameter > 0 ? { diameter: measuredDiameter } : {}),
         ...(metal.trim() ? { material: metal.trim() } : {}),
