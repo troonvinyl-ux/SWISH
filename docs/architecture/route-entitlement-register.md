@@ -39,17 +39,17 @@ These are configured build profiles, not proof that four release APKs have been 
 
 | File | Current responsibility | Audit note |
 |---|---|---|
-| `app/index.tsx` | Authentication/onboarding and active-niche routing | Contains a local niche-to-route mapping; unknown IDs fall back to coins. |
+| `app/index.tsx` | Authentication/onboarding and active-niche routing | Uses the shared canonical resolver; unknown IDs route to niche selection instead of defaulting to Coins. |
 | `app/entry/coins.tsx` | Sets active niche to coins, then redirects to shared tabs | Client-side niche switch, not an entitlement guard. |
 | `app/entry/motocross.tsx` | Sets active niche to motocross, then redirects to shared tabs | Client-side niche switch, not an entitlement guard. |
 | `app/entry/bicycles.tsx` | Sets active niche to bicycles, then redirects to shared tabs | Client-side niche switch, not an entitlement guard. |
 | `app/entry/clothing.tsx` | Sets active niche to clothing, then redirects to shared tabs | Client-side niche switch, not an entitlement guard. |
 | `app/(tabs)/_layout.tsx` | Shared Home / Scan / Stock / eBay tabs | Intended to remain common but must render niche-appropriate labels and routes. |
-| `app/(tabs)/index.tsx` | Chooses one of four niche home screens | Has a separate mapping and defaults unknown IDs to Coin Flipper. |
-| `contexts/AppContext.tsx` | Holds tenant, subscription and active/enabled niche state | Active/enabled niche selection is persisted in device-wide AsyncStorage, not account-specific server state. |
+| `app/(tabs)/index.tsx` | Chooses one of four niche home screens | Uses the shared resolver; unknown IDs route to niche selection instead of defaulting to Coin Flipper. |
+| `contexts/AppContext.tsx` | Holds tenant, subscription and active/enabled niche state | Local niche preferences use a per-user AsyncStorage key, are validated against production niches, and branded builds pin the configured niche. Server-side entitlement remains authoritative. |
 | `app/niche-select.tsx` | Lets users switch and enable multiple niches | Local enable state must not grant paid access. In the final UX, niche switching is only for entitled products. |
 | `app/subscription.tsx` | Displays plan and initiates checkout | Checkout previously hardcoded `coins`; fixed to pass `activeNicheId` in commit `a2e8aeee00ec345ec04eb9a90739df547e699ee6`. |
-| `supabase/functions/swish-create-checkout/index.ts` | Creates Stripe subscription with `niche_id` metadata | Accepts a client-supplied niche ID; validate it against the canonical allowed list before production entitlement work. |
+| `supabase/functions/swish-create-checkout/index.ts` | Creates Stripe subscription with `niche_id` metadata | Canonical niche IDs and explicit branded callback schemes are validated; legacy callback retained. |
 | `supabase/functions/swish-check-subscription/index.ts` | Checks Stripe active subscription | Currently reports a general active subscription and first active subscription, not entitlement for a requested niche. |
 | `services/subscriptionService.ts` | Client-side subscription state | Current response shape does not represent a set of independently entitled niches. |
 
@@ -72,7 +72,7 @@ These are configured build profiles, not proof that four release APKs have been 
 4. `swish-check-subscription` now returns `niche_entitlements` from active Stripe subscription metadata; legacy subscriptions without metadata are mapped to Coins. Client premium badges evaluate the active niche.
 5. `swish-create-checkout` validates canonical niche IDs and checks the supplied branded scheme against that niche; legacy clients retain the old callback.
 6. The subscription screen presents product-specific labels and feature lists.
-7. Server-side valuation/listing entitlement enforcement and database row-level security still need a separate endpoint-by-endpoint audit.
+7. Server-side valuation/listing entitlement enforcement and database row-level security still need a separate endpoint-by-endpoint audit. The eBay listing `end` route now resolves the listing and linked item from tenant-scoped database records, validates any supplied external ID, and scopes local updates by `tenant_id` (commit `a6be2707b8becbdcc7b2923cd4b40ea594d71a89`). eBay full sync now scopes listing/item writes by tenant as well (commit `e06f0db2e929bc2cf2f36a3e80d1cb800c2280bd`).
 8. Four EAS build profiles and a CI workflow now exist, but no successful test/build run or live deployment has yet been confirmed.
 
 ## Implementation sequence
@@ -100,3 +100,5 @@ These are configured build profiles, not proof that four release APKs have been 
 - 2026-10-18: Branded checkout callback uses a scheme matched to the selected niche; legacy callback retained (commits `01033ef3c95d5b76665610d45e54748ddff9fa52`, `ad4c8be75a17fce7f85728c4e5d6d1a0a5e5438c`, `713f951e73bc43e47203b2b1a107f02477068760`, `fdaefcd79acb36762887bb1d103016d52403f27e`, `1d05e4cc08ac12ec35af8065097b0104ae8babda`).
 - 2026-10-18: Added route/build config regression tests and CI workflow; execution still needs confirmation (commits `b55d302756044e2c329dea24c53619accd5b72c3`, `f7157118445b7117e3c2ddd90bd5a00c563604fd`, `df69ff99d08bc8e15ef05ed0c7751f567de37424`).
 - 2026-10-18: Market valuation now checks that any supplied item ID belongs to the authenticated tenant and matches the requested product's specialist family, even when the caller supplies external image URLs (commit `ca22b3ccd7a99ffc66e4083b850ba5c88473a89b`).
+- 2026-10-18: eBay listing end route validates tenant-owned listing/item records and the saved external listing ID before ending; all local writes are tenant-scoped (commit `a6be2707b8becbdcc7b2923cd4b40ea594d71a89`).
+- 2026-10-18: eBay full sync listing and item updates now explicitly include `tenant_id` in every affected write path (commit `e06f0db2e929bc2cf2f36a3e80d1cb800c2280bd`).
