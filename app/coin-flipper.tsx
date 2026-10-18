@@ -1499,7 +1499,7 @@ class CaptureTabErrorBoundary extends React.Component<
 export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: boolean } = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, setScanMode } = useApp();
+  const { tenant, setScanMode, triggerInventoryReload } = useApp();
   const { showAlert } = useAlert();
   const { isPremium } = useSubscription();
 
@@ -1693,6 +1693,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
         const completed = batchResult.items.filter(i => i.status === 'complete' && i.result);
         if (completed.length > 0) {
           const saveResult = await saveIslamicBatchToInventory(tenant.id, completed, () => {});
+          if (saveResult.saved > 0) triggerInventoryReload();
           if (saveResult.failed > 0) setAiError(`Identified ${completed.length} coin(s), but ${saveResult.failed} could not be saved: ${saveResult.errors.slice(0, 2).join('; ')}`);
         }
         if (batchResult.failed > 0) setAiError(`${batchResult.failed} coin(s) failed identification. Tap each result to review the error.`);
@@ -1722,6 +1723,8 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
               continue;
             }
             setQuickIdentificationResults(prev => prev.map(entry => entry.id === cap.id ? { ...entry, itemId: item.id } : entry));
+            // Ensure the shared Inventory screen reloads newly created coin records.
+            triggerInventoryReload();
             try {
               const { urls } = await uploadItemImages(item.id, coinImages);
               if (urls.length > 0) await updateItemMedia(tenant.id, item.id, urls);
@@ -1742,7 +1745,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
       setQuickRunning(false);
       setQuickDone(true);
     }
-  }, [tenant, quickCaptures, quickRunning, selectedSpecialist]);
+  }, [tenant, quickCaptures, quickRunning, selectedSpecialist, triggerInventoryReload]);
 
   // ── AI identification (standard mode) ──────────────────────────────────────
   const handleIdentify = useCallback(async () => {
@@ -1826,6 +1829,8 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
     }
 
     setSavedItemId(item.id);
+    // Refresh shared inventory lists after the database insert succeeds.
+    triggerInventoryReload();
     AccessibilityInfo.announceForAccessibility('Coin saved to inventory');
 
     if (capturedImages.length > 0) {
@@ -1845,7 +1850,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
         setIsUploading(false);
       }
     }
-  }, [idResult, tenant, capturedImages, savedItemId, showAlert]);
+  }, [idResult, tenant, capturedImages, savedItemId, showAlert, triggerInventoryReload]);
 
   // Reset all state for a new scan
   const handleReset = useCallback(() => {
