@@ -1183,7 +1183,14 @@ Deno.serve(async (req: Request) => {
       const ancient = isAncientCoin(constrained, knownAttributes ?? {});
       numistaVerification = await verifyWithNumista(constrained, knownAttributes ?? {}, ancient);
       constrained = applyNumistaToIdentification(constrained, numistaVerification);
+      // applyNumistaToIdentification has already evaluated catalogue score and physical contradictions.
+      // Re-running the generic evidence limiter here used to re-cap verified candidates at 45%.
       constrained = enforceEvidenceConstraints(constrained, false, false);
+      if (['verified', 'strong_match'].includes(numistaVerification.status) && numistaVerification.matchScore >= 80 && numistaVerification.physicalMatchGood) {
+        constrained.confidence = Math.max(constrained.confidence, Math.min(0.85, Number(identification.confidence ?? constrained.confidence) + 0.15));
+        constrained.confidenceTier = constrained.confidence >= 0.85 ? 'very_high' : constrained.confidence >= 0.70 ? 'high' : constrained.confidence >= 0.50 ? 'medium' : 'low';
+        constrained.warnings = (constrained.warnings ?? []).filter((w: string) => !/Low confidence identification/i.test(w));
+      }
     } else if (!vehicleMode && !clothingMode && coinMode && !isConfirmedCoin) {
       constrained.numistaStatus = 'unavailable';
       constrained.warnings = constrained.warnings ?? [];
