@@ -9,7 +9,7 @@ import * as FileSystem from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Platform } from 'react-native';
 import { getSupabaseClient } from '@/template';
-import { FunctionsHttpError } from '@supabase/supabase-js';
+import { FunctionsFetchError, FunctionsHttpError } from '@supabase/supabase-js';
 import { SpecialistId } from '@/constants/specialists';
 import { EvidenceSource, ConfidenceTier, DispositionDecision } from '@/constants/config';
 import { createItem, Item } from '@/services/itemService';
@@ -297,7 +297,16 @@ export async function identifyItemWithAI(
     if (error) {
       let errorMessage = error.message;
       let rawBody: string | null = null;
-      if (error instanceof FunctionsHttpError) {
+      if (error instanceof FunctionsFetchError) {
+        // A fetch error means the client never received an HTTP response. Preserve the
+        // underlying transport detail so connection/CORS/deployment failures aren't
+        // mistaken for an AI identification rejection.
+        const transportDetail = error.context instanceof Error ? error.context.message : String(error.context ?? '');
+        console.error('[SWISH swish-identify transport failure]', transportDetail || error.message);
+        errorMessage = transportDetail
+          ? `Could not reach the swish-identify Edge Function: ${transportDetail}. Check the connection and function availability, then retry.`
+          : 'Could not reach the swish-identify Edge Function. Check the connection and function availability, then retry.';
+      } else if (error instanceof FunctionsHttpError) {
         try {
           const statusCode = error.context?.status ?? 500;
           rawBody = await error.context?.text();
