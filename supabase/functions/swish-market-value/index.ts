@@ -1085,12 +1085,16 @@ Deno.serve(async (req: Request) => {
   }
 
   // ── Fallback Browse queries — sequential with marketplace expansion ─────────
-  // v8 FIX: For rare/niche items that return 0 results on primary query:
-  //   1. Try each additional Gemini-generated query with EBAY_GB filter
-  //   2. If still < 5 results, try final broad query WITHOUT marketplace filter
-  //      (includes international eBay listings — helps for rare Islamic/ancient coins)
+  // Active listings are valuable market context even when Terapeak is connected
+  // but has no matching sales. For rare coins, never gate active-search fallback
+  // on the API's "available" flag: available can mean the request succeeded but
+  // returned no useful sold evidence.
+  //   1. If the primary query returns fewer than 8 active listings, try the
+  //      deterministic coin variants and Gemini alternatives with EBAY_GB filter.
+  //   2. If still < 5 results, try the broadest query without marketplace filter
+  //      to include international listings.
   const browseResults: BrowseSearchResult[] = [firstBrowseResult];
-  const needsMoreBrowse = !teapeakResult.available && firstBrowseResult.items.length < 8 && searchQueries.length > 1;
+  const needsMoreBrowse = firstBrowseResult.items.length < 8 && searchQueries.length > 1;
   if (needsMoreBrowse) {
     for (const query of searchQueries.slice(1)) {
       await sleep(500);
