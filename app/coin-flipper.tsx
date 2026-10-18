@@ -474,7 +474,7 @@ const ibc = StyleSheet.create({
   imgWrap: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: CF.surfaceHigh, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   img: { width: '100%', height: '100%' },
   title: { fontSize: 11, fontWeight: Typography.weight.semibold, color: CF.textPrimary },
-  reviewAction: { fontSize: 9, color: CF.gold, marginTop: 3, fontWeight: Typography.weight.semibold }
+  reviewAction: { fontSize: 9, color: CF.gold, marginTop: 3, fontWeight: Typography.weight.semibold },
   confPill: { borderRadius: Radius.pill, paddingHorizontal: 5, paddingVertical: 2, alignSelf: 'flex-start', marginTop: 2 },
   confTxt: { fontSize: 9, fontWeight: Typography.weight.bold },
   error: { fontSize: 10, color: Colors.danger },
@@ -934,7 +934,7 @@ const ct = StyleSheet.create({
   quickClearText: { fontSize: 10, color: Colors.danger, fontWeight: Typography.weight.semibold },
   quickThumb: { width: 64, height: 64, borderRadius: Radius.md, overflow: 'hidden', position: 'relative' },
   quickThumbImg: { width: '100%', height: '100%' },
-  quickSideLabel: { position: 'absolute', bottom: 1, left: 1, right: 1, fontSize: 6, fontWeight: Typography.weight.bold, textAlign: 'center', color: '#fff', backgroundColor: 'rgba(0,0,0,0.65)', paddingVertical: 2 }
+  quickSideLabel: { position: 'absolute', bottom: 1, left: 1, right: 1, fontSize: 6, fontWeight: Typography.weight.bold, textAlign: 'center', color: '#fff', backgroundColor: 'rgba(0,0,0,0.65)', paddingVertical: 2 },
   quickThumbNum: { position: 'absolute', bottom: 2, right: 2, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 8, width: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
   quickThumbNumText: { fontSize: 8, fontWeight: Typography.weight.bold, color: '#fff' },
   islamicBatchSection: { gap: Spacing.xs },
