@@ -1153,7 +1153,7 @@ Deno.serve(async (req: Request) => {
     if (userError || !user) return new Response(JSON.stringify({ error: 'Invalid or expired authentication token.' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
     const body = await req.json();
-    const { images, existingImageUrls, specialistId, acquisitionContext, knownAttributes, tenantId: bodyTenantId } = body;
+    const { images, imageLabels, existingImageUrls, specialistId, acquisitionContext, knownAttributes, tenantId: bodyTenantId } = body;
     const specialist = specialistId ?? 'curiosities_collectibles';
     const requestedNiche = nicheForSpecialist(specialist);
 
@@ -1254,7 +1254,16 @@ Deno.serve(async (req: Request) => {
       }
     }
     if (hasNewImages) {
-      for (const img of images) {
+      for (let imageIndex = 0; imageIndex < images.length; imageIndex++) {
+        const img = images[imageIndex];
+        const suppliedLabel = Array.isArray(imageLabels) ? imageLabels[imageIndex] : undefined;
+        const safeLabel = typeof suppliedLabel === 'string' && suppliedLabel.trim()
+          ? suppliedLabel.trim().slice(0, 40)
+          : `Photo ${imageIndex + 1} (face not specified)`;
+        // Text labels are sent immediately before each image, preserving the
+        // capture-slot association without changing the existing images[] API.
+        userContent.push({ type: 'text', text: `IMAGE ${imageIndex + 1} — ${safeLabel}. Treat this as the user-supplied face/angle label, not proof of coin identity.` });
+        if (typeof img !== 'string') continue;
         if (img.startsWith('http')) userContent.push({ type: 'image_url', image_url: { url: img } });
         else { const dataUri = img.startsWith('data:') ? img : `data:image/jpeg;base64,${img}`; userContent.push({ type: 'image_url', image_url: { url: dataUri } }); }
       }
