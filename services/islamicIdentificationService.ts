@@ -8,7 +8,7 @@
 //   5. Analyses countermarks separately from host coins
 
 import { getSupabaseClient } from '@/template';
-import { FunctionsHttpError } from '@supabase/supabase-js';
+import { FunctionsFetchError, FunctionsHttpError } from '@supabase/supabase-js';
 import { prepareImageForAI } from '@/services/aiIdentificationService';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -215,7 +215,13 @@ export async function identifyIslamicSilver(
 
     if (error) {
       let errorMessage = error.message;
-      if (error instanceof FunctionsHttpError) {
+      if (error instanceof FunctionsFetchError) {
+        const transportDetail = error.context instanceof Error ? error.context.message : String(error.context ?? '');
+        console.error('[SWISH swish-islamic-identify transport failure]', transportDetail || error.message);
+        errorMessage = transportDetail
+          ? `Could not reach the swish-islamic-identify Edge Function: ${transportDetail}. Check the connection and function availability, then retry.`
+          : 'Could not reach the swish-islamic-identify Edge Function. Check the connection and function availability, then retry.';
+      } else if (error instanceof FunctionsHttpError) {
         try {
           const statusCode = error.context?.status ?? 500;
           const textContent = await error.context?.text();
