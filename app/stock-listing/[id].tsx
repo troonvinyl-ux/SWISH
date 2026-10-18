@@ -895,10 +895,23 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
   const handleRefineIdentification = useCallback(async () => {
     if (!result) return;
     setRefineLoading(true);
-    const extraNotes = [refineWeight ? `Weight: ${refineWeight}g` : '', refineDiameter ? `Diameter: ${refineDiameter}mm` : '', refineKeywords.trim() ? `Additional context: ${refineKeywords}` : ''].filter(Boolean).join(', ');
+    const suppliedSpecs = refineKeywords.trim();
+    const extraNotes = [
+      refineWeight ? `Weight: ${refineWeight}g` : '',
+      refineDiameter ? `Diameter: ${refineDiameter}mm` : '',
+      suppliedSpecs ? `User-supplied specifications (cross-check; not automatically verified):\\n${suppliedSpecs}` : '',
+    ].filter(Boolean).join('\\n');
     const { result: refined, error: refineErr } = await identifyItemWithAI(
       capturedImages, (item.specialistId as any) ?? 'curiosities_collectibles', undefined,
-      { existingTitle: result.canonicalTitle, condition: result.condition, conditionGrade: result.conditionGrade, weight: refineWeight ? parseFloat(refineWeight) : item.weightGrams, diameter: refineDiameter ? parseFloat(refineDiameter) : item.diameterMm, yearMade: item.yearMade, countryOfOrigin: item.countryOfOrigin, material: item.material, ruler: item.ruler, denomination: item.denomination, period: item.period, mint: item.mint, catalogueNumber: item.catalogueNumber, existingAttributes: { ...item.attributes, ...result.attributes }, customNotes: extraNotes },
+      {
+        existingTitle: result.canonicalTitle, condition: result.condition, conditionGrade: result.conditionGrade,
+        weight: refineWeight ? parseFloat(refineWeight) : item.weightGrams,
+        diameter: refineDiameter ? parseFloat(refineDiameter) : item.diameterMm,
+        yearMade: item.yearMade, countryOfOrigin: item.countryOfOrigin, material: item.material,
+        ruler: item.ruler, denomination: item.denomination, period: item.period, mint: item.mint,
+        catalogueNumber: item.catalogueNumber, existingAttributes: { ...item.attributes, ...result.attributes },
+        customNotes: extraNotes,
+      },
       { tenantId, existingImageUrls: useExistingImages ? storedUrls : undefined },
     );
     setRefineLoading(false);
