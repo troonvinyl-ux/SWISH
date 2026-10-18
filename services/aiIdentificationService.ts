@@ -37,6 +37,13 @@ export interface NumistaVerification {
   composition?: string;
   weight?: number;
   diameter?: number;
+  thickness?: number;
+  issuer?: string;
+  mint?: string;
+  denomination?: string;
+  country?: string;
+  obverse?: string;
+  reverse?: string;
   references: string[];
   suppliedWeight?: number;
   suppliedDiameter?: number;
