@@ -1765,7 +1765,14 @@ export default function EbayListingEditorScreen() {
                 if (error instanceof FunctionsHttpError) {
                   try { const txt = await error.context?.text(); const p = txt ? JSON.parse(txt) : null; msg = p?.error ?? txt ?? msg; } catch {}
                 }
-                showAlert('SKU Update Failed', msg);
+                if (msg.includes('This listing is already active on eBay. Use the revise route to update it.')) {
+                  showAlert(
+                    'SKU-only route not deployed',
+                    'The running swish-ebay-list Edge Function is older than the code in GitHub and is treating this as a new listing. No SKU or photo changes were made. Redeploy swish-ebay-list from the current main branch, then retry Update SKU on eBay only. Do not use Revise on eBay as a workaround.'
+                  );
+                } else {
+                  showAlert('SKU Update Failed', msg);
+                }
                 return;
               }
               if (result?.success) {
