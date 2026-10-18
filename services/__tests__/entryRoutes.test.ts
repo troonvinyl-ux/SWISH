@@ -13,6 +13,10 @@
 
 import { nicheToEntryRoute } from '@/services/nicheRouting';
 
+type NicheId =
+  | 'coins' | 'trading_cards' | 'antiques' | 'bicycles' | 'motocross'
+  | 'fossils' | 'clothing' | 'beauty' | 'general';
+
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 // ── SWISH-003: Bicycle specialist classification ─────────────────────────────
