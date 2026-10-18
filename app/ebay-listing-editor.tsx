@@ -1713,6 +1713,7 @@ export default function EbayListingEditorScreen() {
         condition: data.condition,
         condition_grade: data.conditionDescription,
         quantity: parseInt(data.quantity) || 1,
+        inventory_id: data.sku.trim() || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', data.itemId)
@@ -1722,6 +1723,69 @@ export default function EbayListingEditorScreen() {
     originalRef.current = JSON.parse(JSON.stringify(data));
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 2500);
+  }, [data, tenant, showAlert]);
+
+  // ── SKU-only revision: do not send listing photos or other listing fields ───────
+
+  const handleReviseSkuOnEbay = useCallback(async () => {
+    if (!data || !tenant) return;
+    if (!data.externalListingId) {
+      showAlert('Not Live on eBay', 'This listing has not been published to eBay yet.');
+      return;
+    }
+    const sku = data.sku.trim();
+    if (!sku) {
+      showAlert('SKU Required', 'Enter a SKU in the SKU / SWISH ID field before updating eBay.');
+      return;
+    }
+    showAlert(
+      'Update SKU only?',
+      `Set the eBay custom label (SKU) for listing #${data.externalListingId} to "${sku}"? This sends only the SKU change and will not revise listing photos or other listing fields.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Update SKU',
+          onPress: async () => {
+            setRevising(true);
+            const supabase = getSupabaseClient();
+            try {
+              const { data: result, error } = await supabase.functions.invoke('swish-ebay-list', {
+                body: {
+                  route: 'revise_sku',
+                  tenantId: tenant.id,
+                  listingId: data.listingId,
+                  itemId: data.itemId,
+                  externalListingId: data.externalListingId,
+                  sku,
+                  listingType: data.listingType,
+                },
+              });
+              if (error) {
+                let msg = error.message;
+                if (error instanceof FunctionsHttpError) {
+                  try { const txt = await error.context?.text(); const p = txt ? JSON.parse(txt) : null; msg = p?.error ?? txt ?? msg; } catch {}
+                }
+                showAlert('SKU Update Failed', msg);
+                return;
+              }
+              if (result?.success) {
+                await supabase.from('items').update({ inventory_id: sku, updated_at: new Date().toISOString() })
+                  .eq('id', data.itemId).eq('tenant_id', tenant.id);
+                setData(prev => prev ? { ...prev, sku } : prev);
+                setHasChanges(false);
+                showAlert('SKU Updated', `eBay listing #${data.externalListingId} now has SKU ${sku}. Photos and other listing fields were not sent.`);
+              } else {
+                showAlert('SKU Update Failed', result?.error ?? 'Unknown error from eBay');
+              }
+            } catch (e: any) {
+              showAlert('SKU Update Failed', e?.message ?? 'Unknown error');
+            } finally {
+              setRevising(false);
+            }
+          },
+        },
+      ],
+    );
   }, [data, tenant, showAlert]);
 
   // ── Revise on eBay ────────────────────────────────────────────────────────────
@@ -1892,6 +1956,10 @@ export default function EbayListingEditorScreen() {
           <Text style={s.saveBtnText}>{saving ? 'Saving...' : 'Save'}</Text>
         </Pressable>
 
+        <Pressable onPress={handleReviseSkuOnEbay} disabled={revising || !data.externalListingId} style={[s.saveBtn, { borderColor: Colors.gold, marginLeft: 6 }, (!data.externalListingId || revising) && { opacity: 0.5 }]} hitSlop={4}>
+          <MaterialIcons name="sell" size={14} color={Colors.gold} />
+          <Text style={[s.saveBtnText, { color: Colors.gold }]}>Update SKU only</Text>
+        </Pressable>
         <Pressable onPress={handleReviseOnEbay} disabled={revising} style={[s.reviseBtn, !data.externalListingId && { opacity: 0.5 }]} hitSlop={4}>
           {revising ? <ActivityIndicator size="small" color={Colors.background} style={{ width: 14, height: 14 }} /> : <MaterialIcons name="published-with-changes" size={14} color={Colors.background} />}
           <Text style={s.reviseBtnText}>{revising ? 'Revising...' : 'Revise on eBay'}</Text>
