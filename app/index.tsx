@@ -16,39 +16,16 @@
 //   motocross              → /entry/motocross
 //   bicycles / cycling     → /entry/bicycles
 //   clothing / fashion     → /entry/clothing
-//   general / unknown      → /entry/coins  (fallback; subscriber should be prompted to select)
+//   general / unknown      → /niche-select (fail closed; never guess a product)
 
 import { AuthRouter } from '@/template';
 import { Redirect } from 'expo-router';
 import { useApp } from '@/hooks/useApp';
 import { View, ActivityIndicator } from 'react-native';
 import { Colors } from '@/constants/theme';
-import type { NicheId } from '@/constants/niches';
+import { nicheToEntryRoute } from '@/services/nicheRouting';
 
-// Maps a niche ID to its dedicated entry route path
-function nicheToEntryRoute(nicheId: NicheId | null | undefined): string {
-  if (!nicheId) return '/entry/coins'; // fallback
-
-  const id = nicheId.toLowerCase();
-
-  if (
-    id === 'coins' || id === 'coins_uk' || id === 'coins_world' ||
-    id === 'banknotes' || id === 'gold' || id === 'silver' ||
-    id === 'islamic_silver' || id === 'ancient_artefacts' ||
-    id === 'curiosities_collectibles' || id.includes('coin')
-  ) return '/entry/coins';
-
-  if (id === 'motocross' || id === 'mx') return '/entry/motocross';
-
-  if (id === 'bicycles' || id === 'cycling' || id === 'bikes') return '/entry/bicycles';
-
-  if (
-    id === 'clothing' || id === 'fashion' ||
-    id === 'trainers_sneakers' || id === 'trainers' || id === 'threads_flip'
-  ) return '/entry/clothing';
-
-  // Unrecognised niche — fall back to coins entry (will prompt niche selection via onboarding)
-  return '/entry/coins';
+oins';
 }
 
 function AppRouter() {
@@ -72,6 +49,7 @@ function AppRouter() {
   // Route to the correct niche-specific entry point.
   // This prevents all subscribers from silently entering a single shared shell.
   const entryRoute = nicheToEntryRoute(activeNicheId);
+  if (!entryRoute) return <Redirect href="/niche-select" />;
   return <Redirect href={entryRoute as any} />;
 }
 
