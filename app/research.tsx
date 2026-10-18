@@ -524,7 +524,7 @@ export default function ResearchScreen() {
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={s.title}>Research Centre</Text>
-          <Text style={s.subtitle}>Live eBay · Terapeak · Numista · Gemini</Text>
+          <Text style={s.subtitle}>Live eBay · Terapeak · Numista · CANOA · Gemini</Text>
         </View>
       </View>
 
