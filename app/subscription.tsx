@@ -12,6 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useApp } from '@/hooks/useApp';
 import { startCheckout, openCustomerPortal, formatSubscriptionEnd } from '@/services/subscriptionService';
 import { useAlert } from '@/template';
 
@@ -71,6 +72,7 @@ export default function SubscriptionScreen() {
   const router = useRouter();
   const { showAlert } = useAlert();
   const { status, loading, isPremium, refresh } = useSubscription();
+  const { activeNicheId } = useApp();
 
   const [checkingOut, setCheckingOut] = useState(false);
   const [openingPortal, setOpeningPortal] = useState(false);
@@ -91,7 +93,10 @@ export default function SubscriptionScreen() {
 
   const handleSubscribe = useCallback(async () => {
     setCheckingOut(true);
-    const { opened, error } = await startCheckout('coins');
+    // Checkout metadata must identify the niche the subscriber is viewing.
+    // This does not replace server-side entitlement enforcement; it prevents
+    // every niche's upgrade button from incorrectly purchasing the coins niche.
+    const { opened, error } = await startCheckout(activeNicheId);
     setCheckingOut(false);
     if (error) {
       showAlert('Checkout Failed', error);
