@@ -1311,12 +1311,58 @@ Deno.serve(async (req: Request) => {
 
     let aiOutput: any;
     try {
-      const cleaned = rawContent.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-      aiOutput = JSON.parse(cleaned);
+      // Models may wrap JSON in Markdown fences or double-encode it with
+      // literal \n and \" sequences. Normalize those common wrappers first.
+      const stripFence = (value: string) => value
+        .trim()
+        .replace(/^\x60\x60\x60(?:json)?(?:\\r?\\n|\\n|\r?\n)?/i, '')
+        .replace(/(?:\\n)?\x60\x60\x60\s*$/i, '')
+        .trim();
+
+      const cleaned = stripFence(String(rawContent ?? ''));
+      const candidates: string[] = [cleaned];
+
+      // Some model gateways return a JSON string whose contents are the object.
+      try {
+        const decoded = JSON.parse(cleaned);
+        if (typeof decoded === 'string') candidates.push(stripFence(decoded));
+        else if (decoded && typeof decoded === 'object' && !Array.isArray(decoded)) aiOutput = decoded;
+      } catch {
+        // Continue with normalized candidates.
+      }
+
+      if (!aiOutput) {
+        candidates.push(cleaned
+          .replace(/\\r\\n/g, '\n')
+          .replace(/\\n/g, '\n')
+          .replace(/\\t/g, '\t')
+          .replace(/\\"/g, '"')
+          .trim());
+      }
+
+      for (const candidate of candidates) {
+        if (aiOutput) break;
+        try {
+          const parsed = JSON.parse(candidate);
+          if (typeof parsed === 'string') {
+            const nested = JSON.parse(stripFence(parsed));
+            if (nested && typeof nested === 'object' && !Array.isArray(nested)) aiOutput = nested;
+          } else if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            aiOutput = parsed;
+          }
+        } catch {
+          // Continue through the normalization candidates.
+        }
+      }
+
+      if (!aiOutput || typeof aiOutput !== 'object' || Array.isArray(aiOutput)) {
+        throw new Error('Parsed response was not a JSON object');
+      }
     } catch {
+      console.error('[swish-islamic-identify] Invalid AI JSON response; length:', String(rawContent ?? '').length);
       return new Response(
-        JSON.stringify({ error: 'AI returned invalid JSON', raw: rawContent.slice(0, 500) }),
-        { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        JSON.stringify({ error: 'AI returned invalid JSON after normalization. Please retry.' }),
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
 
