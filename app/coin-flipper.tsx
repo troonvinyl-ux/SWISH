@@ -508,7 +508,7 @@ function CaptureTab({
   quickRunning: boolean; quickDone: boolean; onClearQuick: () => void;
   quickIdentificationResults: QuickCoinResult[]; selectedQuickResult: QuickCoinResult | null;
   onQuickResultSelect: (result: QuickCoinResult) => void; onCloseQuickResult: () => void;
-  islamicBatchItems: IslamicBatchItem[]; onIslamicItemPress: (item: IslamicBatchItem) => void;
+  islamicBatchItems: IslamicBatchItem[]; onIslamicItemPress: (item: IslamicBatchItem | null) => void;
   weightInput: string; setWeightInput: (value: string) => void;
   diameterInput: string; setDiameterInput: (value: string) => void;
   yearInput: string; setYearInput: (value: string) => void;
@@ -1661,7 +1661,11 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
   const handleClearQuick = useCallback(() => {
     setQuickCaptures([]);
     setIslamicBatchItems([]);
+    setSelectedIslamicItem(null);
+    setQuickIdentificationResults([]);
+    setSelectedQuickResult(null);
     setQuickDone(false);
+    setAiError(null);
   }, []);
 
   // ── Quick Mode: run batch identification ────────────────────────────────────
@@ -1699,6 +1703,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
             { uri: cap.uri, slotId: 'obverse', slotLabel: 'Obverse' },
             { uri: cap.reverseUri!, slotId: 'reverse', slotLabel: 'Reverse' },
           ];
+          isIdentifyInFlight.current = true;
           try {
             const { result, error } = await identifyItemWithAI(coinImages, selectedSpecialist.specialistId, undefined, undefined, { tenantId: tenant.id });
             if (!result) {
