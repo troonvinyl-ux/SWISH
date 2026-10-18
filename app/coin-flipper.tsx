@@ -1617,7 +1617,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
             const libImg = await pickFromLibrary(slotId, slotLabel);
             if (!libImg) return;
             setCapturedImages(prev => {
-              const existing = prev.findIndex(i => i.slotId !== slotId);
+              const existing = prev.findIndex(i => i.slotId === slotId);
               if (existing >= 0) { const updated = [...prev]; updated[existing] = libImg; return updated; }
               return [...prev, libImg];
             });
@@ -1799,7 +1799,34 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
       return;
     }
 
-    setIdResult(result);
+    // Keep user-supplied physical measurements and the catalogue evidence attached
+    // to this identification so they survive saving and drive downstream valuation.
+    // A Numista result remains a candidate unless the source pipeline explicitly
+    // marks it verified; never silently promote a candidate to a confirmed identity.
+    const suppliedWeight = weightInput.trim() ? Number(weightInput.replace(',', '.')) : undefined;
+    const suppliedDiameter = diameterInput.trim() ? Number(diameterInput.replace(',', '.')) : undefined;
+    const numistaVerification = result.numistaVerification ?? undefined;
+    const enrichedResult: AIIdentificationResult = {
+      ...result,
+      attributes: {
+        ...(result.attributes ?? {}),
+        ...(Number.isFinite(suppliedWeight) && (suppliedWeight ?? 0) > 0 ? { weight_g: suppliedWeight, supplied_weight_g: suppliedWeight } : {}),
+        ...(Number.isFinite(suppliedDiameter) && (suppliedDiameter ?? 0) > 0 ? { diameter_mm: suppliedDiameter, supplied_diameter_mm: suppliedDiameter } : {}),
+        ...(yearInput.trim() ? { user_supplied_year: yearInput.trim() } : {}),
+        ...(materialInput.trim() ? { user_supplied_material: materialInput.trim() } : {}),
+        ...(edgeLegendInput.trim() ? { user_supplied_edge_or_legend: edgeLegendInput.trim() } : {}),
+        ...(result.numistaTypeId || numistaVerification?.typeId ? { numista_type_id: Number(result.numistaTypeId ?? numistaVerification?.typeId) } : {}),
+        ...(result.numistaN || numistaVerification?.numistaN ? { numista_n: result.numistaN ?? numistaVerification?.numistaN } : {}),
+        ...(result.numistaUrl || numistaVerification?.numistaUrl ? { numista_url: result.numistaUrl ?? numistaVerification?.numistaUrl } : {}),
+        ...(result.numistaTitle || numistaVerification?.title ? { numista_title: result.numistaTitle ?? numistaVerification?.title } : {}),
+        ...(result.numistaMatchScore !== undefined || numistaVerification?.matchScore !== undefined ? { numista_match_score: Number(result.numistaMatchScore ?? numistaVerification?.matchScore ?? 0) } : {}),
+        ...(result.numistaStatus || numistaVerification?.status ? { numista_status: result.numistaStatus ?? numistaVerification?.status } : {}),
+        ...(result.numistaMatchTier || numistaVerification?.matchTier ? { numista_match_tier: result.numistaMatchTier ?? numistaVerification?.matchTier } : {}),
+        ...(numistaVerification ? { numista_verification: numistaVerification } : {}),
+        catalogue_reference_state: result.numistaStatus === 'verified' ? 'verified' : (result.numistaTypeId || numistaVerification?.typeId ? 'candidate' : 'not_found'),
+      },
+    };
+    setIdResult(enrichedResult);
     setValuationResult(null);
     setValuationLoading(false);
     setValuationError(null);
