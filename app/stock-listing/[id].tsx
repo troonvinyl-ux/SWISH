@@ -841,7 +841,7 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
     const numista = r.numistaVerification ?? {};
     const suppliedNumistaN = r.numistaN ?? numista.numistaN ?? null;
     const parsedNumistaId = suppliedNumistaN
-      ? Number(String(suppliedNumistaN).match(/N\\s*#?\\s*(\\d+)/i)?.[1] ?? 0) || null
+      ? Number(String(suppliedNumistaN).match(/N\s*#?\s*(\d+)/i)?.[1] ?? 0) || null
       : null;
     const numistaTypeId = r.numistaTypeId ?? numista.typeId ?? parsedNumistaId;
     const numistaN = suppliedNumistaN ?? (numistaTypeId ? `N#${numistaTypeId}` : null);
