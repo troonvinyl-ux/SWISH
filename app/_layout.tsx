@@ -14,7 +14,9 @@ import {
   FontAwesome,
 } from '@expo/vector-icons';
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {
+  // The host may already have configured the splash screen during launch.
+});
 
 // ── TV BackHandler ────────────────────────────────────────────────────────────
 // Intercepts the Fire Stick hardware Back button.
