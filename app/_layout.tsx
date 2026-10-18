@@ -133,6 +133,7 @@ export default function RootLayout() {
                 <Stack.Screen name="entry/clothing" />
                 <Stack.Screen name="buy-decision" />
                 <Stack.Screen name="research" />
+                <Stack.Screen name="deep-id-lab" />
               </Stack>
             </TVBackHandlerProvider>
           </AppProvider>
