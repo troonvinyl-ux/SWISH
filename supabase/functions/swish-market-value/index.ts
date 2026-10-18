@@ -684,10 +684,22 @@ function buildSearchQueries(title: string, attributes: Record<string, any>, spec
   // and common numismatic variants are still useful eBay queries.
   if (isCoin && sanitised.length >= 4) {
     const titleLower = sanitised.toLowerCase();
-    const coinQueries = [
-      sanitised,
-      /\bcoin\b/i.test(sanitised) ? sanitised : `${sanitised} coin`,
-    ];
+    const coinQueries = [sanitised];
+    if (!/\bcoin\b/i.test(sanitised)) coinQueries.push(`${sanitised} coin`);
+
+    // Keep deterministic, domain-specific variants before Gemini terms. The
+    // function only sends five queries, so fallbacks added later can otherwise
+    // be silently truncated and never reach eBay.
+    if (/jammu/.test(titleLower) && /kashmir/.test(titleLower)) {
+      coinQueries.push(
+        'Jammu Kashmir coin',
+        'Kashmir rupee silver coin',
+        'Ranbir Singh Kashmir rupee',
+        'Kashmir rupee coin'
+      );
+    } else if (/kashmir/.test(titleLower)) {
+      coinQueries.push('Kashmir coin', 'Kashmir rupee silver coin', 'Kashmir rupee coin');
+    }
     if (/\btanka?s?\b/i.test(titleLower)) {
       coinQueries.push(
         `${sanitised} silver coin`,
@@ -697,11 +709,6 @@ function buildSearchQueries(title: string, attributes: Record<string, any>, spec
     }
     if (/\bdirham?s?\b/i.test(titleLower)) {
       coinQueries.push(`${sanitised} Islamic silver coin`, 'Islamic silver dirham coin');
-    }
-    if (/jammu/.test(titleLower) && /kashmir/.test(titleLower)) {
-      coinQueries.push('Jammu Kashmir coin', 'Kashmir rupee silver coin', 'Ranbir Singh Kashmir rupee');
-    } else if (/kashmir/.test(titleLower)) {
-      coinQueries.push('Kashmir coin', 'Kashmir rupee silver coin');
     }
     for (const q of coinQueries) {
       const clean = q.slice(0, 100);
