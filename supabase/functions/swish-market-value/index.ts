@@ -674,14 +674,44 @@ function buildSearchQueries(title: string, attributes: Record<string, any>, spec
   const queries: string[] = [];
   const sanitised = sanitiseTitle(title);
 
-  for (const term of geminiTerms) {
-    if (term.length >= 4 && !queries.includes(term)) queries.push(term.slice(0, 100));
-  }
-
   const isBike = specialistId === 'bicycles' || specialistId === 'cycling';
   const isMX = specialistId === 'motocross';
   const isClothing = specialistId === 'clothing' || specialistId === 'trainers_sneakers';
   const isCoin = specialistId.includes('coin') || ['islamic_silver','ancient_artefacts','gold','silver','banknotes'].includes(specialistId);
+
+  // Always put direct, deterministic coin searches ahead of AI-generated terms.
+  // Rare coin names often produce weak Gemini keywords, but the user's own words
+  // and common numismatic variants are still useful eBay queries.
+  if (isCoin && sanitised.length >= 4) {
+    const titleLower = sanitised.toLowerCase();
+    const coinQueries = [
+      sanitised,
+      /\\bcoin\\b/i.test(sanitised) ? sanitised : `${sanitised} coin`,
+    ];
+    if (/\\btanka?s?\\b/i.test(titleLower)) {
+      coinQueries.push(
+        `${sanitised} silver coin`,
+        'Islamic silver tanka coin',
+        'silver tanka coin'
+      );
+    }
+    if (/\\bdirham?s?\\b/i.test(titleLower)) {
+      coinQueries.push(`${sanitised} Islamic silver coin`, 'Islamic silver dirham coin');
+    }
+    if (/jammu/.test(titleLower) && /kashmir/.test(titleLower)) {
+      coinQueries.push('Jammu Kashmir coin', 'Kashmir rupee silver coin', 'Ranbir Singh Kashmir rupee');
+    } else if (/kashmir/.test(titleLower)) {
+      coinQueries.push('Kashmir coin', 'Kashmir rupee silver coin');
+    }
+    for (const q of coinQueries) {
+      const clean = q.slice(0, 100);
+      if (clean.length >= 4 && !queries.includes(clean)) queries.push(clean);
+    }
+  }
+
+  for (const term of geminiTerms) {
+    if (term.length >= 4 && !queries.includes(term)) queries.push(term.slice(0, 100));
+  }
 
   if (isBike) {
     const brand = String(attributes?.manufacturer ?? attributes?.brand ?? '').trim();
