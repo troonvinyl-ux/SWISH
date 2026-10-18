@@ -44,4 +44,5 @@ export function nicheToEntryRoute(nicheId: string | null | undefined): ProductEn
     case 'bicycles': return '/entry/bicycles';
     case 'clothing': return '/entry/clothing';
   }
+  return null;
 }
