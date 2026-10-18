@@ -88,3 +88,7 @@ Therefore, the four entry routes are four experiences inside one installed app t
 
 - 2026-10-18: Initial route/entitlement register created from source review.
 - 2026-10-18: Subscription screen checkout now passes active niche instead of hardcoding coins (commit `a2e8aeee00ec345ec04eb9a90739df547e699ee6`).
+- 2026-10-18: AI identification Stripe entitlement now matches the specialist's niche; legacy metadata-less subscriptions remain Coins (commit `c1a5082e24acac5fcb64a68e14c1830b2ea6b1ec`).
+- 2026-10-18: Dedicated Islamic identification now requires Coins entitlement or an existing global premium tier (commit `a3cb14a6ed0caf3c2686972e0f1c27ef12a16415`).
+- 2026-10-18: Subscription status endpoint returns active niche entitlements (commit `e62c81484e9f144dcda8de66fb868353507fa40c`); client model and hook use active niche entitlement (commits `1a7bd9522c6bef70bd2479cd5605ef56c16d67e` and `b9c0d1e880846ce5792a4cdb926458f47ff59355`).
+- 2026-10-18: Subscription screen now presents niche-specific premium features and product labels (commit `5126ec9c7efb1b30b6a2c25091c08d89d3c2739d`).
