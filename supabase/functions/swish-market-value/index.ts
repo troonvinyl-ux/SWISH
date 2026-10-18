@@ -122,7 +122,7 @@ interface CanoaCoinCandidate {
   specimenCount?: number;
   url?: string;
 }
-async function searchCanoaCoinTypes(query: string): Promise<{ available: boolean; query: string; items: CanoaCoinCandidate[]; error?: string }> {
+async async function searchCanoaCoinTypes(query: string): Promise<{ available: boolean; query: string; items: CanoaCoinCandidate[]; error?: string }> {
   const empty = { available: false, query, items: [] as CanoaCoinCandidate[] };
   if (!query || query.trim().length < 3) return empty;
 
