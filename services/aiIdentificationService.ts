@@ -208,6 +208,15 @@ export async function pickFromLibrary(slotId: string, slotLabel: string): Promis
 
 // ── Compress image for AI payload ─────────────────────────────────────────────
 // Resizes to max 1024px and reduces quality to keep payload small.
+export async function prepareImageForAI(uri: string): Promise<string> {
+  if (/^(https?:|data:)/i.test(uri)) return uri;
+  // ImagePicker returns local file/blob URIs; compress these before sending to an Edge Function.
+  if (/^(file:|content:|blob:)/i.test(uri) || uri.startsWith('/')) return compressForAI(uri);
+  // Accept a raw base64 image if a caller already prepared one.
+  if (uri.length > 256 && /^[A-Za-z0-9+/=\r\n]+$/.test(uri)) return `data:image/jpeg;base64,${uri.replace(/\s/g, '')}`;
+  return uri;
+}
+
 async function compressForAI(uri: string): Promise<string> {
   try {
     const result = await ImageManipulator.manipulateAsync(
