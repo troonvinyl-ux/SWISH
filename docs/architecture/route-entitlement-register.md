@@ -23,6 +23,17 @@ Decision: four separately branded niche experiences, one shared codebase and bac
 
 Do not create separate databases or duplicate the existing backend to make the products feel independent.
 
+## Current build packaging reality
+
+The current repository is **not yet configured to produce four separately branded store apps**:
+- `app.json` currently uses Expo name/slug `onspace-app` / `onspace-app`.
+- Android currently uses the single package ID `com.swish.inventory`.
+- No iOS bundle identifier is configured in the checked-in app config.
+- `eas.json` currently defines one `production` Android APK profile only.
+- There are no niche-specific app icons in `assets/images`; the shared dashboard image is currently used for the app icon and splash.
+
+Therefore, the four entry routes are four experiences inside one installed app today—not four distributable branded apps. Creating four build variants requires explicit per-niche app name, package/bundle ID, scheme, icon/splash configuration and build profiles. Do that only after the fixed-niche boot configuration is implemented, so each build cannot be switched into an unpurchased niche.
+
 ## Current routing implementation
 
 | File | Current responsibility | Audit note |
