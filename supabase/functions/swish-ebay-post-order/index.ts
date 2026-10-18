@@ -160,7 +160,7 @@ async function handleDispatch(
   if (!ebayOrderId) {
     // No eBay order ID — can only update SWISH locally
     console.warn(`[SWISH Dispatch] Order ${swishOrderId} has no external_order_id — local update only`);
-    const localUpdate = await updateSwishOrderDispatched(supabase, swishOrderId, carrier, trackingNumber, dispatchPhotoUrl);
+    const localUpdate = await updateSwishOrderDispatched(supabase, tenantId, swishOrderId, carrier, trackingNumber, dispatchPhotoUrl);
     if (localUpdate.error) return jsonResponse({ error: localUpdate.error }, 500);
     return jsonResponse({
       success: true,
@@ -205,7 +205,7 @@ async function handleDispatch(
       // If 404, the order may not be a Managed Payments order — fall through to local-only
       if (orderResp.status === 404) {
         console.warn(`[SWISH Dispatch] eBay order ${ebayOrderId} not found via Fulfillment API — local update only`);
-        const localUpdate = await updateSwishOrderDispatched(supabase, swishOrderId, carrier, trackingNumber, dispatchPhotoUrl);
+        const localUpdate = await updateSwishOrderDispatched(supabase, tenantId, swishOrderId, carrier, trackingNumber, dispatchPhotoUrl);
         if (localUpdate.error) return jsonResponse({ error: localUpdate.error }, 500);
         return jsonResponse({
           success: true,
@@ -326,7 +326,7 @@ async function handleDispatch(
 
   // 4. eBay confirmed — now update SWISH
   const swishUpdate = await updateSwishOrderDispatched(
-    supabase, swishOrderId, carrier, trackingNumber, dispatchPhotoUrl, ebayFulfillmentId,
+    supabase, tenantId, swishOrderId, carrier, trackingNumber, dispatchPhotoUrl, ebayFulfillmentId,
   );
   if (swishUpdate.error) {
     // eBay was updated but SWISH DB update failed — this is a data integrity issue
@@ -364,6 +364,7 @@ async function handleDispatch(
 
 async function updateSwishOrderDispatched(
   supabase: ReturnType<typeof adminClient>,
+  tenantId: string,
   orderId: string,
   carrier: string,
   trackingNumber: string,
@@ -378,7 +379,7 @@ async function updateSwishOrderDispatched(
     ...(dispatchPhotoUrl ? { dispatch_photo_url: dispatchPhotoUrl } : {}),
     ...(ebayFulfillmentId ? { notes: `ebay_fulfillment_id:${ebayFulfillmentId}` } : {}),
     updated_at: new Date().toISOString(),
-  }).eq('id', orderId);
+  }).eq('id', orderId).eq('tenant_id', tenantId);
 
   return { error: error?.message ?? null };
 }
