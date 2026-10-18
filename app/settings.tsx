@@ -3418,7 +3418,7 @@ export default function SettingsScreen() {
             onPress={() => router.push('/research' as any)}
             color={Colors.accent}
           />
-          <SettingsRow
+          <SettingRow
             icon="science"
             label="Deep ID / Re-ID Lab"
             desc="Test obverse, reverse, weight, diameter and valuation without changing inventory"
