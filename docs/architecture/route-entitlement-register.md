@@ -107,3 +107,5 @@ These are configured build profiles, not proof that four release APKs have been 
 - 2026-10-18: eBay dispatch's shared order-status writer now requires and filters by tenant ID; shipping lookup rejects non-eBay orders (commits `2318fe2ed0265fd4539fd99f0faec8f7901dce67` and `263d2e74646a0088de200322668a7760202bd07c`).
 - 2026-10-18: eBay Finances actual-fee reconciliation now tenant-scopes the order read and write (commit `53a12f50881a9af8a1f2b3899ec42429c227b14a`).
 - 2026-10-18: CI path filters now include the eBay dispatch and finance functions (commit `f5c8ac4633bac62b6f93f0afac66f85404cfd95b`).
+- 2026-10-18: Order service reads and updates now require tenant scoping; order creation validates linked item/listing ownership and consistency before inserting (commit `848648a258bdedbe2ec5dc63a8565e1a1ff24aa7`).
+- 2026-10-18: CI path filters now include `services/orderService.ts` (commit `b4243c3e12fb5218a1e18a0f052e1f77c10d24db`).
