@@ -4,7 +4,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, Pressable, ScrollView, TextInput,
-  ActivityIndicator, Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
