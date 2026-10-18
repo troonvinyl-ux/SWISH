@@ -15,8 +15,8 @@ import { BusinessConfig, getBusinessConfig } from '@/services/businessConfigServ
 import {
   fetchAndStoreEbayImages, tenantNeedsImageSync,
 } from '@/services/ebayImageService';
-import { NicheId, NicheConfig, NICHES, getPrimaryNiche, isProductionNiche } from '@/constants/niches';
-import { checkSubscription, SubscriptionStatus, PREMIUM_TIERS } from '@/services/subscriptionService';
+import { NicheId, NicheConfig, NICHES, isProductionNiche } from '@/constants/niches';
+import { checkSubscription, SubscriptionStatus } from '@/services/subscriptionService';
 
 const NICHE_STORAGE_PREFIX = '@swish_active_niches';
 const CONFIGURED_BUILD_NICHE = Constants.expoConfig?.extra?.swishNicheId;
