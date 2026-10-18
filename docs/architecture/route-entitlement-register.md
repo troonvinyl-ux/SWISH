@@ -104,3 +104,6 @@ These are configured build profiles, not proof that four release APKs have been 
 - 2026-10-18: eBay full sync listing and item updates now explicitly include `tenant_id` in every affected write path (commit `e06f0db2e929bc2cf2f36a3e80d1cb800c2280bd`).
 - 2026-10-18: eBay order import now scopes linked item reads and item/listing sold-status writes by `tenant_id` in both Fulfillment and Trading API paths (commit `2c8080033a6bb071346b162d0935f5c5f0db253a`).
 - 2026-10-18: CI path filters now run the existing regression/config checks when the eBay listing, sync, or order-import security files change (commit `137e0e1422a8bfa64eac2d9657cab8e6167873e6`).
+- 2026-10-18: eBay dispatch's shared order-status writer now requires and filters by tenant ID; shipping lookup rejects non-eBay orders (commits `2318fe2ed0265fd4539fd99f0faec8f7901dce67` and `263d2e74646a0088de200322668a7760202bd07c`).
+- 2026-10-18: eBay Finances actual-fee reconciliation now tenant-scopes the order read and write (commit `53a12f50881a9af8a1f2b3899ec42429c227b14a`).
+- 2026-10-18: CI path filters now include the eBay dispatch and finance functions (commit `f5c8ac4633bac62b6f93f0afac66f85404cfd95b`).
