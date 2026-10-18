@@ -109,32 +109,50 @@ interface CanoaCoinCandidate {
 async function searchCanoaCoinTypes(query: string): Promise<{ available: boolean; query: string; items: CanoaCoinCandidate[]; error?: string }> {
   const empty = { available: false, query, items: [] as CanoaCoinCandidate[] };
   if (!query || query.trim().length < 3) return empty;
-  try {
-    const params = new URLSearchParams({ q: query.trim().slice(0, 100), per_page: "8" });
-    const response = await fetch(`https://canoanumis.org/api/coins?${params.toString()}`, {
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(7000),
-    });
-    if (!response.ok) return { ...empty, error: `CANOA HTTP ${response.status}` };
-    const data = await response.json();
-    const raw = Array.isArray(data.results) ? data.results : [];
-    const items = raw.map((item: any): CanoaCoinCandidate => ({
-      id: Number.isFinite(Number(item.id)) ? Number(item.id) : undefined,
-      title: String(item.label ?? item.pref_label ?? "").slice(0, 180),
-      catalogueNumber: typeof item.ocre_id === "string" && item.ocre_id ? item.ocre_id.slice(0, 80) : undefined,
-      ruler: typeof item.authority === "string" && item.authority ? item.authority.slice(0, 100) : undefined,
-      mint: typeof item.mint === "string" && item.mint ? item.mint.slice(0, 100) : undefined,
-      denomination: typeof item.denomination === "string" && item.denomination ? item.denomination.slice(0, 80) : undefined,
-      material: typeof item.material === "string" && item.material ? item.material.slice(0, 80) : undefined,
-      dateFrom: item.date_from != null && item.date_from !== "" && Number.isFinite(Number(item.date_from)) ? Number(item.date_from) : null,
-      dateTo: item.date_to != null && item.date_to !== "" && Number.isFinite(Number(item.date_to)) ? Number(item.date_to) : null,
-      specimenCount: item.specimen_count != null && Number.isFinite(Number(item.specimen_count)) ? Number(item.specimen_count) : undefined,
-      url: typeof item.url === "string" && item.url.startsWith("/") ? `https://canoanumis.org${item.url}` : (typeof item.url === "string" && item.url.startsWith("https://") ? item.url : undefined),
-    })).filter((item: CanoaCoinCandidate) => item.title && item.url);
-    return { available: true, query, items: items.slice(0, 8) };
-  } catch (error: any) {
-    return { ...empty, error: error?.name === "TimeoutError" ? "CANOA request timed out" : "CANOA reference search unavailable" };
+
+  // Try the full label first; if its extra detail is too restrictive for CANOA's
+  // token search, retry once with a shorter phrase. Never loop or bulk-crawl.
+  const words = query.trim().split(/\\s+/).filter(Boolean);
+  const fallbackQuery = words.slice(0, Math.min(4, words.length)).join(" ");
+  const queries = [query.trim().slice(0, 100)];
+  if (fallbackQuery.length >= 3 && fallbackQuery.toLowerCase() !== queries[0].toLowerCase()) {
+    queries.push(fallbackQuery.slice(0, 100));
   }
+
+  for (const candidateQuery of queries) {
+    try {
+      const params = new URLSearchParams({ q: candidateQuery, per_page: "8" });
+      const response = await fetch(`https://canoanumis.org/api/coins?${params.toString()}`, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(7000),
+      });
+      if (!response.ok) {
+        if (candidateQuery === queries[queries.length - 1]) return { ...empty, error: `CANOA HTTP ${response.status}` };
+        continue;
+      }
+      const data = await response.json();
+      const raw = Array.isArray(data.results) ? data.results : [];
+      const items = raw.map((item: any): CanoaCoinCandidate => ({
+        id: item.id != null && Number.isFinite(Number(item.id)) ? Number(item.id) : undefined,
+        title: String(item.label ?? item.pref_label ?? "").slice(0, 180),
+        catalogueNumber: typeof item.ocre_id === "string" && item.ocre_id ? item.ocre_id.slice(0, 80) : undefined,
+        ruler: typeof item.authority === "string" && item.authority ? item.authority.slice(0, 100) : undefined,
+        mint: typeof item.mint === "string" && item.mint ? item.mint.slice(0, 100) : undefined,
+        denomination: typeof item.denomination === "string" && item.denomination ? item.denomination.slice(0, 80) : undefined,
+        material: typeof item.material === "string" && item.material ? item.material.slice(0, 80) : undefined,
+        dateFrom: item.date_from != null && item.date_from !== "" && Number.isFinite(Number(item.date_from)) ? Number(item.date_from) : null,
+        dateTo: item.date_to != null && item.date_to !== "" && Number.isFinite(Number(item.date_to)) ? Number(item.date_to) : null,
+        specimenCount: item.specimen_count != null && Number.isFinite(Number(item.specimen_count)) ? Number(item.specimen_count) : undefined,
+        url: typeof item.url === "string" && item.url.startsWith("/") ? `https://canoanumis.org${item.url}` : (typeof item.url === "string" && item.url.startsWith("https://") ? item.url : undefined),
+      })).filter((item: CanoaCoinCandidate) => item.title && item.url);
+      if (items.length > 0) return { available: true, query: candidateQuery, items: items.slice(0, 8) };
+    } catch (error: any) {
+      if (candidateQuery === queries[queries.length - 1]) {
+        return { ...empty, error: error?.name === "TimeoutError" ? "CANOA request timed out" : "CANOA reference search unavailable" };
+      }
+    }
+  }
+  return { ...empty, available: true, query: queries[queries.length - 1] };
 }
 
 function sanitiseTitle(raw: string): string {
