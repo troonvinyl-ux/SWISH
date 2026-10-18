@@ -1114,6 +1114,7 @@ function computeValuation(params: {
 // MAIN HANDLER
 // ══════════════════════════════════════════════════════════════════════════════
 Deno.serve(async (req: Request) => {
+  try {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
 
@@ -1605,5 +1606,14 @@ Deno.serve(async (req: Request) => {
       ].filter(Boolean),
       warningFlags: valuation.valuationWarnings,
     },
+  } catch (err: any) {
+    // Keep unexpected runtime failures observable to the client without leaking credentials.
+    const detail = String(err?.message ?? err ?? 'Unknown runtime error')
+      .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
+      .replace(/(access[_ -]?token|refresh[_ -]?token|client[_ -]?secret)\s*[:=]\s*[^\s,;]+/gi, '$1=[redacted]')
+      .slice(0, 300);
+    console.error('[SWISH Market v8] Unhandled valuation error:', detail);
+    return jsonResponse({ error: 'Market valuation failed', details: detail }, 500);
+  }
   });
 });
