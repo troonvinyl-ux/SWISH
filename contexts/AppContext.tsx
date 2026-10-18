@@ -7,6 +7,7 @@
 
 import React, { createContext, useState, useEffect, useRef, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 import { useAuth } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { Tenant, getUserPrimaryTenant, provisionTenant } from '@/services/tenantService';
@@ -18,6 +19,10 @@ import { NicheId, NicheConfig, NICHES, getPrimaryNiche, isProductionNiche } from
 import { checkSubscription, SubscriptionStatus, PREMIUM_TIERS } from '@/services/subscriptionService';
 
 const NICHE_STORAGE_PREFIX = '@swish_active_niches';
+const CONFIGURED_BUILD_NICHE = Constants.expoConfig?.extra?.swishNicheId;
+const FIXED_BUILD_NICHE_ID: NicheId | null = isProductionNiche(CONFIGURED_BUILD_NICHE)
+  ? CONFIGURED_BUILD_NICHE
+  : null;
 
 interface AppContextType {
   // Subscription
@@ -39,6 +44,7 @@ interface AppContextType {
   // Active Niche — the primary working niche
   activeNiche: NicheConfig;
   activeNicheId: NicheId;
+  fixedNicheId: NicheId | null;
   enabledNiches: NicheId[];
   nichePreferencesLoading: boolean;
   setActiveNiche: (id: NicheId) => void;
@@ -74,8 +80,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
 
   // Niche state — persisted to AsyncStorage
-  const [enabledNiches, setEnabledNiches] = useState<NicheId[]>(['general']);
-  const [activeNicheId, setActiveNicheId] = useState<NicheId>('general');
+  const [enabledNiches, setEnabledNiches] = useState<NicheId[]>(FIXED_BUILD_NICHE_ID ? [FIXED_BUILD_NICHE_ID] : ['general']);
+  const [activeNicheId, setActiveNicheId] = useState<NicheId>(FIXED_BUILD_NICHE_ID ?? 'general');
   const [nichePreferencesLoading, setNichePreferencesLoading] = useState(true);
 
   // Niche preferences are account-scoped. Device-wide niche state allowed one
@@ -83,9 +89,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     setNichePreferencesLoading(true);
-    setActiveNicheId('general');
-    setEnabledNiches(['general']);
+    setActiveNicheId(FIXED_BUILD_NICHE_ID ?? 'general');
+    setEnabledNiches(FIXED_BUILD_NICHE_ID ? [FIXED_BUILD_NICHE_ID] : ['general']);
     const loadForAccount = async () => {
+      // Branded builds are pinned to their product and do not load switchable
+      // niche preferences from local storage.
+      if (FIXED_BUILD_NICHE_ID) {
+        setActiveNicheId(FIXED_BUILD_NICHE_ID);
+        setEnabledNiches([FIXED_BUILD_NICHE_ID]);
+        setNichePreferencesLoading(false);
+        return;
+      }
       if (!user?.id) {
         setActiveNicheId('general');
         setEnabledNiches(['general']);
@@ -125,13 +139,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [user?.id]);
 
   const persistNiches = (active: NicheId, enabled: NicheId[]) => {
-    if (!user?.id) return;
+    if (!user?.id || FIXED_BUILD_NICHE_ID) return;
     const storageKey = `${NICHE_STORAGE_PREFIX}:${user.id}`;
     AsyncStorage.setItem(storageKey, JSON.stringify({ active, enabled })).catch(() => {});
   };
 
   const setActiveNiche = (id: NicheId) => {
-    if (!isProductionNiche(id)) return;
+    if (!isProductionNiche(id) || (FIXED_BUILD_NICHE_ID && id !== FIXED_BUILD_NICHE_ID)) return;
     setActiveNicheId(id);
     setEnabledNiches(prev => {
       const next = prev.includes(id) ? prev : [id, ...prev.filter(isProductionNiche)];
@@ -141,7 +155,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const enableNiche = (id: NicheId) => {
-    if (!isProductionNiche(id)) return;
+    if (!isProductionNiche(id) || FIXED_BUILD_NICHE_ID) return;
     setEnabledNiches(prev => {
       const next = prev.includes(id) ? prev : [...prev.filter(isProductionNiche), id];
       persistNiches(activeNicheId, next);
@@ -150,7 +164,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const disableNiche = (id: NicheId) => {
-    if (!isProductionNiche(id)) return;
+    if (!isProductionNiche(id) || FIXED_BUILD_NICHE_ID) return;
     setEnabledNiches(prev => {
       const next = prev.filter(n => n !== id && isProductionNiche(n));
       const safeNext: NicheId[] = next.length > 0 ? next : ['general'];
@@ -297,6 +311,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         refreshSubscription: loadSubscription,
         activeNiche,
         activeNicheId,
+        fixedNicheId: FIXED_BUILD_NICHE_ID,
         enabledNiches,
         nichePreferencesLoading,
         setActiveNiche,
