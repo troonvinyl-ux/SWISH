@@ -1481,6 +1481,43 @@ Deno.serve(async (req: Request) => {
       attributes['numista_candidate_score'] = bestNumista.matchScore;
     }
 
+    // Persist the ranked evidence trail, not just the winning reference. Keep
+    // a compact candidate record so later review/valuation can inspect why a
+    // candidate was suggested without treating it as a confirmed attribution.
+    attributes['identification_candidates'] = enhancedCandidates.slice(0, 8).map(candidate => ({
+      candidateId: candidate.candidateId,
+      label: candidate.label,
+      dynasty: candidate.dynasty ?? null,
+      ruler: candidate.ruler ?? null,
+      denomination: candidate.denomination ?? null,
+      mint: candidate.mint ?? null,
+      dateAH: candidate.dateAH ?? null,
+      dateCE: candidate.dateCE ?? null,
+      confidence: candidate.confidence,
+      confidenceTier: candidate.confidenceTier,
+      sourceEvidence: candidate.sourceEvidence.slice(0, 8),
+      zenoMatches: candidate.zenoMatches.slice(0, 8),
+      numistaMatches: candidate.numistaMatches.slice(0, 8),
+      supportingFeatures: candidate.supportingFeatures.slice(0, 8),
+      contradictions: candidate.contradictions.slice(0, 8),
+      notes: candidate.notes,
+      status: 'candidate',
+    }));
+    attributes['source_evidence_summary'] = sourceEvidence.slice(0, 20);
+    attributes['source_contradictions'] = sourceContradictions.slice(0, 20);
+    attributes['zeno_search_status'] = zenoResults.map(result => ({
+      query: result.query,
+      available: result.available,
+      totalFound: result.totalFound,
+      error: result.error ?? null,
+    }));
+    attributes['numista_search_status'] = {
+      available: numistaResult.available,
+      query: numistaResult.query,
+      totalFound: numistaResult.totalFound,
+      error: numistaResult.error ?? null,
+    };
+
     // Warnings
     const warnings: string[] = [...(aiOutput.warnings ?? [])];
     if (countermark.status === 'confirmed' || countermark.status === 'possible') {
