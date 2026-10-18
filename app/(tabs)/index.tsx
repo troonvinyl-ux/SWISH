@@ -11,7 +11,7 @@
 //   clothing / trainers_sneakers / fashion           → ThreadsFlipScreen
 //   (no active niche / first launch)                 → NicheSelect
 
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useApp } from '@/hooks/useApp';
 import { Colors } from '@/constants/theme';
