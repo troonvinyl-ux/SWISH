@@ -25,14 +25,15 @@ Do not create separate databases or duplicate the existing backend to make the p
 
 ## Current build packaging reality
 
-The current repository is **not yet configured to produce four separately branded store apps**:
-- `app.json` currently uses Expo name/slug `onspace-app` / `onspace-app`.
-- Android currently uses the single package ID `com.swish.inventory`.
-- No iOS bundle identifier is configured in the checked-in app config.
-- `eas.json` currently defines one `production` Android APK profile only.
-- There are no niche-specific app icons in `assets/images`; the shared dashboard image is currently used for the app icon and splash.
+The repository now has environment-driven branded build identities:
+- `app.config.js` reads `SWISH_NICHE` and sets product name, slug, deep-link scheme, Android package ID, iOS bundle ID, and runtime `swishNicheId`.
+- `eas.json` now has `production-coins`, `production-motocross`, `production-bicycles`, and `production-clothing` APK profiles.
+- The original `production` profile and legacy app identity remain unchanged when `SWISH_NICHE` is unset.
+- Branded runtime state is pinned to its configured niche; onboarding and niche selection no longer offer a cross-product switch.
+- Checkout uses the branded deep-link scheme for new branded builds while preserving `onspaceapp://` for legacy builds.
+- App icons/splash art are still shared assets; distinct product artwork remains a follow-up design task.
 
-Therefore, the four entry routes are four experiences inside one installed app today—not four distributable branded apps. Creating four build variants requires explicit per-niche app name, package/bundle ID, scheme, icon/splash configuration and build profiles. Do that only after the fixed-niche boot configuration is implemented, so each build cannot be switched into an unpurchased niche.
+These are configured build profiles, not proof that four release APKs have been built, signed, installed, or published. Those checks remain outstanding.
 
 ## Current routing implementation
 
@@ -76,13 +77,14 @@ Therefore, the four entry routes are four experiences inside one installed app t
 
 ## Implementation sequence
 
-1. Canonicalise niche IDs and route mapping without changing screens or database.
-2. Make niche selection account-aware and ensure entry routes resolve only to one of the four supported products.
-3. Extend the existing subscription-check endpoint to return entitlement for the requested niche(s), derived from verified active Stripe subscriptions and existing tier rules.
-4. Validate checkout niche IDs server-side and confirm Stripe subscription metadata/webhook handling.
-5. Apply entitlement checks to paid specialist operations on the server, retaining basic free inventory access.
-6. Add regression tests for all four products, cross-niche inventory/listing isolation, single-niche subscription, multi-niche subscription and existing lifetime tier.
-7. Only then simplify the visual shell and refine each niche's dashboard.
+1. [Done in source] Centralise canonical niche routing and fail closed for unknown/inactive product IDs.
+2. [Done in source] Scope local niche preferences to the signed-in account; pin branded builds to one product.
+3. [Done in source] Add four EAS build profiles with distinct package/bundle IDs and deep-link schemes.
+4. [Done in source] Return per-niche subscription entitlements, validate checkout niche IDs, and scope AI identification entitlement to its specialist niche.
+5. [In progress] Audit all valuation, listing, order and inventory endpoints for server-side niche/tenant entitlement enforcement.
+6. [Added, not yet verified] CI regression tests for routing, isolation and all four Expo branded configs.
+7. Build and install all four APKs, test checkout return links, single-/multi-niche subscription cases and account switching.
+8. Only then refine the shared navigation and niche-specific dashboards.
 
 ## Change log
 
