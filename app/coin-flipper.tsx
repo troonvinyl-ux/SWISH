@@ -26,6 +26,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
+import type { SpecialistId } from '@/constants/specialists';
 import { Image } from 'expo-image';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
@@ -81,7 +82,7 @@ interface SpecialistChip {
   icon: string;
   color: string;
   hint: string;
-  specialistId: string;
+  specialistId: SpecialistId;
   periodId?: string;
 }
 
