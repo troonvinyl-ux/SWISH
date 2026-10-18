@@ -395,8 +395,14 @@ async function handleGetShipping(
     .from('orders').select('external_order_id, marketplace_id')
     .eq('id', swishOrderId).eq('tenant_id', tenantId).maybeSingle();
 
-  if (!orderRow?.external_order_id) {
-    return jsonResponse({ error: 'Order not found or no eBay order ID.' }, 404);
+  if (!orderRow) {
+    return jsonResponse({ error: 'Order not found or access denied.' }, 404);
+  }
+  if (orderRow.marketplace_id !== 'ebay') {
+    return jsonResponse({ error: 'This shipping lookup only supports eBay orders.' }, 400);
+  }
+  if (!orderRow.external_order_id) {
+    return jsonResponse({ error: 'Order has no eBay order ID.' }, 404);
   }
 
   const tokenResult = await getAccessToken(supabase, tenantId);
