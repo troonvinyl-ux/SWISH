@@ -1532,29 +1532,29 @@ describe('SWISH-030 Issue 3: Android CI/CD Signing (Static Config Inspection)', 
 });
 
 describe('Canonical production niche resolver', () => {
-    test.each([
-      ['coins', 'coins'],
-      ['islamic_silver', 'coins'],
-      ['motocross', 'motocross'],
-      ['flipper_mx', 'motocross'],
-      ['bicycles', 'bicycles'],
-      ['bike_flipper', 'bicycles'],
-      ['clothing', 'clothing'],
-      ['threads_flip', 'clothing'],
-      ['surplus_flip', 'surplus_flip'],
-      ['surplus-flip', 'surplus_flip'],
-      ['catalog_flip', 'surplus_flip'],
-      ['catalog_surplus', 'surplus_flip'],
-      ['surplus_trader', 'surplus_flip'],
-    ])('%s resolves to %s', (input, expected) => {
-      expect(resolveProductionNiche(input)).toBe(expected);
-    });
-
-    test.each([null, undefined, '', 'general', 'trading_cards', 'antiques', 'made_up_niche'])(
-      'inactive or unknown niche %s fails closed',
-      (input) => expect(resolveProductionNiche(input as string | null | undefined)).toBeNull(),
-    );
+  test.each([
+    ['coins', 'coins'],
+    ['islamic_silver', 'coins'],
+    ['motocross', 'motocross'],
+    ['flipper_mx', 'motocross'],
+    ['bicycles', 'bicycles'],
+    ['bike_flipper', 'bicycles'],
+    ['clothing', 'clothing'],
+    ['threads_flip', 'clothing'],
+    ['surplus_flip', 'surplus_flip'],
+    ['surplus-flip', 'surplus_flip'],
+    ['catalog_flip', 'surplus_flip'],
+    ['catalog_surplus', 'surplus_flip'],
+    ['surplus_trader', 'surplus_flip'],
+  ])('%s resolves to %s', (input, expected) => {
+    expect(resolveProductionNiche(input)).toBe(expected);
   });
+
+  test.each([null, undefined, '', 'general', 'trading_cards', 'antiques', 'made_up_niche'])(
+    'inactive or unknown niche %s fails closed',
+    (input) => expect(resolveProductionNiche(input as string | null | undefined)).toBeNull(),
+  );
+});
 
   // ── Coins niche ──────────────────────────────────────────────────────────
   describe('Coins niche → /entry/coins', () => {
