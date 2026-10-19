@@ -18,6 +18,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { createItem } from '@/services/itemService';
+import { getSupabaseClient } from '@/template';
 import { useAlert } from '@/template';
 
 type ManifestRow = {
@@ -199,8 +200,30 @@ export default function SurplusFlipScreen() {
     setProgress({ done: 0, total: chosen.length });
     const errors: string[] = [];
     let imported = 0;
+    // Check existing Surplus rows once to avoid duplicate manifest imports.
+    const supabase = getSupabaseClient();
+    const { data: existingRows, error: existingError } = await supabase
+      .from('items')
+      .select('id, attributes')
+      .eq('tenant_id', tenant.id)
+      .eq('specialist_id', 'surplus_trader');
+    if (existingError) {
+      setBusy(false);
+      showAlert('Could not check for duplicates', existingError.message);
+      return;
+    }
+    const existingKeys = new Set<string>((existingRows ?? []).map((item: any) => {
+      const a = item.attributes ?? {};
+      return [a.manifest_name ?? '', a.manifest_row ?? '', a.supplier_sku ?? '', a.barcode ?? ''].join('|');
+    }));
     for (let i = 0; i < chosen.length; i++) {
       const row = chosen[i];
+      const key = [manifestName, row.sourceRow, row.supplierSku, row.barcode].join('|');
+      if (existingKeys.has(key)) {
+        errors.push(row.title + ': already imported from this manifest row, skipped to prevent a duplicate.');
+        setProgress({ done: i + 1, total: chosen.length });
+        continue;
+      }
       const result = await createItem(tenant.id, {
         canonicalTitle: row.title,
         description: row.description,
@@ -244,6 +267,7 @@ export default function SurplusFlipScreen() {
       if (result.error || !result.item) errors.push(row.title + ': ' + (result.error ?? 'unknown error'));
       else {
         imported++;
+        existingKeys.add(key);
         updateRow(row.id, { imported: true, selected: false });
       }
       setProgress({ done: i + 1, total: chosen.length });
