@@ -277,7 +277,7 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
       <View style={ht.statsRow}>
         {[
           { label: 'Bikes in Stock', value: bikeCount !== null ? String(bikeCount) : '—', color: BF.white },
-          { label: 'Bike Types', value: '8', color: BF.green },
+          { label: 'Bike Types', value: String(BIKE_CATEGORIES.length), color: BF.green }
           { label: 'AI Powered', value: '✓', color: BF.success },
         ].map((s, i) => (
           <View key={s.label} style={[ht.stat, i > 0 && { borderLeftWidth: 1, borderLeftColor: BF.border }]}>
