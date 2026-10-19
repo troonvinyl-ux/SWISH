@@ -1561,7 +1561,7 @@ describe('SWISH-030 Issue 3: Android CI/CD Signing (Static Config Inspection)', 
       'inactive or unknown niche %s fails closed',
       (input) => expect(resolveProductionNiche(input as string | null | undefined)).toBeNull(),
     );
-
+  });
 
   // ── Coins niche ──────────────────────────────────────────────────────────
   describe('Coins niche → /entry/coins', () => {
