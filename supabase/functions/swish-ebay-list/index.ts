@@ -2083,6 +2083,14 @@ async function handleRequest(req: Request): Promise<Response> {
     addSpec('Year Manufactured', attrs['era'] ? attrs['era'].split('-')[0] : null);
     addSpec('Style', attrs['style']);
   }
+  // Surplus Flip: eBay requires a buyer-facing Type item specific for many categories.
+  // Prefer explicit supplier/product metadata; fall back to the listing title rather than
+  // silently submitting without Type. This is only used when another niche mapping did not add it.
+  if (!seenNames.has('type')) {
+    const productType = attrs['product_type'] ?? attrs['type'] ?? attrs['item_type'] ?? attrs['object_type'];
+    addSpec('Type', productType ?? (specialistId === 'surplus_flip' || specialistId === 'surplus_trader' ? title : null));
+  }
+
   // Default: extract from item attributes using existing logic
   for (const [k, v] of Object.entries(attrs)) {
     const keyLower = k.toLowerCase().replace(/[^a-z0-9_]/g, '_');
