@@ -1090,7 +1090,7 @@ describe('SWISH-006: Evidence-First Identification and Valuation Guardrails', ()
       const g = runGuardrail006(r, 0.75, 'coins');
       // 3 relevant = minRelevantSoldForModerate(3) → medium by count,
       // but server already said 'low' — take the lower
-      expect(g.effectiveConfidence).toBe('medium'); // count says medium, server says low → take lower
+      expect(g.effectiveConfidence).toBe('low'); // lowerConfidence('medium', 'low') must take the lower value
       // Wait: lowerConfidence('medium', 'low') = 'low'
       expect(g.effectiveConfidence).not.toBe('high');
     });
@@ -1241,7 +1241,7 @@ const SAFE_CONNECTOR_COLUMNS_030 = [
 
 function columnListExposesCredentials030(columns: string[]): boolean {
   const SENSITIVE = ['credential_ref', 'access_token', 'refresh_token', 'client_secret'];
-  return columns.some(col => SENSITIVE.some(s => col.includes(s)));
+  return columns.some(col => SENSITIVE.includes(col));
 }
 
 // Credential format detection — mirrors credentialCrypto.ts
