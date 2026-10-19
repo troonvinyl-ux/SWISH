@@ -336,7 +336,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         isMasterAdmin,
         subscriptionStatus,
         subscriptionLoading,
-        subscriptionTier: tenant?.subscriptionTier ?? null,
+        subscriptionTier: isMasterAdmin ? 'lifetime' : (tenant?.subscriptionTier ?? null),
         refreshSubscription: loadSubscription,
         activeNiche,
         activeNicheId,
