@@ -10,7 +10,6 @@ import {
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
-import { decode } from 'base64-arraybuffer';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,6 +20,25 @@ import { useApp } from '@/hooks/useApp';
 import { createItem } from '@/services/itemService';
 import { getSupabaseClient } from '@/template';
 import { useAlert } from '@/template';
+
+
+function decodeBase64(base64: string): ArrayBuffer {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const cleaned = base64.replace(/[^A-Za-z0-9+/=]/g, '');
+  const padding = cleaned.endsWith('==') ? 2 : cleaned.endsWith('=') ? 1 : 0;
+  const output = new Uint8Array(Math.max(0, Math.floor(cleaned.length * 3 / 4) - padding));
+  let offset = 0;
+  for (let i = 0; i < cleaned.length; i += 4) {
+    const a = alphabet.indexOf(cleaned[i] ?? 'A');
+    const b = alphabet.indexOf(cleaned[i + 1] ?? 'A');
+    const c = cleaned[i + 2] === '=' || cleaned[i + 2] === undefined ? 0 : alphabet.indexOf(cleaned[i + 2]);
+    const d = cleaned[i + 3] === '=' || cleaned[i + 3] === undefined ? 0 : alphabet.indexOf(cleaned[i + 3]);
+    if (offset < output.length) output[offset++] = (a << 2) | (b >> 4);
+    if (cleaned[i + 2] !== '=' && offset < output.length) output[offset++] = ((b & 15) << 4) | (c >> 2);
+    if (cleaned[i + 3] !== '=' && offset < output.length) output[offset++] = ((c & 3) << 6) | d;
+  }
+  return output.buffer;
+}
 
 type ManifestRow = {
   id: string;
@@ -236,7 +254,7 @@ export default function SurplusFlipScreen() {
         const filePath = tenant.id + '/surplus/' + Date.now() + '-' + i + '.' + extension;
         const { error: uploadError } = await supabase.storage
           .from('item-images')
-          .upload(filePath, decode(base64), { contentType, upsert: false });
+          .upload(filePath, decodeBase64(base64), { contentType, upsert: false });
         if (uploadError) throw uploadError;
         const { data: publicData } = supabase.storage.from('item-images').getPublicUrl(filePath);
         permanentPhotoUrl = publicData.publicUrl;
