@@ -15,7 +15,7 @@ import { BusinessConfig, getBusinessConfig } from '@/services/businessConfigServ
 import {
   fetchAndStoreEbayImages, tenantNeedsImageSync,
 } from '@/services/ebayImageService';
-import { NicheId, NicheConfig, NICHES, isProductionNiche } from '@/constants/niches';
+import { NicheId, NicheConfig, NICHES, PRODUCTION_NICHE_IDS, isProductionNiche } from '@/constants/niches';
 import { checkSubscription, SubscriptionStatus } from '@/services/subscriptionService';
 
 const NICHE_STORAGE_PREFIX = '@swish_active_niches';
@@ -109,8 +109,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Branded builds are pinned to their product and do not load switchable
-      // niche preferences from local storage.
+      const storageKey = `${NICHE_STORAGE_PREFIX}:${user.id}`;
+
+      // The verified master account can switch every production niche, even
+      // when the app was built as a single-niche branded build.
+      if (isMasterAdmin) {
+        let active: NicheId = 'coins';
+        try {
+          const val = await AsyncStorage.getItem(storageKey);
+          const parsed = val ? JSON.parse(val) as { active?: string } : null;
+          if (isProductionNiche(parsed?.active)) active = parsed.active;
+        } catch {
+          // Invalid saved preferences fall back to the default owner niche.
+        }
+        if (!cancelled) {
+          setActiveNicheId(active);
+          setEnabledNiches([...PRODUCTION_NICHE_IDS]);
+          setNichePreferencesLoading(false);
+        }
+        return;
+      }
+
+      // Non-owner accounts in branded builds remain pinned to their product.
       if (FIXED_BUILD_NICHE_ID) {
         setActiveNicheId(FIXED_BUILD_NICHE_ID);
         setEnabledNiches([FIXED_BUILD_NICHE_ID]);
@@ -118,7 +138,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const storageKey = `${NICHE_STORAGE_PREFIX}:${user.id}`;
       try {
         const val = await AsyncStorage.getItem(storageKey);
         if (cancelled || !val) return;
@@ -145,10 +164,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!cancelled) setNichePreferencesLoading(false);
     });
     return () => { cancelled = true; };
-  }, [user?.id]);
+  }, [user?.id, isMasterAdmin]);
 
   const persistNiches = (active: NicheId, enabled: NicheId[]) => {
-    if (!user?.id || FIXED_BUILD_NICHE_ID) return;
+    if (!user?.id || (FIXED_BUILD_NICHE_ID && !isMasterAdmin)) return;
     const storageKey = `${NICHE_STORAGE_PREFIX}:${user.id}`;
     AsyncStorage.setItem(storageKey, JSON.stringify({ active, enabled })).catch(() => {});
   };
