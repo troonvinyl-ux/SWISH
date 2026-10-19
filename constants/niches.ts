@@ -20,7 +20,8 @@ export type NicheId =
   | 'fossils'
   | 'clothing'
   | 'beauty'
-  | 'general';
+  | 'general'
+  | 'surplus_flip';
 
 export interface NicheConfig {
   id: NicheId;
@@ -437,6 +438,46 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     hasMeasurements: false,
     version: '1.0.0',
   },
+
+  surplus_flip: {
+    id: 'surplus_flip',
+    name: 'Surplus Flip',
+    shortName: 'Surplus',
+    tagline: 'Turn job lots and pallet manifests into eBay listings',
+    description: 'A trader workflow for importing supplier manifests, matching each manifest line to a real product photo, tracking available units, and preparing eBay listings in batches.',
+    icon: 'inventory-2',
+    color: '#14B8A6',
+    accentColor: '#0D9488',
+    specialists: ['surplus_trader'],
+    defaultSpecialist: 'surplus_trader',
+    terms: {
+      item: 'Product',
+      items: 'Products',
+      itemPlural: 'products',
+      scan: 'Match Product',
+      identify: 'Match',
+      condition: 'Condition',
+      catalogue: 'Manifest SKU',
+    },
+    quickActions: [
+      { icon: 'upload-file', label: 'Import Manifest', route: '/surplus-flip' },
+      { icon: 'photo-camera', label: 'Match Product Photo', route: '/surplus-flip' },
+      { icon: 'storefront', label: 'eBay Hub', route: '/ebay-hub' },
+      { icon: 'inventory-2', label: 'Stock', route: '/(tabs)/inventory' },
+    ],
+    keyAttributes: ['supplier_sku', 'brand', 'model', 'quantity_available', 'condition', 'manifest_id'],
+    acquisitionSources: ['Job lots', 'Pallets', 'Wholesale manifests', 'Returns auctions', 'Clearance stock'],
+    marketplaces: ['eBay'],
+    captureInstructions: [
+      'Select the manifest line before photographing the product',
+      'Photograph the product clearly from the front',
+      'Capture model, barcode, and packaging labels where present',
+      'Record condition and missing accessories honestly',
+      'Confirm the available sellable quantity before creating a listing',
+    ],
+    hasMeasurements: false,
+    version: '1.0.0',
+  },
 };
 
 export const NICHE_LIST = Object.values(NICHES);
@@ -481,8 +522,8 @@ export function nicheIdForSpecialist(specialistId: string): NicheId | null {
 }
 
 // ── Production niche gate ─────────────────────────────────────────────────────
-// Only these four niches are active in the production application.
-// All other niches (fossils, beauty, antiques, trading_cards, general) exist
+// Only explicitly registered production niches are active in the application.
+// Other legacy niches (fossils, beauty, antiques, trading_cards, general) exist
 // in the data model for historical records but are NOT selectable by subscribers
 // and do NOT appear in navigation, onboarding, or niche selection screens.
 // Historical inventory records belonging to inactive niches are preserved as-is
@@ -493,16 +534,17 @@ export const PRODUCTION_NICHE_IDS: readonly NicheId[] = [
   'motocross',
   'bicycles',
   'clothing',
+  'surplus_flip',
 ] as const;
 
 export type ProductionNicheId = typeof PRODUCTION_NICHE_IDS[number];
 
-/** Returns true only if the niche is one of the four active production niches. */
+/** Returns true only if the niche is one of the active production niches. */
 export function isProductionNiche(nicheId: NicheId | string | null | undefined): nicheId is ProductionNicheId {
   return PRODUCTION_NICHE_IDS.includes(nicheId as NicheId);
 }
 
-/** List of the four production NicheConfig objects. */
+/** List of active production NicheConfig objects. */
 export const PRODUCTION_NICHES: NicheConfig[] = PRODUCTION_NICHE_IDS.map(id => NICHES[id]);
 
 // Get niches a user has enabled — restricted to production niches only.
