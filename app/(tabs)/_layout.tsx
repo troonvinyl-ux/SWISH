@@ -24,6 +24,7 @@ function useNicheHomeTab() {
   if (id === 'motocross' || id === 'mx') return { icon: 'two-wheeler' as const, label: 'MX' };
   if (id === 'bicycles' || id === 'cycling' || id === 'bikes') return { icon: 'pedal-bike' as const, label: 'Bikes' };
   if (id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers' || id === 'trainers') return { icon: 'checkroom' as const, label: 'Fashion' };
+  if (id === 'surplus_flip') return { icon: 'inventory-2' as const, label: 'Surplus' };
   return { icon: 'dashboard' as const, label: 'Home' };
 }
 
