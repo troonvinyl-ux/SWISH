@@ -122,7 +122,7 @@ function makeRows(source: string | string[][]): ManifestRow[] {
   const rrpCol = findColumn(headers, ['Unit RRP', 'RRP', 'Retail Price']);
   const imageCols = ['Image 1', 'Image 2', 'Image 3', 'Image 4', 'Image 5', 'Image 6'].map(name => findColumn(headers, [name]));
   const barcodeCol = findColumn(headers, ['Barcode', 'EAN', 'UPC', 'GTIN']);
-  const titleCol = findColumn(headers, ['Product', 'Product Name', 'Item', 'Item Name', 'Description', 'Title', 'Name']);
+  const titleCol = findColumn(headers, ['Product Title', 'Product Name', 'Product', 'Item Title', 'Item Name', 'Item', 'Title', 'Name', 'Description']);
   const descCol = findColumn(headers, ['Product Description', 'Long Description', 'Details', 'Description']);
   const qtyCol = findColumn(headers, ['Quantity', 'Qty', 'Units', 'Pieces', 'Stock', 'Count']);
   const costCol = findColumn(headers, ['Unit Cost', 'Cost Price', 'Purchase Price', 'Cost', 'Unit Price', 'Wholesale Price']);
