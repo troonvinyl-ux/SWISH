@@ -23,7 +23,8 @@ export type SpecialistId =
   | 'cryptocurrency'
   | 'motocross'
   | 'bicycles'
-  | 'curiosities_collectibles';
+  | 'curiosities_collectibles'
+  | 'surplus_trader';
 
 export interface CaptureRequirement {
   id: string;
@@ -763,6 +764,35 @@ export const SPECIALISTS: Record<SpecialistId, SpecialistConfig> = {
     riskFactors: ['reproduction', 'damage', 'incorrect_attribution'],
     typicalMarketplaces: ['ebay', 'etsy'],
     autoDetectKeywords: ['curiosity', 'curio', 'vintage', 'retro', 'collectible', 'toy', 'figurine', 'memorabilia'],
+    version: '1.0.0',
+  },
+
+  surplus_trader: {
+    id: 'surplus_trader',
+    name: 'Job Lot & Surplus Trading',
+    shortName: 'Surplus Trader',
+    description: 'Manifest-led bulk resale. Match a photographed product to a supplier line, track units available, and create eBay listings without mixing unrelated niche inventory.',
+    icon: 'inventory-2',
+    iconFamily: 'MaterialIcons',
+    color: '#14B8A6',
+    category: 'physical_goods',
+    captureRequirements: [
+      { id: 'main', label: 'Product Photo', description: 'Clear image matching the manifest line', required: true },
+      { id: 'barcode', label: 'Barcode / SKU', description: 'Barcode or manufacturer label where present', required: false },
+      { id: 'condition', label: 'Condition', description: 'Packaging, wear, and completeness', required: true },
+      { id: 'contents', label: 'Contents', description: 'Accessories or included components', required: false },
+    ],
+    capabilities: {
+      identify: true, classify: true, research: true, assessCondition: true,
+      value: true, predictDemand: true, recommendDisposition: true,
+      generateListing: true, validateListing: true, detectRisk: true,
+      suggestAcquisitionStrategy: true,
+    },
+    keyAttributes: ['supplier_sku', 'barcode', 'brand', 'model', 'quantity_available', 'condition', 'manifest_id'],
+    valuationInputs: ['supplier_cost_per_unit', 'quantity_available', 'condition', 'realised_sold_comparables', 'fees', 'shipping_cost'],
+    riskFactors: ['wrong_manifest_match', 'missing_parts', 'damaged_packaging', 'used_or_opened', 'restricted_item', 'quantity_mismatch'],
+    typicalMarketplaces: ['ebay'],
+    autoDetectKeywords: ['job lot', 'joblot', 'surplus', 'wholesale', 'pallet', 'manifest', 'bulk lot', 'clearance stock', 'returns lot'],
     version: '1.0.0',
   },
 };

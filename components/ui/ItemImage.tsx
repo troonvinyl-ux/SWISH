@@ -30,6 +30,7 @@ export function getNichePlaceholderIcon(specialistId?: string | null): string {
   if (id === 'motocross') return 'two-wheeler';
   if (id === 'bicycles' || id === 'cycling') return 'pedal-bike';
   if (id === 'clothing' || id === 'trainers_sneakers') return 'checkroom';
+  if (id === 'surplus_trader') return 'inventory-2';
   if (id === 'coins' || id === 'coins_uk' || id === 'islamic_silver' ||
       id === 'gold' || id === 'silver' || id === 'banknotes' || id === 'ancient_artefacts') return 'toll';
   return 'inventory-2';

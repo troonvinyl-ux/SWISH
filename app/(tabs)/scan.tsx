@@ -20,7 +20,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 
 // ── Map active niche to its product ──────────────────────────────────────────
 
-type NicheProduct = 'coins' | 'mx' | 'bikes' | 'clothing' | 'general';
+type NicheProduct = 'coins' | 'mx' | 'bikes' | 'clothing' | 'surplus' | 'general';
 
 function getNicheProduct(nicheId: string | null | undefined): NicheProduct {
   const id = (nicheId ?? '').toLowerCase();
@@ -28,6 +28,7 @@ function getNicheProduct(nicheId: string | null | undefined): NicheProduct {
   if (id === 'motocross' || id === 'mx') return 'mx';
   if (id === 'bicycles' || id === 'cycling' || id === 'bikes') return 'bikes';
   if (id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers' || id === 'trainers') return 'clothing';
+  if (id === 'surplus_flip' || id === 'catalog_flip' || id === 'catalog_surplus') return 'surplus';
   return 'general';
 }
 

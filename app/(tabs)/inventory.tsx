@@ -132,6 +132,25 @@ function getNicheTheme(activeNicheId: string | null | undefined): NicheTheme {
       scanRoute: '/bike-flipper',
     };
   }
+  if (id === 'surplus_flip' || id === 'catalog_flip' || id === 'catalog_surplus') {
+    return {
+      accent: '#14B8A6', accentDim: '#062A28', icon: 'inventory-2',
+      label: 'Surplus Inventory', itemLabel: 'Product', itemsLabel: 'Products',
+      specialistIds: ['surplus_trader'],
+      subFilters: [
+        { label: 'All Products', value: 'all', search: '' },
+        { label: 'Manifest Stock', value: 'manifest', search: 'supplier_manifest' },
+        { label: 'Bulk Stock', value: 'bulk', search: 'quantity_available' },
+      ],
+      metaKeys: [
+        { key: 'supplier_sku', label: '', icon: 'qr-code', color: '#14B8A6' },
+        { key: 'barcode', label: '', icon: 'barcode', color: Colors.textTertiary },
+        { key: 'quantity_available', label: 'units', icon: 'inventory-2', color: Colors.textTertiary },
+      ],
+      scanRoute: '/surplus-flip',
+      uniqueBanner: { icon: 'upload-file', title: 'Import Job-lot Manifest', sub: 'CSV → photo match → stock', route: '/surplus-flip' },
+    };
+  }
   if (id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers' || id === 'trainers') {
     return {
       accent: '#E91E8C', accentDim: '#250014', icon: 'checkroom',

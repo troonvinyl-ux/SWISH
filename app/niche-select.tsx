@@ -106,7 +106,7 @@ function NicheCard({
 export default function NicheSelectScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { activeNicheId, fixedNicheId, enabledNiches, setActiveNiche, enableNiche, disableNiche } = useApp();
+  const { activeNicheId, fixedNicheId, enabledNiches, setActiveNiche, enableNiche, disableNiche, isMasterAdmin } = useApp();
 
   const handleSetActive = (id: NicheId) => {
     setActiveNiche(id);
@@ -123,7 +123,7 @@ export default function NicheSelectScreen() {
   };
 
   // Branded builds are single-product apps, not a multi-niche switcher.
-  if (fixedNicheId) {
+  if (fixedNicheId && !isMasterAdmin) {
     const route = nicheToEntryRoute(fixedNicheId);
     if (route) return <Redirect href={route as any} />;
   }
@@ -141,7 +141,11 @@ export default function NicheSelectScreen() {
           <Text style={s.headerTitle}>SWISH Verticals</Text>
           <Text style={s.headerSub}>Select your trading niche</Text>
         </View>
-        <View style={{ width: 36 }} />
+        {isMasterAdmin ? (
+          <Pressable onPress={() => router.push('/master-admin' as any)} style={s.backBtn} accessibilityLabel="Open SWISH Master Admin">
+            <MaterialIcons name="admin-panel-settings" size={22} color={Colors.primary} />
+          </Pressable>
+        ) : <View style={{ width: 36 }} />}
       </View>
 
       {/* Info banner */}

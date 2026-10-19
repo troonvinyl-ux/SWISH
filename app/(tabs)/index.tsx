@@ -9,6 +9,7 @@
 //   motocross                                        → FlipperMXScreen
 //   bicycles / cycling                               → BikeFlipperScreen
 //   clothing / trainers_sneakers / fashion           → ThreadsFlipScreen
+//   surplus_flip / catalog_flip / catalog_surplus   → SurplusFlipScreen
 //   (no active niche / first launch)                 → NicheSelect
 
 import React from 'react';
@@ -21,6 +22,7 @@ import CoinFlipperScreen from '@/app/coin-flipper';
 import FlipperMXScreen from '@/app/flipper-mx';
 import BikeFlipperScreen from '@/app/bike-flipper';
 import ThreadsFlipScreen from '@/app/threads-flip';
+import SurplusFlipScreen from '@/app/surplus-flip';
 
 export default function NicheHomeScreen() {
   const { activeNicheId, tenant, tenantLoading } = useApp();
@@ -43,6 +45,7 @@ export default function NicheHomeScreen() {
   if (product === 'motocross') return <FlipperMXScreen key={activeNicheId} isHomeTab />;
   if (product === 'bicycles') return <BikeFlipperScreen key={activeNicheId} isHomeTab />;
   if (product === 'clothing') return <ThreadsFlipScreen key={activeNicheId} isHomeTab />;
+  if (product === 'surplus_flip') return <SurplusFlipScreen key={activeNicheId} />;
   return <Redirect href="/niche-select" />;
 }
 

@@ -7,8 +7,18 @@ on:
       - 'app.config.js'
       - 'eas.json'
       - 'services/nicheRouting.ts'
+      - 'constants/niches.ts'
+      - 'constants/specialists.ts'
+      - 'services/__tests__/nicheIsolation.test.ts'
       - 'services/__tests__/entryRoutes.test.ts'
       - 'services/__tests__/brandedBuildConfig.test.ts'
+      - 'services/__tests__/surplusFlipRouting.test.ts'
+      - 'app/master-admin.tsx'
+      - 'services/__tests__/surplusFlipRouting.test.ts'
+      - 'app/master-admin.tsx'
+      - 'app/entry/surplus-flip.tsx'
+      - 'app/surplus-flip.tsx'
+      - 'app/(tabs)/inventory.tsx'
       - 'contexts/AppContext.tsx'
       - 'app/index.tsx'
       - 'app/(tabs)/index.tsx'
@@ -30,8 +40,16 @@ on:
       - 'app.config.js'
       - 'eas.json'
       - 'services/nicheRouting.ts'
+      - 'constants/niches.ts'
+      - 'constants/specialists.ts'
+      - 'services/__tests__/nicheIsolation.test.ts'
       - 'services/__tests__/entryRoutes.test.ts'
       - 'services/__tests__/brandedBuildConfig.test.ts'
+      - 'services/__tests__/surplusFlipRouting.test.ts'
+      - 'app/master-admin.tsx'
+      - 'app/entry/surplus-flip.tsx'
+      - 'app/surplus-flip.tsx'
+      - 'app/(tabs)/inventory.tsx'
       - 'contexts/AppContext.tsx'
       - 'app/index.tsx'
       - 'app/(tabs)/index.tsx'
@@ -88,13 +106,13 @@ jobs:
         run: pnpm add -D jest@29.7.0
 
       - name: Run routing and build-identity regression tests
-        run: npx jest --config jest.config.ci.js --runInBand services/__tests__/entryRoutes.test.ts services/__tests__/nicheIsolation.test.ts services/__tests__/brandedBuildConfig.test.ts
+        run: npx jest --config jest.config.ci.js --runInBand services/__tests__/entryRoutes.test.ts services/__tests__/nicheIsolation.test.ts services/__tests__/brandedBuildConfig.test.ts services/__tests__/surplusFlipRouting.test.ts
 
-      - name: Validate all four Expo branded configurations
+      - name: Validate all five Expo branded configurations
         shell: bash
         run: |
           set -euo pipefail
-          for niche in coins motocross bicycles clothing; do
+          for niche in coins motocross bicycles clothing surplus_flip; do
             echo "Validating branded config: $niche"
             SWISH_NICHE="$niche" npx expo config --type public >/dev/null
           done
