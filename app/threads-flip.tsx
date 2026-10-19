@@ -122,7 +122,7 @@ function TFPaywall({ onBack }: { onBack: () => void }) {
           <MaterialIcons name="workspace-premium" size={18} color={TF.black} />
           <View>
             <Text style={pw.upgradeBtnText}>{upgrading ? 'Opening checkout...' : 'Upgrade to Threads Flip Pro'}</Text>
-            <Text style={pw.upgradeBtnSub}>9.99 / month - Cancel any time</Text>
+            <Text style={pw.upgradeBtnSub}>£9.99 / month - Cancel any time</Text>
           </View>
           {upgrading ? <ActivityIndicator size="small" color={TF.black} style={{ marginLeft: 'auto' }} /> : <MaterialIcons name="arrow-forward" size={16} color={TF.black} style={{ marginLeft: 'auto' }} />}
         </Pressable>
@@ -224,7 +224,7 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
       <View style={ht.statsRow}>
         {[
           { label: 'Items in Stock', value: itemCount !== null ? String(itemCount) : '-', color: TF.white },
-          { label: 'Categories', value: '8', color: TF.pink },
+          { label: 'Categories', value: String(CLOTHING_CATEGORIES.length), color: TF.pink }
           { label: 'AI Powered', value: 'Yes', color: TF.success },
         ].map((s, i) => (
           <View key={s.label} style={[ht.stat, i > 0 && { borderLeftWidth: 1, borderLeftColor: TF.border }]}>
@@ -276,7 +276,7 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
             <Text style={ht.upgradeText}>Upgrade to Threads Flip Pro</Text>
             <Text style={ht.upgradeSub}>Live market values - Care guides - Listing templates</Text>
           </View>
-          <Text style={ht.upgradePrice}>9.99/mo</Text>
+          <Text style={ht.upgradePrice}>£9.99/mo</Text>
         </Pressable>
       ) : (
         <View style={ht.proConfirmed}>
