@@ -1396,8 +1396,19 @@ export default function EbayListingEditorScreen() {
     // ── Item Specifics: blocked internal keys (never send to eBay) ─────────────
     // Lowercase set — matched case-insensitively
     const BLOCKED_KEYS = new Set([
-      // Internal tracking / batch fields
+      // Internal tracking / batch and supplier-manifest fields. These are
+      // inventory provenance, not buyer-facing eBay item specifics.
       'batch_id', 'batchid', 'capture_ref', 'captureref',
+      'niche_id', 'nicheid', 'specialist_id', 'specialistid',
+      'source_type', 'sourcetype', 'manifest_name', 'manifestname',
+      'manifest_row', 'manifestrow', 'manifest_sku', 'manifestsku',
+      'supplier_sku', 'suppliersku', 'supplier_category', 'suppliercategory',
+      'supplier_subcategory', 'suppliersubcategory', 'supplier_image_urls', 'supplierimageurls',
+      'matched_photo_url', 'matchedphotourl', 'quantity_received', 'quantityreceived',
+      'quantity_available', 'quantityavailable', 'ebay_quantity', 'ebayquantity',
+      'supplier_unit_cost', 'supplierunitcost', 'unit_rrp', 'unitrrp',
+      'unit_weight_kg', 'unitweightkg', 'target_sell_price', 'targetsellprice',
+      'review_before_listing', 'reviewbeforelisting', 'asin', 'barcode', 'ean',
       // Object classification (internal AI fields)
       'object_type', 'objecttype', 'identification_state', 'identificationstate',
       'identification_source', 'identificationsource',
