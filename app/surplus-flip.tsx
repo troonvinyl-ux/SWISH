@@ -1,7 +1,6 @@
 // Surplus Flip — Manifest-led trader workflow
-// Imports CSV manifests, matches product photos to manifest lines, tracks stock units,
-// and creates draft SWISH inventory items using the existing tenant and item service.
-// Spreadsheet .xlsx files should be exported/saved as CSV before importing.
+// Imports Joblot XLSX/CSV manifests, uses supplier image URLs, tracks stock units,
+// and creates SWISH inventory items using the existing tenant and item service.
 
 import React, { useCallback, useMemo, useState } from 'react';
 import {
@@ -9,6 +8,7 @@ import {
   View, Alert,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
+import * as XLSX from 'xlsx';
 import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
@@ -45,6 +45,14 @@ type ManifestRow = {
   sourceRow: number;
   supplierSku: string;
   barcode: string;
+  manifestSku: string;
+  asin: string;
+  brand: string;
+  category: string;
+  subcategory: string;
+  unitWeight: number;
+  unitRrp: number;
+  imageUrls: string[];
   title: string;
   description: string;
   quantity: number;
@@ -99,34 +107,51 @@ function qty(v: string | undefined): number {
   const n = Number((v ?? '').replace(/[^0-9.]/g, ''));
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 1;
 }
-function makeRows(csv: string): ManifestRow[] {
-  const rows = parseCsv(csv);
+function makeRows(source: string | string[][]): ManifestRow[] {
+  const rows = typeof source === 'string' ? parseCsv(source) : source.map(row => row.map(v => String(v ?? '').trim()));
   if (rows.length < 2) return [];
   const headers = rows[0];
-  const skuCol = findColumn(headers, ['SKU', 'Supplier SKU', 'Product Code', 'Item Code', 'Code', 'Reference']);
+  const skuCol = findColumn(headers, ['Product SKU', 'SKU', 'Supplier SKU', 'Product Code', 'Item Code', 'Code', 'Reference']);
+  const manifestSkuCol = findColumn(headers, ['Manifest SKU', 'Manifest Reference', 'Lot SKU']);
+  const asinCol = findColumn(headers, ['ASIN']);
+  const brandCol = findColumn(headers, ['Brand', 'Manufacturer']);
+  const categoryCol = findColumn(headers, ['Category Name', 'Category']);
+  const subcategoryCol = findColumn(headers, ['Sub Category Name', 'Subcategory', 'Sub Category']);
+  const weightCol = findColumn(headers, ['Unit Weight (kg)', 'Unit Weight', 'Weight kg']);
+  const rrpCol = findColumn(headers, ['Unit RRP', 'RRP', 'Retail Price']);
+  const imageCols = ['Image 1', 'Image 2', 'Image 3', 'Image 4', 'Image 5', 'Image 6'].map(name => findColumn(headers, [name]));
   const barcodeCol = findColumn(headers, ['Barcode', 'EAN', 'UPC', 'GTIN']);
   const titleCol = findColumn(headers, ['Product', 'Product Name', 'Item', 'Item Name', 'Description', 'Title', 'Name']);
-  const descCol = findColumn(headers, ['Long Description', 'Details', 'Product Description']);
+  const descCol = findColumn(headers, ['Product Description', 'Long Description', 'Details', 'Description']);
   const qtyCol = findColumn(headers, ['Quantity', 'Qty', 'Units', 'Pieces', 'Stock', 'Count']);
   const costCol = findColumn(headers, ['Unit Cost', 'Cost Price', 'Purchase Price', 'Cost', 'Unit Price', 'Wholesale Price']);
-  const priceCol = findColumn(headers, ['Sell Price', 'Retail Price', 'Target Price', 'eBay Price', 'Selling Price', 'Price RRP', 'RRP']);
+  const priceCol = findColumn(headers, ['Sell Price', 'Target Price', 'eBay Price', 'Selling Price', 'Listing Price']);
   const conditionCol = findColumn(headers, ['Condition', 'Item Condition', 'Grade']);
   return rows.slice(1).map((cells, i) => {
     const title = titleCol >= 0 ? cells[titleCol] ?? '' : '';
     const supplierSku = skuCol >= 0 ? cells[skuCol] ?? '' : '';
     const barcode = barcodeCol >= 0 ? cells[barcodeCol] ?? '' : '';
+    const imageUrls = imageCols.map(col => col >= 0 ? (cells[col] ?? '').trim() : '').filter(url => /^https?:\/\//i.test(url) && !/^https?:\/\/[^/]+\/(?:N\/A|)$/i.test(url));
     return {
       id: 'manifest-' + (i + 2) + '-' + (supplierSku || barcode || title || 'row'),
       sourceRow: i + 2,
       supplierSku,
       barcode,
+      manifestSku: manifestSkuCol >= 0 ? cells[manifestSkuCol] ?? '' : '',
+      asin: asinCol >= 0 ? cells[asinCol] ?? '' : '',
+      brand: brandCol >= 0 ? cells[brandCol] ?? '' : '',
+      category: categoryCol >= 0 ? cells[categoryCol] ?? '' : '',
+      subcategory: subcategoryCol >= 0 ? cells[subcategoryCol] ?? '' : '',
+      unitWeight: weightCol >= 0 ? money(cells[weightCol]) : 0,
+      unitRrp: rrpCol >= 0 ? money(cells[rrpCol]) : 0,
+      imageUrls,
       title: title.trim(),
       description: (descCol >= 0 ? cells[descCol] : '') || title,
       quantity: qty(qtyCol >= 0 ? cells[qtyCol] : undefined),
       unitCost: money(costCol >= 0 ? cells[costCol] : undefined),
       targetPrice: money(priceCol >= 0 ? cells[priceCol] : undefined),
       condition: (conditionCol >= 0 ? cells[conditionCol] : '') || 'Used — inspect and confirm',
-      photoUri: null,
+      photoUri: imageUrls[0] ?? null,
       selected: Boolean(title.trim()),
       imported: false,
     };
@@ -156,12 +181,17 @@ export default function SurplusFlipScreen() {
       });
       if (picked.canceled || !picked.assets?.[0]) return;
       const asset = picked.assets[0];
+      let parsed: ManifestRow[];
       if (/\.xlsx?$/i.test(asset.name)) {
-        showAlert('Export as CSV first', 'This first version imports CSV manifests. Open the supplier spreadsheet and export/save as CSV, then import it here.');
-        return;
+        const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 });
+        const workbook = XLSX.read(base64, { type: 'base64' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const matrix = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: '', raw: false });
+        parsed = makeRows(matrix);
+      } else {
+        const text = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.UTF8 });
+        parsed = makeRows(text);
       }
-      const text = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.UTF8 });
-      const parsed = makeRows(text);
       if (!parsed.length) {
         showAlert('No product rows found', 'Check the manifest has a header row and a product/name/description column.');
         return;
@@ -245,6 +275,9 @@ export default function SurplusFlipScreen() {
       }
       let permanentPhotoUrl = '';
       try {
+        if (/^https?:\/\//i.test(row.photoUri ?? '')) {
+          permanentPhotoUrl = row.photoUri as string;
+        } else {
         const base64 = await FileSystem.readAsStringAsync(row.photoUri as string, {
           encoding: FileSystem.EncodingType.Base64,
         });
@@ -260,6 +293,7 @@ export default function SurplusFlipScreen() {
         permanentPhotoUrl = publicData.publicUrl;
         if (!permanentPhotoUrl || !(permanentPhotoUrl.includes('supabase') || permanentPhotoUrl.includes('onspace'))) {
           throw new Error('Storage did not return a persistent image URL');
+        }
         }
       } catch (photoError: any) {
         errors.push(row.title + ': photo upload failed — ' + (photoError?.message ?? 'unknown error'));
@@ -287,7 +321,7 @@ export default function SurplusFlipScreen() {
         quantity: row.quantity,
         sku: row.supplierSku || undefined,
         manufacturer: undefined,
-        media: [permanentPhotoUrl],
+        media: Array.from(new Set([permanentPhotoUrl, ...row.imageUrls].filter(Boolean))),
         attributes: {
           niche_id: 'surplus_flip',
           specialist_id: 'surplus_trader',
@@ -295,13 +329,23 @@ export default function SurplusFlipScreen() {
           manifest_name: manifestName,
           manifest_row: row.sourceRow,
           supplier_sku: row.supplierSku,
+          manifest_sku: row.manifestSku,
+          asin: row.asin,
           barcode: row.barcode,
+          ean: row.barcode,
+          brand: row.brand,
+          supplier_category: row.category,
+          supplier_subcategory: row.subcategory,
+          unit_weight_kg: row.unitWeight,
+          unit_rrp: row.unitRrp,
+          supplier_image_urls: row.imageUrls,
           quantity_received: row.quantity,
           quantity_available: row.quantity,
           supplier_unit_cost: row.unitCost,
           target_sell_price: row.targetPrice,
           matched_photo_url: permanentPhotoUrl,
           review_before_listing: true,
+          ebay_quantity: row.quantity,
         },
         tags: ['surplus_flip', 'supplier_manifest'],
         warnings: ['Manifest data is supplier-provided. Verify exact product match, condition, stock count, restrictions, price, and postage before publishing.'],
@@ -352,7 +396,7 @@ export default function SurplusFlipScreen() {
           <MaterialIcons name="upload-file" size={20} color={Colors.background} />
           <View style={{ flex: 1 }}>
             <Text style={s.uploadTitle}>{manifestName || 'Choose manifest CSV'}</Text>
-            <Text style={s.uploadSub}>CSV • supplier SKU • barcode • quantity • unit cost • target price</Text>
+            <Text style={s.uploadSub}>XLSX / CSV • supplier photos • SKU • quantity • cost</Text>
           </View>
           <MaterialIcons name="chevron-right" size={20} color={Colors.background} />
         </Pressable>
@@ -374,7 +418,7 @@ export default function SurplusFlipScreen() {
             />
             <View style={s.note}>
               <MaterialIcons name="info-outline" size={16} color={Colors.info} />
-              <Text style={s.noteText}>Select only rows you want to import. Each selected row needs its own photo. Quantity is total sellable units for that line; listing as a multi-quantity eBay listing must be confirmed in the existing listing editor.</Text>
+              <Text style={s.noteText}>Select only rows you want to import. Supplier image URLs are pre-matched where available; replace with your own photo if needed. Quantity is the total sellable units for that line. Check condition, price and eBay category before listing.</Text>
             </View>
 
             {visibleRows.map(row => (
