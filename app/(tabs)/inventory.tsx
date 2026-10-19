@@ -139,8 +139,8 @@ function getNicheTheme(activeNicheId: string | null | undefined): NicheTheme {
       specialistIds: ['surplus_trader'],
       subFilters: [
         { label: 'All Products', value: 'all', search: '' },
-        { label: 'Needs Photo', value: 'needs_photo', search: '' },
-        { label: 'Bulk Stock', value: 'bulk', search: '' },
+        { label: 'Manifest Stock', value: 'manifest', search: 'supplier_manifest' },
+        { label: 'Bulk Stock', value: 'bulk', search: 'quantity_available' },
       ],
       metaKeys: [
         { key: 'supplier_sku', label: '', icon: 'qr-code', color: '#14B8A6' },
