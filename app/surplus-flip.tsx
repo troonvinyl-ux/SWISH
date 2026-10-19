@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
+import { decode } from 'base64-arraybuffer';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -224,6 +225,29 @@ export default function SurplusFlipScreen() {
         setProgress({ done: i + 1, total: chosen.length });
         continue;
       }
+      let permanentPhotoUrl = '';
+      try {
+        const base64 = await FileSystem.readAsStringAsync(row.photoUri as string, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        const uriPath = (row.photoUri ?? '').toLowerCase().split('?')[0];
+        const extension = uriPath.endsWith('.png') ? 'png' : uriPath.endsWith('.webp') ? 'webp' : 'jpg';
+        const contentType = extension === 'png' ? 'image/png' : extension === 'webp' ? 'image/webp' : 'image/jpeg';
+        const filePath = tenant.id + '/surplus/' + Date.now() + '-' + i + '.' + extension;
+        const { error: uploadError } = await supabase.storage
+          .from('item-images')
+          .upload(filePath, decode(base64), { contentType, upsert: false });
+        if (uploadError) throw uploadError;
+        const { data: publicData } = supabase.storage.from('item-images').getPublicUrl(filePath);
+        permanentPhotoUrl = publicData.publicUrl;
+        if (!permanentPhotoUrl || !(permanentPhotoUrl.includes('supabase') || permanentPhotoUrl.includes('onspace'))) {
+          throw new Error('Storage did not return a persistent image URL');
+        }
+      } catch (photoError: any) {
+        errors.push(row.title + ': photo upload failed — ' + (photoError?.message ?? 'unknown error'));
+        setProgress({ done: i + 1, total: chosen.length });
+        continue;
+      }
       const result = await createItem(tenant.id, {
         canonicalTitle: row.title,
         description: row.description,
@@ -245,7 +269,7 @@ export default function SurplusFlipScreen() {
         quantity: row.quantity,
         sku: row.supplierSku || undefined,
         manufacturer: undefined,
-        media: [row.photoUri as string],
+        media: [permanentPhotoUrl],
         attributes: {
           niche_id: 'surplus_flip',
           specialist_id: 'surplus_trader',
@@ -258,7 +282,7 @@ export default function SurplusFlipScreen() {
           quantity_available: row.quantity,
           supplier_unit_cost: row.unitCost,
           target_sell_price: row.targetPrice,
-          matched_photo_uri: row.photoUri,
+          matched_photo_url: permanentPhotoUrl,
           review_before_listing: true,
         },
         tags: ['surplus_flip', 'supplier_manifest'],
@@ -268,7 +292,7 @@ export default function SurplusFlipScreen() {
       else {
         imported++;
         existingKeys.add(key);
-        updateRow(row.id, { imported: true, selected: false });
+        updateRow(row.id, { imported: true, selected: false, photoUri: permanentPhotoUrl });
       }
       setProgress({ done: i + 1, total: chosen.length });
     }
