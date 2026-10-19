@@ -19,12 +19,19 @@ import { NicheId, NicheConfig, NICHES, isProductionNiche } from '@/constants/nic
 import { checkSubscription, SubscriptionStatus } from '@/services/subscriptionService';
 
 const NICHE_STORAGE_PREFIX = '@swish_active_niches';
+export const SWISH_MASTER_ADMIN_EMAIL = 'troonvinyl@gmail.com';
+export function isSwishMasterAdmin(email?: string | null): boolean {
+  return (email ?? '').trim().toLowerCase() === SWISH_MASTER_ADMIN_EMAIL;
+}
 const CONFIGURED_BUILD_NICHE = Constants.expoConfig?.extra?.swishNicheId;
 const FIXED_BUILD_NICHE_ID: NicheId | null = isProductionNiche(CONFIGURED_BUILD_NICHE)
   ? CONFIGURED_BUILD_NICHE
   : null;
 
 interface AppContextType {
+  // Platform owner access
+  isMasterAdmin: boolean;
+
   // Subscription
   subscriptionStatus: SubscriptionStatus | null;
   subscriptionLoading: boolean;
@@ -68,6 +75,7 @@ export const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const isMasterAdmin = isSwishMasterAdmin(user?.email);
 
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [tenantLoading, setTenantLoading] = useState(false);
@@ -146,7 +154,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const setActiveNiche = (id: NicheId) => {
-    if (!isProductionNiche(id) || (FIXED_BUILD_NICHE_ID && id !== FIXED_BUILD_NICHE_ID)) return;
+    if (!isProductionNiche(id) || (FIXED_BUILD_NICHE_ID && id !== FIXED_BUILD_NICHE_ID && !isMasterAdmin)) return;
     setActiveNicheId(id);
     setEnabledNiches(prev => {
       const next = prev.includes(id) ? prev : [id, ...prev.filter(isProductionNiche)];
@@ -156,7 +164,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const enableNiche = (id: NicheId) => {
-    if (!isProductionNiche(id) || FIXED_BUILD_NICHE_ID) return;
+    if (!isProductionNiche(id) || (FIXED_BUILD_NICHE_ID && !isMasterAdmin)) return;
     setEnabledNiches(prev => {
       const next = prev.includes(id) ? prev : [...prev.filter(isProductionNiche), id];
       persistNiches(activeNicheId, next);
@@ -165,7 +173,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const disableNiche = (id: NicheId) => {
-    if (!isProductionNiche(id) || FIXED_BUILD_NICHE_ID) return;
+    if (!isProductionNiche(id) || (FIXED_BUILD_NICHE_ID && !isMasterAdmin)) return;
     setEnabledNiches(prev => {
       const next = prev.filter(n => n !== id && isProductionNiche(n));
       const safeNext: NicheId[] = next.length > 0 ? next : ['general'];
@@ -306,6 +314,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         reloadBusinessConfig: async () => {
           if (tenant) await loadBusinessConfig(tenant.id);
         },
+        isMasterAdmin,
         subscriptionStatus,
         subscriptionLoading,
         subscriptionTier: tenant?.subscriptionTier ?? null,
