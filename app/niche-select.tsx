@@ -173,7 +173,7 @@ export default function NicheSelectScreen() {
           <View style={{ flex: 1 }}>
             <Text style={s.comingSoonTitle}>More Verticals Coming</Text>
             <Text style={s.comingSoonText}>
-              Electronics · Musical Instruments · Sports Equipment · Golf · Watches · Vinyl Records · Comics · and hundreds more
+              Surplus Flip · Electronics · Musical Instruments · Sports Equipment · Golf · Watches · Vinyl Records · Comics · and hundreds more
             </Text>
           </View>
         </View>
