@@ -64,7 +64,7 @@ const NICHE_SPECIFIC_SPECIALISTS = new Set([
   'bicycles', 'motocross', 'clothing', 'trainers_sneakers',
   'coins', 'islamic_silver', 'banknotes', 'gold', 'silver',
   'pokemon_cards', 'trading_cards', 'stamps', 'vinyl_records',
-  'books', 'retro_games', 'retro_consoles',
+  'books', 'retro_games', 'retro_consoles', 'surplus_trader',
 ]);
 
 function resolveSpecialistId(
