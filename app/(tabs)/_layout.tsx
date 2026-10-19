@@ -178,6 +178,19 @@ export default function TabLayout() {
         }}
       />
 
+      {/* ── Account: sign-out, niche switcher and owner admin ── */}
+      <Tabs.Screen
+        name="account"
+        options={{
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.tabItem, focused && styles.tabItemActive]}>
+              <MaterialIcons name="account-circle" size={22} color={color} />
+              <TabLabel label="Account" focused={focused} />
+            </View>
+          ),
+        }}
+      />
+
       {/* ── Hidden tabs (V2 — keep functional but not in nav) ── */}
       <Tabs.Screen
         name="acquisitions"
