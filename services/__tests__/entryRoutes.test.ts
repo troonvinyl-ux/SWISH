@@ -1563,7 +1563,7 @@ describe('SWISH-030 Issue 3: Android CI/CD Signing (Static Config Inspection)', 
     );
   });
 
-  // ── Coins niche ──────────────────────────────────────────────────────────
+// ── Coins niche ──────────────────────────────────────────────────────────
   describe('Coins niche → /entry/coins', () => {
     test('coins → /entry/coins', () => {
       expect(nicheToEntryRoute('coins')).toBe('/entry/coins');
