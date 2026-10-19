@@ -2088,7 +2088,11 @@ async function handleRequest(req: Request): Promise<Response> {
   // silently submitting without Type. This is only used when another niche mapping did not add it.
   if (!seenNames.has('type')) {
     const productType = attrs['product_type'] ?? attrs['type'] ?? attrs['item_type'] ?? attrs['object_type'];
-    addSpec('Type', productType ?? (specialistId === 'surplus_flip' || specialistId === 'surplus_trader' ? title : null));
+    // Ensure the XML always contains a non-empty Type value when the product
+    // metadata has no explicit type. eBay's category validator is authoritative;
+    // using the item title is a conservative fallback and avoids a guaranteed
+    // missing-required-specific rejection.
+    addSpec('Type', productType ?? title);
   }
 
   // Default: extract from item attributes using existing logic
