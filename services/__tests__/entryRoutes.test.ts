@@ -1538,7 +1538,7 @@ describe('SWISH-030 Issue 3: Android CI/CD Signing (Static Config Inspection)', 
   });
 });
 
-    describe('Canonical production niche resolver', () => {
+  describe('Canonical production niche resolver', () => {
     test.each([
       ['coins', 'coins'],
       ['islamic_silver', 'coins'],
