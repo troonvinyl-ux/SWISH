@@ -15,6 +15,7 @@ const BUILDS = {
   motocross: ['Flipper MX', 'swish-flipper-mx', 'flippermx', 'com.swish.flippermx'],
   bicycles: ['Bike Flipper', 'swish-bike-flipper', 'bikeflipper', 'com.swish.bikeflipper'],
   clothing: ['Threads Flip', 'swish-threads-flip', 'threadsflip', 'com.swish.threadsflip'],
+  surplus_flip: ['Surplus Flip', 'swish-surplus-flip', 'surplusflip', 'com.swish.surplusflip'],
 };
 
 describe('Branded Expo build configuration', () => {
