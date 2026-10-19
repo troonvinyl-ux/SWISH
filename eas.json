@@ -4,6 +4,31 @@
       "android": {
         "buildType": "apk"
       }
+    },
+    "coins": {
+      "extends": "production",
+      "env": { "SWISH_NICHE": "coins" },
+      "android": { "buildType": "apk" }
+    },
+    "motocross": {
+      "extends": "production",
+      "env": { "SWISH_NICHE": "motocross" },
+      "android": { "buildType": "apk" }
+    },
+    "bicycles": {
+      "extends": "production",
+      "env": { "SWISH_NICHE": "bicycles" },
+      "android": { "buildType": "apk" }
+    },
+    "clothing": {
+      "extends": "production",
+      "env": { "SWISH_NICHE": "clothing" },
+      "android": { "buildType": "apk" }
+    },
+    "surplus_flip": {
+      "extends": "production",
+      "env": { "SWISH_NICHE": "surplus_flip" },
+      "android": { "buildType": "apk" }
     }
   }
 }
