@@ -88,6 +88,8 @@ function productForSpecialist(specialistId: string | null | undefined): string |
     'coins', 'coins_uk', 'coins_world', 'coins_currency', 'islamic_silver',
     'banknotes', 'gold', 'silver', 'ancient_artefacts',
     'jewellery_precious_metals', 'curiosities_collectibles',
+    // Surplus Flip is a distinct product boundary; legacy and current IDs are aliases.
+    'surplus_trader', 'surplus_flip',
   ].includes(id) || id.includes('coin')) return 'coins';
   if (id === 'motocross' || id === 'mx' || id === 'flipper_mx') return 'motocross';
   if (id === 'bicycles' || id === 'cycling' || id === 'bike_flipper') return 'bicycles';
