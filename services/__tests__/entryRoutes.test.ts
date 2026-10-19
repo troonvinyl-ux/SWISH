@@ -15,7 +15,7 @@ import { nicheToEntryRoute, resolveProductionNiche } from '@/services/nicheRouti
 
 type NicheId =
   | 'coins' | 'trading_cards' | 'antiques' | 'bicycles' | 'motocross'
-  | 'fossils' | 'clothing' | 'beauty' | 'general' | 'surplus_flip';
+  | 'fossils' | 'clothing' | 'beauty' | 'general';
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
@@ -64,7 +64,7 @@ const NICHE_SPECIFIC_SPECIALISTS = new Set([
   'bicycles', 'motocross', 'clothing', 'trainers_sneakers',
   'coins', 'islamic_silver', 'banknotes', 'gold', 'silver',
   'pokemon_cards', 'trading_cards', 'stamps', 'vinyl_records',
-  'books', 'retro_games', 'retro_consoles', 'surplus_trader',
+  'books', 'retro_games', 'retro_consoles',
 ]);
 
 function resolveSpecialistId(
@@ -1204,14 +1204,14 @@ describe('SWISH-006: Evidence-First Identification and Valuation Guardrails', ()
 //
 // Tests for:
 //   Issue 1 — Credential security (safe column selection, no credential_ref in responses)
-//   Issue 2 — Production niche ring-fencing (registered niches only)
+//   Issue 2 — Production niche ring-fencing (only 4 niches active)
 //   Issue 3 — CI/CD signing (verified via config inspection, not a live build)
 
 // ── Inline implementations mirroring the production code ───────────────────────
 
-type NicheId030 = 'coins' | 'trading_cards' | 'antiques' | 'bicycles' | 'motocross' | 'fossils' | 'clothing' | 'beauty' | 'general' | 'surplus_flip';
+type NicheId030 = 'coins' | 'trading_cards' | 'antiques' | 'bicycles' | 'motocross' | 'fossils' | 'clothing' | 'beauty' | 'general';
 
-const PRODUCTION_NICHE_IDS_030: readonly NicheId030[] = ['coins', 'motocross', 'bicycles', 'clothing', 'surplus_flip'] as const;
+const PRODUCTION_NICHE_IDS_030: readonly NicheId030[] = ['coins', 'motocross', 'bicycles', 'clothing'] as const;
 
 function isProductionNiche030(nicheId: NicheId030 | string | null | undefined): boolean {
   return PRODUCTION_NICHE_IDS_030.includes(nicheId as NicheId030);
@@ -1331,9 +1331,8 @@ describe('SWISH-030 Issue 1: Credential Security', () => {
 
 describe('SWISH-030 Issue 2: Production Niche Ring-Fencing', () => {
   describe('Production niche IDs', () => {
-    test('five production niches exist including Surplus Flip', () => {
-      expect(PRODUCTION_NICHE_IDS_030.length).toBe(5);
-      expect(PRODUCTION_NICHE_IDS_030).toContain('surplus_flip');
+    test('exactly four production niches exist', () => {
+      expect(PRODUCTION_NICHE_IDS_030.length).toBe(4);
     });
 
     test('coins is a production niche', () => {
@@ -1350,10 +1349,6 @@ describe('SWISH-030 Issue 2: Production Niche Ring-Fencing', () => {
 
     test('clothing is a production niche', () => {
       expect(isProductionNiche030('clothing')).toBe(true);
-    });
-
-    test('surplus_flip is a production niche', () => {
-      expect(isProductionNiche030('surplus_flip')).toBe(true);
     });
 
     test('fossils is NOT a production niche', () => {
@@ -1399,13 +1394,12 @@ describe('SWISH-030 Issue 2: Production Niche Ring-Fencing', () => {
     });
 
     test('all four production niches are returned', () => {
-      const result = getActiveNiches030(['coins', 'motocross', 'bicycles', 'clothing', 'surplus_flip']);
-      expect(result).toHaveLength(5);
+      const result = getActiveNiches030(['coins', 'motocross', 'bicycles', 'clothing']);
+      expect(result).toHaveLength(4);
       expect(result).toContain('coins');
       expect(result).toContain('motocross');
       expect(result).toContain('bicycles');
       expect(result).toContain('clothing');
-      expect(result).toContain('surplus_flip');
     });
 
     test('mixed list: non-production niches are stripped', () => {
@@ -1453,7 +1447,6 @@ describe('SWISH-030 Issue 2: Production Niche Ring-Fencing', () => {
       if (id === 'motocross' || id === 'mx') return ['motocross'];
       if (id === 'bicycles' || id === 'cycling' || id === 'bikes') return ['bicycles'];
       if (id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers' || id === 'trainers') return ['clothing', 'trainers_sneakers'];
-      if (id === 'surplus_flip') return ['surplus_trader'];
       return [];
     }
 
@@ -1538,7 +1531,7 @@ describe('SWISH-030 Issue 3: Android CI/CD Signing (Static Config Inspection)', 
   });
 });
 
-    describe('Canonical production niche resolver', () => {
+  describe('Canonical production niche resolver', () => {
     test.each([
       ['coins', 'coins'],
       ['islamic_silver', 'coins'],
@@ -1548,11 +1541,6 @@ describe('SWISH-030 Issue 3: Android CI/CD Signing (Static Config Inspection)', 
       ['bike_flipper', 'bicycles'],
       ['clothing', 'clothing'],
       ['threads_flip', 'clothing'],
-      ['surplus_flip', 'surplus_flip'],
-      ['surplus-flip', 'surplus_flip'],
-      ['catalog_flip', 'surplus_flip'],
-      ['catalog_surplus', 'surplus_flip'],
-      ['surplus_trader', 'surplus_flip'],
     ])('%s resolves to %s', (input, expected) => {
       expect(resolveProductionNiche(input)).toBe(expected);
     });
@@ -1561,9 +1549,8 @@ describe('SWISH-030 Issue 3: Android CI/CD Signing (Static Config Inspection)', 
       'inactive or unknown niche %s fails closed',
       (input) => expect(resolveProductionNiche(input as string | null | undefined)).toBeNull(),
     );
-  });
 
-// ── Coins niche ──────────────────────────────────────────────────────────
+  // ── Coins niche ──────────────────────────────────────────────────────────
   describe('Coins niche → /entry/coins', () => {
     test('coins → /entry/coins', () => {
       expect(nicheToEntryRoute('coins')).toBe('/entry/coins');
@@ -1629,14 +1616,13 @@ describe('SWISH-030 Issue 3: Android CI/CD Signing (Static Config Inspection)', 
 
   // ── Isolation check — no cross-niche leakage ─────────────────────────────
   describe('No cross-niche leakage', () => {
-    const ENTRY_ROUTES = ['/entry/coins', '/entry/motocross', '/entry/bicycles', '/entry/clothing', '/entry/surplus-flip'] as const;
+    const ENTRY_ROUTES = ['/entry/coins', '/entry/motocross', '/entry/bicycles', '/entry/clothing'] as const;
 
     const NICHE_EXPECTATIONS: Array<[NicheId | string, typeof ENTRY_ROUTES[number]]> = [
       ['coins',             '/entry/coins'],
       ['motocross',         '/entry/motocross'],
       ['bicycles',          '/entry/bicycles'],
       ['clothing',          '/entry/clothing'],
-      ['surplus_flip',      '/entry/surplus-flip'],
     ];
 
     NICHE_EXPECTATIONS.forEach(([nicheId, expectedRoute]) => {
@@ -1649,8 +1635,8 @@ describe('SWISH-030 Issue 3: Android CI/CD Signing (Static Config Inspection)', 
     });
   });
 
-  // ── All five entry routes are distinct ───────────────────────────────────
-  describe('All five entry routes are distinct', () => {
+  // ── All four entry routes are distinct ───────────────────────────────────
+  describe('All four entry routes are distinct', () => {
     test('coins and motocross have different entry routes', () => {
       expect(nicheToEntryRoute('coins')).not.toBe(nicheToEntryRoute('motocross'));
     });
@@ -1668,14 +1654,6 @@ describe('SWISH-030 Issue 3: Android CI/CD Signing (Static Config Inspection)', 
     });
     test('bicycles and clothing have different entry routes', () => {
       expect(nicheToEntryRoute('bicycles')).not.toBe(nicheToEntryRoute('clothing'));
-    });
-    test('Surplus Flip has its own distinct entry route', () => {
-      const surplus = nicheToEntryRoute('surplus_flip');
-      expect(surplus).toBe('/entry/surplus-flip');
-      expect(surplus).not.toBe(nicheToEntryRoute('coins'));
-      expect(surplus).not.toBe(nicheToEntryRoute('motocross'));
-      expect(surplus).not.toBe(nicheToEntryRoute('bicycles'));
-      expect(surplus).not.toBe(nicheToEntryRoute('clothing'));
     });
   });
 });
