@@ -3418,13 +3418,6 @@ export default function SettingsScreen() {
             onPress={() => router.push('/research' as any)}
             color={Colors.accent}
           />
-          <SettingRow
-            icon="science"
-            label="Deep ID / Re-ID Lab"
-            desc="Test obverse, reverse, weight, diameter and valuation without changing inventory"
-            onPress={() => router.push('/deep-id-lab' as any)}
-            color={Colors.info}
-          />
         </CardGroup>
 
         {tenant ? (

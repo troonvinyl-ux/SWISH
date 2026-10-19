@@ -287,27 +287,6 @@ export async function createItem(
       warnings: input.warnings ?? [],
       tags: input.tags ?? [],
       acquired_cost: input.acquiredCost ?? 0,
-      // Persist the same canonical metadata fields that updateItem already supports.
-      // Previously createItem silently dropped these fields on first save.
-      weight_grams: input.weightGrams ?? null,
-      dimensions_mm: input.dimensionsMm ?? null,
-      material: input.material ?? null,
-      manufacturer: input.manufacturer ?? null,
-      year_made: input.yearMade ?? null,
-      country_of_origin: input.countryOfOrigin ?? null,
-      quantity: input.quantity ?? null,
-      sku: input.sku ?? null,
-      storage_location: input.storageLocation ?? null,
-      custom_notes: input.customNotes ?? null,
-      inventory_id: input.inventoryId ?? null,
-      folder_number: input.folderNumber ?? null,
-      pocket_position: input.pocketPosition ?? null,
-      catalogue_number: input.catalogueNumber ?? null,
-      period: input.period ?? null,
-      ruler: input.ruler ?? null,
-      mint: input.mint ?? null,
-      denomination: input.denomination ?? null,
-      diameter_mm: input.diameterMm ?? null,
     })
     .select()
     .single();

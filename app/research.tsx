@@ -25,7 +25,7 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface ResearchResult {
-  source: 'terapeak' | 'marketplace_insights' | 'ebay_browse' | 'numista' | 'gemini' | 'canoa';
+  source: 'terapeak' | 'ebay_browse' | 'numista' | 'gemini';
   title: string;
   price?: number;
   currency?: string;
@@ -36,7 +36,6 @@ interface ResearchResult {
   isActive?: boolean;   // true = asking price, false = sold
   isSoldPrice?: boolean;
   conditionId?: string;
-  evidenceType?: 'reference' | 'active' | 'sold' | 'ai';
 }
 
 interface ResearchSummary {
@@ -63,12 +62,10 @@ function fmt(price?: number, currency = 'GBP'): string {
 
 function sourceChip(source: ResearchResult['source']) {
   const cfg: Record<string, { label: string; color: string }> = {
-    terapeak:   { label: 'Product Research', color: Colors.success },
-    marketplace_insights: { label: 'eBay Sold', color: Colors.success },
+    terapeak:   { label: 'Terapeak', color: Colors.success },
     ebay_browse:{ label: 'eBay',     color: '#E53238' },
     numista:    { label: 'Numista',  color: Colors.info },
     gemini:     { label: 'Gemini AI',color: Colors.accent },
-    canoa:      { label: 'CANOA Reference', color: Colors.info },
   };
   return cfg[source] ?? { label: source, color: Colors.textTertiary };
 }
@@ -97,9 +94,9 @@ function ResultCard({ item }: { item: ResearchResult }) {
           <View style={[rc.sourceChip, { backgroundColor: chip.color + '20', borderColor: chip.color + '40' }]}>
             <Text style={[rc.sourceText, { color: chip.color }]}>{chip.label}</Text>
           </View>
-          <View style={[rc.typeChip, item.evidenceType === 'reference' ? { backgroundColor: Colors.infoDim, borderColor: Colors.info + '40' } : item.isSoldPrice ? { backgroundColor: Colors.successDim, borderColor: Colors.success + '40' } : { backgroundColor: Colors.warningDim, borderColor: Colors.warning + '40' }]}>
-            <MaterialIcons name={item.evidenceType === 'reference' ? 'menu-book' : item.isSoldPrice ? 'sell' : 'storefront'} size={9} color={item.evidenceType === 'reference' ? Colors.info : item.isSoldPrice ? Colors.success : Colors.warning} />
-            <Text style={[rc.typeText, { color: item.evidenceType === 'reference' ? Colors.info : item.isSoldPrice ? Colors.success : Colors.warning }]}>{item.evidenceType === 'reference' ? 'REFERENCE' : item.isSoldPrice ? 'SOLD' : 'ACTIVE'}</Text>
+          <View style={[rc.typeChip, item.isSoldPrice ? { backgroundColor: Colors.successDim, borderColor: Colors.success + '40' } : { backgroundColor: Colors.warningDim, borderColor: Colors.warning + '40' }]}>
+            <MaterialIcons name={item.isSoldPrice ? 'sell' : 'storefront'} size={9} color={item.isSoldPrice ? Colors.success : Colors.warning} />
+            <Text style={[rc.typeText, { color: item.isSoldPrice ? Colors.success : Colors.warning }]}>{item.isSoldPrice ? 'SOLD' : 'ACTIVE'}</Text>
           </View>
           {item.soldDate ? <Text style={rc.date}>{item.soldDate.slice(0, 10)}</Text> : null}
         </View>
@@ -410,7 +407,7 @@ export default function ResearchScreen() {
         const price = Number(s.price ?? s.soldPrice ?? 0);
         if (!s.title || !(price > 0)) continue;
         newResults.push({
-          source: sold.source === 'ebay_marketplace_insights' ? 'marketplace_insights' : 'terapeak',
+          source: 'terapeak',
           title: s.title,
           price,
           currency: s.currency ?? 'GBP',
@@ -461,27 +458,6 @@ export default function ResearchScreen() {
         }
       }
 
-      // CANOA is a structured catalogue reference, not an identification verdict
-      // and never price evidence. Keep it visibly distinct from active listings.
-      const canoa = mv?.canoaReference;
-      for (const c of (Array.isArray(canoa?.items) ? canoa.items.slice(0, 8) : [])) {
-        if (!c.title || !c.url) continue;
-        const dateText = c.dateFrom != null || c.dateTo != null
-          ? `Dates: ${c.dateFrom ?? '?'} to ${c.dateTo ?? '?'}`
-          : '';
-        const detailText = [c.catalogueNumber, c.mint, c.material, dateText,
-          c.specimenCount != null ? `Museum specimens: ${c.specimenCount}` : ''].filter(Boolean).join(' · ');
-        newResults.push({
-          source: 'canoa',
-          title: c.title,
-          itemUrl: c.url,
-          condition: detailText || 'CANOA ancient coin catalogue candidate — verify against both faces and measurements.',
-          isActive: false,
-          isSoldPrice: false,
-          evidenceType: 'reference',
-        });
-      }
-
       // Report the real failure mode when no results were returned.
       const apiStatus = mv?.dataSource?.apiConnectionStatus;
       if (newResults.length === 0 && !newSummary.avgSoldPrice && !newSummary.geminiEstimate) {
@@ -489,13 +465,15 @@ export default function ResearchScreen() {
           apiStatus?.teapeakStatus ? 'eBay sold research HTTP ' + apiStatus.teapeakStatus : '',
           apiStatus?.browseApiError ? 'eBay Browse: ' + apiStatus.browseApiError : '',
           mv?.teapeakProductResearch?.needsReauth ? 'Reconnect eBay to grant the required sold-research access.' : '',
-          mv?.verifiedSoldResearch?.accessError ?? '',
         ].filter(Boolean).join(' ');
         setError(details || 'No results found. Try a more specific search term or add an image for visual research.');
       }
       setSummary(newSummary);
       setResults(newResults);
 
+      if (newResults.length === 0 && !newSummary.avgSoldPrice && !newSummary.recentSoldCount && !newSummary.geminiEstimate) {
+        setError('No results found. Try a different search term or add an image for visual research.');
+      }
     } catch (e: any) {
       setError(e?.message ?? 'Research failed');
     } finally {
@@ -505,13 +483,13 @@ export default function ResearchScreen() {
 
   // ── Filter results ───────────────────────────────────────────────────────────
   const filteredResults = results.filter(r => {
-    if (filterSold === 'sold') return r.isSoldPrice === true;
-    if (filterSold === 'active') return r.isSoldPrice === false && r.evidenceType !== 'reference';
+    if (filterSold === 'sold') return r.isSoldPrice;
+    if (filterSold === 'active') return !r.isSoldPrice;
     return true;
   });
 
-  const soldCount = results.filter(r => r.isSoldPrice === true).length;
-  const activeCount = results.filter(r => r.isSoldPrice === false && r.evidenceType !== 'reference').length;
+  const soldCount = results.filter(r => r.isSoldPrice).length;
+  const activeCount = results.filter(r => !r.isSoldPrice).length;
 
   return (
     <View style={s.container}>
@@ -524,7 +502,7 @@ export default function ResearchScreen() {
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={s.title}>Research Centre</Text>
-          <Text style={s.subtitle}>Live eBay · Terapeak · Numista · CANOA · Gemini</Text>
+          <Text style={s.subtitle}>Live eBay · Terapeak · Numista · Gemini</Text>
         </View>
       </View>
 
@@ -615,7 +593,7 @@ export default function ResearchScreen() {
         ) : null}
 
         {/* Summary */}
-        {summary && (summary.avgSoldPrice || summary.recentSoldCount || summary.geminiEstimate || summary.numista) ? (
+        {summary && (summary.avgSoldPrice || summary.geminiEstimate || summary.numista) ? (
           <>
             <Text style={s.sectionLabel}>MARKET SUMMARY</Text>
             <SummaryPanel summary={summary} />

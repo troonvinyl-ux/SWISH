@@ -93,6 +93,7 @@ const EBAY_CATEGORY_FALLBACK = [
   { id: '4730', name: 'Islamic Coins' },
   { id: '4737', name: 'Ancient Persian & Indian Coins' },
   { id: '93500', name: 'Ancient Coin Collections & Bulk Lots' },
+  { id: '532', name: 'Other Ancient Coins' },
   { id: '122475', name: 'Celtic Coins (c.100 BC–c.100 AD)' },
   { id: '58523', name: 'Anglo-Saxon Coins (c.600–1066)' },
   { id: '122476', name: 'Norman Coins (1066–1154)' },

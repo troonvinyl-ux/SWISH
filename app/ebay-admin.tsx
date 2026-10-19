@@ -1441,46 +1441,6 @@ const row = StyleSheet.create({
   actionBtnInfo: { backgroundColor: Colors.infoDim, borderColor: Colors.info + '40' },
 });
 
-type ApiUsageRow = {
-  apiName: string;
-  resourceName: string;
-  limit?: number;
-  remaining?: number;
-  used?: number;
-  reset?: string;
-  timeWindow?: string | number;
-};
-
-function normalizeApiUsage(payload: any): ApiUsageRow[] {
-  const groups = Array.isArray(payload?.rateLimits) ? payload.rateLimits
-    : Array.isArray(payload?.rateLimit) ? payload.rateLimit
-    : Array.isArray(payload?.resources) ? [payload]
-    : [];
-  const rows: ApiUsageRow[] = [];
-  for (const group of groups) {
-    const resources = Array.isArray(group?.resources) ? group.resources : [group];
-    for (const resource of resources) {
-      if (!resource || typeof resource !== 'object') continue;
-      const apiName = String(group?.apiName ?? group?.apiContext ?? resource?.apiName ?? 'eBay API');
-      const resourceName = String(resource?.name ?? resource?.resourceName ?? resource?.apiName ?? group?.apiName ?? 'API calls');
-      const limitValue = resource?.limit ?? resource?.callLimit ?? resource?.quota;
-      const remainingValue = resource?.remaining ?? resource?.remainingCalls ?? resource?.callsRemaining;
-      const usedValue = resource?.count ?? resource?.used ?? resource?.callsUsed;
-      const numeric = (v: any) => v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? undefined : Number(v);
-      rows.push({
-        apiName,
-        resourceName,
-        limit: numeric(limitValue),
-        remaining: numeric(remainingValue),
-        used: numeric(usedValue),
-        reset: resource?.reset ?? resource?.resetTime ?? resource?.resetAt,
-        timeWindow: resource?.timeWindow ?? resource?.window,
-      });
-    }
-  }
-  return rows;
-}
-
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export default function EbayAdminScreen() {
@@ -1503,13 +1463,6 @@ export default function EbayAdminScreen() {
   const [dispatchingId, setDispatchingId] = useState<string | null>(null);
   const [importingOrders, setImportingOrders] = useState(false);
   const [syncingStatus, setSyncingStatus] = useState(false);
-
-  // eBay Developer Analytics API usage panel
-  const [apiUsageRows, setApiUsageRows] = useState<ApiUsageRow[] | null>(null);
-  const [apiUsageLoading, setApiUsageLoading] = useState(false);
-  const [apiUsageError, setApiUsageError] = useState('');
-  const [apiUsageCheckedAt, setApiUsageCheckedAt] = useState('');
-
 
   // Image refresh state
   const [imageRefreshing, setImageRefreshing] = useState(false);
@@ -1759,36 +1712,6 @@ export default function EbayAdminScreen() {
     );
   }, [tenant, listings, showAlert]);
 
-  // ── Check eBay API call limits ───────────────────────────────────────────────
-  const handleCheckApiUsage = useCallback(async () => {
-    if (!tenant || apiUsageLoading) return;
-    setApiUsageLoading(true);
-    setApiUsageError('');
-    try {
-      const supabase = getSupabaseClient();
-      const { data, error } = await supabase.functions.invoke('swish-ebay-list', {
-        body: { route: 'get_api_usage', tenantId: tenant.id },
-      });
-      if (error) {
-        let message = error.message;
-        if (error instanceof FunctionsHttpError) {
-          try { const body = await error.context?.text(); const parsed = body ? JSON.parse(body) : null; message = parsed?.error ?? body ?? message; } catch {}
-        }
-        throw new Error(message);
-      }
-      if (data?.success === false) throw new Error(data.error ?? 'eBay could not return API usage data.');
-      const rows = normalizeApiUsage(data?.data);
-      setApiUsageRows(rows);
-      setApiUsageCheckedAt(data?.checkedAt ?? new Date().toISOString());
-      if (!rows.length) setApiUsageError(data?.message ?? 'eBay responded, but the response contained no rate-limit rows. Try again shortly; this may be an eBay Analytics API response issue.');
-    } catch (e: any) {
-      setApiUsageError(e?.message ?? 'Could not retrieve eBay API usage.');
-      setApiUsageRows(null);
-    } finally {
-      setApiUsageLoading(false);
-    }
-  }, [tenant?.id, apiUsageLoading]);
-
   // ── Refresh all eBay images ─────────────────────────────────────────────────
 
   const handleRefreshImages = useCallback(async () => {
@@ -1943,67 +1866,6 @@ export default function EbayAdminScreen() {
           <MaterialIcons name="storefront" size={14} color="#E53238" />
           <Text style={[s.headerBtnText, { color: '#E53238' }]}>Hub</Text>
         </Pressable>
-      </View>
-
-      {/* eBay Developer Analytics API usage dashboard */}
-      <View style={s.apiUsageCard}>
-        <View style={s.apiUsageHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.apiUsageTitle}>eBay API Usage</Text>
-            <Text style={s.apiUsageSub}>Live call limits for SWISH's Production application</Text>
-          </View>
-          <Pressable
-            onPress={handleCheckApiUsage}
-            disabled={apiUsageLoading}
-            style={[s.apiUsageButton, apiUsageLoading && { opacity: 0.6 }]}
-          >
-            {apiUsageLoading
-              ? <ActivityIndicator size="small" color={Colors.primary} />
-              : <MaterialIcons name="query-stats" size={15} color={Colors.primary} />}
-            <Text style={s.apiUsageButtonText}>{apiUsageLoading ? 'Checking…' : 'Check usage'}</Text>
-          </Pressable>
-        </View>
-        {apiUsageError ? (
-          <View style={s.apiUsageErrorBox}>
-            <MaterialIcons name="info-outline" size={15} color={Colors.warning} />
-            <Text style={s.apiUsageErrorText}>{apiUsageError}</Text>
-          </View>
-        ) : null}
-        {apiUsageRows?.length ? (
-          <>
-            {apiUsageRows.map((row, index) => {
-              const used = row.used ?? (row.limit !== undefined && row.remaining !== undefined ? Math.max(0, row.limit - row.remaining) : undefined);
-              const pct = row.limit && used !== undefined ? Math.min(100, Math.max(0, (used / row.limit) * 100)) : 0;
-              return (
-                <View key={row.apiName + row.resourceName + index} style={s.apiUsageRow}>
-                  <View style={s.apiUsageRowTop}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.apiUsageResource}>{row.resourceName}</Text>
-                      <Text style={s.apiUsageApi}>{row.apiName}</Text>
-                    </View>
-                    <Text style={s.apiUsageNumbers}>
-                      {used !== undefined ? used.toLocaleString() : '—'} used
-                      {row.limit !== undefined ? ` / ${row.limit.toLocaleString()}` : ''}
-                    </Text>
-                  </View>
-                  {row.limit !== undefined && used !== undefined ? (
-                    <View style={s.apiUsageTrack}>
-                      <View style={[s.apiUsageFill, { width: `${pct}%` as any, backgroundColor: pct >= 95 ? Colors.danger : pct >= 80 ? Colors.warning : Colors.success }]} />
-                    </View>
-                  ) : null}
-                  <View style={s.apiUsageMeta}>
-                    <Text style={s.apiUsageMetaText}>{row.remaining !== undefined ? `${row.remaining.toLocaleString()} remaining` : 'Remaining calls not supplied'}</Text>
-                    {row.reset ? <Text style={s.apiUsageMetaText}>Reset: {String(row.reset)}</Text> : null}
-                    {row.timeWindow ? <Text style={s.apiUsageMetaText}>Window: {String(row.timeWindow)}</Text> : null}
-                  </View>
-                </View>
-              );
-            })}
-            {apiUsageCheckedAt ? <Text style={s.apiUsageTimestamp}>Checked {new Date(apiUsageCheckedAt).toLocaleString()}</Text> : null}
-          </>
-        ) : !apiUsageError ? (
-          <Text style={s.apiUsagePlaceholder}>Tap Check usage to retrieve live limits, calls used, remaining calls and reset times from eBay.</Text>
-        ) : null}
       </View>
 
       {/* ── Refresh Images Banner ──────────────────────────────────────────── */}
@@ -2325,38 +2187,6 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.warning + '50',
   },
   imageBannerRetryText: { fontSize: 10, fontWeight: Typography.weight.bold, color: Colors.warning },
-
-  apiUsageCard: {
-    marginHorizontal: Spacing.base, marginVertical: Spacing.sm,
-    padding: Spacing.md, borderRadius: Radius.lg,
-    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.surfaceBorder,
-    gap: Spacing.sm,
-  },
-  apiUsageHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  apiUsageTitle: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: Colors.textPrimary },
-  apiUsageSub: { fontSize: 10, color: Colors.textTertiary, marginTop: 2 },
-  apiUsageButton: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
-    borderRadius: Radius.md, paddingHorizontal: Spacing.sm, paddingVertical: 8,
-    borderWidth: 1, borderColor: Colors.primary + '60', backgroundColor: Colors.primaryDim,
-  },
-  apiUsageButtonText: { fontSize: 10, fontWeight: Typography.weight.bold, color: Colors.primary },
-  apiUsageErrorBox: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.xs,
-    padding: Spacing.sm, borderRadius: Radius.md, backgroundColor: Colors.warningDim,
-  },
-  apiUsageErrorText: { flex: 1, fontSize: 11, color: Colors.warning, lineHeight: 16 },
-  apiUsageRow: { paddingTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.surfaceBorder, gap: 5 },
-  apiUsageRowTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  apiUsageResource: { fontSize: 12, color: Colors.textPrimary, fontWeight: Typography.weight.semibold },
-  apiUsageApi: { fontSize: 10, color: Colors.textTertiary, marginTop: 2 },
-  apiUsageNumbers: { fontSize: 11, color: Colors.textSecondary, fontWeight: Typography.weight.bold },
-  apiUsageTrack: { height: 5, borderRadius: Radius.pill, backgroundColor: Colors.surfaceHighlight, overflow: 'hidden' },
-  apiUsageFill: { height: '100%', borderRadius: Radius.pill },
-  apiUsageMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  apiUsageMetaText: { fontSize: 9, color: Colors.textTertiary },
-  apiUsageTimestamp: { fontSize: 9, color: Colors.textTertiary, textAlign: 'right' },
-  apiUsagePlaceholder: { fontSize: 11, color: Colors.textTertiary, lineHeight: 16 },
 
   simpleDeliveryBanner: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,

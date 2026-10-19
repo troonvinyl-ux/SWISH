@@ -128,10 +128,7 @@ export default function ListingPreflightScreen() {
       }
 
       // ── Category — live leaf validation ─────────────────────────────────
-      const categoryId = row.category_id ?? attrs['ebay_category_id'] ?? attrs['_ebay_category_id'] ?? '';
-      const savedCategoryName = String(
-        row.category_name ?? attrs['ebay_category_name'] ?? attrs['_ebay_category_name'] ?? ''
-      ).trim();
+      const categoryId = row.category_id ?? attrs['ebay_category_id'] ?? '';
       if (!categoryId) {
         updateCheck('category', { status: 'fail', detail: 'No eBay category set. Tap "Pick Category" to choose a valid leaf category.' });
         allPass = false;
@@ -143,12 +140,7 @@ export default function ListingPreflightScreen() {
           let validationError: any = null;
           try {
             const primary = await supabase.functions.invoke('swish-ebay-category', {
-              body: {
-                route: 'validate_category',
-                tenantId: tenant.id,
-                categoryId: String(categoryId),
-                categoryName: savedCategoryName,
-              },
+              body: { route: 'validate_category', tenantId: tenant.id, categoryId: String(categoryId) },
             });
             validation = primary.data;
             validationError = primary.error;
@@ -159,16 +151,13 @@ export default function ListingPreflightScreen() {
           // The dedicated taxonomy function uses an application token. If that
           // token cannot verify a category, retry through the listing function,
           // which can use the connected seller token and the actual publish path.
-          // Also run seller-token resolution whenever a saved label exists. This catches old
-          // records where the ID still points to a valid leaf but the saved label belongs elsewhere.
-          if (validationError || validation?.valid == null || savedCategoryName) {
+          if (validationError || validation?.valid == null) {
             try {
               const fallback = await supabase.functions.invoke('swish-ebay-list', {
                 body: {
                   route: 'resolve_category',
                   tenantId: tenant.id,
                   categoryId: String(categoryId),
-                  categoryName: savedCategoryName,
                   title,
                   specialistId: item?.specialist_id ?? '',
                 },
@@ -193,25 +182,9 @@ export default function ListingPreflightScreen() {
                 }
               } else {
                 validationError = fallback.error ?? new Error(fallback.data?.error ?? 'Seller-token category validation unavailable');
-                // If an old saved label exists, a plain leaf-ID pass is not enough
-                // to prove the listing is in the intended category.
-                if (savedCategoryName) {
-                  validation = {
-                    valid: null,
-                    isLeaf: null,
-                    reason: 'The category ID could not be matched to its saved label against the live seller taxonomy. Retry with eBay connected or choose the category again.',
-                  };
-                }
               }
             } catch (e: any) {
               validationError = validationError ?? e;
-              if (savedCategoryName) {
-                validation = {
-                  valid: null,
-                  isLeaf: null,
-                  reason: 'The category ID could not be matched to its saved label against the live seller taxonomy. Retry with eBay connected or choose the category again.',
-                };
-              }
             }
           }
 
@@ -221,14 +194,11 @@ export default function ListingPreflightScreen() {
               detail: `${validation.categoryName ?? attrs['ebay_category_name'] ?? categoryId} (ID: ${categoryId}) ✓ Verified against current EBAY_GB Taxonomy`,
             });
           } else if (validation?.valid === false || validation?.isLeaf === false) {
-            // Preflight taxonomy checks can disagree with the connected seller's
-            // publish path. Treat this client-side result as advisory and let the
-            // server-side publish route perform the final authoritative validation.
-            // The edge function still blocks a category it cannot verify as a leaf.
             updateCheck('category', {
-              status: 'warn',
-              detail: `Preflight category warning: ${validation?.reason ?? `Category ID ${categoryId} was not verified as an EBAY_GB leaf.`} The publish service will perform its own final check; eBay submission will still stop if the category is invalid.`,
+              status: 'fail',
+              detail: validation?.reason ?? `Category ID ${categoryId} is not a verified EBAY_GB leaf. Tap "Pick Category" and choose a leaf category.`,
             });
+            allPass = false;
           } else {
             updateCheck('category', {
               status: 'warn',
@@ -323,7 +293,7 @@ export default function ListingPreflightScreen() {
         error = e;
       }
 
-      if (error || !data?.success || ['curated', 'curated_verified', 'db_cache'].includes(data?.source)) {
+      if (error || !data?.success || ['curated', 'curated_verified'].includes(data?.source)) {
         try {
           const fallback = await supabase.functions.invoke('swish-ebay-list', {
             body: { route: 'get_category_children', tenantId: tenant.id, parentId: parentId || '' },
@@ -394,7 +364,7 @@ export default function ListingPreflightScreen() {
           error = e;
         }
 
-        if (error || !data?.success || ['curated', 'curated_verified', 'db_cache_offline', 'curated_fallback', 'db_cache'].includes(data?.source)) {
+        if (error || !data?.success || ['curated', 'curated_verified', 'db_cache_offline', 'curated_fallback'].includes(data?.source)) {
           try {
             const fallback = await supabase.functions.invoke('swish-ebay-list', {
               body: { route: 'get_category_suggestions', tenantId: tenant.id, query },
@@ -455,16 +425,11 @@ export default function ListingPreflightScreen() {
     try {
       const supabase = getSupabaseClient();
       // Persist the selected category to the correct tenant's listing/item records.
-      const { data: savedListing, error: saveListingError } = await supabase.from('listings')
+      const { error: saveListingError } = await supabase.from('listings')
         .update({ category_id: catId, updated_at: new Date().toISOString() })
         .eq('id', listingId)
-        .eq('tenant_id', tenant.id)
-        .select('id, category_id')
-        .maybeSingle();
+        .eq('tenant_id', tenant.id);
       if (saveListingError) throw saveListingError;
-      if (!savedListing || String(savedListing.category_id ?? '') !== String(catId)) {
-        throw new Error('The selected eBay category did not persist to this SWISH listing. No submission was attempted.');
-      }
 
       const { data: lRow, error: lookupError } = await supabase.from('listings')
         .select('item_id, items(id, attributes)')
@@ -484,21 +449,6 @@ export default function ListingPreflightScreen() {
           .eq('id', itemId2)
           .eq('tenant_id', tenant.id);
         if (saveItemError) throw saveItemError;
-
-        // Read the chosen ID/name pair back so the submit path cannot proceed
-        // with a stale category left in the linked item record.
-        const { data: verifiedItem, error: verifyItemError } = await supabase
-          .from('items')
-          .select('attributes')
-          .eq('id', itemId2)
-          .eq('tenant_id', tenant.id)
-          .maybeSingle();
-        if (verifyItemError) throw verifyItemError;
-        const savedAttrs = verifiedItem?.attributes ?? {};
-        if (String(savedAttrs.ebay_category_id ?? '') !== String(catId) ||
-            String(savedAttrs.ebay_category_name ?? '') !== String(catName)) {
-          throw new Error('The selected eBay category did not persist to the linked SWISH item. No submission was attempted.');
-        }
       }
       setCategoryPickerOpen(false);
       // Re-run preflight to reflect the new category
@@ -532,7 +482,7 @@ export default function ListingPreflightScreen() {
     if (result.success) {
       showAlert(
         'Listed on eBay!',
-        `Your listing is now live on eBay UK.${result.externalListingId ? `\n\nListing ID: ${result.externalListingId}` : ''}${result.warnings?.length ? `\n\nSWISH advisories (listing was still submitted):\n• ${result.warnings.join('\n• ')}` : ''}`,
+        `Your listing is now live on eBay UK.${result.externalListingId ? `\n\nListing ID: ${result.externalListingId}` : ''}`,
         [{
           text: 'View Listing',
           onPress: () => {

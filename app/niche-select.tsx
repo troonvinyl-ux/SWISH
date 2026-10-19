@@ -138,8 +138,8 @@ export default function NicheSelectScreen() {
           <MaterialIcons name="arrow-back" size={20} color={Colors.textSecondary} />
         </Pressable>
         <View style={s.headerCenter}>
-          <Text style={s.headerTitle}>Choose Your Flipper</Text>
-          <Text style={s.headerSub}>One platform. Specialist tools for every flip.</Text>
+          <Text style={s.headerTitle}>SWISH Verticals</Text>
+          <Text style={s.headerSub}>Select your trading niche</Text>
         </View>
         {isMasterAdmin ? (
           <Pressable onPress={() => router.push('/master-admin' as any)} style={s.backBtn} accessibilityLabel="Open SWISH Master Admin">
@@ -152,7 +152,7 @@ export default function NicheSelectScreen() {
       <View style={s.infoBanner}>
         <MaterialIcons name="info-outline" size={14} color={Colors.primary} />
         <Text style={s.infoText}>
-          Choose a product to open its specialist workspace. Your account and shared platform stay the same.
+          ONE SWISH ENGINE — tap a niche to switch context. Enable multiple to manage different businesses from one account.
         </Text>
       </View>
 

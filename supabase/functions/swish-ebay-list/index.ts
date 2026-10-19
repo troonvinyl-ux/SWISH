@@ -1843,57 +1843,6 @@ async function handleRequest(req: Request): Promise<Response> {
     return jsonResponse({ success: true, externalListingId: savedExternalListingId });
   }
 
-  // ── Route: revise_sku ───────────────────────────────────────────────────────
-  // Deliberately sends only ItemID + SKU. In particular, do not include
-  // PictureDetails: a SKU-only edit must never replace the live photo gallery.
-  if (route === 'revise_sku') {
-    const { listingId, externalListingId, sku: rawSku, listingType = 'FixedPriceItem' } = body;
-    const sku = String(rawSku ?? '').trim();
-    if (!externalListingId) return jsonResponse({ error: 'externalListingId required for SKU revision' }, 400);
-    if (!sku) return jsonResponse({ error: 'A non-empty SKU is required' }, 400);
-    if (sku.length > 50) return jsonResponse({ error: 'SKU must be 50 characters or fewer' }, 400);
-
-    const creds = await getEbayCredentials(supabase, tenantId, true);
-    if ('error' in creds) return jsonResponse({ error: creds.error }, 400);
-
-    const requestName = listingType === 'Chinese' ? 'ReviseItemRequest' : 'ReviseFixedPriceItemRequest';
-    const operation = listingType === 'Chinese' ? 'ReviseItem' : 'ReviseFixedPriceItem';
-    const skuXml = `<?xml version="1.0" encoding="utf-8"?>
-<${requestName} xmlns="urn:ebay:apis:eBLBaseComponents">
-  <RequesterCredentials><eBayAuthToken>${creds.accessToken}</eBayAuthToken></RequesterCredentials>
-  <Item>
-    <ItemID>${xmlEscape(String(externalListingId))}</ItemID>
-    <SKU>${xmlEscape(sku)}</SKU>
-  </Item>
-</${requestName}>`;
-    const { xml: responseXml, ok } = await callEbayTradingApi(skuXml, operation, creds.clientId);
-    if (!ok) {
-      const errors = parseErrors(responseXml);
-      return jsonResponse({ success: false, error: friendlyError(errors, 'Failed to update eBay SKU'), errors }, 400);
-    }
-
-    if (listingId) {
-      try {
-        const { data: listingRow } = await supabase.from('listings')
-          .select('items(id)')
-          .eq('id', listingId)
-          .eq('tenant_id', tenantId)
-          .maybeSingle();
-        const relatedItems = (listingRow as any)?.items;
-        const itemId = (Array.isArray(relatedItems) ? relatedItems[0]?.id : relatedItems?.id) ?? body.itemId;
-        if (itemId) {
-          await supabase.from('items').update({
-            inventory_id: sku,
-            updated_at: new Date().toISOString(),
-          }).eq('id', itemId).eq('tenant_id', tenantId);
-        }
-      } catch (e: any) {
-        console.warn('[SWISH revise_sku] eBay SKU updated but local SKU sync failed:', e?.message ?? 'unknown error');
-      }
-    }
-    return jsonResponse({ success: true, externalListingId, sku, photosChanged: false });
-  }
-
   // ── Route: revise ─────────────────────────────────────────────────────────
   if (route === 'revise') {
     const {
@@ -2081,13 +2030,6 @@ async function handleRequest(req: Request): Promise<Response> {
   const attrs: Record<string, any> = item?.attributes ?? {};
   const specialistId: string = item?.specialist_id ?? '';
   const SPEC_BLOCKLIST = new Set([
-    // Supplier manifest provenance and commercial metadata are internal inventory
-    // fields, never buyer-facing item specifics.
-    'niche_id', 'specialist_id', 'source_type', 'manifest_name', 'manifest_row',
-    'manifest_sku', 'supplier_sku', 'supplier_category', 'supplier_subcategory',
-    'supplier_image_urls', 'matched_photo_url', 'quantity_received', 'quantity_available',
-    'ebay_quantity', 'supplier_unit_cost', 'unit_rrp', 'unit_weight_kg',
-    'target_sell_price', 'review_before_listing', 'asin', 'barcode', 'ean',
     'batch_id', 'capture_ref', 'object_type', 'has_alteration', 'has_hole', 'has_countermark',
     'alteration_notes', 'ebay_category_id', 'ebay_category_name',
     'numista_type_id', 'numista_status', 'numista_candidate_id', 'numista_n', 'numista_url',

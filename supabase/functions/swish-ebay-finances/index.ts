@@ -22,7 +22,7 @@ async function getToken(supabase: ReturnType<typeof adminClient>, tenantId: stri
   const shouldRefresh = creds.expiresAt ? Date.now() + 5 * 60_000 >= new Date(creds.expiresAt).getTime() : false;
   if (shouldRefresh && creds.refreshToken) {
     try {
-      const resp = await fetch(EBAY_TOKEN_URL, { method: 'POST', headers: { Authorization: `Basic ${btoa(`${creds.clientId}:${creds.clientSecret}`)}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: creds.refreshToken }).toString(), signal: AbortSignal.timeout(12000) });
+      const resp = await fetch(EBAY_TOKEN_URL, { method: 'POST', headers: { Authorization: `Basic ${btoa(`${creds.clientId}:${creds.clientSecret}`)}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: creds.refreshToken, scope: 'https://api.ebay.com/oauth/api_scope/sell.finances' }).toString(), signal: AbortSignal.timeout(12000) });
       const data = await resp.json();
       if (data.access_token) {
         creds = { ...creds, accessToken: data.access_token, expiresAt: new Date(Date.now() + (data.expires_in ?? 7200) * 1000).toISOString() };
@@ -115,10 +115,10 @@ Deno.serve(async (req: Request) => {
           // Update actual fees on orders with real eBay data
           if ((txType === 'FINAL_VALUE_FEE' || txType === 'FINAL_VALUE_FEE_FIXED_PER_ORDER') && swishOrderId && amount < 0) {
             const actualFee = Math.abs(amount);
-            const { data: ord } = await supabase.from('orders').select('sale_price, shipping_cost').eq('id', swishOrderId).eq('tenant_id', tenantId).maybeSingle();
+            const { data: ord } = await supabase.from('orders').select('sale_price, shipping_cost').eq('id', swishOrderId).maybeSingle();
             if (ord) {
               const netRev = Math.round((Number(ord.sale_price) - actualFee - Number(ord.shipping_cost)) * 100) / 100;
-              await supabase.from('orders').update({ marketplace_fee: actualFee, net_revenue: netRev, notes: 'fee_note:ACTUAL_EBAY', updated_at: new Date().toISOString() }).eq('id', swishOrderId).eq('tenant_id', tenantId);
+              await supabase.from('orders').update({ marketplace_fee: actualFee, net_revenue: netRev, notes: 'fee_note:ACTUAL_EBAY', updated_at: new Date().toISOString() }).eq('id', swishOrderId);
               if (ebayOrderId) await supabase.from('sales').update({ marketplace_fee: actualFee, net_revenue: netRev }).eq('tenant_id', tenantId).eq('external_order_id', ebayOrderId);
             }
           }

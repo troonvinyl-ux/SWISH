@@ -8,7 +8,6 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { Colors, Typography, Spacing, Radius } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { getSupabaseClient } from '@/template';
@@ -17,7 +16,7 @@ type OfferSnapshot = {
   offerId?: string; sku?: string; status?: string; marketplaceId?: string;
   categoryId?: string; format?: string; availableQuantity?: number | null;
 };
-type DraftOffer = { offerId: string; sku?: string; title?: string; imageUrl?: string; categoryId?: string; status?: string; format?: string; availableQuantity?: number | null; marketplaceId?: string };
+type DraftOffer = { offerId: string; sku?: string; categoryId?: string; status?: string; format?: string; availableQuantity?: number | null; marketplaceId?: string };
 type Result = {
   ok?: boolean; error?: string; message?: string; offer?: OfferSnapshot; offers?: DraftOffer[];
   before?: OfferSnapshot; after?: OfferSnapshot; changedFields?: string[];
@@ -52,11 +51,12 @@ export default function EbayDraftSyncTestScreen() {
       });
       if (listError) throw new Error(listError.message || 'Could not retrieve unpublished drafts from eBay UK.');
       const offers = Array.isArray(listData?.offers) ? listData.offers as DraftOffer[] : [];
+      setDraftOffers(offers);
       if (!offers.length) {
-        setDraftOffers([]);
         setResult({ ok: true, message: 'eBay UK returned no unpublished drafts to sync.' });
         return;
       }
+
       let imported = 0;
       let alreadyInSwish = 0;
       const failures: string[] = [];
@@ -72,21 +72,6 @@ export default function EbayDraftSyncTestScreen() {
           imported++;
         }
       }
-      const { data: syncedItems } = await supabase.from('items')
-        .select('sku,canonical_title,media')
-        .eq('tenant_id', tenant.id)
-        .in('sku', offers.map(offer => offer.sku).filter(Boolean));
-      const itemBySku = new Map((syncedItems ?? []).map((item: any) => [String(item.sku), item]));
-      const enrichedOffers = offers.map(offer => {
-        const item: any = itemBySku.get(String(offer.sku ?? ''));
-        const media = Array.isArray(item?.media) ? item.media : [];
-        return {
-          ...offer,
-          title: String(item?.canonical_title ?? offer.sku ?? 'eBay draft'),
-          imageUrl: media.find((url: unknown) => typeof url === 'string' && url.startsWith('https://')),
-        };
-      });
-      setDraftOffers(enrichedOffers);
       setResult({
         ok: failures.length === 0,
         message: `eBay UK draft sync finished. ${imported} imported, ${alreadyInSwish} already in SWISH, ${failures.length} failed. Tap a draft below to select it for the round-trip test.${failures.length ? '\\n' + failures.slice(0, 5).join('\\n') : ''}`,
@@ -115,24 +100,7 @@ export default function EbayDraftSyncTestScreen() {
       const { data, error } = await supabase.functions.invoke('swish-ebay-draft-sync-test', {
         body: { action, tenantId: tenant.id, ...(offerId.trim() ? { offerId: offerId.trim() } : {}) },
       });
-      if (error) {
-        let detail = error.message || 'Edge Function request failed.';
-        try {
-          const context = (error as any).context;
-          if (context && typeof context.clone === 'function') {
-            const responseText = await context.clone().text();
-            if (responseText) {
-              try {
-                const payload = JSON.parse(responseText);
-                detail = String(payload.error || payload.message || responseText);
-              } catch {
-                detail = responseText.slice(0, 500);
-              }
-            }
-          }
-        } catch {}
-        throw new Error(detail);
-      }
+      if (error) throw new Error(error.message || 'Could not load your eBay UK drafts. The Edge Function may not be deployed yet.');
       if (action === 'list_unpublished_offers') {
         const found = Array.isArray(data?.offers) ? data.offers as DraftOffer[] : [];
         setDraftOffers(found);
@@ -183,11 +151,11 @@ export default function EbayDraftSyncTestScreen() {
         {draftOffers.length ? (
           <View style={styles.draftList}>
             {draftOffers.map((offer) => (
-              <Pressable key={offer.offerId} disabled={busy} onPress={() => { setOfferId(offer.offerId); setResult({ ok: true, message: 'Draft selected. Use the round-trip button to test submission.', offer }); }} style={[styles.draftOption, offerId === offer.offerId && styles.draftOptionSelected]}>
-                {offer.imageUrl ? <Image source={{ uri: offer.imageUrl }} style={styles.draftPhoto} contentFit="cover" /> : <View style={styles.draftPhotoPlaceholder}><MaterialIcons name="toll" size={22} color={Colors.textTertiary} /></View>}
+              <Pressable key={offer.offerId} disabled={busy} onPress={() => { setOfferId(offer.offerId); setResult({ ok: true, message: 'Draft selected. You can now import it into SWISH.' , offer }); }} style={[styles.draftOption, offerId === offer.offerId && styles.draftOptionSelected]}>
                 <View style={{ flex: 1, gap: 3 }}>
-                  <Text style={styles.draftTitle}>{offer.title || offer.sku || 'eBay draft'}</Text>
-                  <Text style={styles.body}>Category {offer.categoryId || 'not set'} · {offer.status || 'UNPUBLISHED'}</Text>
+                  <Text style={styles.draftTitle}>{offer.sku || 'eBay draft'}</Text>
+                  <Text style={styles.body}>Category {offer.categoryId || 'not set'} · {offer.format || 'format unknown'} · {offer.status || 'UNPUBLISHED'}</Text>
+                  <Text style={styles.draftId}>Offer reference: {offer.offerId}</Text>
                 </View>
                 <MaterialIcons name={offerId === offer.offerId ? 'radio-button-checked' : 'radio-button-unchecked'} size={20} color={Colors.primary} />
               </Pressable>
@@ -300,8 +268,6 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: Typography.size.xs, color: Colors.textTertiary, marginTop: 2 },
   content: { padding: Spacing.base, gap: Spacing.md },
   draftList: { gap: Spacing.sm },
-  draftPhoto: { width: 54, height: 54, borderRadius: Radius.md, backgroundColor: Colors.surfaceHighlight },
-  draftPhotoPlaceholder: { width: 54, height: 54, borderRadius: Radius.md, backgroundColor: Colors.surfaceHighlight, alignItems: 'center', justifyContent: 'center' },
   draftOption: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md, backgroundColor: Colors.surface, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.surfaceBorder },
   draftOptionSelected: { borderColor: Colors.primary, backgroundColor: Colors.primaryDim },
   draftTitle: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: Colors.textPrimary },

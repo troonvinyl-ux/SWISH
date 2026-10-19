@@ -73,6 +73,7 @@ async function refreshToken(clientId: string, clientSecret: string, rToken: stri
     body: new URLSearchParams({
       grant_type: 'refresh_token',
       refresh_token: rToken,
+      scope: 'https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.fulfillment https://api.ebay.com/oauth/api_scope/sell.account',
     }).toString(),
   });
   const data = await resp.json();
@@ -258,7 +259,7 @@ function parseItemXml(itemXml: string, defaultStatus: 'active' | 'sold' | 'ended
       returnsPolicy: [returnsAccepted, returnsWithin, refundOption].filter(Boolean).join(', '),
       sku: extractTag(itemXml, 'SKU') || '',
       bestOfferEnabled: itemXml.includes('<BestOfferEnabled>true</BestOfferEnabled>'),
-      photos: photos.slice(0, 24),
+      photos: photos.slice(0, 12),
       galleryUrl,
       listedAt: extractTag(itemXml, 'StartTime') || null,
       endedAt: extractTag(itemXml, 'EndTime') || null,
@@ -397,7 +398,6 @@ function safeAttrs(raw: any): Record<string, string> {
 
 async function syncItemToSwish(
   supabase: ReturnType<typeof adminClient>,
-  tenantId: string,
   ebay: EbayItemData,
   existingItem: any,
 ): Promise<{ imageUrlsStored: number; titleFixed: boolean; updated: boolean; error?: string }> {
@@ -531,7 +531,6 @@ async function syncItemToSwish(
     await supabase
       .from('listings')
       .update(listingUpdate)
-      .eq('tenant_id', tenantId)
       .eq('item_id', existingItem.id)
       .eq('marketplace_id', 'ebay');
 
@@ -541,7 +540,7 @@ async function syncItemToSwish(
       if (v !== undefined && v !== null) cleanUpdates[k] = v;
     }
 
-    const { error: itemErr } = await supabase.from('items').update(cleanUpdates).eq('id', existingItem.id).eq('tenant_id', tenantId);
+    const { error: itemErr } = await supabase.from('items').update(cleanUpdates).eq('id', existingItem.id);
     if (itemErr) {
       console.log(`[EbaySync] Item update error ${existingItem.id}: ${itemErr.message}`);
       return { imageUrlsStored: 0, titleFixed: false, updated: false, error: itemErr.message };
@@ -727,7 +726,7 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      const result = await syncItemToSwish(supabase, tenantId, ebay, existingItem);
+      const result = await syncItemToSwish(supabase, ebay, existingItem);
       if (result.updated) {
         updated++;
         imagesFetched += result.imageUrlsStored;
@@ -753,9 +752,9 @@ Deno.serve(async (req: Request) => {
     if (l.external_listing_id && !ebayActiveIds.has(l.external_listing_id)) {
       const ebayItem = allEbayListings.find(e => e.ebayItemId === l.external_listing_id);
       const newStatus = ebayItem?.ebayStatus === 'sold' ? 'sold' : 'ended';
-      await supabase.from('listings').update({ status: newStatus, ended_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', l.id).eq('tenant_id', tenantId);
+      await supabase.from('listings').update({ status: newStatus, ended_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', l.id);
       if (l.item_id) {
-        await supabase.from('items').update({ status: newStatus === 'sold' ? 'sold' : 'identified', updated_at: new Date().toISOString() }).eq('id', l.item_id).eq('tenant_id', tenantId);
+        await supabase.from('items').update({ status: newStatus === 'sold' ? 'sold' : 'identified', updated_at: new Date().toISOString() }).eq('id', l.item_id);
         orphansFixed++;
       }
     }

@@ -8,11 +8,11 @@ import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 
 export function useSubscription() {
-  const { subscriptionStatus, subscriptionLoading, subscriptionTier, refreshSubscription, activeNicheId } = useApp();
+  const { subscriptionStatus, subscriptionLoading, subscriptionTier, refreshSubscription } = useApp();
   const router = useRouter();
 
   // isPremiumSubscriber now checks both tenant tier (lifetime) and Stripe subscription
-  const isPremium = isPremiumSubscriber(subscriptionStatus, subscriptionTier, activeNicheId);
+  const isPremium = isPremiumSubscriber(subscriptionStatus, subscriptionTier);
 
   /** Navigate to the subscription screen to show the upgrade CTA. */
   const promptUpgrade = useCallback(() => {

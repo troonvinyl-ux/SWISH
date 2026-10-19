@@ -224,7 +224,7 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
       <View style={ht.statsRow}>
         {[
           { label: 'Items in Stock', value: itemCount !== null ? String(itemCount) : '-', color: TF.white },
-          { label: 'Categories', value: String(CLOTHING_CATEGORIES.length), color: TF.pink }
+          { label: 'Categories', value: String(CLOTHING_CATEGORIES.length), color: TF.pink },
           { label: 'AI Powered', value: 'Yes', color: TF.success },
         ].map((s, i) => (
           <View key={s.label} style={[ht.stat, i > 0 && { borderLeftWidth: 1, borderLeftColor: TF.border }]}>

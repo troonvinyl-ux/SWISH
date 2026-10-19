@@ -92,10 +92,6 @@ function productForSpecialist(specialistId: string | null | undefined): string |
   if (id === 'motocross' || id === 'mx' || id === 'flipper_mx') return 'motocross';
   if (id === 'bicycles' || id === 'cycling' || id === 'bike_flipper') return 'bicycles';
   if (id === 'clothing' || id === 'trainers_sneakers' || id === 'trainers') return 'clothing';
-  // Surplus Flip uses a dedicated trader specialist, but it is a valid product
-  // boundary of its own. Both the item ID and the requested specialist must map
-  // to the same boundary so the generic eBay valuation pipeline can run safely.
-  if (['surplus_trader', 'surplus_flip', 'surplus'].includes(id) || id.startsWith('surplus_')) return 'surplus_flip';
   return null;
 }
 

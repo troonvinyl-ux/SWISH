@@ -68,9 +68,9 @@ export interface NicheConfig {
 export const NICHES: Record<NicheId, NicheConfig> = {
   coins: {
     id: 'coins',
-    name: 'Coin Flipper',
-    shortName: 'Coin Flipper',
-    tagline: 'Ancient coins · Real values · Smarter decisions',
+    name: 'SWISH Coins',
+    shortName: 'Coins',
+    tagline: 'Identify, value and flip coins & collectibles',
     description: 'The complete platform for coin dealers, collectors, and resellers. AI identification, Numista verification, eBay valuation, and full order management.',
     icon: 'toll',
     color: '#F5C842',
@@ -190,9 +190,9 @@ export const NICHES: Record<NicheId, NicheConfig> = {
 
   bicycles: {
     id: 'bicycles',
-    name: 'Bike Flipper',
-    shortName: 'Bike Flipper',
-    tagline: 'Buy smart · Build better · Sell strong',
+    name: 'SWISH Bikes',
+    shortName: 'Bikes',
+    tagline: 'Identify, value and flip bicycles',
     description: 'The complete platform for bike flippers and dealers. AI identification of road, mountain, gravel, hybrid, BMX, and e-bikes. eBay valuation and full lifecycle management.',
     icon: 'pedal-bike',
     color: '#22C55E',
@@ -232,13 +232,13 @@ export const NICHES: Record<NicheId, NicheConfig> = {
 
   motocross: {
     id: 'motocross',
-    name: 'Flipper MX',
-    shortName: 'Flipper MX',
-    tagline: 'Dirt bikes · Real data · Bigger profits',
+    name: 'SWISH MX',
+    shortName: 'MX',
+    tagline: 'Buy, prep and flip motocross & off-road bikes',
     description: 'The platform for motocross, enduro, trail, and supermoto bike dealers. AI identification of MX bikes, parts, and equipment. Evidence-based valuation, eBay listing, and profit tracking.',
     icon: 'two-wheeler',
-    color: '#FF5500',
-    accentColor: '#FF7733',
+    color: '#EF4444',
+    accentColor: '#DC2626',
     // NICHE-ISOLATION: motocross uses ONLY 'motocross' specialist.
     // curiosities_collectibles deliberately excluded — it is the generic catch-all
     // and its inclusion caused cross-niche contamination (coins/generic items
@@ -318,9 +318,9 @@ export const NICHES: Record<NicheId, NicheConfig> = {
 
   clothing: {
     id: 'clothing',
-    name: 'Threads Flip',
-    shortName: 'Threads Flip',
-    tagline: 'Identify · Value · Style · Sell',
+    name: 'SWISH Clothing',
+    shortName: 'Clothing',
+    tagline: 'Source, identify and flip vintage & designer clothing',
     description: 'The platform for clothing resellers and vintage dealers. AI identification of brands, eras, and authentication of designer items. eBay, Depop, and Vinted valuation.',
     icon: 'checkroom',
     color: '#EC4899',

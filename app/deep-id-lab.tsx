@@ -11,11 +11,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import * as ImageManipulator from 'expo-image-manipulator';
 import { Colors, Typography, Spacing, Radius } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import {
-  CapturedImage, AIIdentificationResult, KnownItemAttributes, pickFromLibrary, identifyItemWithAI,
+  CapturedImage, AIIdentificationResult, pickFromLibrary, identifyItemWithAI,
 } from '@/services/aiIdentificationService';
 import { getMarketValue, MarketValueResult } from '@/services/marketValueService';
 
@@ -82,7 +81,7 @@ export default function DeepIdLabScreen() {
     try {
       const measuredWeight = Number.parseFloat(weight);
       const measuredDiameter = Number.parseFloat(diameter);
-      const knownAttributes: KnownItemAttributes = {
+      const knownAttributes: Record<string, any> = {
         ...(Number.isFinite(measuredWeight) && measuredWeight > 0 ? { weight: measuredWeight } : {}),
         ...(Number.isFinite(measuredDiameter) && measuredDiameter > 0 ? { diameter: measuredDiameter } : {}),
         ...(metal.trim() ? { material: metal.trim() } : {}),
@@ -107,19 +106,6 @@ export default function DeepIdLabScreen() {
         ...(Number.isFinite(measuredWeight) && measuredWeight > 0 ? { measured_weight: measuredWeight } : {}),
         ...(Number.isFinite(measuredDiameter) && measuredDiameter > 0 ? { measured_diameter: measuredDiameter } : {}),
       };
-      // Pass a compressed in-memory face image to Gemini market research.
-      // This data URL is sent only to the existing Edge Function and is not saved.
-      let imageBase64: string | undefined;
-      try {
-        const compressed = await ImageManipulator.manipulateAsync(
-          images[0].uri,
-          [{ resize: { width: 1024 } }],
-          { compress: 0.55, format: ImageManipulator.SaveFormat.JPEG, base64: true },
-        );
-        if (compressed.base64) imageBase64 = `data:image/jpeg;base64,${compressed.base64}`;
-      } catch {
-        // Identification still succeeded; continue valuation without image if compression fails.
-      }
       const { result: valueResult, error: valueError } = await getMarketValue({
         tenantId: tenant.id,
         title: result.canonicalTitle,
@@ -131,7 +117,6 @@ export default function DeepIdLabScreen() {
         numistaTypeId: result.numistaVerification?.typeId ?? result.numistaTypeId ?? null,
         numistaMatchScore: result.numistaMatchScore ?? 0,
         numistaMatchTier: result.numistaMatchTier ?? 'no_match',
-        imageBase64,
         applyToItem: false,
       });
       if (valueResult) setValuation(valueResult);
