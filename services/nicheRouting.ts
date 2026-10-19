@@ -8,8 +8,8 @@ export type ProductEntryRoute =
   | '/entry/surplus-flip';
 
 /**
- * Resolve historical specialist/product aliases to one of the four production
- * products. Unknown and inactive niche IDs intentionally return null; callers
+ * Resolve historical specialist/product aliases to a registered production
+ * product. Unknown and inactive niche IDs intentionally return null; callers
  * must route to product selection instead of silently opening Coins.
  */
 export function resolveProductionNiche(
@@ -24,6 +24,8 @@ export function resolveProductionNiche(
     id === 'silver' || id === 'islamic_silver' || id === 'ancient_artefacts' ||
     id === 'curiosities_collectibles' || id.includes('coin') || id === 'numismatic'
   ) return 'coins';
+
+  if (id === 'surplus_flip' || id === 'surplus-flip' || id === 'catalog_flip' || id === 'catalog_surplus' || id === 'surplus_trader') return 'surplus_flip';
 
   if (id === 'motocross' || id === 'mx' || id === 'flipper_mx') return 'motocross';
   if (id === 'bicycles' || id === 'cycling' || id === 'bikes' || id === 'bike_flipper') return 'bicycles';
