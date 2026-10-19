@@ -37,51 +37,12 @@ serve(async (req) => {
     const user = userData.user;
     console.log(`[create-checkout] User: ${user.id} — ${user.email}`);
 
-    const schemeByNiche: Record<string, string> = {
-      coins: "coinflipper",
-      motocross: "flippermx",
-      bicycles: "bikeflipper",
-      clothing: "threadsflip",
-    };
-    const allowedNiches = new Set(Object.keys(schemeByNiche));
     let nicheId = "coins";
-    let requestedScheme: string | undefined;
     try {
       const body = await req.json();
-      if (body?.nicheId !== undefined) {
-        if (typeof body.nicheId !== "string") {
-          return new Response(JSON.stringify({ error: "Invalid nicheId." }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 400,
-          });
-        }
-        nicheId = body.nicheId.trim().toLowerCase();
-        if (!allowedNiches.has(nicheId)) {
-          return new Response(JSON.stringify({ error: "Unsupported nicheId. Choose coins, motocross, bicycles, or clothing." }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 400,
-          });
-        }
-      }
-      if (body?.appScheme !== undefined) {
-        if (typeof body.appScheme !== "string" || body.appScheme !== schemeByNiche[nicheId]) {
-          return new Response(JSON.stringify({ error: "The app scheme does not match the selected niche." }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 400,
-          });
-        }
-        requestedScheme = body.appScheme;
-      }
-    } catch (error) {
-      // Empty body retains the legacy Coins checkout default and return scheme.
-      if (error instanceof SyntaxError) {
-        nicheId = "coins";
-      } else {
-        throw error;
-      }
-    }
+      if (body?.nicheId) nicheId = body.nicheId;
+    } catch {}
 
-    const appScheme = requestedScheme ?? "onspaceapp";
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY not configured");
 
@@ -100,8 +61,8 @@ serve(async (req) => {
       customer_email: customerId ? undefined : user.email,
       line_items: [{ price: PRICE_ID, quantity: 1 }],
       mode: "subscription",
-      success_url: `${appScheme}://subscription/success`,
-      cancel_url: `${appScheme}://subscription/cancel`,
+      success_url: "onspaceapp://subscription/success",
+      cancel_url: "onspaceapp://subscription/cancel",
       metadata: { user_id: user.id, niche_id: nicheId },
       subscription_data: {
         metadata: { user_id: user.id, niche_id: nicheId },

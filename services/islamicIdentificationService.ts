@@ -8,8 +8,7 @@
 //   5. Analyses countermarks separately from host coins
 
 import { getSupabaseClient } from '@/template';
-import { FunctionsFetchError, FunctionsHttpError } from '@supabase/supabase-js';
-import { prepareImageForAI } from '@/services/aiIdentificationService';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -197,12 +196,9 @@ export async function identifyIslamicSilver(
   const supabase = getSupabaseClient();
 
   try {
-    const preparedImages = input.images?.length
-      ? await Promise.all(input.images.map(prepareImageForAI))
-      : undefined;
     const { data, error } = await supabase.functions.invoke('swish-islamic-identify', {
       body: {
-        images: preparedImages,
+        images: input.images,
         existingImageUrls: input.existingImageUrls,
         weight: input.weight,
         diameter: input.diameter,
@@ -215,13 +211,7 @@ export async function identifyIslamicSilver(
 
     if (error) {
       let errorMessage = error.message;
-      if (error instanceof FunctionsFetchError) {
-        const transportDetail = error.context instanceof Error ? error.context.message : String(error.context ?? '');
-        console.error('[SWISH swish-islamic-identify transport failure]', transportDetail || error.message);
-        errorMessage = transportDetail
-          ? `Could not reach the swish-islamic-identify Edge Function: ${transportDetail}. Check the connection and function availability, then retry.`
-          : 'Could not reach the swish-islamic-identify Edge Function. Check the connection and function availability, then retry.';
-      } else if (error instanceof FunctionsHttpError) {
+      if (error instanceof FunctionsHttpError) {
         try {
           const statusCode = error.context?.status ?? 500;
           const textContent = await error.context?.text();
