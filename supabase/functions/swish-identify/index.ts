@@ -719,64 +719,129 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
     };
   }
 
-  const searchParts: string[] = [];
-  if (denomination && denomination.length > 1) searchParts.push(denomination);
-  if (issuer && issuer.length > 2) searchParts.push(issuer);
+  // Multi-query discovery uses the primary guess AND model alternatives.
+  // A wrong first-pass issuer/denomination must not hide the correct catalogue type.
+  const cleanQuery = (value: unknown): string => String(value ?? '')
+    .replace(/^(possible|likely|probable|provisional|candidate|circa|c\.|ca\.)\s+/gi, '')
+    .replace(/[()[\]{}"'\x60;:|]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
+  const querySet = new Set<string>();
+  const addQuery = (...parts: unknown[]) => {
+    const q = cleanQuery(parts.filter(Boolean).join(' '));
+    if (q.length >= 3) querySet.add(q);
+  };
   const yearMatch = year.match(/\d{2,4}/);
-  if (yearMatch && !isAncient) searchParts.push(yearMatch[0]);
+  const candidatePool = [primaryCandidate, ...aiCandidates.slice(1, 5)];
+  for (const cand of candidatePool) {
+    addQuery(cand.denomination ?? denomination, cand.issuer ?? cand.ruler ?? issuer, cand.period ?? year);
+    addQuery(cand.title ?? cand.name);
+    addQuery(cand.denomination ?? denomination, cand.dynasty ?? cand.family ?? period);
+    addQuery(cand.obverseDescription, cand.reverseDescription);
+  }
+  addQuery(denomination, issuer, !isAncient ? yearMatch?.[0] : '');
+  addQuery(denomination, period);
+  addQuery(issuer, period);
+  // Broad queries preserve recall when the first visual guess is wrong.
+  addQuery('ancient coin', primaryCandidate.denomination ?? denomination);
+  addQuery('medieval coin', primaryCandidate.denomination ?? denomination);
+  addQuery('coin', primaryCandidate.obverseDescription, primaryCandidate.reverseDescription);
 
-  if (searchParts.length === 0 && primaryCandidate.obverseDescription) {
-    const keywords = primaryCandidate.obverseDescription.split(/\s+/).filter((w: string) => w.length > 4 && !/not|established|legible|visible|unknown/i.test(w)).slice(0, 3);
-    searchParts.push(...keywords);
+  const queriesToTry = [...querySet].slice(0, 6);
+  if (queriesToTry.length === 0) {
+    return { status: 'no_match', matchScore: 0, matchTier: 'rejected', matchFactors: ['Insufficient visible or confirmed evidence for Numista search'], contradictions: [], physicalMatchGood: false, references: [] };
   }
 
-  const searchQuery = searchParts.join(' ').slice(0, 80);
-  if (searchQuery.length < 3) {
-    return { status: 'no_match', matchScore: 0, matchTier: 'rejected', matchFactors: ['Insufficient confirmed evidence for Numista search'], contradictions: [], physicalMatchGood: false, references: [] };
-  }
-
-  const queriesToTry: string[] = [searchQuery];
-  const titleForSearch = aiIdentification.canonicalTitle ?? '';
-  if (titleForSearch && titleForSearch.length > 5) {
-    const cleanTitle = titleForSearch.replace(/^(possible|likely|probable|provisional|candidate|circa|c\.|ca\.)\s+/gi, '').replace(/—.*$/g, '').trim().slice(0, 60);
-    if (cleanTitle !== searchQuery && cleanTitle.length > 3) queriesToTry.push(cleanTitle);
-  }
-
-  let allCandidates: any[] = [];
-  for (const q of queriesToTry.slice(0, 2)) {
+  const candidateMap = new Map<number, any>();
+  for (const q of queriesToTry) {
     try {
-      const resp = await fetch(`${NUMISTA_API}/types?q=${encodeURIComponent(q)}&lang=en&count=8`, { headers: { 'Numista-API-Key': apiKey }, signal: AbortSignal.timeout(8000) });
+      const resp = await fetch(`${NUMISTA_API}/types?q=${encodeURIComponent(q)}&lang=en&count=20`, { headers: { 'Numista-API-Key': apiKey }, signal: AbortSignal.timeout(8000) });
       if (!resp.ok) {
         if (resp.status === 401 || resp.status === 403) return { ...noApiKey, matchFactors: [`Numista API authentication failed (${resp.status})`] };
         continue;
       }
       const data = await resp.json();
-      for (const t of data.types ?? []) { if (!allCandidates.find(c => c.id === t.id)) allCandidates.push(t); }
-      if (allCandidates.length >= 8) break;
-    } catch (e: any) {
-      return { status: 'unavailable', matchScore: 0, matchTier: 'rejected', matchFactors: [`Numista API error: ${e.message}`], contradictions: [], physicalMatchGood: false, references: [] };
+      for (const t of data.types ?? []) {
+        if (t?.id != null && !candidateMap.has(Number(t.id))) candidateMap.set(Number(t.id), t);
+      }
+      if (candidateMap.size >= 80) break;
+    } catch {
+      // One failed query must not discard successful results from other query variants.
+      continue;
     }
   }
 
-  if (allCandidates.length === 0) return { status: 'no_match', matchScore: 0, matchTier: 'rejected', matchFactors: [`No Numista candidates for: "${searchQuery}"`], contradictions: [], physicalMatchGood: false, references: [] };
+  const searchQuery = queriesToTry.join(' | ');
+  if (candidateMap.size === 0) return { status: 'no_match', matchScore: 0, matchTier: 'rejected', matchFactors: [`No Numista candidates for queries: "${searchQuery}"`], contradictions: [], physicalMatchGood: false, references: [] };
 
-  let bestScore = -100, bestCandidate: any = null, bestFactors: string[] = [], bestContradictions: string[] = [];
-  for (const cand of allCandidates.slice(0, 8)) {
-    const { score, factors, contradictions } = scoreNumistaCandidate(cand, null, suppliedWeight, suppliedDiameter, suppliedMaterial, denomination, issuer, year, period, mint, aiCandidates);
-    if (score > bestScore) { bestScore = score; bestCandidate = cand; bestFactors = factors; bestContradictions = contradictions; }
+  // Score all lightweight search results, then fetch detailed specs for finalists.
+  const prelim = [...candidateMap.values()]
+    .map((candidate: any) => {
+      const ranked = scoreNumistaCandidate(candidate, null, suppliedWeight, suppliedDiameter, suppliedMaterial,
+        denomination, issuer, year, period, mint, aiCandidates);
+      const titleWords = (value: unknown) => cleanQuery(value).toLowerCase().split(/\s+/)
+        .filter(word => word.length > 3 && !['coin', 'type', 'silver', 'copper', 'bronze', 'ancient', 'medieval'].includes(word));
+      const candidateWords = new Set(titleWords(candidate.title));
+      const aiText = [
+        aiIdentification.canonicalTitle,
+        ...candidatePool.map((c: any) => [c.title, c.name, c.obverseDescription, c.reverseDescription, c.legendFragment, c.denomination, c.issuer, c.ruler].filter(Boolean).join(' ')),
+      ].join(' ').toLowerCase();
+      const sharedTerms = [...candidateWords].filter(word => aiText.includes(word));
+      if (sharedTerms.length) {
+        ranked.score += Math.min(18, sharedTerms.length * 4);
+        ranked.factors.push(`Candidate/visual description overlap: ${sharedTerms.slice(0, 4).join(', ')}`);
+      }
+      return { candidate, ...ranked };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const detailed = await Promise.all(prelim.slice(0, 12).map(async item => ({
+    ...item,
+    detail: await fetchNumistaTypeDetail(Number(item.candidate.id), apiKey),
+  })));
+
+  let bestScore = -100, bestCandidate: any = null, bestFactors: string[] = [], bestContradictions: string[] = [], typeDetail: any = null;
+  for (const item of detailed) {
+    const detail = item.detail ?? null;
+    const scored = scoreNumistaCandidate(item.candidate, detail, suppliedWeight, suppliedDiameter, suppliedMaterial,
+      denomination, issuer, year, period, mint, aiCandidates);
+    const candText = cleanQuery([
+      detail?.title ?? item.candidate.title,
+      detail?.obverse?.description, detail?.obverse?.lettering,
+      detail?.reverse?.description, detail?.reverse?.lettering,
+      detail?.issuer?.name ?? detail?.issuer,
+      detail?.min_unit?.name ?? detail?.denomination_name,
+    ].filter(Boolean).join(' ')).toLowerCase();
+    const aiEvidenceText = cleanQuery([
+      aiIdentification.canonicalTitle,
+      ...candidatePool.flatMap((c: any) => [
+        c.title, c.name, c.obverseDescription, c.reverseDescription,
+        c.legendFragment, c.obverseLegend, c.reverseLegend, c.denomination, c.issuer, c.ruler,
+      ]),
+      knownAttributes?.edgeLegend,
+    ].filter(Boolean).join(' ')).toLowerCase();
+    const evidenceTerms = [...new Set(aiEvidenceText.split(/\s+/).filter((w: string) => w.length >= 4))];
+    const overlaps = evidenceTerms.filter((w: string) => candText.includes(w) && !['coin', 'type', 'silver', 'copper', 'bronze', 'possible', 'unknown', 'legend'].includes(w));
+    if (overlaps.length) {
+      const bonus = Math.min(16, overlaps.length * 2);
+      scored.score += bonus;
+      scored.factors.push(`Catalogue text overlap: ${overlaps.slice(0, 6).join(', ')} (+${bonus})`);
+    }
+    const contradictions = [...scored.contradictions];
+    let score = scored.score;
+    // Major physical contradictions cap the candidate below strong-match territory.
+    if (contradictions.some(c => /MAJOR CONTRADICTION|DIAMETER CONTRADICTION/i.test(c))) score = Math.min(score, 49);
+    if (score > bestScore) {
+      bestScore = score;
+      bestCandidate = item.candidate;
+      typeDetail = detail;
+      bestFactors = scored.factors;
+      bestContradictions = contradictions;
+    }
   }
-
   if (bestScore < 30 || !bestCandidate) return { status: 'no_match', matchScore: Math.max(0, bestScore), matchTier: 'rejected', matchFactors: bestFactors, contradictions: bestContradictions.length > 0 ? bestContradictions : ['No candidate scored above threshold'], physicalMatchGood: false, references: [] };
-
-  let typeDetail: any = null;
-  if (bestScore >= 50) {
-    typeDetail = await fetchNumistaTypeDetail(bestCandidate.id, apiKey);
-    if (typeDetail) {
-      const { score, factors, contradictions } = scoreNumistaCandidate(bestCandidate, typeDetail, suppliedWeight, suppliedDiameter, suppliedMaterial, denomination, issuer, year, period, mint, aiCandidates);
-      bestScore = score; bestFactors = factors; bestContradictions = contradictions;
-    }
-  }
-
+  bestScore = Math.max(-50, Math.min(100, bestScore));
   const finalMatchTier = scoreToMatchTier(bestScore);
   const finalStatus = matchTierToStatus(finalMatchTier);
   const physicalMatchGood = !bestContradictions.some(c => c.includes('MAJOR') || c.includes('CONTRADICTION'));
