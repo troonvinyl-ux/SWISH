@@ -4,7 +4,8 @@ export type ProductEntryRoute =
   | '/entry/coins'
   | '/entry/motocross'
   | '/entry/bicycles'
-  | '/entry/clothing';
+  | '/entry/clothing'
+  | '/entry/surplus-flip';
 
 /**
  * Resolve historical specialist/product aliases to one of the four production
@@ -43,6 +44,7 @@ export function nicheToEntryRoute(nicheId: string | null | undefined): ProductEn
     case 'motocross': return '/entry/motocross';
     case 'bicycles': return '/entry/bicycles';
     case 'clothing': return '/entry/clothing';
+    case 'surplus_flip': return '/entry/surplus-flip';
   }
   return null;
 }
