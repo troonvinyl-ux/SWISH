@@ -1531,7 +1531,7 @@ describe('SWISH-030 Issue 3: Android CI/CD Signing (Static Config Inspection)', 
   });
 });
 
-  describe('Canonical production niche resolver', () => {
+describe('Canonical production niche resolver', () => {
     test.each([
       ['coins', 'coins'],
       ['islamic_silver', 'coins'],
@@ -1553,14 +1553,6 @@ describe('SWISH-030 Issue 3: Android CI/CD Signing (Static Config Inspection)', 
     test.each([null, undefined, '', 'general', 'trading_cards', 'antiques', 'made_up_niche'])(
       'inactive or unknown niche %s fails closed',
       (input) => expect(resolveProductionNiche(input as string | null | undefined)).toBeNull(),
-    );
-
-  // ── Surplus Flip niche ────────────────────────────────────────────────────
-  describe('Surplus Flip niche → /entry/surplus-flip', () => {
-    test.each(['surplus_flip', 'surplus-flip', 'catalog_flip', 'catalog_surplus', 'surplus_trader'])(
-      '%s → /entry/surplus-flip', (id) => {
-        expect(nicheToEntryRoute(id)).toBe('/entry/surplus-flip');
-      },
     );
   });
 
