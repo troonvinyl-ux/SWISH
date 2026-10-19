@@ -334,7 +334,8 @@ export default function SurplusFlipScreen() {
         quantity: row.quantity,
         sku: row.supplierSku || undefined,
         manufacturer: undefined,
-        // Only use the copied permanent image URL; supplier/CDN URLs may expire.\n        media: permanentPhotoUrl ? [permanentPhotoUrl] : [],
+        // Only use the copied permanent image URL; supplier/CDN URLs may expire.
+        media: permanentPhotoUrl ? [permanentPhotoUrl] : [],
         attributes: {
           niche_id: 'surplus_flip',
           specialist_id: 'surplus_trader',
