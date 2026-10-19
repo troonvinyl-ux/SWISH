@@ -2081,6 +2081,13 @@ async function handleRequest(req: Request): Promise<Response> {
   const attrs: Record<string, any> = item?.attributes ?? {};
   const specialistId: string = item?.specialist_id ?? '';
   const SPEC_BLOCKLIST = new Set([
+    // Supplier manifest provenance and commercial metadata are internal inventory
+    // fields, never buyer-facing item specifics.
+    'niche_id', 'specialist_id', 'source_type', 'manifest_name', 'manifest_row',
+    'manifest_sku', 'supplier_sku', 'supplier_category', 'supplier_subcategory',
+    'supplier_image_urls', 'matched_photo_url', 'quantity_received', 'quantity_available',
+    'ebay_quantity', 'supplier_unit_cost', 'unit_rrp', 'unit_weight_kg',
+    'target_sell_price', 'review_before_listing', 'asin', 'barcode', 'ean',
     'batch_id', 'capture_ref', 'object_type', 'has_alteration', 'has_hole', 'has_countermark',
     'alteration_notes', 'ebay_category_id', 'ebay_category_name',
     'numista_type_id', 'numista_status', 'numista_candidate_id', 'numista_n', 'numista_url',
