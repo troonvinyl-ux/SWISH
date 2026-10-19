@@ -867,21 +867,9 @@ export default function EbayImportScreen() {
             setImporting(false);
             setImportProgress(null);
 
-            // Auto-trigger image import for newly imported items
-            // BUG C/D FIX: Pass the specific item IDs so swish-image-download
-            // calls GetItem for EACH item and downloads ALL PictureURL elements.
-            // This avoids running the full inventory through the downloader.
-            if (imported > 0) {
-              setImageImporting(true);
-              setImageProgress({ current: 0, total: 0, updated: 0, failed: 0, done: false });
-              fetchAndUpdateEbayImages(
-                tenant.id,
-                p => setImageProgress(p),
-                importedItemIds.length > 0 ? importedItemIds : undefined,
-              )
-                .catch(() => {})
-                .finally(() => setImageImporting(false));
-            }
+            // Image downloads are deliberately manual to avoid unexpected eBay API
+            // calls after every import. Use the explicit Import eBay Images action
+            // when you want to fetch missing images for these items.
 
             if (errors.length === 0) {
               showAlert(
@@ -913,7 +901,10 @@ export default function EbayImportScreen() {
 
       {/* Header */}
       <View style={[s.header, { paddingTop: insets.top + Spacing.base }]}>
-        <Pressable onPress={() => router.back()} style={s.backBtn} hitSlop={8}>
+        <Pressable onPress={() => {
+          if (router.canGoBack()) router.back();
+          else router.replace('/(tabs)/listings' as any);
+        }} style={s.backBtn} hitSlop={8}>
           <MaterialIcons name="arrow-back" size={20} color={Colors.textSecondary} />
         </Pressable>
         <View style={s.flex}>
