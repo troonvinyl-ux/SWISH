@@ -177,7 +177,7 @@ export default function SurplusFlipScreen() {
   const loadCsv = useCallback(async () => {
     try {
       const picked = await DocumentPicker.getDocumentAsync({
-        type: ['text/csv', 'text/comma-separated-values', 'text/plain', '*/*'],
+        type: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel', 'text/csv', 'text/comma-separated-values', 'text/plain', '*/*'],
         copyToCacheDirectory: true,
       });
       if (picked.canceled || !picked.assets?.[0]) return;
@@ -411,14 +411,14 @@ export default function SurplusFlipScreen() {
           <MaterialIcons name="inventory-2" size={26} color={Colors.primary} />
           <View style={{ flex: 1 }}>
             <Text style={s.heroTitle}>Import a job-lot manifest</Text>
-            <Text style={s.heroText}>Load the supplier CSV, confirm each item and its unit count, then take a photo to tie the real product to the manifest row. Imported stock stays as a draft until you review it.</Text>
+            <Text style={s.heroText}>Load a supplier XLSX or CSV manifest. Supplier image links are used when available; you can add a photo for rows without one. Review each item and its unit count before importing stock as an eBay draft.</Text>
           </View>
         </View>
 
         <Pressable onPress={loadCsv} disabled={busy} style={s.uploadBtn}>
           <MaterialIcons name="upload-file" size={20} color={Colors.background} />
           <View style={{ flex: 1 }}>
-            <Text style={s.uploadTitle}>{manifestName || 'Choose manifest CSV'}</Text>
+            <Text style={s.uploadTitle}>{manifestName || 'Choose manifest XLSX or CSV'}</Text>
             <Text style={s.uploadSub}>XLSX / CSV • supplier photos • SKU • quantity • cost</Text>
           </View>
           <MaterialIcons name="chevron-right" size={20} color={Colors.background} />
