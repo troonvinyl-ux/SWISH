@@ -1186,7 +1186,7 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
           <MaterialIcons name="workspace-premium" size={13} color={TF.black} />
           <Text style={main.upgradeBarText}>Upgrade to Threads Flip Pro</Text>
           <Pressable onPress={() => setShowPaywall(true)} style={main.upgradeBarBtn}>
-            <Text style={main.upgradeBarBtnText}>9.99/mo</Text>
+            <Text style={main.upgradeBarBtnText}>£9.99/mo</Text>
           </Pressable>
         </View>
       ) : <View style={{ height: insets.bottom }} />}
