@@ -266,134 +266,152 @@ export default function SurplusFlipScreen() {
       const a = item.attributes ?? {};
       return [a.manifest_name ?? '', a.manifest_row ?? '', a.supplier_sku ?? '', a.barcode ?? ''].join('|');
     }));
-    for (let i = 0; i < chosen.length; i++) {
-      const row = chosen[i];
-      const key = [manifestName, row.sourceRow, row.supplierSku, row.barcode].join('|');
-      if (existingKeys.has(key)) {
-        errors.push(row.title + ': already imported from this manifest row, skipped to prevent a duplicate.');
-        setProgress({ done: i + 1, total: chosen.length });
-        continue;
-      }
-      let permanentPhotoUrl = '';
+    // Run a small worker pool instead of waiting for all 633 rows one by one.
+    // Each row still uploads its own permanent image, saves stock, then creates a draft.
+    let nextIndex = 0;
+    let completed = 0;
+    const processRow = async (row: ManifestRow, i: number) => {
       try {
-        let imageBytes: ArrayBuffer;
-        let contentType = 'image/jpeg';
-        let extension = 'jpg';
-        if (/^https?:\/\//i.test(row.photoUri ?? '')) {
-          // Supplier/eBay CDN URLs are temporary sources, not permanent listing media.
-          // Download the selected image and copy it into SWISH's existing item-images bucket.
-          const response = await fetch(row.photoUri as string);
-          if (!response.ok) throw new Error('Supplier image download returned HTTP ' + response.status);
-          contentType = (response.headers.get('content-type') ?? 'image/jpeg').split(';')[0].trim().toLowerCase();
-          if (!contentType.startsWith('image/')) throw new Error('Supplier URL did not return an image');
-          extension = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : contentType.includes('gif') ? 'gif' : 'jpg';
-          imageBytes = await response.arrayBuffer();
-          if (!imageBytes.byteLength) throw new Error('Downloaded supplier image was empty');
-        } else {
-          const base64 = await FileSystem.readAsStringAsync(row.photoUri as string, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-          const uriPath = (row.photoUri ?? '').toLowerCase().split('?')[0];
-          extension = uriPath.endsWith('.png') ? 'png' : uriPath.endsWith('.webp') ? 'webp' : 'jpg';
-          contentType = extension === 'png' ? 'image/png' : extension === 'webp' ? 'image/webp' : 'image/jpeg';
-          imageBytes = decodeBase64(base64);
+        const row = chosen[i];
+        const key = [manifestName, row.sourceRow, row.supplierSku, row.barcode].join('|');
+        if (existingKeys.has(key)) {
+          errors.push(row.title + ': already imported from this manifest row, skipped to prevent a duplicate.');
+          return;
         }
-        const filePath = tenant.id + '/surplus/' + Date.now() + '-' + i + '.' + extension;
-        const { error: uploadError } = await supabase.storage
-          .from('item-images')
-          .upload(filePath, imageBytes, { contentType, upsert: false });
-        if (uploadError) throw uploadError;
-        const { data: publicData } = supabase.storage.from('item-images').getPublicUrl(filePath);
-        permanentPhotoUrl = publicData.publicUrl;
-        if (!permanentPhotoUrl || !(permanentPhotoUrl.includes('supabase') || permanentPhotoUrl.includes('onspace'))) {
-          throw new Error('Storage did not return a persistent image URL');
-        }
-      } catch (photoError: any) {
-        errors.push(row.title + ': photo upload failed — ' + (photoError?.message ?? 'unknown error'));
-        setProgress({ done: i + 1, total: chosen.length });
-        continue;
-      }
-      const result = await createItem(tenant.id, {
-        canonicalTitle: row.title,
-        description: row.description,
-        specialistId: 'surplus_trader',
-        status: 'identified',
-        condition: row.condition,
-        conditionNotes: 'Imported from manifest: ' + manifestName + ' (row ' + row.sourceRow + '). Verify actual condition before listing.',
-        identificationConfidence: 1,
-        identificationSource: 'user_confirmed',
-        valuationLow: row.targetPrice,
-        valuationMid: row.targetPrice,
-        valuationHigh: row.targetPrice,
-        valuationConfidence: row.targetPrice > 0 ? 'medium' : 'unknown',
-        expectedSellingPrice: row.targetPrice,
-        expectedNet: Math.max(0, row.targetPrice * 0.8725),
-        expectedProfit: row.targetPrice > 0 ? row.targetPrice * 0.8725 - row.unitCost : 0,
-        saleProb30d: 0.5,
-        acquiredCost: row.unitCost * row.quantity,
-        quantity: row.quantity,
-        sku: row.supplierSku || undefined,
-        manufacturer: undefined,
-        // Only use the copied permanent image URL; supplier/CDN URLs may expire.
-        media: permanentPhotoUrl ? [permanentPhotoUrl] : [],
-        attributes: {
-          niche_id: 'surplus_flip',
-          specialist_id: 'surplus_trader',
-          source_type: 'supplier_manifest',
-          manifest_name: manifestName,
-          manifest_row: row.sourceRow,
-          supplier_sku: row.supplierSku,
-          manifest_sku: row.manifestSku,
-          asin: row.asin,
-          barcode: row.barcode,
-          ean: row.barcode,
-          brand: row.brand,
-          supplier_category: row.category,
-          supplier_subcategory: row.subcategory,
-          unit_weight_kg: row.unitWeight,
-          unit_rrp: row.unitRrp,
-          supplier_image_urls: row.imageUrls,
-          quantity_received: row.quantity,
-          quantity_available: row.quantity,
-          supplier_unit_cost: row.unitCost,
-          target_sell_price: row.targetPrice,
-          matched_photo_url: permanentPhotoUrl,
-          review_before_listing: true,
-          ebay_quantity: row.quantity,
-        },
-        tags: ['surplus_flip', 'supplier_manifest'],
-        warnings: ['Manifest data is supplier-provided. Verify exact product match, condition, stock count, restrictions, price, and postage before publishing.'],
-      });
-      if (result.error || !result.item) errors.push(row.title + ': ' + (result.error ?? 'unknown error'));
-      else {
-        imported++;
-        existingKeys.add(key);
-        updateRow(row.id, { imported: true, selected: false, photoUri: permanentPhotoUrl });
-
-        // Create a normal SWISH eBay draft using the existing listing pipeline.
-        // Publishing remains a deliberate user action after checking price,
-        // category, condition, photos and Simple Delivery settings.
-        const generated = await generateListing(result.item.id, tenant.id, 'ebay');
-        if (generated.listing) {
-          const draft = await saveListing(tenant.id, result.item.id, generated.listing, 'ebay');
-          if (draft.error || !draft.listing) {
-            errors.push(row.title + ': stock saved, but eBay draft creation failed — ' + (draft.error ?? 'unknown error'));
-          } else if (row.targetPrice > 0) {
-            // A manifest-provided selling price is explicit; RRP is never
-            // silently substituted for the selling price.
-            const supabase = getSupabaseClient();
-            const { error: priceError } = await supabase.from('listings')
-              .update({ price: row.targetPrice, updated_at: new Date().toISOString() })
-              .eq('id', draft.listing.id)
-              .eq('tenant_id', tenant.id);
-            if (priceError) errors.push(row.title + ': draft created, but supplied listing price could not be applied — ' + priceError.message);
+        let permanentPhotoUrl = '';
+        try {
+          let imageBytes: ArrayBuffer;
+          let contentType = 'image/jpeg';
+          let extension = 'jpg';
+          if (/^https?:\/\//i.test(row.photoUri ?? '')) {
+            // Supplier/eBay CDN URLs are temporary sources, not permanent listing media.
+            // Download the selected image and copy it into SWISH's existing item-images bucket.
+            const response = await fetch(row.photoUri as string);
+            if (!response.ok) throw new Error('Supplier image download returned HTTP ' + response.status);
+            contentType = (response.headers.get('content-type') ?? 'image/jpeg').split(';')[0].trim().toLowerCase();
+            if (!contentType.startsWith('image/')) throw new Error('Supplier URL did not return an image');
+            extension = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : contentType.includes('gif') ? 'gif' : 'jpg';
+            imageBytes = await response.arrayBuffer();
+            if (!imageBytes.byteLength) throw new Error('Downloaded supplier image was empty');
+          } else {
+            const base64 = await FileSystem.readAsStringAsync(row.photoUri as string, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+            const uriPath = (row.photoUri ?? '').toLowerCase().split('?')[0];
+            extension = uriPath.endsWith('.png') ? 'png' : uriPath.endsWith('.webp') ? 'webp' : 'jpg';
+            contentType = extension === 'png' ? 'image/png' : extension === 'webp' ? 'image/webp' : 'image/jpeg';
+            imageBytes = decodeBase64(base64);
           }
-        } else {
-          errors.push(row.title + ': stock saved, but eBay draft generation failed — ' + (generated.error ?? 'unknown error'));
+          const filePath = tenant.id + '/surplus/' + Date.now() + '-' + i + '.' + extension;
+          const { error: uploadError } = await supabase.storage
+            .from('item-images')
+            .upload(filePath, imageBytes, { contentType, upsert: false });
+          if (uploadError) throw uploadError;
+          const { data: publicData } = supabase.storage.from('item-images').getPublicUrl(filePath);
+          permanentPhotoUrl = publicData.publicUrl;
+          if (!permanentPhotoUrl || !(permanentPhotoUrl.includes('supabase') || permanentPhotoUrl.includes('onspace'))) {
+            throw new Error('Storage did not return a persistent image URL');
+          }
+        } catch (photoError: any) {
+          errors.push(row.title + ': photo upload failed — ' + (photoError?.message ?? 'unknown error'));
+          return;
+        }
+        const result = await createItem(tenant.id, {
+          canonicalTitle: row.title,
+          description: row.description,
+          specialistId: 'surplus_trader',
+          status: 'identified',
+          condition: row.condition,
+          conditionNotes: 'Imported from manifest: ' + manifestName + ' (row ' + row.sourceRow + '). Verify actual condition before listing.',
+          identificationConfidence: 1,
+          identificationSource: 'user_confirmed',
+          valuationLow: row.targetPrice,
+          valuationMid: row.targetPrice,
+          valuationHigh: row.targetPrice,
+          valuationConfidence: row.targetPrice > 0 ? 'medium' : 'unknown',
+          expectedSellingPrice: row.targetPrice,
+          expectedNet: Math.max(0, row.targetPrice * 0.8725),
+          expectedProfit: row.targetPrice > 0 ? row.targetPrice * 0.8725 - row.unitCost : 0,
+          saleProb30d: 0.5,
+          acquiredCost: row.unitCost * row.quantity,
+          quantity: row.quantity,
+          sku: row.supplierSku || undefined,
+          manufacturer: undefined,
+          // Only use the copied permanent image URL; supplier/CDN URLs may expire.
+          media: permanentPhotoUrl ? [permanentPhotoUrl] : [],
+          attributes: {
+            niche_id: 'surplus_flip',
+            specialist_id: 'surplus_trader',
+            source_type: 'supplier_manifest',
+            manifest_name: manifestName,
+            manifest_row: row.sourceRow,
+            supplier_sku: row.supplierSku,
+            manifest_sku: row.manifestSku,
+            asin: row.asin,
+            barcode: row.barcode,
+            ean: row.barcode,
+            brand: row.brand,
+            supplier_category: row.category,
+            supplier_subcategory: row.subcategory,
+            unit_weight_kg: row.unitWeight,
+            unit_rrp: row.unitRrp,
+            supplier_image_urls: row.imageUrls,
+            quantity_received: row.quantity,
+            quantity_available: row.quantity,
+            supplier_unit_cost: row.unitCost,
+            target_sell_price: row.targetPrice,
+            matched_photo_url: permanentPhotoUrl,
+            review_before_listing: true,
+            ebay_quantity: row.quantity,
+          },
+          tags: ['surplus_flip', 'supplier_manifest'],
+          warnings: ['Manifest data is supplier-provided. Verify exact product match, condition, stock count, restrictions, price, and postage before publishing.'],
+        });
+        if (result.error || !result.item) errors.push(row.title + ': ' + (result.error ?? 'unknown error'));
+        else {
+          imported++;
+          existingKeys.add(key);
+          updateRow(row.id, { imported: true, selected: false, photoUri: permanentPhotoUrl });
+  
+          // Create a normal SWISH eBay draft using the existing listing pipeline.
+          // Publishing remains a deliberate user action after checking price,
+          // category, condition, photos and Simple Delivery settings.
+          const generated = await generateListing(result.item.id, tenant.id, 'ebay');
+          if (generated.listing) {
+            const draft = await saveListing(tenant.id, result.item.id, generated.listing, 'ebay');
+            if (draft.error || !draft.listing) {
+              errors.push(row.title + ': stock saved, but eBay draft creation failed — ' + (draft.error ?? 'unknown error'));
+            } else if (row.targetPrice > 0) {
+              // A manifest-provided selling price is explicit; RRP is never
+              // silently substituted for the selling price.
+              const supabase = getSupabaseClient();
+              const { error: priceError } = await supabase.from('listings')
+                .update({ price: row.targetPrice, updated_at: new Date().toISOString() })
+                .eq('id', draft.listing.id)
+                .eq('tenant_id', tenant.id);
+              if (priceError) errors.push(row.title + ': draft created, but supplied listing price could not be applied — ' + priceError.message);
+            }
+          } else {
+            errors.push(row.title + ': stock saved, but eBay draft generation failed — ' + (generated.error ?? 'unknown error'));
+          }
         }
       }
-      setProgress({ done: i + 1, total: chosen.length });
-    }
+  
+      } catch (rowError: any) {
+        errors.push(row.title + ': import failed — ' + (rowError?.message ?? 'unknown error'));
+      } finally {
+        completed += 1;
+        setProgress({ done: completed, total: chosen.length });
+      }
+    };
+    const worker = async () => {
+      while (true) {
+        const i = nextIndex++;
+        if (i >= chosen.length) return;
+        await processRow(chosen[i], i);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(3, chosen.length) }, () => worker()));
     setBusy(false);
     if (imported) triggerInventoryReload();
     showAlert(
