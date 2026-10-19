@@ -276,25 +276,37 @@ export default function SurplusFlipScreen() {
       }
       let permanentPhotoUrl = '';
       try {
+        let imageBytes: ArrayBuffer;
+        let contentType = 'image/jpeg';
+        let extension = 'jpg';
         if (/^https?:\/\//i.test(row.photoUri ?? '')) {
-          permanentPhotoUrl = row.photoUri as string;
+          // Supplier/eBay CDN URLs are temporary sources, not permanent listing media.
+          // Download the selected image and copy it into SWISH's existing item-images bucket.
+          const response = await fetch(row.photoUri as string);
+          if (!response.ok) throw new Error('Supplier image download returned HTTP ' + response.status);
+          contentType = (response.headers.get('content-type') ?? 'image/jpeg').split(';')[0].trim().toLowerCase();
+          if (!contentType.startsWith('image/')) throw new Error('Supplier URL did not return an image');
+          extension = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : contentType.includes('gif') ? 'gif' : 'jpg';
+          imageBytes = await response.arrayBuffer();
+          if (!imageBytes.byteLength) throw new Error('Downloaded supplier image was empty');
         } else {
-        const base64 = await FileSystem.readAsStringAsync(row.photoUri as string, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        const uriPath = (row.photoUri ?? '').toLowerCase().split('?')[0];
-        const extension = uriPath.endsWith('.png') ? 'png' : uriPath.endsWith('.webp') ? 'webp' : 'jpg';
-        const contentType = extension === 'png' ? 'image/png' : extension === 'webp' ? 'image/webp' : 'image/jpeg';
+          const base64 = await FileSystem.readAsStringAsync(row.photoUri as string, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          const uriPath = (row.photoUri ?? '').toLowerCase().split('?')[0];
+          extension = uriPath.endsWith('.png') ? 'png' : uriPath.endsWith('.webp') ? 'webp' : 'jpg';
+          contentType = extension === 'png' ? 'image/png' : extension === 'webp' ? 'image/webp' : 'image/jpeg';
+          imageBytes = decodeBase64(base64);
+        }
         const filePath = tenant.id + '/surplus/' + Date.now() + '-' + i + '.' + extension;
         const { error: uploadError } = await supabase.storage
           .from('item-images')
-          .upload(filePath, decodeBase64(base64), { contentType, upsert: false });
+          .upload(filePath, imageBytes, { contentType, upsert: false });
         if (uploadError) throw uploadError;
         const { data: publicData } = supabase.storage.from('item-images').getPublicUrl(filePath);
         permanentPhotoUrl = publicData.publicUrl;
         if (!permanentPhotoUrl || !(permanentPhotoUrl.includes('supabase') || permanentPhotoUrl.includes('onspace'))) {
           throw new Error('Storage did not return a persistent image URL');
-        }
         }
       } catch (photoError: any) {
         errors.push(row.title + ': photo upload failed — ' + (photoError?.message ?? 'unknown error'));
@@ -322,7 +334,7 @@ export default function SurplusFlipScreen() {
         quantity: row.quantity,
         sku: row.supplierSku || undefined,
         manufacturer: undefined,
-        media: Array.from(new Set([permanentPhotoUrl, ...row.imageUrls].filter(Boolean))),
+        // Only use the copied permanent image URL; supplier/CDN URLs may expire.\n        media: permanentPhotoUrl ? [permanentPhotoUrl] : [],
         attributes: {
           niche_id: 'surplus_flip',
           specialist_id: 'surplus_trader',
