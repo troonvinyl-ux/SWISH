@@ -18,6 +18,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { createItem } from '@/services/itemService';
+import { generateListing, saveListing } from '@/services/listingService';
 import { getSupabaseClient } from '@/template';
 import { useAlert } from '@/template';
 
@@ -355,6 +356,28 @@ export default function SurplusFlipScreen() {
         imported++;
         existingKeys.add(key);
         updateRow(row.id, { imported: true, selected: false, photoUri: permanentPhotoUrl });
+
+        // Create a normal SWISH eBay draft using the existing listing pipeline.
+        // Publishing remains a deliberate user action after checking price,
+        // category, condition, photos and Simple Delivery settings.
+        const generated = await generateListing(result.item.id, tenant.id, 'ebay');
+        if (generated.listing) {
+          const draft = await saveListing(tenant.id, result.item.id, generated.listing, 'ebay');
+          if (draft.error || !draft.listing) {
+            errors.push(row.title + ': stock saved, but eBay draft creation failed — ' + (draft.error ?? 'unknown error'));
+          } else if (row.targetPrice > 0) {
+            // A manifest-provided selling price is explicit; RRP is never
+            // silently substituted for the selling price.
+            const supabase = getSupabaseClient();
+            const { error: priceError } = await supabase.from('listings')
+              .update({ price: row.targetPrice, updated_at: new Date().toISOString() })
+              .eq('id', draft.listing.id)
+              .eq('tenant_id', tenant.id);
+            if (priceError) errors.push(row.title + ': draft created, but supplied listing price could not be applied — ' + priceError.message);
+          }
+        } else {
+          errors.push(row.title + ': stock saved, but eBay draft generation failed — ' + (generated.error ?? 'unknown error'));
+        }
       }
       setProgress({ done: i + 1, total: chosen.length });
     }
@@ -362,7 +385,7 @@ export default function SurplusFlipScreen() {
     if (imported) triggerInventoryReload();
     showAlert(
       imported ? 'Stock imported' : 'Import not completed',
-      imported + ' product row(s) added to SWISH stock.' + (errors.length ? '\n\n' + errors.slice(0, 5).join('\n') : '') + '\n\nListings are not published automatically; each product must be reviewed and listing created through the existing SWISH eBay workflow.',
+      imported + ' product row(s) added to SWISH stock.' + (errors.length ? '\n\n' + errors.slice(0, 5).join('\n') : '') + '\n\nAn eBay draft is created through the existing SWISH listing workflow where generation succeeds. Review each draft and publish deliberately; importing never publishes automatically.',
     );
   }, [tenant, rows, manifestName, showAlert, triggerInventoryReload, updateRow]);
 
