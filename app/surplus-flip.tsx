@@ -272,7 +272,6 @@ export default function SurplusFlipScreen() {
     let completed = 0;
     const processRow = async (row: ManifestRow, i: number) => {
       try {
-        const row = chosen[i];
         const key = [manifestName, row.sourceRow, row.supplierSku, row.barcode].join('|');
         if (existingKeys.has(key)) {
           errors.push(row.title + ': already imported from this manifest row, skipped to prevent a duplicate.');
@@ -470,6 +469,14 @@ export default function SurplusFlipScreen() {
               style={s.search}
               accessibilityLabel="Search manifest"
             />
+            {busy ? (
+              <View style={[s.note, { backgroundColor: Colors.primaryDim }]}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={[s.noteText, { color: Colors.primary }]}>
+                  Import running: {progress.done} of {progress.total}. Three products are processed at a time to reduce waiting. You can navigate to other SWISH screens while this session stays open.
+                </Text>
+              </View>
+            ) : null}
             <View style={s.note}>
               <MaterialIcons name="info-outline" size={16} color={Colors.info} />
               <Text style={s.noteText}>Select only rows you want to import. Supplier image URLs are pre-matched where available; replace with your own photo if needed. Quantity is the total sellable units for that line. Check condition, price and eBay category before listing.</Text>
