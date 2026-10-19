@@ -32,6 +32,14 @@ const NICHE_BUILDS = {
     androidPackage: "com.swish.bikeflipper",
     iosBundleIdentifier: "com.swish.bikeflipper",
   },
+  surplus_flip: {
+    id: "surplus_flip",
+    name: "Surplus Flip",
+    slug: "swish-surplus-flip",
+    scheme: "surplusflip",
+    androidPackage: "com.swish.surplusflip",
+    iosBundleIdentifier: "com.swish.surplusflip",
+  },
   clothing: {
     id: "clothing",
     name: "Threads Flip",
@@ -51,7 +59,7 @@ module.exports = ({ config }) => {
   const niche = NICHE_BUILDS[selected];
   if (!niche) {
     throw new Error(
-      `Unsupported SWISH_NICHE "${selected}". Choose coins, motocross, bicycles, or clothing.`,
+      `Unsupported SWISH_NICHE "${selected}". Choose coins, motocross, bicycles, clothing, or surplus_flip.`,
     );
   }
 
