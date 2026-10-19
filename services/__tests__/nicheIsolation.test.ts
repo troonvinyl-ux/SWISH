@@ -72,6 +72,8 @@ import {
   ACTIVE_INVENTORY_STATUSES,
   HISTORY_STATUSES,
   getLifecycleGroup,
+  deleteItem,
+  updateItem,
 } from '@/services/itemService';
 // Keep the placeholder-icon helper testable in the Node-only service suite without loading React Native UI modules.
 jest.mock('@/components/ui/ItemImage', () => ({
@@ -505,28 +507,24 @@ describe('Item lifecycle state machine', () => {
 
 describe('Mutation tenant guard', () => {
   test('deleteItem with empty tenantId fails closed without hitting DB', async () => {
-    const { deleteItem } = await import('@/services/itemService');
     const { error } = await deleteItem('some-item-id', '');
     expect(error).toBeTruthy();
     expect(error).toContain('tenantId is required');
   });
 
   test('deleteItem with whitespace-only tenantId fails closed', async () => {
-    const { deleteItem } = await import('@/services/itemService');
     const { error } = await deleteItem('some-item-id', '   ');
     expect(error).toBeTruthy();
     expect(error).toContain('tenantId is required');
   });
 
   test('updateItem with empty tenantId fails closed without hitting DB', async () => {
-    const { updateItem } = await import('@/services/itemService');
     const { error } = await updateItem('some-item-id', { status: 'sold' as any }, '');
     expect(error).toBeTruthy();
     expect(error).toContain('tenantId is required');
   });
 
   test('updateItem with undefined tenantId does NOT trigger guard (intentional for legacy callers)', async () => {
-    const { updateItem } = await import('@/services/itemService');
     // When tenantId is entirely omitted (undefined), the guard intentionally does NOT fire.
     // Legacy internal callers (pre-SWISH-005) omit tenantId; the DB RLS handles isolation.
     // We verify only that the guard error message is NOT returned — the mock may
