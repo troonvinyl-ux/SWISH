@@ -73,6 +73,19 @@ import {
   HISTORY_STATUSES,
   getLifecycleGroup,
 } from '@/services/itemService';
+// Keep the placeholder-icon helper testable in the Node-only service suite without loading React Native UI modules.
+jest.mock('@/components/ui/ItemImage', () => ({
+  getNichePlaceholderIcon: (specialistId?: string | null): string => {
+    if (!specialistId) return 'inventory-2';
+    const id = specialistId.toLowerCase();
+    if (id === 'motocross') return 'two-wheeler';
+    if (id === 'bicycles' || id === 'cycling') return 'pedal-bike';
+    if (id === 'clothing' || id === 'trainers_sneakers') return 'checkroom';
+    if (id === 'surplus_trader') return 'inventory-2';
+    if (['coins', 'coins_uk', 'islamic_silver', 'gold', 'silver', 'banknotes', 'ancient_artefacts'].includes(id)) return 'toll';
+    return 'inventory-2';
+  },
+}));
 import { getNichePlaceholderIcon } from '@/components/ui/ItemImage';
 import {
   isPermanentImageUrl,
