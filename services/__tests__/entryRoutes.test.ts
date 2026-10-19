@@ -1204,14 +1204,14 @@ describe('SWISH-006: Evidence-First Identification and Valuation Guardrails', ()
 //
 // Tests for:
 //   Issue 1 — Credential security (safe column selection, no credential_ref in responses)
-//   Issue 2 — Production niche ring-fencing (only 4 niches active)
+//   Issue 2 — Production niche ring-fencing (registered niches only)
 //   Issue 3 — CI/CD signing (verified via config inspection, not a live build)
 
 // ── Inline implementations mirroring the production code ───────────────────────
 
-type NicheId030 = 'coins' | 'trading_cards' | 'antiques' | 'bicycles' | 'motocross' | 'fossils' | 'clothing' | 'beauty' | 'general';
+type NicheId030 = 'coins' | 'trading_cards' | 'antiques' | 'bicycles' | 'motocross' | 'fossils' | 'clothing' | 'beauty' | 'general' | 'surplus_flip';
 
-const PRODUCTION_NICHE_IDS_030: readonly NicheId030[] = ['coins', 'motocross', 'bicycles', 'clothing'] as const;
+const PRODUCTION_NICHE_IDS_030: readonly NicheId030[] = ['coins', 'motocross', 'bicycles', 'clothing', 'surplus_flip'] as const;
 
 function isProductionNiche030(nicheId: NicheId030 | string | null | undefined): boolean {
   return PRODUCTION_NICHE_IDS_030.includes(nicheId as NicheId030);
@@ -1331,8 +1331,9 @@ describe('SWISH-030 Issue 1: Credential Security', () => {
 
 describe('SWISH-030 Issue 2: Production Niche Ring-Fencing', () => {
   describe('Production niche IDs', () => {
-    test('exactly four production niches exist', () => {
-      expect(PRODUCTION_NICHE_IDS_030.length).toBe(4);
+    test('five production niches exist including Surplus Flip', () => {
+      expect(PRODUCTION_NICHE_IDS_030.length).toBe(5);
+      expect(PRODUCTION_NICHE_IDS_030).toContain('surplus_flip');
     });
 
     test('coins is a production niche', () => {
@@ -1349,6 +1350,10 @@ describe('SWISH-030 Issue 2: Production Niche Ring-Fencing', () => {
 
     test('clothing is a production niche', () => {
       expect(isProductionNiche030('clothing')).toBe(true);
+    });
+
+    test('surplus_flip is a production niche', () => {
+      expect(isProductionNiche030('surplus_flip')).toBe(true);
     });
 
     test('fossils is NOT a production niche', () => {
@@ -1394,12 +1399,13 @@ describe('SWISH-030 Issue 2: Production Niche Ring-Fencing', () => {
     });
 
     test('all four production niches are returned', () => {
-      const result = getActiveNiches030(['coins', 'motocross', 'bicycles', 'clothing']);
-      expect(result).toHaveLength(4);
+      const result = getActiveNiches030(['coins', 'motocross', 'bicycles', 'clothing', 'surplus_flip']);
+      expect(result).toHaveLength(5);
       expect(result).toContain('coins');
       expect(result).toContain('motocross');
       expect(result).toContain('bicycles');
       expect(result).toContain('clothing');
+      expect(result).toContain('surplus_flip');
     });
 
     test('mixed list: non-production niches are stripped', () => {
@@ -1447,6 +1453,7 @@ describe('SWISH-030 Issue 2: Production Niche Ring-Fencing', () => {
       if (id === 'motocross' || id === 'mx') return ['motocross'];
       if (id === 'bicycles' || id === 'cycling' || id === 'bikes') return ['bicycles'];
       if (id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers' || id === 'trainers') return ['clothing', 'trainers_sneakers'];
+      if (id === 'surplus_flip') return ['surplus_trader'];
       return [];
     }
 
