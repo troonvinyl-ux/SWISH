@@ -10,7 +10,7 @@ import { useEffect } from 'react';
 import { Redirect } from 'expo-router';
 import { useApp } from '@/hooks/useApp';
 
-export default function Surplus FlipEntryRoute() {
+export default function SurplusFlipEntryRoute() {
   const { setActiveNiche, activeNicheId } = useApp();
 
   useEffect(() => {
