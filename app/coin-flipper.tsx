@@ -1120,6 +1120,20 @@ function IdentifyTab({ result, capturedImages, onSave, saving, savedItemId, uplo
           {result.numistaMatchScore && result.numistaMatchScore > 0 ? <Text style={idS.numistaScore}>{result.numistaMatchScore}/100</Text> : null}
         </View>
       ) : null}
+      {result.coinResearch ? (
+        <View style={[idS.evidenceCard, { borderColor: CF.gold + '55' }]}>
+          <Text style={idS.evidenceTitle}>CROSS-CATALOGUE RESEARCH</Text>
+          <Text style={idS.evidenceText}>{result.coinResearch.candidates.length} catalogue lead(s) found. These are research candidates, not confirmed identifications.</Text>
+          {(result.coinResearch.candidates ?? []).slice(0, 8).map((candidate, index) => (
+            <View key={candidate.source + ':' + candidate.url + ':' + index} style={{ gap: 3, paddingTop: 7, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: CF.border }}>
+              <Text style={{ color: CF.gold, fontSize: 9, fontWeight: Typography.weight.bold }}>{candidate.source}{candidate.reference ? ' · ' + candidate.reference : ''}</Text>
+              <Text onPress={() => Linking.openURL(candidate.url)} style={{ color: CF.textPrimary, fontSize: 12, textDecorationLine: 'underline' }}>{candidate.title}</Text>
+              {candidate.snippet ? <Text style={{ color: CF.textSub, fontSize: 10, lineHeight: 14 }}>{candidate.snippet}</Text> : null}
+            </View>
+          ))}
+          <Text style={{ color: CF.textMuted, fontSize: 9, lineHeight: 13 }}>{result.coinResearch.note}</Text>
+        </View>
+      ) : null}
       {(result.evidenceSupporting.length > 0 || result.missingInformation.length > 0) ? (
         <View style={idS.evidenceCard}>
           <Text style={idS.evidenceTitle}>EVIDENCE</Text>
