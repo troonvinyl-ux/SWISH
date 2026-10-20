@@ -41,6 +41,7 @@ import {
   saveIdentifiedItem,
   uploadItemImages,
   updateItemMedia,
+  saveCoinReferenceImages,
 } from '@/services/aiIdentificationService';
 import {
   IslamicBatchItem,
@@ -1951,6 +1952,8 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
             try {
               const { urls } = await uploadItemImages(item.id, coinImages);
               if (urls.length > 0) await updateItemMedia(tenant.id, item.id, urls);
+              // Rendered references are stored separately, never in the eBay media array.
+              await saveCoinReferenceImages(tenant.id, item.id, coinImages);
             } catch { /* identification is saved; media upload can be retried separately */ }
           } catch (error: any) {
             const message = error?.message ?? 'Unexpected error while processing this coin';
@@ -2101,9 +2104,11 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
       setUploadProgress('Uploading photos...');
       try {
         const { urls } = await uploadItemImages(item.id, capturedImages);
+        if (urls.length > 0) await updateItemMedia(tenant.id, item.id, urls);
+        const referenceSave = await saveCoinReferenceImages(tenant.id, item.id, capturedImages);
+        if (referenceSave.errors.length > 0) console.warn('[CoinFlipper] Some rendered references could not be saved separately.', referenceSave.errors);
         if (urls.length > 0) {
-          await updateItemMedia(tenant.id, item.id, urls);
-          setUploadProgress(`${urls.length} photo${urls.length === 1 ? '' : 's'} saved`);
+          setUploadProgress(`${urls.length} original photo${urls.length === 1 ? '' : 's'} saved${Object.keys(referenceSave.urls).length ? ' · rendered references saved separately' : ''}`);
         } else {
           setUploadProgress('Photos saved locally');
         }
