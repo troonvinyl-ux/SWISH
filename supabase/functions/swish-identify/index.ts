@@ -1924,6 +1924,33 @@ Deno.serve(async (req: Request) => {
                 physicalMatchGood: false, references: [],
               });
               constrained.warnings = Array.isArray(constrained.warnings) ? constrained.warnings : [];
+
+              // An explicit Numista N# is resolved by /types/{id}; the second-pass
+              // language model must not replace that exact record with a guessed
+              // search result or invent a different catalogue page.
+              const directReferenceWasResolved = Boolean(
+                numistaVerification?.typeId &&
+                (numistaVerification.matchFactors ?? []).some((factor: string) =>
+                  /Exact user-supplied catalogue reference N#\d+ retrieved directly from Numista API/i.test(factor)
+                )
+              );
+              if (directReferenceWasResolved && numistaVerification?.title) {
+                constrained.canonicalTitle = numistaVerification.title;
+                constrained.numistaN = numistaVerification.numistaN;
+                constrained.numistaTypeId = numistaVerification.typeId;
+                constrained.numistaTitle = numistaVerification.title;
+                constrained.numistaUrl = numistaVerification.numistaUrl;
+                constrained.warnings = constrained.warnings.filter((warning: unknown) =>
+                  !/user-supplied Numista link|British East Africa|George V\s*\(Pattern\)|Numista\s*#?16367|N#16367/i.test(String(warning))
+                );
+                constrained.evidenceSupporting = Array.isArray(constrained.evidenceSupporting)
+                  ? constrained.evidenceSupporting
+                  : [];
+                const directReferenceEvidence = `Exact Numista reference ${numistaVerification.numistaN} resolved directly to ${numistaVerification.title}; second-pass guesses cannot override the catalogue record.`;
+                if (!constrained.evidenceSupporting.includes(directReferenceEvidence)) {
+                  constrained.evidenceSupporting.push(directReferenceEvidence);
+                }
+              }
               constrained.attributes = constrained.attributes ?? {};
               constrained.attributes.aiReviewPasses = 2;
               constrained.attributes.aiReviewMethod = 'Gemini visual attribution + catalogue-aware independent second-pass review';
