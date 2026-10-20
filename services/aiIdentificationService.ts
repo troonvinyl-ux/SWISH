@@ -73,6 +73,21 @@ export interface QuotaExceededError {
   message: string;
 }
 
+export interface CoinResearchCandidate {
+  source: 'CANOA' | 'OCRE' | 'CRRO' | 'RPC';
+  title: string;
+  url: string;
+  reference?: string;
+  snippet?: string;
+}
+export interface CoinResearchResult {
+  status: string;
+  searched: string[];
+  candidates: CoinResearchCandidate[];
+  sources: Record<string, { status: string; count: number }>;
+  note: string;
+}
+
 export interface AIIdentificationResult {
   canonicalTitle: string;
   specialistId: SpecialistId;
@@ -144,6 +159,8 @@ export interface AIIdentificationResult {
   warnings: string[];
   suggestedDisposition: string;
   dispositionDecision: DispositionDecision;
+  // Cross-catalogue research (candidate discovery only; not an identity verdict)
+  coinResearch?: CoinResearchResult | null;
   // v3: Numista verification
   numistaVerification?: NumistaVerification | null;
   numistaStatus?: string;
@@ -423,6 +440,7 @@ export async function identifyItemWithAI(
       suggestedDisposition: id.suggestedDisposition ?? '',
       dispositionDecision: (id.dispositionDecision ?? 'sell_individual') as DispositionDecision,
       // v3/v4: Numista
+      coinResearch: id.coinResearch ?? data.coinResearch ?? null,
       numistaVerification: numistaV,
       numistaStatus: id.numistaStatus ?? numistaV?.status ?? null,
       numistaTypeId: id.numistaTypeId ?? numistaV?.typeId ?? null,
