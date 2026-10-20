@@ -1533,10 +1533,36 @@ Deno.serve(async (req: Request) => {
 
     let identification: any = null;
     try {
-      const cleaned = rawContent.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-      identification = JSON.parse(cleaned);
-    } catch {
-      return new Response(JSON.stringify({ error: 'AI returned invalid JSON', raw: rawContent.slice(0, 400) }), { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      // Models sometimes wrap the JSON in Markdown, prepend a short sentence,
+      // or return the JSON object as a JSON-encoded string. Normalise those
+      // harmless format variations before treating the response as malformed.
+      const parseModelJson = (value: string): any => {
+        const stripFences = (input: string) => input
+          .replace(/^﻿/, '')
+          .replace(/^s*```(?:json)?s*/i, '')
+          .replace(/s*```s*$/i, '')
+          .trim();
+        const parseOnce = (input: string): any => {
+          const cleaned = stripFences(input);
+          try { return JSON.parse(cleaned); } catch (firstError) {
+            const start = cleaned.indexOf('{');
+            const end = cleaned.lastIndexOf('}');
+            if (start >= 0 && end > start) return JSON.parse(cleaned.slice(start, end + 1));
+            throw firstError;
+          }
+        };
+        let parsed = parseOnce(value);
+        if (typeof parsed === 'string') parsed = parseOnce(parsed);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          throw new Error('AI response was not a JSON object');
+        }
+        return parsed;
+      };
+      identification = parseModelJson(rawContent);
+    } catch (parseError) {
+      // Keep diagnostics useful without returning the model's entire response.
+      console.warn('[swish-identify] AI response JSON parsing failed:', parseError instanceof Error ? parseError.message : 'unknown parse error');
+      return new Response(JSON.stringify({ error: 'AI returned invalid JSON. Please retry identification.', details: 'The model response could not be parsed as a JSON object.' }), { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const objectType: ObjectType = identification.objectType ?? (vehicleMode ? 'motorcycle' : clothingMode ? 'garment' : 'unknown');
