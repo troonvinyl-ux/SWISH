@@ -53,6 +53,7 @@ import {
 } from '@/services/islamicIdentificationService';
 import { getMarketValue, MarketValueResult } from '@/services/marketValueService';
 import { startCheckout } from '@/services/subscriptionService';
+import { processCoinImage, CoinImageTool } from '@/services/coinImageProcessing';
 
 // ── Coin Flipper design tokens ────────────────────────────────────────────────
 const CF = {
@@ -466,7 +467,7 @@ const ht = StyleSheet.create({
 });
 // ── Capture tab ───────────────────────────────────────────────────────────────
 function CaptureTab({
-  capturedImages, onCapture, onRemove, onIdentify, identifying,
+  capturedImages, onCapture, onRemove, onIdentify, onProcessImage, onRestoreImage, identifying,
   processingStatus, aiError, onTabSelect, isPremium,
   // Specialist mode
   selectedSpecialist, onSpecialistChange,
@@ -482,7 +483,9 @@ function CaptureTab({
   edgeLegendInput, setEdgeLegendInput,
 }: {
   capturedImages: CapturedImage[]; onCapture: (slotId: string, slotLabel: string) => void;
-  onRemove: (slotId: string) => void; onIdentify: () => void; identifying: boolean;
+  onRemove: (slotId: string) => void; onIdentify: () => void;
+  onProcessImage: (mode: CoinImageTool, slotId: string) => Promise<void>;
+  onRestoreImage: (slotId: string) => void; identifying: boolean;
   processingStatus: string; aiError: string | null; onTabSelect: (t: CFTab) => void; isPremium: boolean;
   selectedSpecialist: SpecialistChip; onSpecialistChange: (s: SpecialistChip) => void;
   quickMode: boolean; onToggleQuickMode: () => void;
@@ -502,6 +505,7 @@ function CaptureTab({
   const [activeSide, setActiveSide] = useState<'obverse' | 'reverse'>('obverse');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [captureToolNotice, setCaptureToolNotice] = useState<'detect' | 'enhance' | null>(null);
+  const [processingImage, setProcessingImage] = useState(false);
   const isIslamic = selectedSpecialist.id === 'islamic';
   const incompleteQuickCoins = quickCaptures.filter(coin => !coin.reverseUri).length;
   const completeQuickCoins = quickCaptures.length - incompleteQuickCoins;
@@ -774,15 +778,35 @@ function CaptureTab({
 
             {captureToolNotice ? (
               <View style={ct.advancedCard}>
-                <Text style={ct.advancedTitle}>{captureToolNotice === 'detect' ? 'COIN EDGE DETECTION' : 'PHOTO ENHANCEMENT'}</Text>
+                <Text style={ct.advancedTitle}>{captureToolNotice === 'detect' ? 'AUTO-DETECT COIN BOUNDARY' : 'ENHANCE PHOTO'}</Text>
                 <Text style={ct.advancedHint}>
                   {captureToolNotice === 'detect'
-                    ? 'Automatic edge detection is not yet available in this build. For a reliable result, place the entire coin on a plain contrasting background, avoid shadows crossing the rim, and capture the coin straight-on. The original photo will not be cropped or altered automatically.'
-                    : 'Non-destructive brightness, contrast and sharpness processing is not yet available in this build. Keep the original photo for identification; strong filters can hide worn lettering, patina and genuine surface details.'}
+                    ? 'Analyses background contrast and crops around the likely coin boundary with a safety margin. It will refuse uncertain detections rather than guess. Check that the full rim remains visible.'
+                    : 'Creates a separate copy with restrained brightness and contrast adjustment. It does not invent detail; the original remains available to restore.'}
                 </Text>
-                <Pressable onPress={() => setCaptureToolNotice(null)} accessibilityRole="button" style={[ct.toolButton, { alignSelf: 'flex-start', paddingHorizontal: Spacing.md }]}>
-                  <Text style={ct.toolLabel}>Close</Text>
-                </Pressable>
+                {!capturedImages.some(i => i.slotId === activeSide) ? (
+                  <Text style={ct.advancedHint}>Capture the {activeSide} first to use this tool.</Text>
+                ) : (
+                  <Pressable
+                    disabled={processingImage}
+                    onPress={async () => {
+                      setProcessingImage(true);
+                      try { await onProcessImage(captureToolNotice, activeSide); setCaptureToolNotice(null); }
+                      catch (error) { Alert.alert(captureToolNotice === 'detect' ? 'Boundary not detected' : 'Enhancement failed', error instanceof Error ? error.message : 'The photo was not changed. Please try again.'); }
+                      finally { setProcessingImage(false); }
+                    }}
+                    accessibilityRole="button"
+                    accessibilityState={{ busy: processingImage, disabled: processingImage }}
+                    style={[ct.toolButton, { alignSelf: 'stretch', backgroundColor: CF.gold, borderRadius: Radius.md, paddingHorizontal: Spacing.md, marginTop: Spacing.xs }]}
+                  >
+                    {processingImage ? <ActivityIndicator size="small" color={CF.black} /> : <MaterialIcons name={captureToolNotice === 'detect' ? 'center-focus-strong' : 'contrast'} size={16} color={CF.black} />}
+                    <Text style={[ct.toolLabel, { color: CF.black }]}>{processingImage ? 'Processing photo…' : captureToolNotice === 'detect' ? 'Detect and crop coin' : 'Apply enhancement'}</Text>
+                  </Pressable>
+                )}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md }}>
+                  <Pressable onPress={() => { onRestoreImage(activeSide); setCaptureToolNotice(null); }} accessibilityRole="button" style={[ct.toolButton, { alignSelf: 'flex-start', paddingHorizontal: Spacing.md }]}><Text style={ct.toolLabel}>Restore original</Text></Pressable>
+                  <Pressable onPress={() => setCaptureToolNotice(null)} accessibilityRole="button" style={[ct.toolButton, { alignSelf: 'flex-start', paddingHorizontal: Spacing.md }]}><Text style={ct.toolLabel}>Close</Text></Pressable>
+                </View>
               </View>
             ) : null}
 
@@ -1515,6 +1539,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
 
   // ── Capture state ───────────────────────────────────────────────────────────
   const [capturedImages, setCapturedImages] = useState<CapturedImage[]>([]);
+  const originalImageUris = useRef<Record<string, string>>({});
   // Optional hard evidence for every coin identification (web and native).
   // These values must be sent to swish-identify rather than being UI-only.
   const [weightInput, setWeightInput] = useState('');
@@ -1622,8 +1647,30 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
     );
   }, []);
 
+  const handleProcessImage = useCallback(async (mode: CoinImageTool, slotId: string) => {
+    const current = capturedImages.find(image => image.slotId === slotId);
+    if (!current) throw new Error('Capture this side of the coin first.');
+    const processed = await processCoinImage(current.uri, mode);
+    if (!originalImageUris.current[slotId]) originalImageUris.current[slotId] = current.uri;
+    setCapturedImages(prev => prev.map(image => image.slotId === slotId
+      ? { ...image, uri: processed.uri, base64: undefined }
+      : image));
+  }, [capturedImages]);
+
+  const handleRestoreImage = useCallback((slotId: string) => {
+    const originalUri = originalImageUris.current[slotId];
+    if (!originalUri) {
+      Alert.alert('Original photo', 'This photo has not been processed, so there is no separate original to restore.');
+      return;
+    }
+    setCapturedImages(prev => prev.map(image => image.slotId === slotId
+      ? { ...image, uri: originalUri, base64: undefined }
+      : image));
+  }, []);
+
   const handleRemoveImage = useCallback((slotId: string) => {
     setCapturedImages(prev => prev.filter(i => i.slotId !== slotId));
+    delete originalImageUris.current[slotId];
   }, []);
 
   // ── Quick Mode: single-shot capture (fire camera, add to batch) ─────────────
@@ -1979,6 +2026,8 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
             onCapture={handleCapture}
             onRemove={handleRemoveImage}
             onIdentify={handleIdentify}
+            onProcessImage={handleProcessImage}
+            onRestoreImage={handleRestoreImage}
             identifying={identifying}
             processingStatus={processingStatus}
             aiError={aiError}
