@@ -107,9 +107,24 @@ export async function processCoinImage(uri: string, mode: CoinImageTool): Promis
       0, 0, 1.12, 0, 7,
       0, 0, 0, 1, 0,
     ];
-    const paint = Skia.Paint();
-    paint.setColorFilter(Skia.ColorFilter.MakeMatrix(matrix));
-    canvas.drawImageRect(image, Rect(crop.x, crop.y, crop.width, crop.height), Rect(0, 0, outWidth, outHeight), paint);
+    // Skia's native bridge expects a numeric typed array for a colour matrix
+    // on some Android/iOS builds. Passing a plain JS array can surface the
+    // HostFunction "Value is undefined, expected a number" error.
+    try {
+      const colorFilter = Skia.ColorFilter.MakeMatrix(new Float32Array(matrix));
+      const paint = Skia.Paint();
+      if (colorFilter) {
+        paint.setColorFilter(colorFilter);
+        canvas.drawImageRect(image, Rect(crop.x, crop.y, crop.width, crop.height), Rect(0, 0, outWidth, outHeight), paint);
+      } else {
+        canvas.drawImageRect(image, Rect(crop.x, crop.y, crop.width, crop.height), Rect(0, 0, outWidth, outHeight));
+        note = 'High-quality copy created; contrast enhancement was unavailable on this device.';
+      }
+    } catch (filterError) {
+      // Never fail the whole operation if native matrix support differs by build.
+      canvas.drawImageRect(image, Rect(crop.x, crop.y, crop.width, crop.height), Rect(0, 0, outWidth, outHeight));
+      note = 'High-quality copy created; contrast enhancement was unavailable on this device.';
+    }
   } else {
     canvas.drawImageRect(image, Rect(crop.x, crop.y, crop.width, crop.height), Rect(0, 0, outWidth, outHeight));
   }
