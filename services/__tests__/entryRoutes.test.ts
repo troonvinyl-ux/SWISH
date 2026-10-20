@@ -775,7 +775,7 @@ function buildSyntheticMarketResult(opts: {
       available: numistaSalesAvailable,
       error: numistaSalesError ?? null,
       numistaN: 'N#12345',
-      numistaUrl: 'https://en.numista.com/catalogue/index.php?r=12345',
+      numistaUrl: 'https://numista.com/12345',
       numistaTitle: 'SYNTHETIC Test Coin',
       totalFetched: numistaSalesRelevant,
       relevantCount: numistaSalesRelevant,
@@ -794,7 +794,7 @@ function buildSyntheticMarketResult(opts: {
     },
     numista: hasNumistaType ? {
       typeId: 12345, numistaN: 'N#12345',
-      numistaUrl: 'https://en.numista.com/catalogue/index.php?r=12345',
+      numistaUrl: 'https://numista.com/12345',
       matchScore: 85,
       matchTier: 'strong',
       accepted: true,
