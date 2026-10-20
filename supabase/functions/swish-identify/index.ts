@@ -527,7 +527,10 @@ function scoreNumistaCandidate(
     else if (diffPct <= 0.12) { score += 2; factors.push(`Weight weak match: ${(diffPct * 100).toFixed(1)}% diff`); }
     else { score -= 25; contradictions.push(`Weight MAJOR CONTRADICTION: ${suppliedWeight}g vs catalogue ${candWeight}g (${(diffPct * 100).toFixed(1)}% — exceeds 12%)`); }
   }
-  const candDiam = src.diameter ?? candidate.diameter ?? null;
+  // Numista v3 catalogue fields call the coin's diameter "size" in many
+  // responses; accept both names or the supplied physical measurement is
+  // silently ignored during elimination.
+  const candDiam = src.diameter ?? src.size ?? candidate.diameter ?? candidate.size ?? null;
   if (suppliedDiameter !== null && suppliedDiameter > 0 && candDiam !== null && candDiam > 0) {
     const diffMm = Math.abs(suppliedDiameter - candDiam);
     if (diffMm <= 0.5) { score += 10; factors.push(`Diameter STRONG match: ${suppliedDiameter}mm vs ${candDiam}mm`); }
@@ -751,6 +754,25 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
   };
   const yearMatch = year.match(/\d{2,4}/);
   const candidatePool = [primaryCandidate, ...aiCandidates.slice(1, 5)];
+
+  // LEGEND-FIRST Numista discovery: a clearly transcribed inscription is a
+  // stronger search key than the model's guessed denomination/title. Put it
+  // at the front of the limited query budget so generic AI guesses cannot crowd
+  // out the catalogue types whose recorded lettering matches the coin.
+  const suppliedLegend = String(
+    knownAttributes?.edgeLegend ??
+    knownAttributes?.legend ??
+    aiIdentification.observedCharacteristics?.visibleText ??
+    aiIdentification.coinFields?.legendFragment ??
+    ''
+  ).trim();
+  if (suppliedLegend) {
+    addQuery(suppliedLegend);
+    addQuery(suppliedLegend.replace(/[\/|]+/g, ' '));
+    addQuery(issuer, suppliedLegend);
+  }
+  const visibleText = String(aiIdentification.observedCharacteristics?.visibleText ?? '').trim();
+  if (visibleText && visibleText !== suppliedLegend) addQuery(visibleText);
 
   // Search the complete first-pass attribution and visible legends directly.
   // Candidate lists can omit the best title, so do not rely on coinCandidates
