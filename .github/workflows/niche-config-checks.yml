@@ -35,8 +35,6 @@ on:
       - 'services/aiIdentificationService.ts'
       - 'services/coinImageEnhancementService.ts'
       - 'supabase/functions/swish-coin-image-enhance/index.ts'
-      - 'services/coinImageEnhancementService.ts'
-      - 'supabase/functions/swish-coin-image-enhance/index.ts'
       - 'services/islamicIdentificationService.ts'
       - '.github/workflows/niche-config-checks.yml'
   pull_request:
@@ -68,6 +66,8 @@ on:
       - 'services/orderService.ts'
       - 'app/coin-flipper.tsx'
       - 'services/aiIdentificationService.ts'
+      - 'services/coinImageEnhancementService.ts'
+      - 'supabase/functions/swish-coin-image-enhance/index.ts'
       - 'services/islamicIdentificationService.ts'
       - '.github/workflows/niche-config-checks.yml'
 
