@@ -1008,6 +1008,7 @@ function enforceEvidenceConstraints(identification: any, vehicleMode: boolean, c
     const indianTraditionEvidence = /indian princely|maratha|mughal|persian\/arabic|arabic script|persian script|indo-islamic|indian coinage|paisa/.test(evidenceText);
     if (romanCandidate && indianTraditionEvidence) {
       result.canonicalTitle = 'Possible Indian princely-state copper paisa — provisional';
+      result.evidenceConflictCorrected = true;
       result.identificationState = 'candidate';
       result.identificationSource = 'inferred';
       result.confidence = Math.min(Number(result.confidence ?? 0.3), 0.42);
@@ -1130,7 +1131,7 @@ function enforceEvidenceConstraints(identification: any, vehicleMode: boolean, c
   const hasCatalogueMatch = ['verified', 'strong_match', 'candidate', 'weak_match'].includes(
     String(result.numistaStatus ?? result.numistaVerification?.status ?? '')
   );
-  if (result.objectType === 'coin' && !hasCatalogueMatch && result.confidence < 0.30) {
+  if (result.objectType === 'coin' && !hasCatalogueMatch && result.confidence < 0.30 && !result.evidenceConflictCorrected) {
     result.canonicalTitle = 'Unidentified coin — provisional visual observations';
     result.identificationState = 'observation_only';
     result.identificationSource = 'inferred';
