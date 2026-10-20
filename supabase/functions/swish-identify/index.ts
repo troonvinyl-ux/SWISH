@@ -1539,8 +1539,8 @@ Deno.serve(async (req: Request) => {
       const parseModelJson = (value: string): any => {
         const stripFences = (input: string) => input
           .replace(/^﻿/, '')
-          .replace(/^\\s*```(?:json)?\\s*/i, '')
-          .replace(/\\s*```\\s*$/i, '')
+          .replace(/^\s*```(?:json)?\s*/i, '')
+          .replace(/\s*```\s*$/i, '')
           .trim();
         const parseOnce = (input: string): any => {
           const cleaned = stripFences(input);
