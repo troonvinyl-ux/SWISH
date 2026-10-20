@@ -876,6 +876,39 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
     }
   }
 
+  // Physical-measurement discovery is a second independent search path.
+  // Numista supports size and weight filters; use generous tolerances to gather
+  // candidates, then apply the stricter deterministic comparisons below.
+  // This avoids excluding worn coins while still letting measurements find
+  // candidates the text query missed entirely.
+  if (suppliedWeight !== null && suppliedWeight > 0 || suppliedDiameter !== null && suppliedDiameter > 0) {
+    const params = new URLSearchParams({ lang: 'en', count: '50', order: 'relevance' });
+    if (suppliedDiameter !== null && suppliedDiameter > 0) {
+      params.set('size', `${Math.max(1, suppliedDiameter - 1.5).toFixed(1)}-${(suppliedDiameter + 1.5).toFixed(1)}`);
+    }
+    if (suppliedWeight !== null && suppliedWeight > 0) {
+      params.set('weight', `${Math.max(0.1, suppliedWeight * 0.88).toFixed(2)}-${(suppliedWeight * 1.12).toFixed(2)}`);
+    }
+    // Numista requires a search parameter in addition to measurements. Use
+    // evidence-led terms rather than a generic "coin" query.
+    const measurementQuery = suppliedLegend || visibleText || issuer || aiIdentification.canonicalTitle || 'coin';
+    params.set('q', cleanQuery(measurementQuery));
+    try {
+      const resp = await fetch(`${NUMISTA_API}/types?${params.toString()}`, {
+        headers: { 'Numista-API-Key': apiKey },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        for (const t of data.types ?? []) {
+          if (t?.id != null && !candidateMap.has(Number(t.id))) candidateMap.set(Number(t.id), t);
+        }
+      }
+    } catch {
+      // Measurement discovery is additive; a transient failure does not discard text matches.
+    }
+  }
+
   const searchQuery = queriesToTry.join(' | ');
   if (candidateMap.size === 0) return { status: 'no_match', matchScore: 0, matchTier: 'rejected', matchFactors: [`No Numista candidates for queries: "${searchQuery}"`], contradictions: [], physicalMatchGood: false, references: [] };
 
