@@ -29,23 +29,12 @@ export async function processCoinImage(uri: string, mode: CoinImageTool): Promis
     }
 
     if (mode === 'detect') {
-      // Safe fallback: a modest centre crop instead of unreliable pixel analysis.
-      const marginX = Math.round(source.width * 0.04);
-      const marginY = Math.round(source.height * 0.04);
-      const cropped = await ImageManipulator.manipulateAsync(source.uri, [{
-        crop: {
-          originX: marginX,
-          originY: marginY,
-          width: Math.max(1, source.width - marginX * 2),
-          height: Math.max(1, source.height - marginY * 2),
-        },
-      }], {
-        compress: 0.96,
-        format: ImageManipulator.SaveFormat.JPEG,
-      });
+      // Never crop automatically without a reliable boundary detector: a tight
+      // coin photo could lose its rim. Preserve the full frame for the vision
+      // model to assess the coin boundary during identification.
       return {
-        uri: cropped.uri,
-        note: 'Safe centre crop created. Check the full coin rim; automatic boundary detection is unavailable in this build.',
+        uri: source.uri,
+        note: 'Photo prepared; full frame preserved so the AI can assess the coin boundary without clipping the rim.',
       };
     }
 
