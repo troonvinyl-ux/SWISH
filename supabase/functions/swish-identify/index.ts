@@ -81,6 +81,8 @@ IMAGE-ORDER AND PROCESSING INVARIANCE (critical):
 - Image enhancement, cropping, background removal, sharpening, colour changes, or CoinSnap-style processing may improve visibility but are not new numismatic evidence. Do not change the candidate solely because a processed image looks different.
 - If image order or processing causes materially different conclusions, prefer the shared observable evidence, lower confidence, and state which visual detail is uncertain. Do not invent an issuer or denomination to force a match.
 - Separate observed facts (e.g. raised script, horizontal lines, flan shape) from interpretations (e.g. Persian/Arabic script, Indian princely state). Do not state script language or metal as certain unless the image supports it; colour alone cannot confirm copper/bronze.
+- NUMISMATIC TYPE RECOGNITION: Identify diagnostic combinations across both faces, not generic regional resemblance. For Indian coins, explicitly compare Devanagari legends and their arrangement against known types. For example, a copper irregular-flan coin with a two-line 'श्री / राजा शिव' style legend on one face and 'छत्र / पति' on the other, especially with the distinctive double horizontal bars, is a strong research lead for a Shivrai/Chhatrapati paisa, including Dudandi variants. Treat this as a candidate to verify, not a template to force onto unrelated coins. Distinguish Maratha Empire issues from later Satara/Poona or other regional variants only when the visible legend, measurements, date marks, or catalogue evidence supports the distinction.
+- LEGEND-LED IDENTIFICATION: Transcribe or cautiously transliterate visible characters and compare them to known catalogue legends. If one side is partial, use the other side and the design together. Never reject a plausible type solely because the exact catalogue photo differs in wear, rotation, flan shape, or lighting.
 3. USER-SUPPLIED PHYSICAL MEASUREMENTS — if weight or diameter supplied, record as HARD EVIDENCE.
    These take absolute priority over any visual estimate.
 4. VISIBLE LEGENDS & INSCRIPTIONS — copy character by character. NEVER complete partial text.
@@ -769,8 +771,27 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
   for (const clue of evidence) {
     addQuery(clue);
   }
-  // Query broad historical families stated in evidence without forcing a ruler.
+  // Recognise distinctive two-face Shivrai/Dudandi patterns and search these exact catalogue families early.
+  // This is evidence-triggered discovery, not a hard-coded identification.
   const evidenceText = evidence.join(' ').toLowerCase();
+  const coinDescriptionText = [
+    evidenceText,
+    aiIdentification.canonicalTitle,
+    aiIdentification.coinFields?.obverseDescription,
+    aiIdentification.coinFields?.reverseDescription,
+    aiIdentification.coinFields?.legendFragment,
+    aiIdentification.observedCharacteristics?.visibleText,
+  ].filter(Boolean).join(' ').toLowerCase();
+  const hasDoubleBarClue = /double bars|two bars|horizontal lines|horizontal bars|dudandi|do dundi|double.line/.test(coinDescriptionText);
+  const hasShivraiLegendClue = /chhatrapati|chhatra.?pati|shivrai|shivaji|श्री|राजा|शिव|छत्र|पति/.test(coinDescriptionText);
+  const hasIndianCoinClue = /indian|maratha|mughal|paisa|princely state|indo-islamic|devanagari|indian script|copper/.test(coinDescriptionText);
+  if (hasIndianCoinClue && (hasDoubleBarClue || hasShivraiLegendClue)) {
+    addQuery('1 Paisa Dudandi type Shivrai Maratha Empire Devanagari');
+    addQuery('1 Paisa dudandi shivrai Poona Satara');
+    addQuery('Maratha Shivrai Chhatrapati paisa copper');
+    addQuery('Shri Raja Shiva Chhatra Pati coin');
+  }
+  // Query broad historical families stated in evidence without forcing a ruler.
   if (/indian|maratha|mughal|paisa|princely state|indo-islamic|persian|arabic script/.test(evidenceText)) {
     addQuery('Indian princely state coin');
     addQuery('Maratha paisa copper coin');
