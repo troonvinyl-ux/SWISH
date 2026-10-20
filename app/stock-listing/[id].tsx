@@ -902,7 +902,7 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
         ...(numistaTypeId ? {
           numista_candidate_id: numistaTypeId,
           numista_n: numistaN,
-          numista_url: r.numistaUrl ?? numista.numistaUrl ?? `https://en.numista.com/catalogue/index.php?r=${numistaTypeId}`,
+          numista_url: r.numistaUrl ?? numista.numistaUrl ?? `https://numista.com/${numistaTypeId}`,
           numista_title: r.numistaTitle ?? numista.title ?? null,
           numista_status: numistaStatus ?? 'candidate',
           numista_match_score: numistaMatchScore,
@@ -1478,7 +1478,7 @@ function MarketValuePanel({
                   {numista.typeId ? <View style={mv.nBadge}><Text style={mv.nBadgeText}>N#{numista.typeId}</Text></View> : null}
                 </View>
                 {numista.typeId ? (
-                  <Pressable onPress={() => Linking.openURL(`https://en.numista.com/catalogue/index.php?r=${numista.typeId}`)} style={({ pressed }) => [mv.numistaViewLink, pressed && { opacity: 0.7 }]} hitSlop={8}>
+                  <Pressable onPress={() => Linking.openURL(`https://numista.com/${numista.typeId}`)} style={({ pressed }) => [mv.numistaViewLink, pressed && { opacity: 0.7 }]} hitSlop={8}>
                     <MaterialIcons name="open-in-new" size={11} color={Colors.info} /><Text style={mv.numistaViewLinkText}>View on Numista</Text>
                   </Pressable>
                 ) : null}
