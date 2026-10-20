@@ -715,7 +715,7 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
       typeId: directDetail.id,
       numistaId: directDetail.id,
       numistaN: `N#${directDetail.id}`,
-      numistaUrl: `https://en.numista.com/catalogue/index.php?r=${directDetail.id}`,
+      numistaUrl: `https://numista.com/${directDetail.id}`,
       title: directDetail.title ?? '',
       matchScore: Math.round(Math.max(0, directPoints)),
       matchTier: directTier,
