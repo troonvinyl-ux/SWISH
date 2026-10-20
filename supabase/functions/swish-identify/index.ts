@@ -1616,6 +1616,90 @@ Deno.serve(async (req: Request) => {
       else if (objectType !== 'coin') constrained.warnings.push(`Object classified as ${objectType.replace(/_/g, ' ').toUpperCase()} — coin catalogue verification not applicable.`);
     }
 
+    // ── COIN SECOND-PASS ADJUDICATION ──────────────────────────────────────────
+    // Reproduce the useful part of a ChatGPT-style coin conversation inside SWISH:
+    // the model sees the original photos and user notes again, then must reconcile
+    // its first attribution against measurements and the actual catalogue lookup.
+    // This is server-side only; the client contract and database schema do not change.
+    if (coinMode && !vehicleMode && !clothingMode && objectType === 'coin') {
+      try {
+        const reviewContent = [
+          ...userContent,
+          {
+            type: 'text',
+            text: [
+              'FINAL NUMISMATIC REVIEW — SECOND PASS.',
+              'You are now the independent senior numismatist reviewing your first answer, not defending it.',
+              'Re-examine the supplied original coin photographs and the user-provided notes/measurements. Treat the first answer as a hypothesis only.',
+              'CATALOGUE VERIFICATION DATA (server-retrieved; use it as evidence, not as unquestionable truth):',
+              JSON.stringify(numistaVerification ?? { status: 'unavailable', matchFactors: ['No catalogue verification result'] }),
+              'FIRST-PASS CANDIDATE (must be critically checked against the actual images):',
+              JSON.stringify(constrained),
+              'Tasks: (1) transcribe only characters genuinely visible; (2) compare both faces and diagnostic layout; (3) compare supplied weight/diameter against catalogue specifications; (4) distinguish issuer/dynasty/period variants only when supported; (5) reject catalogue matches that contradict the image or measurements; (6) keep alternatives when ambiguity remains; (7) return the best defensible identification, not the most specific-sounding one.',
+              'If the catalogue says no match, do NOT erase a plausible evidence-led historical attribution. Mark it provisional/unverified and explain the limitation.',
+              'Never invent a date, mint, ruler, denomination, alloy, catalogue number, or inscription. Use Not established when not supported.',
+              'Do not increase confidence merely because two AI passes agree. Confidence must come from independent visible and catalogue evidence.',
+              'Return ONLY the complete JSON object matching the existing output schema. Preserve every required field and the existing schema shape.',
+              OUTPUT_SCHEMA,
+              supplementalSchema,
+            ].filter(Boolean).join('\\n'),
+          },
+        ];
+
+        const reviewResponse = await fetch(`${baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: 'google/gemini-2.5-flash',
+            messages: [
+              { role: 'system', content: fullSystemPrompt + '\\n\\nYou are performing a final independent coin attribution review. Resolve conflicts by prioritising visible evidence, supplied physical measurements, and verified catalogue facts. Do not merely repeat the first answer.' },
+              { role: 'user', content: reviewContent },
+            ],
+            temperature: 0.05,
+            max_tokens: 3500,
+          }),
+          signal: AbortSignal.timeout(30000),
+        });
+
+        if (reviewResponse.ok) {
+          const reviewData = await reviewResponse.json();
+          const reviewText = reviewData.choices?.[0]?.message?.content ?? '';
+          try {
+            const cleanedReview = reviewText.replace(/```json\\s*/gi, '').replace(/```\\s*/g, '').trim();
+            const reviewed = JSON.parse(cleanedReview);
+            if (reviewed && typeof reviewed === 'object' && typeof reviewed.canonicalTitle === 'string') {
+              // Keep the second-pass attribution, but retain the authoritative
+              // catalogue verification object and rerun deterministic guardrails.
+              constrained = {
+                ...constrained,
+                ...reviewed,
+                numistaVerification,
+              };
+              constrained = enforceEvidenceConstraints(constrained, false, false);
+              constrained = applyNumistaToIdentification(constrained, numistaVerification ?? {
+                status: 'unavailable', matchScore: 0, matchTier: 'rejected',
+                matchFactors: ['Catalogue verification unavailable'], contradictions: [],
+                physicalMatchGood: false, references: [],
+              });
+              constrained.warnings = Array.isArray(constrained.warnings) ? constrained.warnings : [];
+              constrained.attributes = constrained.attributes ?? {};
+              constrained.attributes.aiReviewPasses = 2;
+              constrained.attributes.aiReviewMethod = 'Gemini visual attribution + catalogue-aware independent second-pass review';
+            } else {
+              console.warn('[swish-identify] Second-pass review returned an incomplete result; retaining guarded first pass.');
+            }
+          } catch {
+            console.warn('[swish-identify] Second-pass review returned invalid JSON; retaining guarded first pass.');
+          }
+        } else {
+          // A review-pass outage must not discard a usable first-pass result.
+          console.warn(`[swish-identify] Second-pass review unavailable (HTTP ${reviewResponse.status}); retaining guarded first pass.`);
+        }
+      } catch (reviewError) {
+        console.warn('[swish-identify] Second-pass review failed; retaining guarded first pass:', reviewError);
+      }
+    }
+
     // Re-read usage for accurate quota response
     const usedAfter = (!isPremium && tenantId)
       ? await getUsage(adminClient, tenantId, user.id, monthKey)
