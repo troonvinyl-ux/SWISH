@@ -752,6 +752,17 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
   const yearMatch = year.match(/\d{2,4}/);
   const candidatePool = [primaryCandidate, ...aiCandidates.slice(1, 5)];
 
+  // Search the complete first-pass attribution and visible legends directly.
+  // Candidate lists can omit the best title, so do not rely on coinCandidates
+  // alone: a strong issuer + design match may otherwise never reach scoring.
+  addQuery(aiIdentification.canonicalTitle);
+  addQuery(aiIdentification.coinFields?.issuer, aiIdentification.coinFields?.denomination, aiIdentification.coinFields?.period);
+  addQuery(aiIdentification.coinFields?.issuer, aiIdentification.coinFields?.denomination);
+  addQuery(aiIdentification.coinFields?.issuer, aiIdentification.coinFields?.period);
+  addQuery(aiIdentification.observedCharacteristics?.visibleText);
+  addQuery(aiIdentification.coinFields?.legendFragment);
+  addQuery(aiIdentification.coinFields?.obverseDescription, aiIdentification.coinFields?.reverseDescription);
+
   // Search evidence-led descriptions BEFORE trusting the model's first candidate.
   // A bad first guess (e.g. Roman denarius) must not consume all catalogue queries.
   const evidence = [
@@ -819,7 +830,7 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
 
   // More than the former six searches: prioritize evidence-derived queries and
   // reserve some capacity for alternatives rather than overfitting to one title.
-  const queriesToTry = [...querySet].slice(0, 10);
+  const queriesToTry = [...querySet].slice(0, 14);
   if (queriesToTry.length === 0) {
     return { status: 'no_match', matchScore: 0, matchTier: 'rejected', matchFactors: ['Insufficient visible or confirmed evidence for Numista search'], contradictions: [], physicalMatchGood: false, references: [] };
   }
@@ -867,7 +878,7 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
     })
     .sort((a, b) => b.score - a.score);
 
-  const detailed = await Promise.all(prelim.slice(0, 12).map(async item => ({
+  const detailed = await Promise.all(prelim.slice(0, 20).map(async item => ({
     ...item,
     detail: await fetchNumistaTypeDetail(Number(item.candidate.id), apiKey),
   })));
