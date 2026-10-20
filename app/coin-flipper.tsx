@@ -1007,12 +1007,13 @@ const ct = StyleSheet.create({
 
 // ── Identify tab ──────────────────────────────────────────────────────────────
 
-function IdentifyTab({ result, capturedImages, onSave, saving, savedItemId, uploadProgress, isUploading, onReset, onTabSelect, onProcessImage, onRestoreImage, onIdentify, identifying }: {
+function IdentifyTab({ result, capturedImages, onSave, saving, savedItemId, uploadProgress, isUploading, onReset, onTabSelect, onProcessImage, onRestoreImage, onIdentify, identifying, valuationResult, valuationLoading, valuationError }: {
   result: AIIdentificationResult | null; capturedImages: CapturedImage[];
   onSave: () => void; saving: boolean; savedItemId: string | null;
   uploadProgress: string; isUploading: boolean; onReset: () => void; onTabSelect: (t: CFTab) => void;
   onProcessImage: (mode: CoinImageTool, slotId: string) => Promise<void>; onRestoreImage: (slotId: string) => void;
   onIdentify: () => void; identifying: boolean;
+  valuationResult: MarketValueResult | null; valuationLoading: boolean; valuationError: string | null;
 }) {
   const router = useRouter();
   if (!result) {
@@ -1153,6 +1154,44 @@ function IdentifyTab({ result, capturedImages, onSave, saving, savedItemId, uplo
         <Text style={idS.valueCtaText}>Estimate Market Value</Text>
         <MaterialIcons name="arrow-forward" size={17} color={CF.black} />
       </Pressable>
+      <View style={idS.marketPreview}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+          <MaterialIcons name="bar-chart" size={17} color={CF.gold} />
+          <Text style={idS.reasoningHeading}>MARKET VALUE</Text>
+          {valuationLoading ? <ActivityIndicator size="small" color={CF.gold} /> : null}
+        </View>
+        {valuationLoading ? (
+          <Text style={idS.reasoningText}>Checking completed sales and current asking prices…</Text>
+        ) : valuationError ? (
+          <Text style={[idS.reasoningText, { color: Colors.warning }]}>{valuationError} Open Value for details or retry.</Text>
+        ) : valuationResult?.valuation ? (
+          <>
+            <Text style={idS.marketRange}>£{Number(valuationResult.valuation.valuationLow ?? 0).toFixed(0)}–£{Number(valuationResult.valuation.valuationHigh ?? 0).toFixed(0)}</Text>
+            <Text style={idS.reasoningText}>Indicative market range · {String(valuationResult.valuation.valuationConfidence ?? 'unrated').replace(/_/g, ' ')}</Text>
+            <View style={idS.marketMetrics}>
+              <View style={{ flex: 1 }}>
+                <Text style={idS.marketMetricLabel}>Relevant sold</Text>
+                <Text style={idS.marketMetricValue}>{valuationResult.soldMarket?.relevantSoldCount ?? 0}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={idS.marketMetricLabel}>Sold median</Text>
+                <Text style={idS.marketMetricValue}>£{Number(valuationResult.soldMarket?.medianPrice ?? 0).toFixed(2)}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={idS.marketMetricLabel}>Asking median</Text>
+                <Text style={idS.marketMetricValue}>£{Number(valuationResult.activeAskingPrices?.medianAskingPrice ?? 0).toFixed(2)}</Text>
+              </View>
+            </View>
+            <Text style={idS.reasoningText}>{(valuationResult.soldMarket?.relevantSoldCount ?? 0) > 0 ? 'Sold data is shown separately from active asking prices.' : 'No relevant completed sales were found; treat the estimate as provisional and do not confuse asking prices with realised sales.'}</Text>
+          </>
+        ) : (
+          <Text style={idS.reasoningText}>A market estimate will appear here when pricing research finishes.</Text>
+        )}
+        <Pressable onPress={() => onTabSelect('value')} style={idS.marketDetailsBtn} accessibilityRole="button" accessibilityLabel="Open full market value research">
+          <Text style={idS.catalogueLinkText}>View full pricing research</Text>
+          <MaterialIcons name="arrow-forward" size={15} color={CF.gold} />
+        </Pressable>
+      </View>
       {Object.keys(result.attributes).length > 0 ? (
         <View style={idS.attrsCard}>
           <Text style={idS.evidenceTitle}>COIN ATTRIBUTES</Text>
@@ -1202,6 +1241,12 @@ const idS = StyleSheet.create({
   sourcRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   sourceText: { fontSize: Typography.size.xs, color: CF.textMuted },
   thumb: { width: 80, height: 80, borderRadius: Radius.md },
+  marketPreview: { backgroundColor: CF.surface, borderRadius: Radius.lg, padding: Spacing.md, gap: Spacing.sm, borderWidth: 1, borderColor: CF.gold + '35' },
+  marketRange: { fontSize: 27, fontWeight: Typography.weight.extrabold, color: CF.cream },
+  marketMetrics: { flexDirection: 'row', gap: Spacing.sm, paddingVertical: Spacing.xs },
+  marketMetricLabel: { color: CF.textMuted, fontSize: 10 },
+  marketMetricValue: { color: CF.textPrimary, fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, marginTop: 3 },
+  marketDetailsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Spacing.sm, borderTopWidth: 1, borderTopColor: CF.border },
   photoToolBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: Radius.sm, paddingVertical: 5, paddingHorizontal: 3, backgroundColor: CF.surfaceHigh, borderWidth: 1, borderColor: CF.border },
   photoToolText: { fontSize: 10, color: CF.gold, fontWeight: Typography.weight.semibold },
   reidentifyBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, padding: Spacing.md, borderRadius: Radius.lg, backgroundColor: CF.gold },
@@ -1669,9 +1714,9 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
     setActiveTab(tab);
   }, [isPremium]);
 
-  // Fetch valuation when entering Value tab
+  // Fetch valuation automatically for the identification report and refresh it when Value is opened.
   useEffect(() => {
-    if (activeTab !== 'value' || !idResult || !tenant) return;
+    if ((activeTab !== 'identify' && activeTab !== 'value') || !idResult || !tenant) return;
     if (valuationResult || valuationLoading) return;
     if (!idResult.canonicalTitle || idResult.canonicalTitle.length < 3) return;
     setValuationLoading(true);
@@ -2144,7 +2189,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
             />
           </CaptureTabErrorBoundary>
         ) : activeTab === 'identify' ? (
-          <IdentifyTab result={idResult} capturedImages={capturedImages} onSave={handleSave} saving={isSaving} savedItemId={savedItemId} uploadProgress={uploadProgress} isUploading={isUploading} onReset={handleReset} onTabSelect={handleTabSelect} onProcessImage={handleProcessImage} onRestoreImage={handleRestoreImage} onIdentify={handleIdentify} identifying={identifying} />
+          <IdentifyTab result={idResult} capturedImages={capturedImages} onSave={handleSave} saving={isSaving} savedItemId={savedItemId} uploadProgress={uploadProgress} isUploading={isUploading} onReset={handleReset} onTabSelect={handleTabSelect} onProcessImage={handleProcessImage} onRestoreImage={handleRestoreImage} onIdentify={handleIdentify} identifying={identifying} valuationResult={valuationResult} valuationLoading={valuationLoading} valuationError={valuationError} />
         ) : activeTab === 'reference' ? (
           <ReferenceTab result={idResult} selectedPeriod={selectedPeriod} onPeriodSelect={setSelectedPeriod} />
         ) : activeTab === 'value' ? (
