@@ -511,8 +511,9 @@ function CaptureTab({
   const isIslamic = selectedSpecialist.id === 'islamic';
   const incompleteQuickCoins = quickCaptures.filter(coin => !coin.reverseUri).length;
   const completeQuickCoins = quickCaptures.length - incompleteQuickCoins;
-  const canIdentify = capturedImages.length > 0;
   const hasRequired = COIN_SLOTS.filter(s => s.required).every(s => capturedImages.some(i => i.slotId === s.id));
+  const imageProcessing = capturedImages.some(i => (i.slotId === 'obverse' || i.slotId === 'reverse') && i.enhancementStatus === 'processing');
+  const canIdentify = hasRequired && !imageProcessing;
   const accentColor = selectedSpecialist.color;
 
   return (
@@ -850,11 +851,11 @@ function CaptureTab({
 
             <Pressable
               onPress={onIdentify}
-              disabled={!hasRequired || identifying}
+              disabled={!canIdentify || identifying}
               accessibilityRole="button"
               accessibilityLabel={identifying ? 'Identifying coin' : 'Identify coin'}
-              accessibilityState={{ disabled: !hasRequired || identifying, busy: identifying }}
-              style={[ct.identifyPrimary, (!hasRequired || identifying) && ct.identifyPrimaryDisabled]}
+              accessibilityState={{ disabled: !canIdentify || identifying, busy: identifying }}
+              style={[ct.identifyPrimary, (!canIdentify || identifying) && ct.identifyPrimaryDisabled]}
             >
               {identifying ? <ActivityIndicator size="small" color={CF.black} /> : <MaterialIcons name="auto-awesome" size={18} color={CF.black} />}
               <Text style={ct.identifyPrimaryText}>{identifying ? (processingStatus || 'Identifying…') : 'IDENTIFY COIN'}</Text>
