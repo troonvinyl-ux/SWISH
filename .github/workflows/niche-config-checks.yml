@@ -33,8 +33,6 @@ on:
       - 'services/orderService.ts'
       - 'app/coin-flipper.tsx'
       - 'services/aiIdentificationService.ts'
-      - 'services/coinImageEnhancementService.ts'
-      - 'supabase/functions/swish-coin-image-enhance/index.ts'
       - 'services/islamicIdentificationService.ts'
       - '.github/workflows/niche-config-checks.yml'
   pull_request:
@@ -66,8 +64,6 @@ on:
       - 'services/orderService.ts'
       - 'app/coin-flipper.tsx'
       - 'services/aiIdentificationService.ts'
-      - 'services/coinImageEnhancementService.ts'
-      - 'supabase/functions/swish-coin-image-enhance/index.ts'
       - 'services/islamicIdentificationService.ts'
       - '.github/workflows/niche-config-checks.yml'
 
@@ -99,7 +95,7 @@ jobs:
           set +e
           npx tsc --noEmit --pretty false > /tmp/swish-tsc.log 2>&1
           set -e
-          if grep -E 'app/coin-flipper.tsx|services/aiIdentificationService.ts|services/coinImageEnhancementService.ts|services/islamicIdentificationService.ts' /tmp/swish-tsc.log; then
+          if grep -E 'app/coin-flipper.tsx|services/aiIdentificationService.ts|services/islamicIdentificationService.ts' /tmp/swish-tsc.log; then
             echo "TypeScript diagnostics found in the coin scanner or its AI services."
             exit 1
           fi
