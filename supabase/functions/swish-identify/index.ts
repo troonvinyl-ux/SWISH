@@ -614,7 +614,7 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
         : noApiKey.matchFactors,
       ...(suppliedId ? {
         numistaN: `N#${suppliedId}`,
-        numistaUrl: `https://en.numista.com/catalogue/index.php?r=${suppliedId}`,
+        numistaUrl: `https://numista.com/${suppliedId}`,
       } : {}),
     };
   }
@@ -663,7 +663,7 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
         matchFactors: [`Direct Numista reference N#${directNumistaId} was supplied, but the catalogue type could not be retrieved; it has NOT been verified.`],
         contradictions: [], physicalMatchGood: false, references: [],
         numistaN: `N#${directNumistaId}`,
-        numistaUrl: `https://en.numista.com/catalogue/index.php?r=${directNumistaId}`,
+        numistaUrl: `https://numista.com/${directNumistaId}`,
       };
     }
 
@@ -1027,7 +1027,7 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
     rankedAlternatives.push({
       typeId: candidateId,
       title: String(detail?.title ?? item.candidate.title ?? `Numista type ${candidateId}`),
-      url: `https://en.numista.com/catalogue/index.php?r=${candidateId}`,
+      url: `https://numista.com/${candidateId}`,
       score: Math.round(Math.max(0, Math.min(100, score))),
       weight: detail?.weight ?? item.candidate.weight ?? null,
       diameter: detail?.size ?? detail?.diameter ?? item.candidate.size ?? item.candidate.diameter ?? null,
@@ -1054,7 +1054,7 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
 
   return {
     status: finalStatus, typeId, numistaId: typeId, numistaN: `N#${typeId}`,
-    numistaUrl: `https://en.numista.com/catalogue/index.php?r=${typeId}`,
+    numistaUrl: `https://numista.com/${typeId}`,
     title: src.title ?? bestCandidate.title ?? '',
     matchScore: Math.round(Math.max(0, Math.min(100, bestScore))),
     matchTier: finalMatchTier, matchFactors: bestFactors, contradictions: bestContradictions,
