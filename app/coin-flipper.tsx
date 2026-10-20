@@ -1775,23 +1775,44 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
     });
   }, [activeTab, idResult, tenant, selectedSpecialist.specialistId]);
 
-  // Preserve every captured original and asynchronously create a separate AI
-  // reference. The original URI remains canonical for inventory/eBay listings.
+  // Keep originals untouched while the user captures both faces. Processing starts
+  // only after obverse + reverse are present, then runs on both sides in parallel.
   const prepareCapturedPhoto = useCallback(async (image: CapturedImage): Promise<CapturedImage> => {
     originalImageUris.current[image.slotId] = image.uri;
-    const pending: CapturedImage = { ...image, enhancementStatus: 'processing' };
-    void generateCoinImageReference(image.uri).then((reference) => {
-      setCapturedImages(prev => prev.map(current => current.slotId === image.slotId && current.uri === image.uri
-        ? { ...current, enhancedUri: reference.enhancedUri, enhancementStatus: 'ready', enhancementWarning: reference.warning }
-        : current));
-    }).catch((error) => {
-      console.warn('[CoinFlipper] AI coin reference generation unavailable; original photo retained.', error);
-      setCapturedImages(prev => prev.map(current => current.slotId === image.slotId && current.uri === image.uri
-        ? { ...current, enhancementStatus: 'failed', enhancementWarning: error instanceof Error ? error.message : 'AI image enhancement unavailable.' }
-        : current));
-    });
-    return pending;
+    return { ...image, enhancedUri: undefined, enhancementStatus: undefined, enhancementWarning: undefined };
   }, []);
+
+  useEffect(() => {
+    const sides = ['obverse', 'reverse']
+      .map(slotId => capturedImages.find(image => image.slotId === slotId))
+      .filter((image): image is CapturedImage => !!image);
+    if (sides.length !== 2) return;
+    const pending = sides.filter(image => !image.enhancedUri && !image.enhancementStatus);
+    if (pending.length === 0) return;
+
+    // Mark each side first so this effect cannot start duplicate render requests.
+    setCapturedImages(prev => prev.map(current =>
+      pending.some(image => image.slotId === current.slotId && image.uri === current.uri)
+        ? { ...current, enhancementStatus: 'processing' }
+        : current
+    ));
+    for (const image of pending) {
+      void generateCoinImageReference(image.uri).then(reference => {
+        setCapturedImages(prev => prev.map(current =>
+          current.slotId === image.slotId && current.uri === image.uri
+            ? { ...current, enhancedUri: reference.enhancedUri, enhancementStatus: 'ready', enhancementWarning: reference.warning }
+            : current
+        ));
+      }).catch(error => {
+        console.warn('[CoinFlipper] AI coin crop/enhancement unavailable; original photo retained.', error);
+        setCapturedImages(prev => prev.map(current =>
+          current.slotId === image.slotId && current.uri === image.uri
+            ? { ...current, enhancementStatus: 'failed', enhancementWarning: error instanceof Error ? error.message : 'AI image enhancement unavailable.' }
+            : current
+        ));
+      });
+    }
+  }, [capturedImages]);
 
   // ── Capture handler ─────────────────────────────────────────────────────────
   const handleCapture = useCallback(async (slotId: string, slotLabel: string) => {
