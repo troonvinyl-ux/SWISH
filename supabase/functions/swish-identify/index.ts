@@ -1036,6 +1036,25 @@ function enforceEvidenceConstraints(identification: any, vehicleMode: boolean, c
     }
   }
 
+  // If the catalogue explicitly found no match and the evidence score is very low,
+  // do not present the model's speculative dynasty/denomination as the main identity.
+  // Preserve the detailed observations and candidate data, but label the item honestly.
+  const hasCatalogueMatch = ['verified', 'strong_match', 'candidate', 'weak_match'].includes(
+    String(result.numistaStatus ?? result.numistaVerification?.status ?? '')
+  );
+  if (result.objectType === 'coin' && !hasCatalogueMatch && result.confidence < 0.30) {
+    result.canonicalTitle = 'Unidentified coin — provisional visual observations';
+    result.identificationState = 'observation_only';
+    result.identificationSource = 'inferred';
+    result.missingInformation = Array.isArray(result.missingInformation) ? result.missingInformation : [];
+    if (!result.missingInformation.some((m: string) => /no matching catalogue|no catalogue match/i.test(m))) {
+      result.missingInformation.push('No matching catalogue type and insufficient evidence for a reliable denomination, ruler, or issuing authority.');
+    }
+    if (!result.warnings.some((w: string) => /do not list as a confirmed identification/i.test(w))) {
+      result.warnings.push('Do not list as a confirmed identification — obtain weight, diameter, clearer images, and specialist review.');
+    }
+  }
+
   if (result.identificationState === 'observation_only' && result.confidence < 0.20) {
     if (!/provisional|possible|likely|candidate|unidentified|unknown/i.test(String(result.canonicalTitle ?? ''))) {
       const typeLabel = vehicleMode ? 'Vehicle' : clothingMode ? 'Garment' : result.objectType !== 'unknown' ? (result.objectType || 'Object') : 'Object';
