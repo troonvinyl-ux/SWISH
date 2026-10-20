@@ -696,7 +696,7 @@ function scoreNumistaIslamic(
   return {
     typeId: type.id,
     numistaN: `N#${type.id}`,
-    numistaUrl: `https://en.numista.com/catalogue/index.php?r=${type.id}`,
+    numistaUrl: `https://numista.com/${type.id}`,
     title: type.title ?? '',
     denomination: type.min_unit?.name,
     issuedFrom: type.issued_from,
