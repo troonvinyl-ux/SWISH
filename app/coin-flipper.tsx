@@ -22,7 +22,7 @@ import {
   ActivityIndicator, Linking, Alert, AccessibilityInfo,
   TextInput, Modal, FlatList,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -965,12 +965,13 @@ class CaptureTabErrorBoundary extends React.Component<
 export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: boolean } = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams<{ tab?: string }>();
   const { tenant, setScanMode, triggerInventoryReload } = useApp();
   const { showAlert } = useAlert();
   const { isPremium } = useSubscription();
 
   // ── Tab state ───────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<CFTab>('home');
+  const [activeTab, setActiveTab] = useState<CFTab>(() => params.tab === 'capture' ? 'capture' : 'home');
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
 
