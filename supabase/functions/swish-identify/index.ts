@@ -469,6 +469,11 @@ export interface NumistaVerificationResult {
   suppliedWeight?: number; suppliedDiameter?: number;
   weightDifferencePercent?: number; diameterDifferenceMm?: number;
   physicalMatchGood: boolean;
+  alternatives?: Array<{
+    typeId: number; title: string; url: string; score: number;
+    weight?: number | null; diameter?: number | null; issuer?: string;
+    denomination?: string; contradictions: string[];
+  }>;
 }
 
 function catalogueText(value: unknown): string {
@@ -939,6 +944,11 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
   })));
 
   let bestScore = -100, bestCandidate: any = null, bestFactors: string[] = [], bestContradictions: string[] = [], typeDetail: any = null;
+  const rankedAlternatives: Array<{
+    typeId: number; title: string; url: string; score: number;
+    weight?: number | null; diameter?: number | null; issuer?: string;
+    denomination?: string; contradictions: string[];
+  }> = [];
   for (const item of detailed) {
     const detail = item.detail ?? null;
     const scored = scoreNumistaCandidate(item.candidate, detail, suppliedWeight, suppliedDiameter, suppliedMaterial,
@@ -969,6 +979,18 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
     let score = scored.score;
     // Major physical contradictions cap the candidate below strong-match territory.
     if (contradictions.some(c => /MAJOR CONTRADICTION|DIAMETER CONTRADICTION/i.test(c))) score = Math.min(score, 49);
+    const candidateId = Number(detail?.id ?? item.candidate.id);
+    rankedAlternatives.push({
+      typeId: candidateId,
+      title: String(detail?.title ?? item.candidate.title ?? `Numista type ${candidateId}`),
+      url: `https://en.numista.com/catalogue/index.php?r=${candidateId}`,
+      score: Math.round(Math.max(0, Math.min(100, score))),
+      weight: detail?.weight ?? item.candidate.weight ?? null,
+      diameter: detail?.size ?? detail?.diameter ?? item.candidate.size ?? item.candidate.diameter ?? null,
+      issuer: catalogueName(detail?.issuer) || catalogueName(item.candidate.issuer),
+      denomination: catalogueText(detail?.value ?? detail?.min_unit?.name ?? detail?.denomination_name ?? item.candidate.value ?? ''),
+      contradictions,
+    });
     if (score > bestScore) {
       bestScore = score;
       bestCandidate = item.candidate;
@@ -1005,6 +1027,7 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
     weightDifferencePercent: (suppliedWeight && src.weight) ? Math.round(Math.abs(suppliedWeight - src.weight) / src.weight * 1000) / 10 : undefined,
     diameterDifferenceMm: (suppliedDiameter && (src.diameter ?? src.size)) ? Math.round(Math.abs(suppliedDiameter - (src.diameter ?? src.size)) * 10) / 10 : undefined,
     physicalMatchGood,
+    alternatives: rankedAlternatives.sort((a, b) => b.score - a.score).slice(0, 9),
   };
 }
 
