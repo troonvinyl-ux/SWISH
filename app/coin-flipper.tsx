@@ -1007,10 +1007,12 @@ const ct = StyleSheet.create({
 
 // ── Identify tab ──────────────────────────────────────────────────────────────
 
-function IdentifyTab({ result, capturedImages, onSave, saving, savedItemId, uploadProgress, isUploading, onReset, onTabSelect }: {
+function IdentifyTab({ result, capturedImages, onSave, saving, savedItemId, uploadProgress, isUploading, onReset, onTabSelect, onProcessImage, onRestoreImage, onIdentify, identifying }: {
   result: AIIdentificationResult | null; capturedImages: CapturedImage[];
   onSave: () => void; saving: boolean; savedItemId: string | null;
   uploadProgress: string; isUploading: boolean; onReset: () => void; onTabSelect: (t: CFTab) => void;
+  onProcessImage: (mode: CoinImageTool, slotId: string) => Promise<void>; onRestoreImage: (slotId: string) => void;
+  onIdentify: () => void; identifying: boolean;
 }) {
   const router = useRouter();
   if (!result) {
@@ -1051,9 +1053,30 @@ function IdentifyTab({ result, capturedImages, onSave, saving, savedItemId, uplo
         </View>
       </View>
       {capturedImages.length > 0 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm }}>
-          {capturedImages.map(img => <Image key={img.slotId} source={{ uri: img.uri }} style={idS.thumb} contentFit="cover" />)}
-        </ScrollView>
+        <View style={{ gap: Spacing.sm }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm }}>
+            {capturedImages.map(img => (
+              <View key={img.slotId} style={{ width: 112, gap: 5 }}>
+                <Image source={{ uri: img.uri }} style={[idS.thumb, { width: 112, height: 112 }]} contentFit="cover" />
+                <Text style={{ color: CF.textSub, fontSize: 10 }} numberOfLines={1}>{img.slotLabel || img.slotId}</Text>
+                <Pressable onPress={() => onProcessImage('enhance', img.slotId).catch(error => Alert.alert('Image enhancement', error?.message ?? 'Could not enhance this photo.'))} style={idS.photoToolBtn} accessibilityRole="button" accessibilityLabel={`Enhance ${img.slotLabel || img.slotId} photo`}>
+                  <MaterialIcons name="auto-fix-high" size={13} color={CF.gold} /><Text style={idS.photoToolText}>Enhance</Text>
+                </Pressable>
+                <Pressable onPress={() => onProcessImage('detect', img.slotId).catch(error => Alert.alert('Auto-crop', error?.message ?? 'Could not detect the coin boundary.'))} style={idS.photoToolBtn} accessibilityRole="button" accessibilityLabel={`Auto-crop ${img.slotLabel || img.slotId} photo`}>
+                  <MaterialIcons name="crop-free" size={13} color={CF.gold} /><Text style={idS.photoToolText}>Auto-crop</Text>
+                </Pressable>
+                <Pressable onPress={() => onRestoreImage(img.slotId)} style={idS.photoToolBtn} accessibilityRole="button" accessibilityLabel={`Restore original ${img.slotLabel || img.slotId} photo`}>
+                  <MaterialIcons name="restore" size={13} color={CF.textSub} /><Text style={[idS.photoToolText, { color: CF.textSub }]}>Original</Text>
+                </Pressable>
+              </View>
+            ))}
+          </ScrollView>
+          <Pressable onPress={onIdentify} disabled={identifying} style={[idS.reidentifyBtn, identifying && { opacity: 0.55 }]} accessibilityRole="button" accessibilityLabel="Re-identify coin using the current photographs" accessibilityState={{ disabled: identifying, busy: identifying }}>
+            {identifying ? <ActivityIndicator size="small" color={CF.black} /> : <MaterialIcons name="refresh" size={17} color={CF.black} />}
+            <Text style={idS.valueCtaText}>{identifying ? 'Re-identifying…' : 'Re-identify with these photos'}</Text>
+          </Pressable>
+          <Text style={{ color: CF.textMuted, fontSize: 10, lineHeight: 14 }}>Enhancement and auto-crop create a new working image. Re-identify to refresh the attribution; use Original to restore the captured photo.</Text>
+        </View>
       ) : null}
       {result.confidence < 0.30 && result.numistaStatus === 'no_match' ? (
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: '#241508', borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: Colors.warning + '70' }} accessibilityRole="alert">
@@ -1179,6 +1202,9 @@ const idS = StyleSheet.create({
   sourcRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   sourceText: { fontSize: Typography.size.xs, color: CF.textMuted },
   thumb: { width: 80, height: 80, borderRadius: Radius.md },
+  photoToolBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: Radius.sm, paddingVertical: 5, paddingHorizontal: 3, backgroundColor: CF.surfaceHigh, borderWidth: 1, borderColor: CF.border },
+  photoToolText: { fontSize: 10, color: CF.gold, fontWeight: Typography.weight.semibold },
+  reidentifyBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, padding: Spacing.md, borderRadius: Radius.lg, backgroundColor: CF.gold },
   numistaCard: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: CF.surface, borderRadius: Radius.lg, padding: Spacing.md, borderWidth: 1 },
   numistaStatus: { fontSize: 10, fontWeight: Typography.weight.semibold, color: CF.textSub, textTransform: 'uppercase', letterSpacing: 0.4 },
   numistaTitle: { fontSize: Typography.size.sm, color: CF.textPrimary, lineHeight: 18, marginTop: 2 },
@@ -2118,7 +2144,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
             />
           </CaptureTabErrorBoundary>
         ) : activeTab === 'identify' ? (
-          <IdentifyTab result={idResult} capturedImages={capturedImages} onSave={handleSave} saving={isSaving} savedItemId={savedItemId} uploadProgress={uploadProgress} isUploading={isUploading} onReset={handleReset} onTabSelect={handleTabSelect} />
+          <IdentifyTab result={idResult} capturedImages={capturedImages} onSave={handleSave} saving={isSaving} savedItemId={savedItemId} uploadProgress={uploadProgress} isUploading={isUploading} onReset={handleReset} onTabSelect={handleTabSelect} onProcessImage={handleProcessImage} onRestoreImage={handleRestoreImage} onIdentify={handleIdentify} identifying={identifying} />
         ) : activeTab === 'reference' ? (
           <ReferenceTab result={idResult} selectedPeriod={selectedPeriod} onPeriodSelect={setSelectedPeriod} />
         ) : activeTab === 'value' ? (
