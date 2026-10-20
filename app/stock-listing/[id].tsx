@@ -1105,6 +1105,22 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
                           {refinedResult.numistaVerification.numistaUrl ? <Text onPress={() => Linking.openURL(refinedResult.numistaVerification.numistaUrl)} style={{ fontSize: 10, color: Colors.info, textDecorationLine: 'underline' }}>Open Numista catalogue entry</Text> : null}
                         </View>
                       ) : null}
+                      {refinedResult.coinResearch ? (
+                        <View style={{ marginTop: 8, marginBottom: 10, padding: 10, borderRadius: 10, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.surfaceBorder, gap: 7 }}>
+                          <Text style={{ fontSize: 10, fontWeight: Typography.weight.bold, letterSpacing: 0.6, color: Colors.info }}>CROSS-CATALOGUE RESEARCH</Text>
+                          <Text style={{ fontSize: 11, color: Colors.textSecondary }}>
+                            {refinedResult.coinResearch.candidates.length} catalogue lead(s) · results are candidates, not confirmed IDs
+                          </Text>
+                          {(refinedResult.coinResearch.candidates ?? []).slice(0, 8).map((candidate, index) => (
+                            <View key={candidate.source + ':' + candidate.url + ':' + index} style={{ gap: 2, paddingTop: 5, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: Colors.surfaceBorder }}>
+                              <Text style={{ fontSize: 9, fontWeight: Typography.weight.bold, color: Colors.info }}>{candidate.source}{candidate.reference ? ' · ' + candidate.reference : ''}</Text>
+                              <Text onPress={() => Linking.openURL(candidate.url)} style={{ fontSize: 11, color: Colors.textPrimary, textDecorationLine: 'underline' }}>{candidate.title}</Text>
+                              {candidate.snippet ? <Text style={{ fontSize: 10, color: Colors.textSecondary }}>{candidate.snippet}</Text> : null}
+                            </View>
+                          ))}
+                          <Text style={{ fontSize: 9, color: Colors.textTertiary }}>{refinedResult.coinResearch.note}</Text>
+                        </View>
+                      ) : null}
                       <View style={reid.comparisonActions}><Pressable onPress={() => setRefinedResult(null)} style={reid.comparisonRejectBtn}><MaterialIcons name="close" size={14} color={Colors.textSecondary} /><Text style={reid.comparisonRejectText}>Keep Original</Text></Pressable><Pressable onPress={handleAcceptRefined} style={reid.comparisonAcceptBtn}><MaterialIcons name="check" size={14} color={Colors.background} /><Text style={reid.comparisonAcceptText}>Use Refined</Text></Pressable></View>
                     </View>
                   ) : null}
