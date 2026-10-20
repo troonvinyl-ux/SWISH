@@ -1082,6 +1082,54 @@ function IdentifyTab({ result, capturedImages, onSave, saving, savedItemId, uplo
           {result.missingInformation.slice(0, 2).map((m, i) => (<View key={i} style={idS.evidenceRow}><MaterialIcons name="help-outline" size={11} color={Colors.warning} /><Text style={[idS.evidenceText, { color: Colors.warning }]}>{m}</Text></View>))}
         </View>
       ) : null}
+      {(result.candidateIdentification?.whyCandidateSelected || result.candidateIdentification?.whyUncertain || (result.candidateIdentification?.alternativeCandidates?.length ?? 0) > 0 || result.evidenceContradictory.length > 0 || result.warnings.length > 0) ? (
+        <View style={idS.reasoningCard}>
+          <Text style={idS.evidenceTitle}>ATTRIBUTION REASONING</Text>
+          {result.candidateIdentification?.whyCandidateSelected ? (
+            <View style={{ gap: 4 }}>
+              <Text style={idS.reasoningHeading}>Why this candidate?</Text>
+              <Text style={idS.reasoningText}>{result.candidateIdentification.whyCandidateSelected}</Text>
+            </View>
+          ) : null}
+          {result.candidateIdentification?.whyUncertain ? (
+            <View style={{ gap: 4 }}>
+              <Text style={idS.reasoningHeading}>What remains uncertain</Text>
+              <Text style={idS.reasoningText}>{result.candidateIdentification.whyUncertain}</Text>
+            </View>
+          ) : null}
+          {(result.candidateIdentification?.alternativeCandidates?.length ?? 0) > 0 ? (
+            <View style={{ gap: 4 }}>
+              <Text style={idS.reasoningHeading}>Alternative candidates</Text>
+              {result.candidateIdentification!.alternativeCandidates!.slice(0, 3).map((candidate, i) => (
+                <Text key={i} style={idS.reasoningText}>• {candidate}</Text>
+              ))}
+            </View>
+          ) : null}
+          {result.evidenceContradictory.length > 0 ? (
+            <View style={{ gap: 4 }}>
+              <Text style={idS.reasoningHeading}>Conflicting evidence</Text>
+              {result.evidenceContradictory.slice(0, 4).map((item, i) => <Text key={i} style={[idS.reasoningText, { color: Colors.warning }]}>• {item}</Text>)}
+            </View>
+          ) : null}
+          {result.warnings.length > 0 ? (
+            <View style={{ gap: 4 }}>
+              <Text style={idS.reasoningHeading}>Warnings</Text>
+              {result.warnings.slice(0, 3).map((item, i) => <Text key={i} style={idS.reasoningText}>• {item}</Text>)}
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+      {result.numistaUrl || result.numistaVerification?.numistaUrl ? (
+        <Pressable onPress={() => Linking.openURL(String(result.numistaUrl ?? result.numistaVerification?.numistaUrl))} style={idS.catalogueLink} accessibilityRole="link" accessibilityLabel="Open Numista catalogue reference">
+          <MaterialIcons name="open-in-new" size={17} color={CF.gold} />
+          <Text style={idS.catalogueLinkText}>Open Numista catalogue record</Text>
+        </Pressable>
+      ) : null}
+      <Pressable onPress={() => onTabSelect('value')} style={idS.valueCta} accessibilityRole="button" accessibilityLabel="Estimate this coin's market value">
+        <MaterialIcons name="bar-chart" size={18} color={CF.black} />
+        <Text style={idS.valueCtaText}>Estimate Market Value</Text>
+        <MaterialIcons name="arrow-forward" size={17} color={CF.black} />
+      </Pressable>
       {Object.keys(result.attributes).length > 0 ? (
         <View style={idS.attrsCard}>
           <Text style={idS.evidenceTitle}>COIN ATTRIBUTES</Text>
@@ -1140,6 +1188,13 @@ const idS = StyleSheet.create({
   evidenceTitle: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: CF.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
   evidenceRow: { flexDirection: 'row', gap: 6, alignItems: 'flex-start' },
   evidenceText: { flex: 1, fontSize: Typography.size.xs, color: CF.textSub, lineHeight: 16 },
+  reasoningCard: { backgroundColor: CF.surface, borderRadius: Radius.lg, padding: Spacing.md, gap: Spacing.md, borderWidth: 1, borderColor: CF.gold + '25' },
+  reasoningHeading: { fontSize: Typography.size.xs, fontWeight: Typography.weight.bold, color: CF.cream },
+  reasoningText: { fontSize: Typography.size.sm, lineHeight: 19, color: CF.textSub },
+  catalogueLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, padding: Spacing.md, borderRadius: Radius.lg, borderWidth: 1, borderColor: CF.gold + '50', backgroundColor: CF.surface },
+  catalogueLinkText: { color: CF.gold, fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold },
+  valueCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, padding: Spacing.md, borderRadius: Radius.lg, backgroundColor: CF.gold },
+  valueCtaText: { color: CF.black, fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, flex: 1 },
   attrsCard: { backgroundColor: CF.surface, borderRadius: Radius.lg, borderWidth: 1, borderColor: CF.border, overflow: 'hidden' },
   attrRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: Spacing.md, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: CF.border },
   attrKey: { fontSize: Typography.size.xs, color: CF.textMuted, textTransform: 'capitalize', flex: 1 },
