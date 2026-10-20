@@ -321,24 +321,25 @@ function HomeTab({ onTabSelect, isPremium, tenant, onUpgrade, onPeriodSelect, se
 }) {
   const router = useRouter();
   const FEATURES = [
-    { label: 'Scan Coin',     icon: 'photo-camera',   tab: 'capture'   as CFTab, pro: false },
-    { label: 'My Coins',      icon: 'inventory-2',    tab: null,                 pro: false, route: '/(tabs)/inventory' },
-    { label: 'Identify',      icon: 'auto-awesome',   tab: 'identify'  as CFTab, pro: false },
-    { label: 'Value',         icon: 'bar-chart',      tab: 'value'     as CFTab, pro: true  },
-    { label: 'Reference',     icon: 'menu-book',      tab: 'reference' as CFTab, pro: true  },
-    { label: 'List & Sell',   icon: 'sell',           tab: 'list_sell' as CFTab, pro: false },
-    { label: 'Insights',      icon: 'trending-up',    tab: 'insights'  as CFTab, pro: true  },
-    { label: 'Quick Capture', icon: 'burst-mode',     tab: 'capture'   as CFTab, pro: false },
+    { label: 'Scan Coin',     icon: 'photo-camera',   tab: 'capture'   as CFTab, pro: false, subtitle: 'Photograph both sides' },
+    { label: 'My Coins',      icon: 'inventory-2',    tab: null,                 pro: false, route: '/(tabs)/inventory', subtitle: 'Your collection' },
+    { label: 'Identify',      icon: 'auto-awesome',   tab: 'identify'  as CFTab, pro: false, subtitle: 'AI + catalogue evidence' },
+    { label: 'Value',         icon: 'bar-chart',      tab: 'value'     as CFTab, pro: true, subtitle: 'Market evidence' },
+    { label: 'Reference',     icon: 'menu-book',      tab: 'reference' as CFTab, pro: true, subtitle: 'Numista & catalogues' },
+    { label: 'List & Sell',   icon: 'sell',           tab: 'list_sell' as CFTab, pro: false, subtitle: 'Create eBay listing' },
+    { label: 'Insights',      icon: 'trending-up',    tab: 'insights'  as CFTab, pro: true, subtitle: 'Collection intelligence' },
+    { label: 'Quick Capture', icon: 'burst-mode',     tab: 'capture'   as CFTab, pro: false, subtitle: 'Scan a batch', quick: true },
   ];
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ht.content}>
       <View style={ht.hero}>
         <View style={ht.heroReticleWrap}>
-          <Reticle size={110} color={CF.gold} />
-          <View style={ht.heroLogoCenter}><MaterialIcons name="toll" size={44} color={CF.gold} /></View>
+          <Reticle size={106} color={CF.gold} />
+          <View style={ht.heroLogoCenter}><MaterialIcons name="toll" size={42} color={CF.gold} /></View>
         </View>
         <Text style={ht.heroTitle}>COIN FLIPPER</Text>
         <Text style={ht.heroTagline}>ANCIENT COINS • REAL VALUES • SMARTER DECISIONS</Text>
+        <Text style={ht.heroPromise}>HISTORY IDENTIFIED. OPPORTUNITY REALISED.</Text>
         {isPremium ? (
           <View style={ht.proBadge}>
             <MaterialIcons name="workspace-premium" size={11} color={CF.black} />
@@ -346,9 +347,13 @@ function HomeTab({ onTabSelect, isPremium, tenant, onUpgrade, onPeriodSelect, se
           </View>
         ) : null}
       </View>
-      <Text style={ht.sectionLabel}>TOOLS</Text>
+
+      <View style={ht.sectionHeading}>
+        <Text style={ht.sectionLabel}>YOUR COIN WORKFLOW</Text>
+        <Text style={ht.sectionHint}>Capture · identify · verify · value · sell</Text>
+      </View>
       <View style={ht.grid}>
-        {FEATURES.map(f => {
+        {FEATURES.map((f, index) => {
           const locked = f.pro && !isPremium;
           return (
             <Pressable
@@ -356,18 +361,27 @@ function HomeTab({ onTabSelect, isPremium, tenant, onUpgrade, onPeriodSelect, se
               onPress={() => { if (locked) { onUpgrade(); return; } if (f.route) { router.push(f.route as any); return; } if (f.tab) onTabSelect(f.tab); }}
               accessibilityRole="button"
               accessibilityLabel={locked ? `${f.label} — Pro feature, tap to upgrade` : f.label}
-              style={({ pressed }) => [ht.gridItem, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
+              style={({ pressed }) => [ht.gridItem, pressed && { opacity: 0.82, transform: [{ scale: 0.985 }] }]}
             >
+              <View style={ht.gridTopRow}>
+                <Text style={ht.gridIndex}>{String(index + 1).padStart(2, '0')}</Text>
+                {locked ? <MaterialIcons name="lock" size={13} color={CF.textMuted} /> : f.quick ? <MaterialIcons name="bolt" size={13} color={CF.gold} /> : null}
+              </View>
               <View style={[ht.gridIcon, locked && { backgroundColor: CF.border }]}>
-                <MaterialIcons name={locked ? 'lock' : f.icon as any} size={22} color={locked ? CF.textMuted : CF.gold} />
+                <MaterialIcons name={locked ? 'lock' : f.icon as any} size={23} color={locked ? CF.textMuted : CF.gold} />
               </View>
               <Text style={[ht.gridLabel, locked && { color: CF.textMuted }]} numberOfLines={1}>{f.label}</Text>
+              <Text style={ht.gridSub} numberOfLines={2}>{f.subtitle}</Text>
               {locked ? <View style={ht.gridProPill}><Text style={ht.gridProText}>PRO</Text></View> : null}
             </Pressable>
           );
         })}
       </View>
-      <Text style={[ht.sectionLabel, { marginBottom: -4 }]}>HISTORICAL PERIODS</Text>
+
+      <View style={ht.sectionHeading}>
+        <Text style={ht.sectionLabel}>BROWSE BY CIVILISATION</Text>
+        <Text style={ht.sectionHint}>Choose a period to focus your next scan</Text>
+      </View>
       <PeriodBrowser onSelect={onPeriodSelect} selectedId={selectedPeriod} />
       {selectedPeriod ? (() => {
         const p = PERIODS.find(x => x.id === selectedPeriod);
@@ -387,13 +401,14 @@ function HomeTab({ onTabSelect, isPremium, tenant, onUpgrade, onPeriodSelect, se
           </Pressable>
         );
       })() : null}
+
       {!isPremium ? (
         <Pressable onPress={onUpgrade} accessibilityRole="button" accessibilityLabel="Upgrade to Coin Flipper Pro for £9.99 per month" style={({ pressed }) => [ht.upgradeBanner, pressed && { opacity: 0.88 }]}>
           <View style={ht.upgradeLeft}>
             <MaterialIcons name="workspace-premium" size={18} color={CF.black} />
-            <View>
-              <Text style={ht.upgradeBannerText}>Upgrade to Coin Flipper Pro</Text>
-              <Text style={ht.upgradeBannerSub}>Islamic engine · Quick capture · Insights</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={ht.upgradeBannerText}>Unlock Coin Flipper Pro</Text>
+              <Text style={ht.upgradeBannerSub}>Islamic specialist · advanced market evidence · deeper references</Text>
             </View>
           </View>
           <View style={ht.upgradePriceChip}>
@@ -412,19 +427,25 @@ function HomeTab({ onTabSelect, isPremium, tenant, onUpgrade, onPeriodSelect, se
 }
 const ht = StyleSheet.create({
   content: { padding: Spacing.base, gap: Spacing.lg, paddingBottom: 40 },
-  sectionLabel: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: CF.textMuted, textTransform: 'uppercase', letterSpacing: 0.8 },
-  hero: { alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.md },
+  sectionHeading: { gap: 4 },
+  sectionLabel: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: CF.goldMid, textTransform: 'uppercase', letterSpacing: 1.3 },
+  sectionHint: { fontSize: 11, color: CF.textMuted, lineHeight: 15 },
+  hero: { alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.xl, paddingHorizontal: Spacing.md, borderRadius: Radius.xxl, borderWidth: 1, borderColor: CF.border, backgroundColor: '#100D08' },
   heroReticleWrap: { position: 'relative', alignItems: 'center', justifyContent: 'center' },
   heroLogoCenter: { position: 'absolute' },
-  heroTitle: { fontSize: 28, fontWeight: Typography.weight.extrabold, color: CF.gold, letterSpacing: 3 },
-  heroTagline: { fontSize: 9, color: CF.textSub, letterSpacing: 1.5, textAlign: 'center' },
-  proBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: CF.gold, borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 3 },
+  heroTitle: { fontSize: 27, fontWeight: Typography.weight.extrabold, color: CF.gold, letterSpacing: 3.2 },
+  heroTagline: { fontSize: 9, color: CF.textSub, letterSpacing: 1.4, textAlign: 'center' },
+  heroPromise: { fontSize: 8, color: CF.goldMid, letterSpacing: 1.6, textAlign: 'center', marginTop: 2, fontWeight: Typography.weight.bold },
+  proBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: CF.gold, borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 3, marginTop: 2 },
   proBadgeText: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: CF.black, letterSpacing: 1.5 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  gridItem: { width: '23%', backgroundColor: CF.surface, borderRadius: Radius.xl, padding: Spacing.sm, alignItems: 'center', gap: 6, borderWidth: 1, borderColor: CF.border, aspectRatio: 0.9, justifyContent: 'center' },
-  gridIcon: { width: 44, height: 44, borderRadius: Radius.md, backgroundColor: CF.goldDim, alignItems: 'center', justifyContent: 'center' },
-  gridLabel: { fontSize: 9, fontWeight: Typography.weight.bold, color: CF.textPrimary, textAlign: 'center' },
-  gridProPill: { backgroundColor: CF.goldDim, borderRadius: Radius.pill, paddingHorizontal: 5, paddingVertical: 2 },
+  gridItem: { width: '48%', minHeight: 148, backgroundColor: CF.surface, borderRadius: Radius.xl, padding: Spacing.md, alignItems: 'flex-start', gap: 7, borderWidth: 1, borderColor: CF.border },
+  gridTopRow: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  gridIndex: { fontSize: 9, color: CF.textMuted, letterSpacing: 1.2, fontWeight: Typography.weight.bold },
+  gridIcon: { width: 42, height: 42, borderRadius: Radius.md, backgroundColor: CF.goldDim, alignItems: 'center', justifyContent: 'center' },
+  gridLabel: { fontSize: 12, fontWeight: Typography.weight.bold, color: CF.textPrimary },
+  gridSub: { fontSize: 10, color: CF.textSub, lineHeight: 14 },
+  gridProPill: { backgroundColor: CF.goldDim, borderRadius: Radius.pill, paddingHorizontal: 6, paddingVertical: 2, position: 'absolute', top: 10, right: 10 },
   gridProText: { fontSize: 7, fontWeight: Typography.weight.extrabold, color: CF.gold, letterSpacing: 0.5 },
   periodDetail: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, backgroundColor: CF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1 },
   periodDetailIcon: { width: 48, height: 48, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
@@ -433,571 +454,16 @@ const ht = StyleSheet.create({
   periodDetailRange: { fontSize: 10, color: CF.textMuted },
   periodDetailBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
   periodDetailBtnText: { fontSize: Typography.size.xs, fontWeight: Typography.weight.extrabold, color: CF.black },
-  upgradeBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: CF.gold, borderRadius: Radius.xxl, paddingVertical: Spacing.base, paddingHorizontal: Spacing.xl, shadowColor: CF.gold, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 14, elevation: 6 },
+  upgradeBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: CF.gold, borderRadius: Radius.xxl, paddingVertical: Spacing.base, paddingHorizontal: Spacing.lg, gap: Spacing.sm, shadowColor: CF.gold, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.32, shadowRadius: 14, elevation: 5 },
   upgradeLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, flex: 1 },
   upgradeBannerText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.extrabold, color: CF.black },
-  upgradeBannerSub: { fontSize: Typography.size.xs, color: CF.black + 'AA' },
-  upgradePriceChip: { alignItems: 'center' },
+  upgradeBannerSub: { fontSize: 9, color: CF.black + 'AA', lineHeight: 13, marginTop: 2 },
+  upgradePriceChip: { alignItems: 'center', marginLeft: 4 },
   upgradePriceText: { fontSize: Typography.size.xl, fontWeight: Typography.weight.extrabold, color: CF.black },
   upgradePriceSub: { fontSize: 9, color: CF.black + 'AA' },
   premiumConfirmed: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: CF.goldDim, borderRadius: Radius.xl, padding: Spacing.md, borderWidth: 1, borderColor: CF.gold + '40' },
   premiumConfirmedText: { fontSize: Typography.size.sm, color: CF.gold, fontWeight: Typography.weight.semibold },
 });
-
-// ── Islamic Batch Card (mini) for Quick Mode ──────────────────────────────────
-function IslamicBatchMiniCard({ item, onPress }: { item: IslamicBatchItem; onPress: () => void }) {
-  const r = item.result;
-  const confColor = r ? getConfidenceColor(r.confidenceTier) : Colors.textTertiary;
-  return (
-    <Pressable onPress={onPress} style={ibc.card}>
-      <View style={ibc.imgWrap}>
-        {item.images[0] ? (
-          <Image source={{ uri: item.images[0] }} style={ibc.img} contentFit="cover" />
-        ) : (
-          <MaterialIcons name="toll" size={16} color={Colors.textTertiary} />
-        )}
-        {item.status === 'processing' ? (
-          <View style={StyleSheet.absoluteFill}>
-            <ActivityIndicator size="small" color="#fff" style={{ flex: 1 }} />
-          </View>
-        ) : null}
-      </View>
-      <View style={{ flex: 1 }}>
-        {r ? <><Text style={ibc.title} numberOfLines={1}>{r.canonicalTitle}</Text><View style={[ibc.confPill, { backgroundColor: confColor + '20' }]}><Text style={[ibc.confTxt, { color: confColor }]}>{Math.round(r.confidence * 100)}%</Text></View></> : item.status === 'error' ? <Text style={ibc.error} numberOfLines={2}>{item.error ?? 'Error'}</Text> : <Text style={ibc.pending}>{item.status === 'processing' ? 'Identifying…' : 'Pending'}</Text>}
-        <Text style={ibc.reviewAction}>{r ? 'Tap to review evidence' : 'Tap to view status'}</Text>
-      </View>
-      <MaterialIcons name="chevron-right" size={14} color={Colors.textTertiary} />
-    </Pressable>
-  );
-}
-const ibc = StyleSheet.create({
-  card: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: CF.surface, borderRadius: Radius.md, padding: Spacing.sm, borderWidth: 1, borderColor: CF.border },
-  imgWrap: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: CF.surfaceHigh, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
-  img: { width: '100%', height: '100%' },
-  title: { fontSize: 11, fontWeight: Typography.weight.semibold, color: CF.textPrimary },
-  reviewAction: { fontSize: 9, color: CF.gold, marginTop: 3, fontWeight: Typography.weight.semibold },
-  confPill: { borderRadius: Radius.pill, paddingHorizontal: 5, paddingVertical: 2, alignSelf: 'flex-start', marginTop: 2 },
-  confTxt: { fontSize: 9, fontWeight: Typography.weight.bold },
-  error: { fontSize: 10, color: Colors.danger },
-  pending: { fontSize: 10, color: CF.textMuted, fontStyle: 'italic' },
-});
-
-// ── Capture tab ───────────────────────────────────────────────────────────────
-function CaptureTab({
-  capturedImages, onCapture, onRemove, onIdentify, identifying,
-  processingStatus, aiError, onTabSelect, isPremium,
-  // Specialist mode
-  selectedSpecialist, onSpecialistChange,
-  // Quick mode
-  quickMode, onToggleQuickMode, quickCaptures, onQuickCapture, onRunQuickBatch,
-  quickRunning, quickDone, onClearQuick,
-  quickIdentificationResults, selectedQuickResult, onQuickResultSelect, onCloseQuickResult,
-  // Islamic batch results
-  islamicBatchItems, selectedIslamicItem, onIslamicItemPress,
-  // Optional physical evidence passed into the AI identification request
-  weightInput, setWeightInput, diameterInput, setDiameterInput,
-  yearInput, setYearInput, materialInput, setMaterialInput,
-  edgeLegendInput, setEdgeLegendInput,
-}: {
-  capturedImages: CapturedImage[]; onCapture: (slotId: string, slotLabel: string) => void;
-  onRemove: (slotId: string) => void; onIdentify: () => void; identifying: boolean;
-  processingStatus: string; aiError: string | null; onTabSelect: (t: CFTab) => void; isPremium: boolean;
-  selectedSpecialist: SpecialistChip; onSpecialistChange: (s: SpecialistChip) => void;
-  quickMode: boolean; onToggleQuickMode: () => void;
-  quickCaptures: Array<{ id: string; uri: string; reverseUri?: string; label?: string }>;
-  onQuickCapture: () => void; onRunQuickBatch: () => void;
-  quickRunning: boolean; quickDone: boolean; onClearQuick: () => void;
-  quickIdentificationResults: QuickCoinResult[]; selectedQuickResult: QuickCoinResult | null;
-  onQuickResultSelect: (result: QuickCoinResult) => void; onCloseQuickResult: () => void;
-  islamicBatchItems: IslamicBatchItem[]; selectedIslamicItem: IslamicBatchItem | null; onIslamicItemPress: (item: IslamicBatchItem | null) => void;
-  weightInput: string; setWeightInput: (value: string) => void;
-  diameterInput: string; setDiameterInput: (value: string) => void;
-  yearInput: string; setYearInput: (value: string) => void;
-  materialInput: string; setMaterialInput: (value: string) => void;
-  edgeLegendInput: string; setEdgeLegendInput: (value: string) => void;
-}) {
-  const router = useRouter();
-  const isIslamic = selectedSpecialist.id === 'islamic';
-  const incompleteQuickCoins = quickCaptures.filter(coin => !coin.reverseUri).length;
-  const completeQuickCoins = quickCaptures.length - incompleteQuickCoins;
-  const canIdentify = capturedImages.length > 0;
-  const hasRequired = COIN_SLOTS.filter(s => s.required).every(s => capturedImages.some(i => i.slotId === s.id));
-  const accentColor = selectedSpecialist.color;
-
-  return (
-    <View style={{ flex: 1 }}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ct.content}>
-
-        {/* ── Specialist chip selector ── */}
-        <View style={ct.specialistSection}>
-          <Text style={ct.specialistLabel}>SPECIALIST</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={ct.specialistChips}>
-            {SPECIALIST_CHIPS.map(chip => {
-              const active = selectedSpecialist.id === chip.id;
-              return (
-                <Pressable
-                  key={chip.id}
-                  onPress={() => onSpecialistChange(chip)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${chip.label} specialist: ${chip.hint}`}
-                  accessibilityState={{ selected: active }}
-                  style={({ pressed }) => [
-                    ct.specialistChip,
-                    active && { backgroundColor: chip.color + '20', borderColor: chip.color + '80' },
-                    pressed && { opacity: 0.82 },
-                  ]}
-                >
-                  <MaterialIcons name={chip.icon as any} size={13} color={active ? chip.color : CF.textMuted} />
-                  <Text style={[ct.specialistChipText, active && { color: chip.color, fontWeight: Typography.weight.bold }]}>
-                    {chip.label}
-                  </Text>
-                  {chip.id === 'islamic' ? (
-                    <View style={[ct.specialistChipBadge, { backgroundColor: CF.islamic + '30' }]}>
-                      <Text style={[ct.specialistChipBadgeText, { color: CF.islamic }]}>Zeno</Text>
-                    </View>
-                  ) : null}
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-          {/* Active specialist hint */}
-          <View style={ct.specialistHintRow}>
-            <MaterialIcons name="info-outline" size={10} color={accentColor} />
-            <Text style={[ct.specialistHintText, { color: accentColor }]}>{selectedSpecialist.hint}</Text>
-          </View>
-        </View>
-
-        {/* ── Mode toggle: Standard vs Quick ── */}
-        <View style={ct.modeRow}>
-          <Pressable
-            onPress={() => { if (quickMode) onToggleQuickMode(); }}
-            style={[ct.modeBtn, !quickMode && { backgroundColor: accentColor + '20', borderColor: accentColor + '60' }]}
-            accessibilityRole="button"
-            accessibilityLabel="Standard mode — photograph one coin at a time"
-            accessibilityState={{ selected: !quickMode }}
-          >
-            <MaterialIcons name="photo-camera" size={14} color={!quickMode ? accentColor : CF.textMuted} />
-            <Text style={[ct.modeBtnText, !quickMode && { color: accentColor, fontWeight: Typography.weight.bold }]}>Standard</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => { if (!quickMode) onToggleQuickMode(); }}
-            style={[ct.modeBtn, quickMode && { backgroundColor: accentColor + '20', borderColor: accentColor + '60' }]}
-            accessibilityRole="button"
-            accessibilityLabel="Quick mode — capture multiple coins rapidly without switching tabs"
-            accessibilityState={{ selected: quickMode }}
-          >
-            <MaterialIcons name="burst-mode" size={14} color={quickMode ? accentColor : CF.textMuted} />
-            <Text style={[ct.modeBtnText, quickMode && { color: accentColor, fontWeight: Typography.weight.bold }]}>Quick</Text>
-            <View style={ct.modeNewPip}><Text style={ct.modeNewPipText}>NEW</Text></View>
-          </Pressable>
-        </View>
-
-        {/* ── QUICK MODE ── */}
-        {quickMode ? (
-          <View style={ct.quickSection}>
-            {/* Info banner */}
-            <View style={[ct.quickInfoBanner, { borderColor: accentColor + '30', backgroundColor: accentColor + '10' }]}>
-              <MaterialIcons name="burst-mode" size={13} color={accentColor} />
-              <Text style={[ct.quickInfoText, { color: accentColor }]}>
-                Quick Mode — fire camera repeatedly. Each tap captures one coin and adds it to the batch. Tap Run Identification when done.
-              </Text>
-            </View>
-
-            {aiError ? <View style={ct.errorBanner} accessibilityRole="alert"><MaterialIcons name="error-outline" size={15} color={CF.danger} /><Text style={ct.errorText} numberOfLines={5}>{aiError}</Text></View> : null}
-
-            {/* Capture button */}
-            <Pressable
-              onPress={onQuickCapture}
-              disabled={quickRunning}
-              accessibilityRole="button"
-              accessibilityLabel="Capture next coin photo"
-              style={({ pressed }) => [
-                ct.quickCaptureBtn,
-                { backgroundColor: accentColor, shadowColor: accentColor },
-                (pressed || quickRunning) && { opacity: 0.8 },
-              ]}
-            >
-              <MaterialIcons name="add-a-photo" size={22} color={CF.black} />
-              <Text style={ct.quickCaptureBtnText}>
-                {quickCaptures.length === 0 ? 'Capture Obverse — Coin #1' : incompleteQuickCoins > 0 ? `Capture Reverse — Coin #${quickCaptures.findIndex(coin => !coin.reverseUri) + 1}` : `Capture Obverse — Coin #${quickCaptures.length + 1}`}
-              </Text>
-            </Pressable>
-
-            {/* Quick capture thumbnails */}
-            {quickCaptures.length > 0 ? (
-              <View style={ct.quickThumbs}>
-                <View style={ct.quickThumbsHeader}>
-                  <Text style={ct.quickThumbsTitle}>{completeQuickCoins} complete · {incompleteQuickCoins} awaiting reverse</Text>
-                  <Pressable onPress={onClearQuick} hitSlop={8} accessibilityLabel="Clear all quick captures">
-                    <Text style={ct.quickClearText}>Clear</Text>
-                  </Pressable>
-                </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm, paddingVertical: Spacing.xs }}>
-                  {quickCaptures.map((cap, i) => {
-                    const result = quickIdentificationResults.find(entry => entry.id === cap.id);
-                    return (
-                      <Pressable key={cap.id} onPress={() => { if (result) onQuickResultSelect(result); else { const islamicResult = islamicBatchItems.find(item => item.label === `Coin ${i + 1}`); if (islamicResult) onIslamicItemPress(islamicResult); } }} accessibilityRole="button" accessibilityLabel={result ? `Review ${result.label} identification` : `Coin ${i + 1}, ${cap.reverseUri ? 'awaiting identification' : 'reverse needed'}`} style={[ct.quickThumb, { flexDirection: 'row' }]}>
-                        <View style={{ flex: 1, overflow: 'hidden' }}><Image source={{ uri: cap.uri }} style={ct.quickThumbImg} contentFit="cover" /><Text style={ct.quickSideLabel}>FRONT</Text></View>
-                        <View style={{ flex: 1, overflow: 'hidden', backgroundColor: CF.surfaceHigh }}>{cap.reverseUri ? <Image source={{ uri: cap.reverseUri }} style={ct.quickThumbImg} contentFit="cover" /> : <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><MaterialIcons name="add-a-photo" size={14} color={CF.textMuted} /></View>}<Text style={ct.quickSideLabel}>{cap.reverseUri ? 'BACK' : 'ADD BACK'}</Text></View>
-                        <View style={ct.quickThumbNum}><Text style={ct.quickThumbNumText}>{i + 1}</Text></View>
-                        {result ? <View style={{ position: 'absolute', top: 2, right: 2, borderRadius: 8, backgroundColor: result.status === 'error' ? CF.danger : result.status === 'complete' ? CF.success : CF.gold, paddingHorizontal: 3, paddingVertical: 1 }}><Text style={{ fontSize: 7, fontWeight: Typography.weight.bold, color: CF.black }}>{result.status === 'error' ? '!' : result.status === 'complete' ? '✓' : '…'}</Text></View> : null}
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            ) : null}
-
-            {selectedQuickResult ? (
-              <View style={{ backgroundColor: CF.surface, borderColor: CF.gold + '55', borderWidth: 1, borderRadius: Radius.xl, padding: Spacing.md, gap: Spacing.sm }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
-                  <Text style={{ flex: 1, color: CF.gold, fontWeight: Typography.weight.bold, fontSize: Typography.size.base }}>{selectedQuickResult.label} · Review</Text>
-                  <Pressable onPress={onCloseQuickResult} accessibilityRole="button" accessibilityLabel="Close coin review"><MaterialIcons name="close" size={18} color={CF.textPrimary} /></Pressable>
-                </View>
-                {selectedQuickResult.result ? <>
-                  <Text style={{ color: CF.textPrimary, fontSize: Typography.size.sm, fontWeight: Typography.weight.bold }}>{selectedQuickResult.result.canonicalTitle}</Text>
-                  <Text style={{ color: CF.textSub, fontSize: Typography.size.xs }}>{Math.round(selectedQuickResult.result.confidence * 100)}% confidence · {selectedQuickResult.result.identificationState ?? 'Candidate'}</Text>
-                  <Text style={{ color: CF.textSub, fontSize: Typography.size.xs }}>Condition: {selectedQuickResult.result.condition || 'Not established'}</Text>
-                  {selectedQuickResult.result.evidenceSupporting.slice(0, 3).map((evidence, i) => <Text key={i} style={{ color: CF.textSub, fontSize: Typography.size.xs }}>• {evidence}</Text>)}
-                  {selectedQuickResult.itemId ? <Text style={{ color: CF.success, fontSize: Typography.size.xs }}>Saved to inventory</Text> : null}
-                </> : <Text style={{ color: CF.textSub, fontSize: Typography.size.xs }}>{selectedQuickResult.error ?? 'Identification pending…'}</Text>}
-                {selectedQuickResult.error && selectedQuickResult.result ? <Text style={{ color: Colors.warning, fontSize: Typography.size.xs }}>{selectedQuickResult.error}</Text> : null}
-              </View>
-            ) : null}
-
-            {/* Islamic batch results */}
-            {isIslamic && islamicBatchItems.length > 0 ? (
-              <View style={ct.islamicBatchSection}>
-                <Text style={[ct.quickThumbsTitle, { color: CF.islamic }]}>ISLAMIC IDENTIFICATIONS</Text>
-                <View style={{ gap: Spacing.xs }}>
-                  {islamicBatchItems.map(item => (
-                    <IslamicBatchMiniCard key={item.id} item={item} onPress={() => onIslamicItemPress(item)} />
-                  ))}
-                </View>
-                {selectedIslamicItem ? (
-                  <View style={{ backgroundColor: CF.surface, borderColor: CF.gold + '55', borderWidth: 1, borderRadius: Radius.xl, padding: Spacing.md, gap: Spacing.sm }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}><Text style={{ flex: 1, color: CF.gold, fontWeight: Typography.weight.bold, fontSize: Typography.size.base }}>Review coin</Text><Pressable onPress={() => onIslamicItemPress(null)} accessibilityRole="button" accessibilityLabel="Close coin review"><MaterialIcons name="close" size={18} color={CF.textPrimary} /></Pressable></View>
-                    {selectedIslamicItem.result ? <><Text style={{ color: CF.textPrimary, fontSize: Typography.size.sm, fontWeight: Typography.weight.bold }}>{selectedIslamicItem.result.canonicalTitle}</Text><Text style={{ color: CF.textSub, fontSize: Typography.size.xs }}>{Math.round(selectedIslamicItem.result.confidence * 100)}% confidence · {selectedIslamicItem.result.identificationState.replace(/_/g, ' ')}</Text><Text style={{ color: CF.textSub, fontSize: Typography.size.xs }}>Obverse: {selectedIslamicItem.result.observations.obverse || 'No observation returned'}</Text><Text style={{ color: CF.textSub, fontSize: Typography.size.xs }}>Reverse: {selectedIslamicItem.result.observations.reverse || 'No observation returned'}</Text><Text style={{ color: CF.textSub, fontSize: Typography.size.xs }}>Countermark: {selectedIslamicItem.result.countermark.description || selectedIslamicItem.result.countermark.status}</Text>{selectedIslamicItem.result.warnings.slice(0, 3).map((warning, i) => <Text key={i} style={{ color: Colors.warning, fontSize: Typography.size.xs }}>• {warning}</Text>)}</> : <Text style={{ color: selectedIslamicItem.status === 'error' ? CF.danger : CF.textSub, fontSize: Typography.size.xs }}>{selectedIslamicItem.error ?? (selectedIslamicItem.status === 'processing' ? 'Identification is still running…' : 'No result is available for this coin.')}</Text>}
-                  </View>
-                ) : null}
-              </View>
-            ) : null}
-
-            {/* Run batch */}
-            {quickCaptures.length > 0 && incompleteQuickCoins > 0 && !quickRunning ? (
-              <View style={[ct.quickInfoBanner, { borderColor: accentColor + '50', backgroundColor: accentColor + '12' }]}><MaterialIcons name="flip" size={15} color={accentColor} /><Text style={[ct.quickInfoText, { color: accentColor }]}>Capture the reverse side of every coin before identification. {incompleteQuickCoins} coin{incompleteQuickCoins === 1 ? '' : 's'} still need the back.</Text></View>
-            ) : null}
-            {completeQuickCoins > 0 && incompleteQuickCoins === 0 && !quickRunning && !quickDone ? (
-              <Pressable
-                onPress={onRunQuickBatch}
-                accessibilityRole="button"
-                accessibilityLabel={`Run AI identification on ${completeQuickCoins} complete coins`}
-                style={({ pressed }) => [ct.quickRunBtn, pressed && { opacity: 0.85 }]}
-              >
-                <MaterialIcons name="auto-awesome" size={18} color={CF.black} />
-                <Text style={ct.quickRunBtnText}>
-                  Identify {completeQuickCoins} Coin{completeQuickCoins !== 1 ? 's' : ''}
-                  {isIslamic ? ' · Islamic Engine' : ''}
-                </Text>
-              </Pressable>
-            ) : quickRunning ? (
-              <View style={[ct.quickRunBtn, { opacity: 0.75 }]}>
-                <ActivityIndicator size="small" color={CF.black} />
-                <Text style={ct.quickRunBtnText}>Running Islamic pipeline...</Text>
-              </View>
-            ) : quickDone ? (
-              <View style={[ct.quickRunBtn, { backgroundColor: CF.success }]}>
-                <MaterialIcons name="check-circle" size={18} color={CF.black} />
-                <Text style={ct.quickRunBtnText}>Done! Tap coins above to review</Text>
-              </View>
-            ) : null}
-          </View>
-        ) : (
-          /* ── STANDARD MODE ── */
-          <>
-            {/* Islamic specialist banner */}
-            {isIslamic ? (
-              <View style={ct.islamicBanner}>
-                <MaterialIcons name="toll" size={14} color={CF.islamic} />
-                <View style={{ flex: 1 }}>
-                  <Text style={ct.islamicBannerTitle}>Islamic Silver Mode</Text>
-                  <Text style={ct.islamicBannerSub}>AI + Zeno.ru + Numista evidence pipeline · Countermark detection</Text>
-                </View>
-                <View style={ct.zenoChip}>
-                  <Text style={ct.zenoChipText}>Zeno</Text>
-                </View>
-              </View>
-            ) : null}
-
-            <View style={ct.progressBar}>
-              <View style={[ct.progressDot, { backgroundColor: capturedImages.length >= 2 ? CF.success : accentColor }]} />
-              <Text style={ct.progressText}>
-                {capturedImages.length === 0 ? 'Tap a slot to photograph your coin'
-                  : capturedImages.length === 1 ? 'Obverse captured — now photograph the reverse'
-                  : `${capturedImages.length} / 4 photos captured`}
-              </Text>
-              <View style={[ct.countChip, capturedImages.length >= 2 && ct.countChipReady]}>
-                <Text style={[ct.countText, capturedImages.length >= 2 && { color: CF.success }]}>{capturedImages.length}/4</Text>
-              </View>
-            </View>
-
-            {aiError ? (
-              <View style={ct.errorBanner} accessibilityRole="alert">
-                <MaterialIcons name={aiError.includes('quota') ? 'workspace-premium' : 'error-outline'} size={15} color={aiError.includes('quota') ? CF.gold : CF.danger} />
-                <Text style={[ct.errorText, aiError.includes('quota') && { color: CF.gold }]} numberOfLines={5}>{aiError}</Text>
-                {aiError.includes('quota') && !isPremium ? (
-                  <Pressable onPress={() => router.push('/subscription' as any)} style={ct.quotaBtn} accessibilityRole="button" accessibilityLabel="Upgrade to Pro for unlimited identifications">
-                    <Text style={ct.quotaBtnText}>Upgrade</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            ) : null}
-
-            <View style={ct.photoGrid}>
-              {COIN_SLOTS.map((slot, idx) => {
-                const img = capturedImages.find(i => i.slotId === slot.id);
-                const isFirst = idx === 0;
-                return (
-                  <View key={slot.id} style={isFirst ? ct.slotLarge : ct.slotSmall}>
-                    <Pressable
-                      onPress={() => onCapture(slot.id, slot.label)}
-                      accessibilityRole="button"
-                      accessibilityLabel={img ? `${slot.label} captured — tap to retake` : `Add ${slot.label} photo${slot.required ? ' (required)' : ' (optional)'}`}
-                      style={({ pressed }) => [ct.slotInner, img ? ct.slotCaptured : ct.slotEmpty, slot.required && !img ? { ...ct.slotRequired, borderColor: accentColor + '50' } : null, pressed && { opacity: 0.82 }]}
-                    >
-                      {img ? (
-                        <>
-                          <Image source={{ uri: img.uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
-                          <View style={ct.capturedBar}>
-                            <MaterialIcons name="check-circle" size={10} color={CF.success} />
-                            <Text style={ct.capturedLabel} numberOfLines={1}>{slot.label}</Text>
-                            <Pressable onPress={e => { e.stopPropagation?.(); onCapture(slot.id, slot.label); }} style={ct.retakeBtn} hitSlop={6} accessibilityLabel={`Retake ${slot.label} photo`} accessibilityRole="button">
-                              <MaterialIcons name="refresh" size={12} color="#fff" />
-                            </Pressable>
-                          </View>
-                          <Pressable onPress={e => { e.stopPropagation?.(); onRemove(slot.id); }} style={ct.removeBtn} hitSlop={6} accessibilityLabel={`Remove ${slot.label} photo`} accessibilityRole="button">
-                            <MaterialIcons name="close" size={11} color="#fff" />
-                          </Pressable>
-                        </>
-                      ) : (
-                        <View style={ct.emptySlot}>
-                          <View style={[ct.emptyIcon, slot.required ? { ...ct.emptyIconRequired, backgroundColor: accentColor + '25' } : null]}>
-                            <MaterialIcons name="add-a-photo" size={isFirst ? 26 : 20} color={slot.required ? accentColor : CF.textMuted} />
-                          </View>
-                          <Text style={[ct.emptyLabel, slot.required && { color: CF.textPrimary }]} numberOfLines={1}>{slot.label}</Text>
-                          {slot.required ? <View style={[ct.requiredPill, { backgroundColor: accentColor + '20' }]}><Text style={[ct.requiredText, { color: accentColor }]}>Required</Text></View> : <Text style={ct.optionalText}>Optional</Text>}
-                          {slot.hint && isFirst ? <Text style={ct.slotHint} numberOfLines={2}>{slot.hint}</Text> : null}
-                        </View>
-                      )}
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </View>
-
-            <View style={ct.tip}>
-              <MaterialIcons name="lightbulb-outline" size={13} color={accentColor} />
-              <Text style={[ct.tipText, { color: accentColor }]}>
-                {isIslamic
-                  ? 'For Islamic coins: obverse + reverse required. Weight (g) and diameter (mm) significantly improve accuracy. Notes about seller description help too.'
-                  : 'Obverse + Reverse gives the AI the most evidence. Edge and Detail boost confidence further.'}
-              </Text>
-            </View>
-
-            {/* User-supplied evidence is available to all coin specialists, not just Islamic mode. */}
-            <View style={ct.islamicMeasureCard}>
-              <Text style={ct.islamicMeasureTitle}>COIN EVIDENCE (optional — improves identification)</Text>
-              <View style={ct.islamicMeasureRow}>
-                <View style={ct.islamicMeasureField}>
-                  <Text style={ct.islamicMeasureLabel}>Weight (g)</Text>
-                  <TextInput
-                    style={ct.islamicMeasureInput}
-                    value={weightInput}
-                    onChangeText={setWeightInput}
-                    placeholder="e.g. 7.77"
-                    placeholderTextColor={CF.textMuted}
-                    keyboardType="decimal-pad"
-                    accessibilityLabel="Coin weight in grams"
-                  />
-                </View>
-                <View style={ct.islamicMeasureField}>
-                  <Text style={ct.islamicMeasureLabel}>Diameter (mm)</Text>
-                  <TextInput
-                    style={ct.islamicMeasureInput}
-                    value={diameterInput}
-                    onChangeText={setDiameterInput}
-                    placeholder="e.g. 20.5"
-                    placeholderTextColor={CF.textMuted}
-                    keyboardType="decimal-pad"
-                    accessibilityLabel="Coin diameter in millimetres"
-                  />
-                </View>
-              </View>
-              <View style={ct.islamicMeasureRow}>
-                <View style={ct.islamicMeasureField}>
-                  <Text style={ct.islamicMeasureLabel}>Year / date</Text>
-                  <TextInput
-                    style={ct.islamicMeasureInput}
-                    value={yearInput}
-                    onChangeText={setYearInput}
-                    placeholder="e.g. 2007"
-                    placeholderTextColor={CF.textMuted}
-                    accessibilityLabel="Coin year or date"
-                  />
-                </View>
-                <View style={ct.islamicMeasureField}>
-                  <Text style={ct.islamicMeasureLabel}>Metal (if known)</Text>
-                  <TextInput
-                    style={ct.islamicMeasureInput}
-                    value={materialInput}
-                    onChangeText={setMaterialInput}
-                    placeholder="e.g. bimetallic"
-                    placeholderTextColor={CF.textMuted}
-                    accessibilityLabel="Coin material"
-                  />
-                </View>
-              </View>
-              <View style={ct.islamicMeasureField}>
-                <Text style={ct.islamicMeasureLabel}>Edge legend / other visible text</Text>
-                <TextInput
-                  style={ct.islamicMeasureInput}
-                  value={edgeLegendInput}
-                  onChangeText={setEdgeLegendInput}
-                  placeholder="Enter the edge inscription exactly as seen"
-                  placeholderTextColor={CF.textMuted}
-                  accessibilityLabel="Coin edge legend or visible inscription"
-                />
-              </View>
-            </View>
-
-            <View style={{ height: 100 }} />
-          </>
-        )}
-      </ScrollView>
-
-      {/* Standard mode action bar */}
-      {!quickMode ? (
-        <View style={ct.actionBar}>
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={ct.actionCount}>{capturedImages.length} photo{capturedImages.length === 1 ? '' : 's'} captured</Text>
-            {!hasRequired ? <Text style={ct.actionHint}>Obverse and Reverse required</Text> : <Text style={ct.actionReady}>Ready to identify</Text>}
-          </View>
-          <Pressable
-            onPress={onIdentify}
-            disabled={!canIdentify || identifying}
-            accessibilityRole="button"
-            accessibilityLabel={identifying ? processingStatus || 'Identifying coin, please wait' : canIdentify ? `Identify ${isIslamic ? 'Islamic silver' : ''} coin with AI` : 'Add at least one photo before identifying'}
-            accessibilityState={{ disabled: !canIdentify || identifying, busy: identifying }}
-            style={({ pressed }) => [ct.identifyBtn, { backgroundColor: accentColor, shadowColor: accentColor }, !canIdentify && ct.identifyBtnDisabled, pressed && canIdentify ? { opacity: 0.88 } : null]}
-          >
-            {identifying
-              ? <ActivityIndicator size="small" color={CF.black} accessibilityLabel="Identifying" />
-              : <MaterialIcons name={isIslamic ? 'toll' : 'auto-awesome'} size={18} color={canIdentify ? CF.black : CF.textMuted} />}
-            <Text style={[ct.identifyBtnText, !canIdentify && { color: CF.textMuted }]}>
-              {identifying ? processingStatus || 'Identifying...' : isIslamic ? 'Identify (Islamic Engine)' : 'Identify Coin'}
-            </Text>
-          </Pressable>
-        </View>
-      ) : null}
-    </View>
-  );
-}
-const ct = StyleSheet.create({
-  content: { padding: Spacing.base, gap: Spacing.md },
-
-  // Specialist chips
-  specialistSection: { gap: 6 },
-  specialistLabel: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: CF.textMuted, textTransform: 'uppercase', letterSpacing: 0.8 },
-  specialistChips: { flexDirection: 'row', gap: Spacing.xs, paddingVertical: 2 },
-  specialistChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: Radius.pill, backgroundColor: CF.surface, borderWidth: 1, borderColor: CF.border },
-  specialistChipText: { fontSize: 11, color: CF.textSub, fontWeight: Typography.weight.medium },
-  specialistChipBadge: { borderRadius: Radius.pill, paddingHorizontal: 5, paddingVertical: 2 },
-  specialistChipBadgeText: { fontSize: 8, fontWeight: Typography.weight.bold },
-  specialistHintRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
-  specialistHintText: { flex: 1, fontSize: 10, lineHeight: 14 },
-
-  // Mode toggle
-  modeRow: { flexDirection: 'row', gap: Spacing.sm, backgroundColor: CF.surfaceHigh, borderRadius: Radius.lg, padding: 4, borderWidth: 1, borderColor: CF.border },
-  modeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 8, borderRadius: Radius.md, borderWidth: 1, borderColor: 'transparent', position: 'relative' },
-  modeBtnText: { fontSize: 12, color: CF.textMuted, fontWeight: Typography.weight.medium },
-  modeNewPip: { position: 'absolute', top: 2, right: 6, backgroundColor: Colors.success, borderRadius: Radius.pill, paddingHorizontal: 3, paddingVertical: 1 },
-  modeNewPipText: { fontSize: 6, fontWeight: Typography.weight.extrabold, color: '#fff', letterSpacing: 0.3 },
-
-  // Quick mode
-  quickSection: { gap: Spacing.md },
-  quickInfoBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1 },
-  quickInfoText: { flex: 1, fontSize: Typography.size.xs, lineHeight: 16 },
-  quickCaptureBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, borderRadius: Radius.xl, paddingVertical: Spacing.lg, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 14, elevation: 8 },
-  quickCaptureBtnText: { fontSize: Typography.size.base, fontWeight: Typography.weight.extrabold, color: CF.black },
-  quickThumbs: { gap: Spacing.xs },
-  quickThumbsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  quickThumbsTitle: { fontSize: 10, fontWeight: Typography.weight.bold, color: CF.textSub, textTransform: 'uppercase', letterSpacing: 0.4 },
-  quickClearText: { fontSize: 10, color: Colors.danger, fontWeight: Typography.weight.semibold },
-  quickThumb: { width: 64, height: 64, borderRadius: Radius.md, overflow: 'hidden', position: 'relative' },
-  quickThumbImg: { width: '100%', height: '100%' },
-  quickSideLabel: { position: 'absolute', bottom: 1, left: 1, right: 1, fontSize: 6, fontWeight: Typography.weight.bold, textAlign: 'center', color: '#fff', backgroundColor: 'rgba(0,0,0,0.65)', paddingVertical: 2 },
-  quickThumbNum: { position: 'absolute', bottom: 2, right: 2, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 8, width: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
-  quickThumbNumText: { fontSize: 8, fontWeight: Typography.weight.bold, color: '#fff' },
-  islamicBatchSection: { gap: Spacing.xs },
-  quickRunBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, backgroundColor: CF.gold, borderRadius: Radius.xl, paddingVertical: Spacing.base, shadowColor: CF.gold, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 12, elevation: 6 },
-  quickRunBtnText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.extrabold, color: CF.black },
-
-  // Islamic standard mode
-  islamicBanner: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: CF.islamic + '15', borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: CF.islamic + '40' },
-  islamicBannerTitle: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: CF.islamic },
-  islamicBannerSub: { fontSize: 10, color: CF.islamic + 'BB', lineHeight: 14, marginTop: 2 },
-  zenoChip: { backgroundColor: CF.islamic + '25', borderRadius: Radius.pill, paddingHorizontal: 7, paddingVertical: 3, borderWidth: 1, borderColor: CF.islamic + '50' },
-  zenoChipText: { fontSize: 9, fontWeight: Typography.weight.bold, color: CF.islamic },
-
-  islamicMeasureCard: { backgroundColor: CF.surfaceHigh, borderRadius: Radius.lg, padding: Spacing.md, gap: Spacing.sm, borderWidth: 1, borderColor: CF.border },
-  islamicMeasureTitle: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: CF.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
-  islamicMeasureRow: { flexDirection: 'row', gap: Spacing.sm },
-  islamicMeasureField: { flex: 1, gap: 4 },
-  islamicMeasureLabel: { fontSize: 10, fontWeight: Typography.weight.semibold, color: CF.textSub },
-  islamicMeasureInput: { backgroundColor: CF.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: CF.border, paddingHorizontal: Spacing.sm, paddingVertical: 8, fontSize: Typography.size.xs, color: CF.textPrimary, includeFontPadding: false },
-
-  // Standard mode shared
-  progressBar: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: CF.surface, borderRadius: Radius.lg, padding: Spacing.md, borderWidth: 1, borderColor: CF.border },
-  progressDot: { width: 8, height: 8, borderRadius: 4 },
-  progressText: { flex: 1, fontSize: Typography.size.sm, color: CF.textSub },
-  countChip: { borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: CF.surfaceHigh, borderWidth: 1, borderColor: CF.border },
-  countChipReady: { backgroundColor: Colors.successDim, borderColor: CF.success + '50' },
-  countText: { fontSize: 11, fontWeight: Typography.weight.bold, color: CF.textMuted },
-  errorBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: Colors.dangerDim, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: CF.danger + '40' },
-  errorText: { flex: 1, fontSize: Typography.size.xs, color: CF.danger, lineHeight: 17 },
-  quotaBtn: { backgroundColor: CF.goldDim, borderRadius: Radius.md, paddingHorizontal: Spacing.sm, paddingVertical: 4, borderWidth: 1, borderColor: CF.gold + '40' },
-  quotaBtnText: { fontSize: 10, fontWeight: Typography.weight.bold, color: CF.gold },
-  photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  slotLarge: { width: '100%', aspectRatio: 1.8 },
-  slotSmall: { width: '31%', aspectRatio: 1 },
-  slotInner: { flex: 1, borderRadius: Radius.lg, overflow: 'hidden', position: 'relative' },
-  slotEmpty: { backgroundColor: CF.surface, borderWidth: 1.5, borderStyle: 'dashed', borderColor: CF.border, alignItems: 'center', justifyContent: 'center' },
-  slotRequired: { borderColor: CF.gold + '50' },
-  slotCaptured: { borderWidth: 2, borderColor: CF.success + '70', borderStyle: 'solid' },
-  emptySlot: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: Spacing.sm },
-  emptyIcon: { width: 48, height: 48, borderRadius: Radius.md, backgroundColor: CF.surfaceHigh, alignItems: 'center', justifyContent: 'center' },
-  emptyIconRequired: { backgroundColor: CF.goldDim },
-  emptyLabel: { fontSize: 11, fontWeight: Typography.weight.semibold, color: CF.textSub, textAlign: 'center' },
-  requiredPill: { backgroundColor: CF.goldDim, borderRadius: Radius.pill, paddingHorizontal: 6, paddingVertical: 2 },
-  requiredText: { fontSize: 8, fontWeight: Typography.weight.bold, color: CF.gold, textTransform: 'uppercase', letterSpacing: 0.3 },
-  optionalText: { fontSize: 8, color: CF.textMuted, textTransform: 'uppercase', letterSpacing: 0.2 },
-  slotHint: { fontSize: 9, color: CF.textMuted, textAlign: 'center', lineHeight: 13, marginTop: 2 },
-  capturedBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.62)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 5, gap: 4 },
-  capturedLabel: { flex: 1, fontSize: 9, color: '#fff', fontWeight: Typography.weight.semibold },
-  retakeBtn: { backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: Radius.sm, paddingHorizontal: 6, paddingVertical: 3 },
-  removeBtn: { position: 'absolute', top: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 10, width: 20, height: 20, alignItems: 'center', justifyContent: 'center' },
-  tip: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: CF.goldDim, borderRadius: Radius.md, padding: Spacing.sm, borderWidth: 1, borderColor: CF.gold + '25' },
-  tipText: { flex: 1, fontSize: 11, color: CF.gold, lineHeight: 16 },
-  actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: CF.surface, borderTopWidth: 1, borderTopColor: CF.border, padding: Spacing.base, flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-  actionCount: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: CF.textPrimary },
-  actionHint: { fontSize: Typography.size.xs, color: Colors.warning },
-  actionReady: { fontSize: Typography.size.xs, color: CF.success },
-  identifyBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, backgroundColor: CF.gold, borderRadius: Radius.md, padding: Spacing.md, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 6 },
-  identifyBtnDisabled: { backgroundColor: CF.surfaceHigh, shadowOpacity: 0 },
-  identifyBtnText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: CF.black },
-});
-
-// ── Identify tab ──────────────────────────────────────────────────────────────
 function IdentifyTab({ result, capturedImages, onSave, saving, savedItemId, uploadProgress, isUploading, onReset, onTabSelect }: {
   result: AIIdentificationResult | null; capturedImages: CapturedImage[];
   onSave: () => void; saving: boolean; savedItemId: string | null;
