@@ -74,6 +74,13 @@ COINS IDENTIFICATION PIPELINE (must follow in order):
    A medal is NOT a coin. If unsure, default to most conservative classification.
 2. VISUAL OBSERVATIONS — record exactly what is visible: shape, size estimate, colour/metal appearance,
    obverse/reverse features, edge type, condition indicators, any legends (copy EXACTLY as visible).
+
+IMAGE-ORDER AND PROCESSING INVARIANCE (critical):
+- Treat supplied coin photos as an unordered set unless explicit user labels identify obverse/reverse. Never assume Photo 1 is obverse or Photo 2 is reverse.
+- Determine each face from its visible design and inscriptions, then compare both faces together before choosing a candidate. If the faces are swapped, the broad identification and evidence should remain the same.
+- Image enhancement, cropping, background removal, sharpening, colour changes, or CoinSnap-style processing may improve visibility but are not new numismatic evidence. Do not change the candidate solely because a processed image looks different.
+- If image order or processing causes materially different conclusions, prefer the shared observable evidence, lower confidence, and state which visual detail is uncertain. Do not invent an issuer or denomination to force a match.
+- Separate observed facts (e.g. raised script, horizontal lines, flan shape) from interpretations (e.g. Persian/Arabic script, Indian princely state). Do not state script language or metal as certain unless the image supports it; colour alone cannot confirm copper/bronze.
 3. USER-SUPPLIED PHYSICAL MEASUREMENTS — if weight or diameter supplied, record as HARD EVIDENCE.
    These take absolute priority over any visual estimate.
 4. VISIBLE LEGENDS & INSCRIPTIONS — copy character by character. NEVER complete partial text.
