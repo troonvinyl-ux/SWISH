@@ -768,9 +768,6 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
       ? aiIdentification.candidateIdentification.alternativeCandidates : []),
     knownAttributes?.edgeLegend,
   ].filter(Boolean);
-  for (const clue of evidence) {
-    addQuery(clue);
-  }
   // Recognise distinctive two-face Shivrai/Dudandi patterns and search these exact catalogue families early.
   // This is evidence-triggered discovery, not a hard-coded identification.
   const evidenceText = evidence.join(' ').toLowerCase();
@@ -798,6 +795,9 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
     addQuery('Mughal copper paisa');
     addQuery('Indo-Islamic copper coin');
   }
+  // Add the raw evidence queries after high-value catalogue family queries so generic
+  // observations cannot crowd the distinctive candidate searches out of the 10-query budget.
+  for (const clue of evidence) addQuery(clue);
   if (/greek|hellenistic|seleucid|ptolemaic/.test(evidenceText)) addQuery('ancient Greek coin');
   if (/byzantine/.test(evidenceText)) addQuery('Byzantine coin');
   if (/roman|denarius|imperial rome/.test(evidenceText) && !/indian|maratha|mughal|paisa|princely state/.test(evidenceText)) {
