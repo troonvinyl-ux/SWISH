@@ -755,6 +755,20 @@ function CaptureTab({
               </View>
             </Pressable>
 
+            {capturedImages.find(i => i.slotId === activeSide)?.enhancementStatus === 'processing' ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4, paddingVertical: 8 }}>
+                <ActivityIndicator size="small" color={CF.gold} />
+                <Text style={{ color: CF.textSub, fontSize: 12 }}>Creating AI-rendered reference… original photo is محفوظ and unchanged.</Text>
+              </View>
+            ) : null}
+            {capturedImages.find(i => i.slotId === activeSide)?.enhancedUri ? (
+              <View style={{ gap: 6, padding: Spacing.sm, borderWidth: 1, borderColor: CF.gold + '50', borderRadius: Radius.lg, backgroundColor: CF.surface }}>
+                <Text style={{ color: CF.gold, fontSize: 10, fontWeight: Typography.weight.extrabold, letterSpacing: 1 }}>AI-RENDERED REFERENCE · NOT THE ORIGINAL</Text>
+                <Image source={{ uri: capturedImages.find(i => i.slotId === activeSide)!.enhancedUri! }} style={{ width: '100%', height: 220, borderRadius: Radius.md }} contentFit="contain" />
+                <Text style={{ color: CF.textSub, fontSize: 10, lineHeight: 14 }}>Used as extra visual evidence during identification. Your original photo remains the one saved for listing.</Text>
+              </View>
+            ) : null}
+
             <View style={ct.captureTools}>
               <Pressable onPress={() => setCaptureToolNotice('detect')} style={ct.toolButton} accessibilityRole="button" accessibilityLabel="Auto detect coin boundary">
                 <MaterialIcons name="center-focus-strong" size={22} color={CF.gold} />
@@ -1060,7 +1074,18 @@ function IdentifyTab({ result, capturedImages, onSave, saving, savedItemId, uplo
             {capturedImages.map(img => (
               <View key={img.slotId} style={{ width: 112, gap: 5 }}>
                 <Image source={{ uri: img.uri }} style={[idS.thumb, { width: 112, height: 112 }]} contentFit="cover" />
-                <Text style={{ color: CF.textSub, fontSize: 10 }} numberOfLines={1}>{img.slotLabel || img.slotId}</Text>
+                <Text style={{ color: CF.textSub, fontSize: 10 }} numberOfLines={1}>{img.slotLabel || img.slotId} · ORIGINAL</Text>
+                {img.enhancedUri ? (
+                  <>
+                    <Image source={{ uri: img.enhancedUri }} style={[idS.thumb, { width: 112, height: 112, borderColor: CF.gold, borderWidth: 1 }]} contentFit="cover" />
+                    <Text style={{ color: CF.gold, fontSize: 9 }} numberOfLines={2}>AI-rendered reference</Text>
+                  </>
+                ) : img.enhancementStatus === 'processing' ? (
+                  <View style={{ height: 112, alignItems: 'center', justifyContent: 'center', backgroundColor: CF.surface, borderRadius: Radius.md }}>
+                    <ActivityIndicator size="small" color={CF.gold} />
+                    <Text style={{ color: CF.textSub, fontSize: 9, marginTop: 5 }}>Rendering…</Text>
+                  </View>
+                ) : null}
                 <Pressable onPress={() => onProcessImage('enhance', img.slotId).catch(error => Alert.alert('Image enhancement', error?.message ?? 'Could not enhance this photo.'))} style={idS.photoToolBtn} accessibilityRole="button" accessibilityLabel={`Enhance ${img.slotLabel || img.slotId} photo`}>
                   <MaterialIcons name="auto-fix-high" size={13} color={CF.gold} /><Text style={idS.photoToolText}>Enhance</Text>
                 </Pressable>
