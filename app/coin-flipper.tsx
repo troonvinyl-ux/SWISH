@@ -744,7 +744,7 @@ function CaptureTab({
               style={({ pressed }) => [ct.heroCapture, pressed && { opacity: 0.88 }]}
             >
               {capturedImages.find(i => i.slotId === activeSide) ? (
-                <Image source={{ uri: capturedImages.find(i => i.slotId === activeSide)!.uri }} style={ct.heroCaptureImage} contentFit="contain" />
+                <Image source={{ uri: capturedImages.find(i => i.slotId === activeSide)!.enhancedUri ?? capturedImages.find(i => i.slotId === activeSide)!.uri }} style={ct.heroCaptureImage} contentFit="contain" />
               ) : (
                 <>
                   <View style={ct.framingGuide}>
@@ -767,17 +767,9 @@ function CaptureTab({
             {capturedImages.find(i => i.slotId === activeSide)?.enhancementStatus === 'processing' ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4, paddingVertical: 8 }}>
                 <ActivityIndicator size="small" color={CF.gold} />
-                <Text style={{ color: CF.textSub, fontSize: 12 }}>Creating AI-rendered reference… original photo is preserved and unchanged.</Text>
+                <Text style={{ color: CF.textSub, fontSize: 12 }}>Tight-cropping and enhancing this side…</Text>
               </View>
             ) : null}
-            {capturedImages.find(i => i.slotId === activeSide)?.enhancedUri ? (
-              <View style={{ gap: 6, padding: Spacing.sm, borderWidth: 1, borderColor: CF.gold + '50', borderRadius: Radius.lg, backgroundColor: CF.surface }}>
-                <Text style={{ color: CF.gold, fontSize: 10, fontWeight: Typography.weight.extrabold, letterSpacing: 1 }}>AI-RENDERED REFERENCE · NOT THE ORIGINAL</Text>
-                <Image source={{ uri: capturedImages.find(i => i.slotId === activeSide)!.enhancedUri! }} style={{ width: '100%', height: 220, borderRadius: Radius.md }} contentFit="contain" />
-                <Text style={{ color: CF.textSub, fontSize: 10, lineHeight: 14 }}>Used as extra visual evidence during identification. Your original photo remains the one saved for listing.</Text>
-              </View>
-            ) : null}
-
             <View style={ct.captureTools}>
               <Pressable onPress={() => setCaptureToolNotice('detect')} style={ct.toolButton} accessibilityRole="button" accessibilityLabel="Auto detect coin boundary">
                 <MaterialIcons name="center-focus-strong" size={22} color={CF.gold} />
@@ -876,7 +868,7 @@ function CaptureTab({
         <View style={ct.actionBar}>
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={ct.actionCount}>{capturedImages.length} photo{capturedImages.length === 1 ? '' : 's'} captured</Text>
-            {!hasRequired ? <Text style={ct.actionHint}>Obverse and Reverse required</Text> : <Text style={ct.actionReady}>Ready to identify</Text>}
+            {!hasRequired ? <Text style={ct.actionHint}>Capture obverse, then reverse</Text> : imageProcessing ? <Text style={ct.actionHint}>Cropping & enhancing both sides…</Text> : identifying ? <Text style={ct.actionHint}>{processingStatus || 'Identifying and researching…'}</Text> : <Text style={ct.actionReady}>Identification starts automatically</Text>}
           </View>
           <Pressable
             onPress={onIdentify}
@@ -1080,29 +1072,21 @@ function IdentifyTab({ result, capturedImages, onSave, saving, savedItemId, uplo
       {capturedImages.length > 0 ? (
         <View style={{ gap: Spacing.sm }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm }}>
-            {capturedImages.map(img => (
-              <View key={img.slotId} style={{ width: 112, gap: 5 }}>
-                <Image source={{ uri: img.uri }} style={[idS.thumb, { width: 112, height: 112 }]} contentFit="cover" />
-                <Text style={{ color: CF.textSub, fontSize: 10 }} numberOfLines={1}>{img.slotLabel || img.slotId} · ORIGINAL</Text>
+            {capturedImages.filter(img => img.slotId === 'obverse' || img.slotId === 'reverse').map(img => (
+              <View key={img.slotId} style={{ width: 156, gap: 5 }}>
                 {img.enhancedUri ? (
-                  <>
-                    <Image source={{ uri: img.enhancedUri }} style={[idS.thumb, { width: 112, height: 112, borderColor: CF.gold, borderWidth: 1 }]} contentFit="cover" />
-                    <Text style={{ color: CF.gold, fontSize: 9 }} numberOfLines={2}>AI-rendered reference</Text>
-                  </>
+                  <Image source={{ uri: img.enhancedUri }} style={[idS.thumb, { width: 156, height: 156, borderColor: CF.gold, borderWidth: 1 }]} contentFit="contain" />
                 ) : img.enhancementStatus === 'processing' ? (
-                  <View style={{ height: 112, alignItems: 'center', justifyContent: 'center', backgroundColor: CF.surface, borderRadius: Radius.md }}>
+                  <View style={{ width: 156, height: 156, alignItems: 'center', justifyContent: 'center', backgroundColor: CF.surface, borderRadius: Radius.md }}>
                     <ActivityIndicator size="small" color={CF.gold} />
-                    <Text style={{ color: CF.textSub, fontSize: 9, marginTop: 5 }}>Rendering…</Text>
+                    <Text style={{ color: CF.textSub, fontSize: 9, marginTop: 5 }}>Cropping & enhancing…</Text>
                   </View>
-                ) : null}
-                <Pressable onPress={() => onProcessImage('enhance', img.slotId).catch(error => Alert.alert('Image enhancement', error?.message ?? 'Could not enhance this photo.'))} style={idS.photoToolBtn} accessibilityRole="button" accessibilityLabel={`Enhance ${img.slotLabel || img.slotId} photo`}>
-                  <MaterialIcons name="auto-fix-high" size={13} color={CF.gold} /><Text style={idS.photoToolText}>Enhance</Text>
-                </Pressable>
-                <Pressable onPress={() => onProcessImage('detect', img.slotId).catch(error => Alert.alert('Auto-crop', error?.message ?? 'Could not detect the coin boundary.'))} style={idS.photoToolBtn} accessibilityRole="button" accessibilityLabel={`Auto-crop ${img.slotLabel || img.slotId} photo`}>
-                  <MaterialIcons name="crop-free" size={13} color={CF.gold} /><Text style={idS.photoToolText}>Auto-crop</Text>
-                </Pressable>
-                <Pressable onPress={() => onRestoreImage(img.slotId)} style={idS.photoToolBtn} accessibilityRole="button" accessibilityLabel={`Restore original ${img.slotLabel || img.slotId} photo`}>
-                  <MaterialIcons name="restore" size={13} color={CF.textSub} /><Text style={[idS.photoToolText, { color: CF.textSub }]}>Original</Text>
+                ) : (
+                  <Image source={{ uri: img.uri }} style={[idS.thumb, { width: 156, height: 156 }]} contentFit="contain" />
+                )}
+                <Text style={{ color: CF.gold, fontSize: 10, fontWeight: Typography.weight.bold, textAlign: 'center' }} numberOfLines={1}>{img.slotLabel || img.slotId}</Text>
+                <Pressable onPress={() => onProcessImage('enhance', img.slotId).catch(error => Alert.alert('Image enhancement', error?.message ?? 'Could not enhance this photo.'))} style={idS.photoToolBtn} accessibilityRole="button" accessibilityLabel={`Reprocess ${img.slotLabel || img.slotId} photo`}>
+                  <MaterialIcons name="auto-fix-high" size={13} color={CF.gold} /><Text style={idS.photoToolText}>Reprocess</Text>
                 </Pressable>
               </View>
             ))}
@@ -1111,7 +1095,7 @@ function IdentifyTab({ result, capturedImages, onSave, saving, savedItemId, uplo
             {identifying ? <ActivityIndicator size="small" color={CF.black} /> : <MaterialIcons name="refresh" size={17} color={CF.black} />}
             <Text style={idS.valueCtaText}>{identifying ? 'Re-identifying…' : 'Re-identify with these photos'}</Text>
           </Pressable>
-          <Text style={{ color: CF.textMuted, fontSize: 10, lineHeight: 14 }}>Enhancement and auto-crop create a new working image. Re-identify to refresh the attribution; use Original to restore the captured photo.</Text>
+          <Text style={{ color: CF.textMuted, fontSize: 10, lineHeight: 14 }}>Rendered coin references are shown here; original photographs remain preserved separately for listing and evidence.</Text>
         </View>
       ) : null}
       {result.confidence < 0.30 && result.numistaStatus === 'no_match' ? (
@@ -1724,6 +1708,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
 
   // ── In-flight locks ─────────────────────────────────────────────────────────
   const isIdentifyInFlight = useRef(false);
+  const autoIdentifyStarted = useRef(false);
   const isSaveInFlight = useRef(false);
 
   const [identifying, setIdentifying] = useState(false);
@@ -1819,6 +1804,12 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
     const cameraImg = await captureFromCamera();
     if (cameraImg) {
       const image = await prepareCapturedPhoto({ ...cameraImg, slotId, slotLabel });
+      autoIdentifyStarted.current = false;
+      setIdResult(null);
+      setSavedItemId(null);
+      setValuationResult(null);
+      setValuationError(null);
+      setActiveTab('capture');
       setCapturedImages(prev => {
         const existing = prev.findIndex(i => i.slotId === slotId);
         if (existing >= 0) { const updated = [...prev]; updated[existing] = image; return updated; }
@@ -1836,7 +1827,13 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
           text: 'Choose from Library', onPress: async () => {
             const libImg = await pickFromLibrary(slotId, slotLabel);
             if (!libImg) return;
-            const prepared = await prepareCapturedPhoto(libImg);
+            const prepared = await prepareCapturedPhoto({ ...libImg, slotId, slotLabel });
+            autoIdentifyStarted.current = false;
+            setIdResult(null);
+            setSavedItemId(null);
+            setValuationResult(null);
+            setValuationError(null);
+            setActiveTab('capture');
             setCapturedImages(prev => {
               const existing = prev.findIndex(i => i.slotId === slotId);
               if (existing >= 0) { const updated = [...prev]; updated[existing] = prepared; return updated; }
@@ -1880,6 +1877,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
   }, []);
 
   const handleRemoveImage = useCallback((slotId: string) => {
+    autoIdentifyStarted.current = false;
     setCapturedImages(prev => prev.filter(i => i.slotId !== slotId));
     delete originalImageUris.current[slotId];
   }, []);
@@ -2004,6 +2002,12 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
 
   // ── AI identification (standard mode) ──────────────────────────────────────
   const handleIdentify = useCallback(async () => {
+    const obverse = capturedImages.find(image => image.slotId === 'obverse');
+    const reverse = capturedImages.find(image => image.slotId === 'reverse');
+    if (!obverse || !reverse) {
+      setAiError('Capture or upload both the obverse and reverse before identification.');
+      return;
+    }
     if (capturedImages.length === 0) return;
     if (isIdentifyInFlight.current) return;
     isIdentifyInFlight.current = true;
@@ -2106,6 +2110,19 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
     );
   }, [capturedImages, tenant?.id, setScanMode, selectedSpecialist, weightInput, diameterInput, yearInput, materialInput, edgeLegendInput]);
 
+  // Automatically identify once both sides have finished crop/enhancement.
+  // If rendering fails, use the untouched original for that side instead.
+  useEffect(() => {
+    const obverse = capturedImages.find(image => image.slotId === 'obverse');
+    const reverse = capturedImages.find(image => image.slotId === 'reverse');
+    if (!obverse || !reverse) return;
+    if (!['ready', 'failed'].includes(obverse.enhancementStatus ?? '') ||
+        !['ready', 'failed'].includes(reverse.enhancementStatus ?? '')) return;
+    if (identifying || isIdentifyInFlight.current || autoIdentifyStarted.current) return;
+    autoIdentifyStarted.current = true;
+    void handleIdentify();
+  }, [capturedImages, identifying, handleIdentify]);
+
   // ── Save to inventory ───────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
     if (!idResult || !tenant) return;
@@ -2151,6 +2168,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
 
   // Reset all state for a new scan
   const handleReset = useCallback(() => {
+    autoIdentifyStarted.current = false;
     setCapturedImages([]);
     setIdResult(null);
     setAiError(null);
