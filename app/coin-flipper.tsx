@@ -1031,6 +1031,15 @@ function IdentifyTab({ result, capturedImages, onSave, saving, savedItemId, uplo
           {capturedImages.map(img => <Image key={img.slotId} source={{ uri: img.uri }} style={idS.thumb} contentFit="cover" />)}
         </ScrollView>
       ) : null}
+      {result.confidence < 0.30 && result.numistaStatus === 'no_match' ? (
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: '#241508', borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: Colors.warning + '70' }} accessibilityRole="alert">
+          <MaterialIcons name="warning-amber" size={19} color={Colors.warning} />
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={{ color: Colors.warning, fontSize: Typography.size.sm, fontWeight: Typography.weight.extrabold }}>Unconfirmed identification</Text>
+            <Text style={{ color: CF.textPrimary, fontSize: Typography.size.sm, lineHeight: 19 }}>The catalogue found no match and confidence is very low. Do not treat a ruler, period or denomination as confirmed. Add the coin's measured weight and diameter and review clearer photos before listing.</Text>
+          </View>
+        </View>
+      ) : null}
       {result.numistaStatus && result.numistaStatus !== 'unavailable' ? (
         <View style={[idS.numistaCard, { borderColor: (result.numistaStatus === 'verified' || result.numistaStatus === 'strong_match') ? CF.success + '40' : Colors.warning + '30' }]}>
           <MaterialIcons name={result.numistaStatus === 'verified' || result.numistaStatus === 'strong_match' ? 'verified' : 'help-outline'} size={13} color={result.numistaStatus === 'verified' || result.numistaStatus === 'strong_match' ? CF.success : Colors.warning} />
@@ -1085,7 +1094,7 @@ const idS = StyleSheet.create({
   emptySub: { fontSize: Typography.size.sm, color: CF.textSub, textAlign: 'center', lineHeight: 20 },
   emptyBtn: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: CF.gold, borderRadius: Radius.md, paddingVertical: Spacing.md, paddingHorizontal: Spacing.xl, marginTop: Spacing.md },
   emptyBtnText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: CF.black },
-  content: { padding: Spacing.base, gap: Spacing.md, paddingBottom: 40 },
+  content: { padding: Spacing.base, gap: Spacing.md, paddingBottom: 96 },
   savedBanner: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.successDim, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: CF.success + '40' },
   savedText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: CF.success },
   savedSub: { fontSize: 10, color: CF.success + 'BB', marginTop: 2 },
