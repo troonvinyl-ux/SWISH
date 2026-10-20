@@ -445,13 +445,13 @@ export default function ResearchScreen() {
           weight: n.weight,
           diameter: n.diameter,
           composition: n.composition,
-          url: n.numistaUrl ?? (n.typeId ? 'https://en.numista.com/catalogue/index.php?r=' + n.typeId : undefined),
+          url: n.numistaUrl ?? (n.typeId ? 'https://numista.com/' + n.typeId : undefined),
         };
         if (nTitle) {
           newResults.push({
             source: 'numista',
             title: nTitle,
-            itemUrl: n.numistaUrl ?? (n.typeId ? 'https://en.numista.com/catalogue/index.php?r=' + n.typeId : undefined),
+            itemUrl: n.numistaUrl ?? (n.typeId ? 'https://numista.com/' + n.typeId : undefined),
             isActive: false,
             isSoldPrice: false,
           });
