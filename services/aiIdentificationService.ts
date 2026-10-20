@@ -531,10 +531,10 @@ export async function saveCoinReferenceImages(
       const safeSlot = img.slotId.replace(/[^a-zA-Z0-9_-]/g, '_');
       const path = `${itemId}/coin-reference_${safeSlot}.jpg`;
       let body: Blob | ArrayBuffer;
-      if (/^https?:\\/\\//i.test(img.enhancedUri)) {
+      if (/^https?:\/\//i.test(img.enhancedUri)) {
         urls[img.slotId] = img.enhancedUri;
         continue;
-      } else if (/^data:image\\//i.test(img.enhancedUri)) {
+      } else if (/^data:image\//i.test(img.enhancedUri)) {
         const base64 = img.enhancedUri.slice(img.enhancedUri.indexOf(',') + 1);
         const binary = atob(base64);
         const bytes = new Uint8Array(binary.length);
