@@ -1524,7 +1524,7 @@ Deno.serve(async (req: Request) => {
 
     numista: numistaTypeId ? {
       typeId: numistaTypeId, numistaN: `N#${numistaTypeId}`,
-      numistaUrl: `https://en.numista.com/catalogue/index.php?r=${numistaTypeId}`,
+      numistaUrl: `https://numista.com/${numistaTypeId}`,
       matchScore: numistaMatchScore, matchTier: numistaMatchTier,
       accepted: ['verified','strong_match'].includes(numistaMatchTier),
     } : null,
