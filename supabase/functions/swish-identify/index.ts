@@ -975,6 +975,28 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
       scored.score += bonus;
       scored.factors.push(`Catalogue text overlap: ${overlaps.slice(0, 6).join(', ')} (+${bonus})`);
     }
+
+    // Give diagnostic visible legends a separate, stronger vote than broad AI
+    // titles. This prevents a generic denomination match from outranking a type
+    // whose catalogue lettering/design description actually agrees with the coin.
+    const legendEvidence = cleanQuery([
+      knownAttributes?.edgeLegend,
+      knownAttributes?.legend,
+      aiIdentification.coinFields?.legendFragment,
+      aiIdentification.observedCharacteristics?.visibleText,
+      ...candidatePool.flatMap((c: any) => [c.legendFragment, c.obverseLegend, c.reverseLegend]),
+    ].filter(Boolean).join(' ')).toLowerCase();
+    const legendTerms = [...new Set(legendEvidence.split(/\s+/)
+      .filter((w: string) => w.length >= 4 && !['coin', 'type', 'legend', 'visible', 'text', 'unknown', 'possible', 'obverse', 'reverse'].includes(w)))];
+    const legendMatches = legendTerms.filter((w: string) => candText.includes(w));
+    if (legendMatches.length >= 2) {
+      const bonus = Math.min(30, 10 + legendMatches.length * 4);
+      scored.score += bonus;
+      scored.factors.push(`Diagnostic legend agreement: ${legendMatches.slice(0, 8).join(', ')} (+${bonus})`);
+    } else if (legendTerms.length >= 3 && legendMatches.length === 0) {
+      scored.score -= 12;
+      scored.contradictions.push('Visible legend evidence is not reflected in the catalogue candidate description');
+    }
     const contradictions = [...scored.contradictions];
     let score = scored.score;
     // Major physical contradictions cap the candidate below strong-match territory.
