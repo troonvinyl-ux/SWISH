@@ -775,6 +775,28 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
     addQuery(suppliedLegend);
     addQuery(suppliedLegend.replace(/[\/|]+/g, ' '));
     addQuery(issuer, suppliedLegend);
+
+    // OCR often captures only the distinctive beginning/end of a long legend.
+    // Search useful fragments independently (not literal wildcard syntax, which
+    // Numista's text endpoint does not document), then merge/deduplicate results.
+    const normalizedLegend = suppliedLegend
+      .replace(/\b1\s*mace\b/gi, '1 Mace')
+      .replace(/\b4[.,]?4\s*candare?ens?\b/gi, '4.4 Candareens')
+      .replace(/\bcan?d?are?ens?\b/gi, 'Candareens')
+      .replace(/[^\p{L}\p{N}.,]+/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const legendWords = normalizedLegend.split(' ').filter((word: string) => word.length >= 2);
+    if (legendWords.length >= 3) {
+      addQuery(legendWords.slice(0, 3).join(' '));
+      addQuery(legendWords.slice(-3).join(' '));
+      addQuery(legendWords.filter((word: string) => /mace|candareen|province|foo.?kien|kiang|tien/i.test(word)).join(' '));
+    }
+    // These are targeted lexical alternatives, not claims that the OCR is exact.
+    if (/mace/i.test(suppliedLegend) && /candareen/i.test(suppliedLegend)) {
+      addQuery('1 Mace 4.4 Candareens');
+      addQuery('Foo-Kien Province Mace Candareens');
+    }
   }
   const visibleText = String(aiIdentification.observedCharacteristics?.visibleText ?? '').trim();
   if (visibleText && visibleText !== suppliedLegend) addQuery(visibleText);
