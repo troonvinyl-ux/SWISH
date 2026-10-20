@@ -1642,7 +1642,7 @@ Deno.serve(async (req: Request) => {
               'Return ONLY the complete JSON object matching the existing output schema. Preserve every required field and the existing schema shape.',
               OUTPUT_SCHEMA,
               supplementalSchema,
-            ].filter(Boolean).join('\\n'),
+            ].filter(Boolean).join('\n'),
           },
         ];
 
@@ -1652,7 +1652,7 @@ Deno.serve(async (req: Request) => {
           body: JSON.stringify({
             model: 'google/gemini-2.5-flash',
             messages: [
-              { role: 'system', content: fullSystemPrompt + '\\n\\nYou are performing a final independent coin attribution review. Resolve conflicts by prioritising visible evidence, supplied physical measurements, and verified catalogue facts. Do not merely repeat the first answer.' },
+              { role: 'system', content: fullSystemPrompt + '\n\nYou are performing a final independent coin attribution review. Resolve conflicts by prioritising visible evidence, supplied physical measurements, and verified catalogue facts. Do not merely repeat the first answer.' },
               { role: 'user', content: reviewContent },
             ],
             temperature: 0.05,
@@ -1665,7 +1665,7 @@ Deno.serve(async (req: Request) => {
           const reviewData = await reviewResponse.json();
           const reviewText = reviewData.choices?.[0]?.message?.content ?? '';
           try {
-            const cleanedReview = reviewText.replace(/```json\\s*/gi, '').replace(/```\\s*/g, '').trim();
+            const cleanedReview = reviewText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
             const reviewed = JSON.parse(cleanedReview);
             if (reviewed && typeof reviewed === 'object' && typeof reviewed.canonicalTitle === 'string') {
               // Keep the second-pass attribution, but retain the authoritative
