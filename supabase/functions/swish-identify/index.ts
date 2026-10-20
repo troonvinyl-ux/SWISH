@@ -742,21 +742,56 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
   };
   const yearMatch = year.match(/\d{2,4}/);
   const candidatePool = [primaryCandidate, ...aiCandidates.slice(1, 5)];
+
+  // Search evidence-led descriptions BEFORE trusting the model's first candidate.
+  // A bad first guess (e.g. Roman denarius) must not consume all catalogue queries.
+  const evidence = [
+    ...(Array.isArray(aiIdentification.evidenceSupporting) ? aiIdentification.evidenceSupporting : []),
+    ...(Array.isArray(aiIdentification.evidenceContradictory) ? aiIdentification.evidenceContradictory : []),
+    aiIdentification.observedCharacteristics?.primary,
+    aiIdentification.observedCharacteristics?.secondary,
+    aiIdentification.observedCharacteristics?.visibleText,
+    aiIdentification.coinFields?.obverseDescription,
+    aiIdentification.coinFields?.reverseDescription,
+    aiIdentification.coinFields?.legendFragment,
+    aiIdentification.candidateIdentification?.whyCandidateSelected,
+    ...(Array.isArray(aiIdentification.candidateIdentification?.alternativeCandidates)
+      ? aiIdentification.candidateIdentification.alternativeCandidates : []),
+    knownAttributes?.edgeLegend,
+  ].filter(Boolean);
+  for (const clue of evidence) {
+    addQuery(clue);
+  }
+  // Query broad historical families stated in evidence without forcing a ruler.
+  const evidenceText = evidence.join(' ').toLowerCase();
+  if (/indian|maratha|mughal|paisa|princely state|indo-islamic|persian|arabic script/.test(evidenceText)) {
+    addQuery('Indian princely state coin');
+    addQuery('Maratha paisa copper coin');
+    addQuery('Mughal copper paisa');
+    addQuery('Indo-Islamic copper coin');
+  }
+  if (/greek|hellenistic|seleucid|ptolemaic/.test(evidenceText)) addQuery('ancient Greek coin');
+  if (/byzantine/.test(evidenceText)) addQuery('Byzantine coin');
+  if (/roman|denarius|imperial rome/.test(evidenceText) && !/indian|maratha|mughal|paisa|princely state/.test(evidenceText)) {
+    addQuery('Roman coin');
+  }
+
+  // Model candidates remain useful, but come after independent visual evidence.
   for (const cand of candidatePool) {
+    addQuery(cand.obverseDescription, cand.reverseDescription);
     addQuery(cand.denomination ?? denomination, cand.issuer ?? cand.ruler ?? issuer, cand.period ?? year);
     addQuery(cand.title ?? cand.name);
     addQuery(cand.denomination ?? denomination, cand.dynasty ?? cand.family ?? period);
-    addQuery(cand.obverseDescription, cand.reverseDescription);
   }
-  addQuery(denomination, issuer, !isAncient ? yearMatch?.[0] : '');
   addQuery(denomination, period);
   addQuery(issuer, period);
-  // Broad queries preserve recall when the first visual guess is wrong.
+  addQuery('coin', aiIdentification.coinFields?.obverseDescription, aiIdentification.coinFields?.reverseDescription);
   addQuery('ancient coin', primaryCandidate.denomination ?? denomination);
   addQuery('medieval coin', primaryCandidate.denomination ?? denomination);
-  addQuery('coin', primaryCandidate.obverseDescription, primaryCandidate.reverseDescription);
 
-  const queriesToTry = [...querySet].slice(0, 6);
+  // More than the former six searches: prioritize evidence-derived queries and
+  // reserve some capacity for alternatives rather than overfitting to one title.
+  const queriesToTry = [...querySet].slice(0, 10);
   if (queriesToTry.length === 0) {
     return { status: 'no_match', matchScore: 0, matchTier: 'rejected', matchFactors: ['Insufficient visible or confirmed evidence for Numista search'], contradictions: [], physicalMatchGood: false, references: [] };
   }
