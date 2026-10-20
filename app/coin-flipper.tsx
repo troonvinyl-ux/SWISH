@@ -516,6 +516,13 @@ function CaptureTab({
   const canIdentify = hasRequired && !imageProcessing;
   const accentColor = selectedSpecialist.color;
 
+  // Move directly from the first face to the reverse capture slot.
+  useEffect(() => {
+    if (capturedImages.some(image => image.slotId === 'obverse') && !capturedImages.some(image => image.slotId === 'reverse')) {
+      setActiveSide('reverse');
+    }
+  }, [capturedImages]);
+
   return (
     <View style={{ flex: 1 }}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ct.content}>
