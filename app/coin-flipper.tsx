@@ -1233,7 +1233,7 @@ function IdentifyTab({ result, capturedImages, onSave, saving, savedItemId, uplo
           {Object.entries(result.attributes).filter(([k]) => !k.startsWith('_') && !['object_type', 'identification_state', 'numista_url'].includes(k)).slice(0, 12).map(([k, v]) => (
             <View key={k} style={idS.attrRow}>
               <Text style={idS.attrKey}>{k.replace(/_/g, ' ')}</Text>
-              <Text style={idS.attrValue}>{String(v)}</Text>
+              <Text style={idS.attrValue}>{Array.isArray(v) ? v.map((entry: any) => entry && typeof entry === 'object' ? JSON.stringify(entry) : String(entry)).join(', ') : v && typeof v === 'object' ? JSON.stringify(v) : String(v)}</Text>
             </View>
           ))}
         </View>
