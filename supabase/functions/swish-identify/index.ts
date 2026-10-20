@@ -1456,6 +1456,81 @@ async function getUsage(
   return Number(data?.count ?? 0);
 }
 
+// ── Cross-catalogue coin research ─────────────────────────────────────────────
+type CoinResearchCandidate = { source: 'CANOA' | 'OCRE' | 'CRRO' | 'RPC'; title: string; url: string; reference?: string; snippet?: string };
+function decodeCatalogueXml(value: string): string {
+  return value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/&amp;/g, '&').replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+async function searchSpecialistCatalogue(source: 'OCRE' | 'CRRO' | 'RPC', base: string, query: string): Promise<CoinResearchCandidate[]> {
+  try {
+    const url = base + '/results?q=' + encodeURIComponent(query.slice(0, 95)) + '&format=rss';
+    const response = await fetch(url, { headers: { Accept: 'application/rss+xml, application/xml, text/xml' }, signal: AbortSignal.timeout(4000) });
+    if (!response.ok) return [];
+    const xml = await response.text();
+    return [...xml.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)].slice(0, 5).map(match => {
+      const item = match[1];
+      const title = decodeCatalogueXml(item.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? '');
+      const link = decodeCatalogueXml(item.match(/<link\b[^>]*>([\s\S]*?)<\/link>/i)?.[1] ?? '');
+      const desc = decodeCatalogueXml(item.match(/<description\b[^>]*>([\s\S]*?)<\/description>/i)?.[1] ?? '');
+      return /^https:\/\/numismatics\.org\//i.test(link) && title ? { source, title: title.slice(0, 180), url: link, snippet: desc.slice(0, 220) } : null;
+    }).filter((item): item is CoinResearchCandidate => Boolean(item));
+  } catch { return []; }
+}
+async function searchCanoaCatalogue(query: string): Promise<CoinResearchCandidate[]> {
+  try {
+    const url = 'https://canoanumis.org/api/coins?' + new URLSearchParams({ q: query.slice(0, 95), per_page: '5' }).toString();
+    const response = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(4000) });
+    if (!response.ok) return [];
+    const data = await response.json();
+    return (Array.isArray(data?.results) ? data.results : []).map((row: any) => {
+      const title = String(row.label ?? row.pref_label ?? '').trim();
+      const raw = String(row.url ?? '');
+      const url = raw.startsWith('/') ? 'https://canoanumis.org' + raw : raw;
+      return title && /^https:\/\/canoanumis\.org\//i.test(url) ? {
+        source: 'CANOA' as const, title: title.slice(0, 180), url,
+        reference: typeof row.ocre_id === 'string' ? row.ocre_id : undefined,
+        snippet: [row.authority, row.denomination, row.mint, row.material].filter(Boolean).join(' · ').slice(0, 220),
+      } : null;
+    }).filter((item: CoinResearchCandidate | null): item is CoinResearchCandidate => Boolean(item));
+  } catch { return []; }
+}
+async function runCoinResearch(id: any, known: Record<string, any>, numista: NumistaVerificationResult | null) {
+  const fields = id.coinFields ?? {};
+  const attrs = id.attributes ?? {};
+  const visible = [known.edgeLegend, fields.legendFragment, id.observedCharacteristics?.visibleInscription]
+    .find(value => typeof value === 'string' && value.trim() && !/not established|not visible/i.test(value)) ?? '';
+  const queries: string[] = [];
+  const add = (value: unknown) => { const q = String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, 95); if (q.length >= 4 && !queries.some(x => x.toLowerCase() === q.toLowerCase())) queries.push(q); };
+  add(visible);
+  add([fields.issuer, fields.denomination, fields.period].filter(Boolean).join(' '));
+  add([id.canonicalTitle, fields.mint].filter(Boolean).join(' '));
+  if (numista?.title) add(numista.title);
+  const context = [fields.period, id.canonicalTitle, fields.issuer, fields.denomination, attrs.ruler].join(' ').toLowerCase();
+  const romanImperial = /roman|imperial|emperor|augustus|denarius|antoninianus|sestertius|\bric\b|constantine|hadrian|trajan|nero|tiberius|marcus aurelius/.test(context);
+  const romanRepublic = /roman republic|republican|\brrc\b|moneyer|republican denarius/.test(context);
+  const greekProvincial = /greek|hellenistic|provincial|seleucid|ptolemaic|macedon|alexander|athens|tetradrachm/.test(context);
+  const jobs: Array<Promise<CoinResearchCandidate[]>> = [];
+  for (const q of queries.slice(0, 3)) {
+    jobs.push(searchCanoaCatalogue(q));
+    if (romanImperial) jobs.push(searchSpecialistCatalogue('OCRE', 'https://numismatics.org/ocre', q));
+    if (romanRepublic) jobs.push(searchSpecialistCatalogue('CRRO', 'https://numismatics.org/crro', q));
+    if (greekProvincial) jobs.push(searchSpecialistCatalogue('RPC', 'https://rpc.ashmus.ox.ac.uk', q));
+  }
+  const groups = await Promise.all(jobs);
+  const map = new Map<string, CoinResearchCandidate>();
+  for (const group of groups) for (const item of group) map.set(item.source + ':' + item.url, item);
+  const candidates = [...map.values()].slice(0, 15);
+  const sources: Record<string, { status: string; count: number }> = {};
+  for (const source of ['CANOA', 'OCRE', 'CRRO', 'RPC']) {
+    const applicable = source === 'CANOA' || (source === 'OCRE' && romanImperial) || (source === 'CRRO' && romanRepublic) || (source === 'RPC' && greekProvincial);
+    const count = candidates.filter(item => item.source === source).length;
+    sources[source] = { status: !applicable ? 'not_applicable' : count ? 'results' : 'no_results', count };
+  }
+  return { status: candidates.length ? 'results_found' : 'no_results', searched: queries, candidates, sources,
+    note: 'Catalogue results are discovery leads, not verified identifications. This build uses text/legend search, not image-embedding search; verify against design and supplied measurements.' };
+}
+
 // ── Main handler ───────────────────────────────────────────────────────────────
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -1716,6 +1791,12 @@ Deno.serve(async (req: Request) => {
       const ancient = isAncientCoin(constrained, knownAttributes ?? {});
       numistaVerification = await verifyWithNumista(constrained, knownAttributes ?? {}, ancient);
       constrained = applyNumistaToIdentification(constrained, numistaVerification);
+      const coinResearch = await runCoinResearch(constrained, knownAttributes ?? {}, numistaVerification);
+      constrained.coinResearch = coinResearch;
+      constrained.attributes = constrained.attributes ?? {};
+      constrained.attributes.coinResearchStatus = coinResearch.status;
+      constrained.attributes.coinResearchCandidateCount = coinResearch.candidates.length;
+      constrained.attributes.coinResearchSources = coinResearch.sources;
       // applyNumistaToIdentification has already evaluated catalogue score and physical contradictions.
       // Re-running the generic evidence limiter here used to re-cap verified candidates at 45%.
       constrained = enforceEvidenceConstraints(constrained, false, false);
@@ -1832,6 +1913,7 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({
         identification: constrained,
         numistaVerification,
+        coinResearch: constrained.coinResearch ?? null,
         quota: {
           isPremium,
           premiumSource,
