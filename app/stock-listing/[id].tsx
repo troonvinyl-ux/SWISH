@@ -2685,14 +2685,14 @@ export default function StockListingScreen() {
               {/* Catalogue reference retained as a candidate unless the match is strong enough to promote. */}
               {item.attributes?.numista_n || item.attributes?.numista_candidate_id ? (
                 <View style={s.intelBlock}>
-                  <Text style={s.intelBlockLabel}>NUMISTA CATALOGUE CANDIDATE</Text>
+                  <Text style={s.intelBlockLabel}>NUMISTA CANDIDATE · NOT VERIFIED</Text>
                   <DataRow
                     label="Reference"
                     value={String(item.attributes.numista_n ?? `N#${item.attributes.numista_candidate_id}`)}
                   />
                   {item.attributes.numista_title ? <DataRow label="Catalogue type" value={String(item.attributes.numista_title)} /> : null}
                   <DataRow
-                    label="Match evidence"
+                    label="Catalogue match score (not ID confidence)"
                     value={`${String(item.attributes.numista_status ?? 'candidate').replace(/_/g, ' ')} · ${Math.round(Number(item.attributes.numista_match_score ?? 0))}/100`}
                   />
                   {item.attributes.numista_catalogue_weight ? <DataRow label="Catalogue weight" value={`${item.attributes.numista_catalogue_weight} g`} /> : null}
