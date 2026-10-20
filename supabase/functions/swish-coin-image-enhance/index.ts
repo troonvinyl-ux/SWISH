@@ -66,7 +66,9 @@ Deno.serve(async (req) => {
     const prompt = [
       'Create a photorealistic, high-clarity conservation-style visual reference of the exact coin shown in the input image.',
       'Preserve the exact coin design, visible lettering, orientation, flan shape, wear, corrosion, patina, scratches and edge irregularities.',
-      'Improve legibility through careful macro lighting, local contrast and focus; isolate the coin on a clean neutral white background.',
+      'Automatically detect the coin’s complete outer boundary and tightly crop around it, removing excess background. Centre the coin and make it fill about 85–90% of the frame while keeping the entire rim and irregular edges visible.',
+      'Replace the surrounding background with a clean neutral white or very light grey background. Do not cut off any part of the coin and do not leave large empty margins.',
+      'Improve legibility through careful macro lighting, local contrast and focus; preserve the coin’s original orientation and proportions.',
       'Do not invent, reconstruct, complete, replace, translate or embellish any inscription or design. Do not make the coin look newer, cleaner, more valuable or made of a different metal.',
       'Do not add labels, measurements, hands, holders, shadows from other objects, or extra coins.',
       'If a feature is indistinct in the input, leave it indistinct rather than hallucinating detail.',
