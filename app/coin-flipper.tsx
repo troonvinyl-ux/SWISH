@@ -758,7 +758,7 @@ function CaptureTab({
             {capturedImages.find(i => i.slotId === activeSide)?.enhancementStatus === 'processing' ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4, paddingVertical: 8 }}>
                 <ActivityIndicator size="small" color={CF.gold} />
-                <Text style={{ color: CF.textSub, fontSize: 12 }}>Creating AI-rendered reference… original photo is محفوظ and unchanged.</Text>
+                <Text style={{ color: CF.textSub, fontSize: 12 }}>Creating AI-rendered reference… original photo is preserved and unchanged.</Text>
               </View>
             ) : null}
             {capturedImages.find(i => i.slotId === activeSide)?.enhancedUri ? (
