@@ -15,10 +15,15 @@ import { EvidenceSource, ConfidenceTier, DispositionDecision } from '@/constants
 import { createItem, Item } from '@/services/itemService';
 
 export interface CapturedImage {
+  /** Original camera/library image. Always retained for listing and provenance. */
   uri: string;
   base64?: string;
   slotId: string;
   slotLabel: string;
+  /** Separate AI-rendered reference; never replaces uri and never becomes the default listing image. */
+  enhancedUri?: string;
+  enhancementStatus?: 'processing' | 'ready' | 'failed';
+  enhancementWarning?: string;
 }
 
 export interface NumistaVerification {
