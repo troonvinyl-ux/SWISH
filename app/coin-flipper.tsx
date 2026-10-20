@@ -1740,11 +1740,26 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
     });
   }, [activeTab, idResult, tenant, selectedSpecialist.specialistId]);
 
+  // Automatically prepare every captured photo; users should not have to tap
+  // Auto detect and Enhance for each side. Keep the original URI for restoration.
+  const prepareCapturedPhoto = useCallback(async (image: CapturedImage): Promise<CapturedImage> => {
+    originalImageUris.current[image.slotId] = image.uri;
+    try {
+      const boundaryPrepared = await processCoinImage(image.uri, 'detect');
+      const enhanced = await processCoinImage(boundaryPrepared.uri, 'enhance');
+      return { ...image, uri: enhanced.uri, base64: undefined };
+    } catch (error) {
+      // Capture must remain usable even if optional processing fails.
+      console.warn('[CoinFlipper] Automatic photo preparation failed; keeping original photo.', error);
+      return image;
+    }
+  }, []);
+
   // ── Capture handler ─────────────────────────────────────────────────────────
   const handleCapture = useCallback(async (slotId: string, slotLabel: string) => {
     const cameraImg = await captureFromCamera();
     if (cameraImg) {
-      const image: CapturedImage = { ...cameraImg, slotId, slotLabel };
+      const image = await prepareCapturedPhoto({ ...cameraImg, slotId, slotLabel });
       setCapturedImages(prev => {
         const existing = prev.findIndex(i => i.slotId === slotId);
         if (existing >= 0) { const updated = [...prev]; updated[existing] = image; return updated; }
@@ -1762,16 +1777,17 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
           text: 'Choose from Library', onPress: async () => {
             const libImg = await pickFromLibrary(slotId, slotLabel);
             if (!libImg) return;
+            const prepared = await prepareCapturedPhoto(libImg);
             setCapturedImages(prev => {
               const existing = prev.findIndex(i => i.slotId === slotId);
-              if (existing >= 0) { const updated = [...prev]; updated[existing] = libImg; return updated; }
-              return [...prev, libImg];
+              if (existing >= 0) { const updated = [...prev]; updated[existing] = prepared; return updated; }
+              return [...prev, prepared];
             });
           },
         },
       ],
     );
-  }, []);
+  }, [prepareCapturedPhoto]);
 
   const handleProcessImage = useCallback(async (mode: CoinImageTool, slotId: string) => {
     const current = capturedImages.find(image => image.slotId === slotId);
