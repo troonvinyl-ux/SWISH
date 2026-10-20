@@ -499,6 +499,8 @@ function CaptureTab({
   edgeLegendInput: string; setEdgeLegendInput: (value: string) => void;
 }) {
   const router = useRouter();
+  const [activeSide, setActiveSide] = useState<'obverse' | 'reverse'>('obverse');
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const isIslamic = selectedSpecialist.id === 'islamic';
   const incompleteQuickCoins = quickCaptures.filter(coin => !coin.reverseUri).length;
   const completeQuickCoins = quickCaptures.length - incompleteQuickCoins;
@@ -695,164 +697,101 @@ function CaptureTab({
             ) : null}
           </View>
         ) : (
-          /* ── STANDARD MODE ── */
+          /* ── STANDARD MODE: dedicated Coin Flipper capture experience ── */
           <>
-            {/* Islamic specialist banner */}
-            {isIslamic ? (
-              <View style={ct.islamicBanner}>
-                <MaterialIcons name="toll" size={14} color={CF.islamic} />
-                <View style={{ flex: 1 }}>
-                  <Text style={ct.islamicBannerTitle}>Islamic Silver Mode</Text>
-                  <Text style={ct.islamicBannerSub}>AI + Zeno.ru + Numista evidence pipeline · Countermark detection</Text>
-                </View>
-                <View style={ct.zenoChip}>
-                  <Text style={ct.zenoChipText}>Zeno</Text>
-                </View>
-              </View>
-            ) : null}
+            <View style={ct.captureHeader}>
+              <Pressable onPress={() => onTabSelect('home')} style={ct.captureBack} accessibilityRole="button" accessibilityLabel="Back to Coin Flipper home">
+                <MaterialIcons name="arrow-back" size={21} color={CF.textPrimary} />
+              </Pressable>
+              <Text style={ct.captureTitle}>CAPTURE COIN</Text>
+              <View style={{ width: 36 }} />
+            </View>
 
-            <View style={ct.progressBar}>
-              <View style={[ct.progressDot, { backgroundColor: capturedImages.length >= 2 ? CF.success : accentColor }]} />
-              <Text style={ct.progressText}>
-                {capturedImages.length === 0 ? 'Tap a slot to photograph your coin'
-                  : capturedImages.length === 1 ? 'Obverse captured — now photograph the reverse'
-                  : `${capturedImages.length} / 4 photos captured`}
-              </Text>
-              <View style={[ct.countChip, capturedImages.length >= 2 && ct.countChipReady]}>
-                <Text style={[ct.countText, capturedImages.length >= 2 && { color: CF.success }]}>{capturedImages.length}/4</Text>
-              </View>
+            <View style={ct.sideToggle}>
+              {(['obverse', 'reverse'] as const).map(side => (
+                <Pressable key={side} onPress={() => setActiveSide(side)} accessibilityRole="button" accessibilityState={{ selected: activeSide === side }} style={[ct.sideButton, activeSide === side && ct.sideButtonActive]}>
+                  <Text style={[ct.sideButtonText, activeSide === side && ct.sideButtonTextActive]}>{side === 'obverse' ? 'Obverse' : 'Reverse'}</Text>
+                </Pressable>
+              ))}
             </View>
 
             {aiError ? (
               <View style={ct.errorBanner} accessibilityRole="alert">
-                <MaterialIcons name={aiError.includes('quota') ? 'workspace-premium' : 'error-outline'} size={15} color={aiError.includes('quota') ? CF.gold : CF.danger} />
-                <Text style={[ct.errorText, aiError.includes('quota') && { color: CF.gold }]} numberOfLines={5}>{aiError}</Text>
-                {aiError.includes('quota') && !isPremium ? (
-                  <Pressable onPress={() => router.push('/subscription' as any)} style={ct.quotaBtn} accessibilityRole="button" accessibilityLabel="Upgrade to Pro for unlimited identifications">
-                    <Text style={ct.quotaBtnText}>Upgrade</Text>
-                  </Pressable>
-                ) : null}
+                <MaterialIcons name="error-outline" size={15} color={CF.danger} />
+                <Text style={ct.errorText} numberOfLines={4}>{aiError}</Text>
               </View>
             ) : null}
 
-            <View style={ct.photoGrid}>
-              {COIN_SLOTS.map((slot, idx) => {
-                const img = capturedImages.find(i => i.slotId === slot.id);
-                const isFirst = idx === 0;
-                return (
-                  <View key={slot.id} style={isFirst ? ct.slotLarge : ct.slotSmall}>
-                    <Pressable
-                      onPress={() => onCapture(slot.id, slot.label)}
-                      accessibilityRole="button"
-                      accessibilityLabel={img ? `${slot.label} captured — tap to retake` : `Add ${slot.label} photo${slot.required ? ' (required)' : ' (optional)'}`}
-                      style={({ pressed }) => [ct.slotInner, img ? ct.slotCaptured : ct.slotEmpty, slot.required && !img ? { ...ct.slotRequired, borderColor: accentColor + '50' } : null, pressed && { opacity: 0.82 }]}
-                    >
-                      {img ? (
-                        <>
-                          <Image source={{ uri: img.uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
-                          <View style={ct.capturedBar}>
-                            <MaterialIcons name="check-circle" size={10} color={CF.success} />
-                            <Text style={ct.capturedLabel} numberOfLines={1}>{slot.label}</Text>
-                            <Pressable onPress={e => { e.stopPropagation?.(); onCapture(slot.id, slot.label); }} style={ct.retakeBtn} hitSlop={6} accessibilityLabel={`Retake ${slot.label} photo`} accessibilityRole="button">
-                              <MaterialIcons name="refresh" size={12} color="#fff" />
-                            </Pressable>
-                          </View>
-                          <Pressable onPress={e => { e.stopPropagation?.(); onRemove(slot.id); }} style={ct.removeBtn} hitSlop={6} accessibilityLabel={`Remove ${slot.label} photo`} accessibilityRole="button">
-                            <MaterialIcons name="close" size={11} color="#fff" />
-                          </Pressable>
-                        </>
-                      ) : (
-                        <View style={ct.emptySlot}>
-                          <View style={[ct.emptyIcon, slot.required ? { ...ct.emptyIconRequired, backgroundColor: accentColor + '25' } : null]}>
-                            <MaterialIcons name="add-a-photo" size={isFirst ? 26 : 20} color={slot.required ? accentColor : CF.textMuted} />
-                          </View>
-                          <Text style={[ct.emptyLabel, slot.required && { color: CF.textPrimary }]} numberOfLines={1}>{slot.label}</Text>
-                          {slot.required ? <View style={[ct.requiredPill, { backgroundColor: accentColor + '20' }]}><Text style={[ct.requiredText, { color: accentColor }]}>Required</Text></View> : <Text style={ct.optionalText}>Optional</Text>}
-                          {slot.hint && isFirst ? <Text style={ct.slotHint} numberOfLines={2}>{slot.hint}</Text> : null}
-                        </View>
-                      )}
-                    </Pressable>
+            <Pressable
+              onPress={() => onCapture(activeSide, activeSide === 'obverse' ? 'Obverse' : 'Reverse')}
+              accessibilityRole="button"
+              accessibilityLabel={capturedImages.some(i => i.slotId === activeSide) ? `Retake ${activeSide} photo` : `Photograph ${activeSide}`}
+              style={({ pressed }) => [ct.heroCapture, pressed && { opacity: 0.88 }]}
+            >
+              {capturedImages.find(i => i.slotId === activeSide) ? (
+                <Image source={{ uri: capturedImages.find(i => i.slotId === activeSide)!.uri }} style={ct.heroCaptureImage} contentFit="contain" />
+              ) : (
+                <>
+                  <View style={ct.framingGuide}>
+                    <View style={[ct.corner, ct.cornerTL]} /><View style={[ct.corner, ct.cornerTR]} />
+                    <View style={[ct.corner, ct.cornerBL]} /><View style={[ct.corner, ct.cornerBR]} />
+                    <View style={ct.heroPlaceholder}>
+                      <MaterialIcons name="photo-camera" size={58} color={CF.textPrimary} />
+                      <Text style={ct.heroPlaceholderTitle}>Tap to photograph</Text>
+                      <Text style={ct.heroPlaceholderSub}>{activeSide === 'obverse' ? 'Head / front face' : 'Tail / back face'}</Text>
+                    </View>
                   </View>
-                );
-              })}
+                </>
+              )}
+              <View style={ct.heroCaptureBadge}>
+                <MaterialIcons name={capturedImages.some(i => i.slotId === activeSide) ? 'check-circle' : 'add-a-photo'} size={14} color={CF.gold} />
+                <Text style={ct.heroCaptureBadgeText}>{capturedImages.some(i => i.slotId === activeSide) ? 'Captured · Tap image to retake' : `Capture ${activeSide === 'obverse' ? 'Obverse' : 'Reverse'}`}</Text>
+              </View>
+            </Pressable>
+
+            <View style={ct.captureTools}>
+              <Pressable onPress={() => setShowAdvanced(v => !v)} style={ct.toolButton} accessibilityRole="button" accessibilityLabel="Toggle auto detect options">
+                <MaterialIcons name="center-focus-strong" size={22} color={CF.gold} />
+                <Text style={ct.toolLabel}>Auto detect</Text>
+              </Pressable>
+              <Pressable onPress={() => setShowAdvanced(v => !v)} style={ct.toolButton} accessibilityRole="button" accessibilityLabel="Toggle image enhancement options">
+                <MaterialIcons name="contrast" size={22} color={CF.gold} />
+                <Text style={ct.toolLabel}>Enhance</Text>
+              </Pressable>
+              <Pressable onPress={() => setShowAdvanced(v => !v)} style={ct.toolButton} accessibilityRole="button" accessibilityLabel="Toggle high detail capture options">
+                <MaterialIcons name="zoom-in" size={22} color={CF.gold} />
+                <Text style={ct.toolLabel}>High detail</Text>
+              </Pressable>
             </View>
 
-            <View style={ct.tip}>
-              <MaterialIcons name="lightbulb-outline" size={13} color={accentColor} />
-              <Text style={[ct.tipText, { color: accentColor }]}>
-                {isIslamic
-                  ? 'For Islamic coins: obverse + reverse required. Weight (g) and diameter (mm) significantly improve accuracy. Notes about seller description help too.'
-                  : 'Obverse + Reverse gives the AI the most evidence. Edge and Detail boost confidence further.'}
-              </Text>
-            </View>
-
-            {/* User-supplied evidence is available to all coin specialists, not just Islamic mode. */}
-            <View style={ct.islamicMeasureCard}>
-              <Text style={ct.islamicMeasureTitle}>COIN EVIDENCE (optional — improves identification)</Text>
-              <View style={ct.islamicMeasureRow}>
-                <View style={ct.islamicMeasureField}>
-                  <Text style={ct.islamicMeasureLabel}>Weight (g)</Text>
-                  <TextInput
-                    style={ct.islamicMeasureInput}
-                    value={weightInput}
-                    onChangeText={setWeightInput}
-                    placeholder="e.g. 7.77"
-                    placeholderTextColor={CF.textMuted}
-                    keyboardType="decimal-pad"
-                    accessibilityLabel="Coin weight in grams"
-                  />
-                </View>
-                <View style={ct.islamicMeasureField}>
-                  <Text style={ct.islamicMeasureLabel}>Diameter (mm)</Text>
-                  <TextInput
-                    style={ct.islamicMeasureInput}
-                    value={diameterInput}
-                    onChangeText={setDiameterInput}
-                    placeholder="e.g. 20.5"
-                    placeholderTextColor={CF.textMuted}
-                    keyboardType="decimal-pad"
-                    accessibilityLabel="Coin diameter in millimetres"
-                  />
-                </View>
-              </View>
-              <View style={ct.islamicMeasureRow}>
-                <View style={ct.islamicMeasureField}>
-                  <Text style={ct.islamicMeasureLabel}>Year / date</Text>
-                  <TextInput
-                    style={ct.islamicMeasureInput}
-                    value={yearInput}
-                    onChangeText={setYearInput}
-                    placeholder="e.g. 2007"
-                    placeholderTextColor={CF.textMuted}
-                    accessibilityLabel="Coin year or date"
-                  />
-                </View>
-                <View style={ct.islamicMeasureField}>
-                  <Text style={ct.islamicMeasureLabel}>Metal (if known)</Text>
-                  <TextInput
-                    style={ct.islamicMeasureInput}
-                    value={materialInput}
-                    onChangeText={setMaterialInput}
-                    placeholder="e.g. bimetallic"
-                    placeholderTextColor={CF.textMuted}
-                    accessibilityLabel="Coin material"
-                  />
-                </View>
-              </View>
-              <View style={ct.islamicMeasureField}>
-                <Text style={ct.islamicMeasureLabel}>Edge legend / other visible text</Text>
-                <TextInput
-                  style={ct.islamicMeasureInput}
-                  value={edgeLegendInput}
-                  onChangeText={setEdgeLegendInput}
-                  placeholder="Enter the edge inscription exactly as seen"
-                  placeholderTextColor={CF.textMuted}
-                  accessibilityLabel="Coin edge legend or visible inscription"
-                />
+            <View style={ct.captureProgress}>
+              <Text style={ct.captureProgressText}>{capturedImages.filter(i => i.slotId === 'obverse' || i.slotId === 'reverse').length}/2 sides captured</Text>
+              <View style={ct.captureProgressDots}>
+                {(['obverse', 'reverse'] as const).map(side => <View key={side} style={[ct.captureProgressDot, capturedImages.some(i => i.slotId === side) && ct.captureProgressDotDone]} />)}
               </View>
             </View>
 
-            <View style={{ height: 100 }} />
+            {showAdvanced ? (
+              <View style={ct.advancedCard}>
+                <Text style={ct.advancedTitle}>SPECIALIST & COIN DETAILS</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={ct.specialistChips}>
+                  {SPECIALIST_CHIPS.map(chip => {
+                    const active = selectedSpecialist.id === chip.id;
+                    return <Pressable key={chip.id} onPress={() => onSpecialistChange(chip)} style={[ct.specialistChip, active && { backgroundColor: chip.color + '20', borderColor: chip.color + '80' }]}><MaterialIcons name={chip.icon as any} size={13} color={active ? chip.color : CF.textMuted} /><Text style={[ct.specialistChipText, active && { color: chip.color }]}>{chip.label}</Text></Pressable>;
+                  })}
+                </ScrollView>
+                <Text style={ct.advancedHint}>{selectedSpecialist.hint}</Text>
+                <View style={ct.islamicMeasureRow}>
+                  <View style={ct.islamicMeasureField}><Text style={ct.islamicMeasureLabel}>Weight (g)</Text><TextInput style={ct.islamicMeasureInput} value={weightInput} onChangeText={setWeightInput} placeholder="e.g. 7.77" placeholderTextColor={CF.textMuted} keyboardType="decimal-pad" /></View>
+                  <View style={ct.islamicMeasureField}><Text style={ct.islamicMeasureLabel}>Diameter (mm)</Text><TextInput style={ct.islamicMeasureInput} value={diameterInput} onChangeText={setDiameterInput} placeholder="e.g. 24" placeholderTextColor={CF.textMuted} keyboardType="decimal-pad" /></View>
+                </View>
+                <View style={ct.islamicMeasureRow}>
+                  <View style={ct.islamicMeasureField}><Text style={ct.islamicMeasureLabel}>Year / date</Text><TextInput style={ct.islamicMeasureInput} value={yearInput} onChangeText={setYearInput} placeholder="Optional" placeholderTextColor={CF.textMuted} /></View>
+                  <View style={ct.islamicMeasureField}><Text style={ct.islamicMeasureLabel}>Material</Text><TextInput style={ct.islamicMeasureInput} value={materialInput} onChangeText={setMaterialInput} placeholder="Silver, bronze…" placeholderTextColor={CF.textMuted} /></View>
+                </View>
+                <View style={ct.islamicMeasureField}><Text style={ct.islamicMeasureLabel}>Edge / inscription notes</Text><TextInput style={ct.islamicMeasureInput} value={edgeLegendInput} onChangeText={setEdgeLegendInput} placeholder="Optional observations" placeholderTextColor={CF.textMuted} /></View>
+              </View>
+            ) : null}
           </>
         )}
       </ScrollView>
@@ -885,7 +824,40 @@ function CaptureTab({
   );
 }
 const ct = StyleSheet.create({
-  content: { padding: Spacing.base, gap: Spacing.md },
+  content: { padding: Spacing.base, gap: Spacing.md, paddingBottom: 112 },
+  captureHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Spacing.xs, paddingBottom: Spacing.sm },
+  captureBack: { width: 36, height: 36, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
+  captureTitle: { fontSize: 16, fontWeight: Typography.weight.extrabold, color: CF.textPrimary, letterSpacing: 1 },
+  sideToggle: { flexDirection: 'row', gap: 4, padding: 4, borderRadius: Radius.lg, backgroundColor: CF.surfaceHigh, borderWidth: 1, borderColor: CF.border },
+  sideButton: { flex: 1, alignItems: 'center', paddingVertical: 11, borderRadius: Radius.md, backgroundColor: 'transparent' },
+  sideButtonActive: { backgroundColor: CF.gold, shadowColor: CF.gold, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 3 },
+  sideButtonText: { color: CF.textSub, fontSize: 13, fontWeight: Typography.weight.bold },
+  sideButtonTextActive: { color: CF.black },
+  heroCapture: { height: 350, borderRadius: Radius.xl, backgroundColor: '#0D0C09', borderWidth: 1, borderColor: CF.border, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  heroCaptureImage: { width: '100%', height: '100%' },
+  framingGuide: { width: '92%', height: '88%', alignItems: 'center', justifyContent: 'center' },
+  corner: { position: 'absolute', width: 26, height: 26, borderColor: '#FFFFFF', borderWidth: 3 },
+  cornerTL: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 8 },
+  cornerTR: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 8 },
+  cornerBL: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 8 },
+  cornerBR: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 8 },
+  heroPlaceholder: { alignItems: 'center', justifyContent: 'center', gap: Spacing.sm },
+  heroPlaceholderTitle: { color: CF.textPrimary, fontSize: 17, fontWeight: Typography.weight.bold },
+  heroPlaceholderSub: { color: CF.textMuted, fontSize: 12 },
+  heroCaptureBadge: { position: 'absolute', bottom: 12, left: 12, right: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: 'rgba(0,0,0,0.76)', paddingVertical: 9, borderRadius: Radius.md },
+  heroCaptureBadgeText: { color: CF.textPrimary, fontSize: 11, fontWeight: Typography.weight.semibold },
+  captureTools: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingVertical: Spacing.sm },
+  toolButton: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: Spacing.xs },
+  toolLabel: { color: CF.textSub, fontSize: 10, fontWeight: Typography.weight.medium },
+  captureProgress: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: CF.surface, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
+  captureProgressText: { color: CF.textSub, fontSize: 11 },
+  captureProgressDots: { flexDirection: 'row', gap: 6 },
+  captureProgressDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: CF.border },
+  captureProgressDotDone: { backgroundColor: CF.success },
+  advancedCard: { backgroundColor: CF.surface, borderRadius: Radius.lg, padding: Spacing.md, gap: Spacing.sm, borderWidth: 1, borderColor: CF.border },
+  advancedTitle: { fontSize: 10, fontWeight: Typography.weight.extrabold, color: CF.gold, letterSpacing: 0.7 },
+  advancedHint: { color: CF.textSub, fontSize: 10, lineHeight: 15 },
+
 
   // Specialist chips
   specialistSection: { gap: 6 },
@@ -1888,6 +1860,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
     <View style={main.container}>
       <StatusBar style="light" />
 
+      {activeTab !== 'capture' ? <>
       {/* ── Header ── */}
       <View style={[main.header, { paddingTop: insets.top + Spacing.sm }]}>
         {!isHomeTab ? (
@@ -1954,6 +1927,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
           })}
         </ScrollView>
       </View>
+      </> : <View style={{ height: insets.top }} />}
 
       {/* ── Tab content ── */}
       <View style={{ flex: 1 }}>
@@ -2014,7 +1988,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
       </View>
 
       {/* ── Bottom upgrade bar ── */}
-      {!isPremium && activeTab !== 'home' ? (
+      {!isPremium && activeTab !== 'home' && activeTab !== 'capture' ? (
         <View style={[main.upgradeBar, { paddingBottom: insets.bottom + 4 }]}>
           <MaterialIcons name="workspace-premium" size={13} color={CF.black} />
           <Text style={main.upgradeBarText}>Upgrade to Coin Flipper Pro</Text>
