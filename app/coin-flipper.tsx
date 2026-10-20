@@ -501,6 +501,7 @@ function CaptureTab({
   const router = useRouter();
   const [activeSide, setActiveSide] = useState<'obverse' | 'reverse'>('obverse');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [captureToolNotice, setCaptureToolNotice] = useState<'detect' | 'enhance' | null>(null);
   const isIslamic = selectedSpecialist.id === 'islamic';
   const incompleteQuickCoins = quickCaptures.filter(coin => !coin.reverseUri).length;
   const completeQuickCoins = quickCaptures.length - incompleteQuickCoins;
@@ -750,15 +751,15 @@ function CaptureTab({
             </Pressable>
 
             <View style={ct.captureTools}>
-              <Pressable onPress={() => setShowAdvanced(v => !v)} style={ct.toolButton} accessibilityRole="button" accessibilityLabel="Toggle auto detect options">
+              <Pressable onPress={() => setCaptureToolNotice('detect')} style={ct.toolButton} accessibilityRole="button" accessibilityLabel="Auto detect coin boundary">
                 <MaterialIcons name="center-focus-strong" size={22} color={CF.gold} />
                 <Text style={ct.toolLabel}>Auto detect</Text>
               </Pressable>
-              <Pressable onPress={() => setShowAdvanced(v => !v)} style={ct.toolButton} accessibilityRole="button" accessibilityLabel="Toggle image enhancement options">
+              <Pressable onPress={() => setCaptureToolNotice('enhance')} style={ct.toolButton} accessibilityRole="button" accessibilityLabel="Enhance coin photo">
                 <MaterialIcons name="contrast" size={22} color={CF.gold} />
                 <Text style={ct.toolLabel}>Enhance</Text>
               </Pressable>
-              <Pressable onPress={() => setShowAdvanced(v => !v)} style={ct.toolButton} accessibilityRole="button" accessibilityLabel="Toggle high detail capture options">
+              <Pressable onPress={() => { setCaptureToolNotice(null); setShowAdvanced(v => !v); }} style={ct.toolButton} accessibilityRole="button" accessibilityLabel="Toggle high detail coin specifications">
                 <MaterialIcons name="zoom-in" size={22} color={CF.gold} />
                 <Text style={ct.toolLabel}>High detail</Text>
               </Pressable>
@@ -770,6 +771,20 @@ function CaptureTab({
                 {(['obverse', 'reverse'] as const).map(side => <View key={side} style={[ct.captureProgressDot, capturedImages.some(i => i.slotId === side) && ct.captureProgressDotDone]} />)}
               </View>
             </View>
+
+            {captureToolNotice ? (
+              <View style={ct.advancedCard}>
+                <Text style={ct.advancedTitle}>{captureToolNotice === 'detect' ? 'COIN EDGE DETECTION' : 'PHOTO ENHANCEMENT'}</Text>
+                <Text style={ct.advancedHint}>
+                  {captureToolNotice === 'detect'
+                    ? 'Automatic edge detection is not yet available in this build. For a reliable result, place the entire coin on a plain contrasting background, avoid shadows crossing the rim, and capture the coin straight-on. The original photo will not be cropped or altered automatically.'
+                    : 'Non-destructive brightness, contrast and sharpness processing is not yet available in this build. Keep the original photo for identification; strong filters can hide worn lettering, patina and genuine surface details.'}
+                </Text>
+                <Pressable onPress={() => setCaptureToolNotice(null)} accessibilityRole="button" style={[ct.toolButton, { alignSelf: 'flex-start', paddingHorizontal: Spacing.md }]}>
+                  <Text style={ct.toolLabel}>Close</Text>
+                </Pressable>
+              </View>
+            ) : null}
 
             {showAdvanced ? (
               <View style={ct.advancedCard}>
