@@ -722,7 +722,7 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
       denomination: directDetail.min_unit?.name ?? directDetail.denomination?.name ?? directDetail.denomination_name ?? '',
       country: catalogueName(directDetail.country) || catalogueName(directDetail.issuer?.country),
       weight: directDetail.weight ?? null,
-      diameter: directDetail.diameter ?? null,
+      diameter: directDetail.diameter ?? directDetail.size ?? null,
       thickness: directDetail.thickness ?? null,
       mint: directDetail.mint?.name ?? directDetail.mint ?? '',
       issuer: directDetail.issuer?.name ?? directDetail.issuer ?? '',
@@ -733,8 +733,8 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
       suppliedDiameter: suppliedDiameter ?? undefined,
       weightDifferencePercent: (suppliedWeight && directDetail.weight)
         ? Math.round(Math.abs(suppliedWeight - directDetail.weight) / directDetail.weight * 1000) / 10 : undefined,
-      diameterDifferenceMm: (suppliedDiameter && directDetail.diameter)
-        ? Math.round(Math.abs(suppliedDiameter - directDetail.diameter) * 10) / 10 : undefined,
+      diameterDifferenceMm: (suppliedDiameter && (directDetail.diameter ?? directDetail.size))
+        ? Math.round(Math.abs(suppliedDiameter - (directDetail.diameter ?? directDetail.size)) * 10) / 10 : undefined,
       physicalMatchGood: directPhysicalMatchGood,
     };
   }
@@ -962,7 +962,7 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
     issuedFrom: src.issued_from ?? bestCandidate.issued_from,
     issuedTo: src.issued_to ?? bestCandidate.issued_to,
     composition: src.composition?.material ?? src.material ?? '',
-    weight: src.weight ?? null, diameter: src.diameter ?? null, thickness: src.thickness ?? null,
+    weight: src.weight ?? null, diameter: src.diameter ?? src.size ?? null, thickness: src.thickness ?? null,
     mint: src.mint?.name ?? src.mint ?? '', issuer: src.issuer?.name ?? src.issuer ?? '',
     denomination: src.min_unit?.name ?? src.denomination?.name ?? src.denomination_name ?? '',
     country: catalogueName(src.country) || catalogueName(src.issuer?.country),
@@ -970,7 +970,7 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
     reverse: typeDetail?.reverse?.description ?? typeDetail?.reverse?.lettering ?? '',
     references, suppliedWeight: suppliedWeight ?? undefined, suppliedDiameter: suppliedDiameter ?? undefined,
     weightDifferencePercent: (suppliedWeight && src.weight) ? Math.round(Math.abs(suppliedWeight - src.weight) / src.weight * 1000) / 10 : undefined,
-    diameterDifferenceMm: (suppliedDiameter && src.diameter) ? Math.round(Math.abs(suppliedDiameter - src.diameter) * 10) / 10 : undefined,
+    diameterDifferenceMm: (suppliedDiameter && (src.diameter ?? src.size)) ? Math.round(Math.abs(suppliedDiameter - (src.diameter ?? src.size)) * 10) / 10 : undefined,
     physicalMatchGood,
   };
 }
