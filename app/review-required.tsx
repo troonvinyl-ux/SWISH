@@ -216,7 +216,8 @@ function ReviewItemCard({ item, onPress }: { item: Item; onPress: (id: string) =
   const ready = isReadyToList(item);
   const idConf = item.identificationConfidence ?? 0;
   const confColor = idConf >= 0.50 ? Colors.warning : idConf >= 0.30 ? Colors.danger : Colors.danger;
-  const hasPhoto = (item.media ?? []).length > 0;
+  const referenceThumb = item.attributes?.swish_coin_reference_url as string | undefined;
+  const hasPhoto = !!referenceThumb || (item.media ?? []).length > 0;
   const objectType = item.attributes?.object_type as string | undefined;
 
   const objectTypeBadge = objectType ? (
@@ -238,7 +239,7 @@ function ReviewItemCard({ item, onPress }: { item: Item; onPress: (id: string) =
       <View style={styles.cardThumb}>
         {hasPhoto ? (
           <Image
-            source={{ uri: item.media[0] }}
+            source={{ uri: referenceThumb ?? item.media[0] }}
             style={styles.thumbImg}
             contentFit="cover"
             transition={150}
