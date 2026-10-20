@@ -54,6 +54,7 @@ import {
 import { getMarketValue, MarketValueResult } from '@/services/marketValueService';
 import { startCheckout } from '@/services/subscriptionService';
 import { processCoinImage, CoinImageTool } from '@/services/coinImageProcessing';
+import { generateCoinImageReference } from '@/services/coinImageEnhancementService';
 
 // ── Coin Flipper design tokens ────────────────────────────────────────────────
 const CF = {
@@ -1740,19 +1741,22 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
     });
   }, [activeTab, idResult, tenant, selectedSpecialist.specialistId]);
 
-  // Automatically prepare every captured photo; users should not have to tap
-  // Auto detect and Enhance for each side. Keep the original URI for restoration.
+  // Preserve every captured original and asynchronously create a separate AI
+  // reference. The original URI remains canonical for inventory/eBay listings.
   const prepareCapturedPhoto = useCallback(async (image: CapturedImage): Promise<CapturedImage> => {
     originalImageUris.current[image.slotId] = image.uri;
-    try {
-      const boundaryPrepared = await processCoinImage(image.uri, 'detect');
-      const enhanced = await processCoinImage(boundaryPrepared.uri, 'enhance');
-      return { ...image, uri: enhanced.uri, base64: undefined };
-    } catch (error) {
-      // Capture must remain usable even if optional processing fails.
-      console.warn('[CoinFlipper] Automatic photo preparation failed; keeping original photo.', error);
-      return image;
-    }
+    const pending: CapturedImage = { ...image, enhancementStatus: 'processing' };
+    void generateCoinImageReference(image.uri).then((reference) => {
+      setCapturedImages(prev => prev.map(current => current.slotId === image.slotId && current.uri === image.uri
+        ? { ...current, enhancedUri: reference.enhancedUri, enhancementStatus: 'ready', enhancementWarning: reference.warning }
+        : current));
+    }).catch((error) => {
+      console.warn('[CoinFlipper] AI coin reference generation unavailable; original photo retained.', error);
+      setCapturedImages(prev => prev.map(current => current.slotId === image.slotId && current.uri === image.uri
+        ? { ...current, enhancementStatus: 'failed', enhancementWarning: error instanceof Error ? error.message : 'AI image enhancement unavailable.' }
+        : current));
+    });
+    return pending;
   }, []);
 
   // ── Capture handler ─────────────────────────────────────────────────────────
@@ -1792,11 +1796,21 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
   const handleProcessImage = useCallback(async (mode: CoinImageTool, slotId: string) => {
     const current = capturedImages.find(image => image.slotId === slotId);
     if (!current) throw new Error('Capture this side of the coin first.');
-    const processed = await processCoinImage(current.uri, mode);
-    if (!originalImageUris.current[slotId]) originalImageUris.current[slotId] = current.uri;
-    setCapturedImages(prev => prev.map(image => image.slotId === slotId
-      ? { ...image, uri: processed.uri, base64: undefined }
-      : image));
+    if (mode === 'enhance') {
+      setCapturedImages(prev => prev.map(image => image.slotId === slotId ? { ...image, enhancementStatus: 'processing' } : image));
+      try {
+        const reference = await generateCoinImageReference(current.uri);
+        setCapturedImages(prev => prev.map(image => image.slotId === slotId
+          ? { ...image, enhancedUri: reference.enhancedUri, enhancementStatus: 'ready', enhancementWarning: reference.warning }
+          : image));
+      } catch (error) {
+        setCapturedImages(prev => prev.map(image => image.slotId === slotId ? { ...image, enhancementStatus: 'failed' } : image));
+        throw error;
+      }
+      return;
+    }
+    // Auto detect is non-destructive until reliable boundary detection is available.
+    await processCoinImage(current.uri, 'detect');
   }, [capturedImages]);
 
   const handleRestoreImage = useCallback((slotId: string) => {
@@ -1951,8 +1965,21 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
       await new Promise(r => setTimeout(r, 350));
     }
 
+    // Give the model the original and (when available) AI-rendered reference
+    // as explicitly labelled evidence. Original photos remain canonical for saving/listing.
+    const identificationImages: CapturedImage[] = capturedImages.flatMap((image) => [
+      { ...image, base64: undefined },
+      ...(image.enhancedUri ? [{
+        ...image,
+        uri: image.enhancedUri,
+        slotId: `${image.slotId}_ai_reference`,
+        slotLabel: `${image.slotLabel} — AI-rendered reference (not documentary evidence)`,
+        base64: undefined,
+        enhancedUri: undefined,
+      }] : []),
+    ]);
     const { result, error, quotaExceeded } = await identifyItemWithAI(
-      capturedImages,
+      identificationImages,
       selectedSpecialist.specialistId,
       undefined,
       {
