@@ -2097,6 +2097,12 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
         ...(result.numistaStatus || numistaVerification?.status ? { numista_status: result.numistaStatus ?? numistaVerification?.status } : {}),
         ...(result.numistaMatchTier || numistaVerification?.matchTier ? { numista_match_tier: result.numistaMatchTier ?? numistaVerification?.matchTier } : {}),
         ...(numistaVerification ? { numista_verification: numistaVerification } : {}),
+        ...(result.coinResearch ? {
+          coin_research_status: result.coinResearch.status,
+          coin_research_candidates: result.coinResearch.candidates,
+          coin_research_sources: result.coinResearch.sources,
+          coin_research_searched: result.coinResearch.searched,
+        } : {}),
         catalogue_reference_state: result.numistaStatus === 'verified' ? 'verified' : (result.numistaTypeId || numistaVerification?.typeId ? 'candidate' : 'not_found'),
       },
     };
