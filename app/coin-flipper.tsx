@@ -792,6 +792,18 @@ function CaptureTab({
                 <View style={ct.islamicMeasureField}><Text style={ct.islamicMeasureLabel}>Edge / inscription notes</Text><TextInput style={ct.islamicMeasureInput} value={edgeLegendInput} onChangeText={setEdgeLegendInput} placeholder="Optional observations" placeholderTextColor={CF.textMuted} /></View>
               </View>
             ) : null}
+
+            <Pressable
+              onPress={onIdentify}
+              disabled={!hasRequired || identifying}
+              accessibilityRole="button"
+              accessibilityLabel={identifying ? 'Identifying coin' : 'Identify coin'}
+              accessibilityState={{ disabled: !hasRequired || identifying, busy: identifying }}
+              style={[ct.identifyPrimary, (!hasRequired || identifying) && ct.identifyPrimaryDisabled]}
+            >
+              {identifying ? <ActivityIndicator size="small" color={CF.black} /> : <MaterialIcons name="auto-awesome" size={18} color={CF.black} />}
+              <Text style={ct.identifyPrimaryText}>{identifying ? (processingStatus || 'Identifying…') : 'IDENTIFY COIN'}</Text>
+            </Pressable>
           </>
         )}
       </ScrollView>
@@ -850,6 +862,9 @@ const ct = StyleSheet.create({
   toolButton: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: Spacing.xs },
   toolLabel: { color: CF.textSub, fontSize: 10, fontWeight: Typography.weight.medium },
   captureProgress: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: CF.surface, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
+  identifyPrimary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, backgroundColor: CF.gold, borderRadius: Radius.md, paddingVertical: 15, marginTop: Spacing.xs, shadowColor: CF.gold, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
+  identifyPrimaryDisabled: { backgroundColor: CF.surfaceHigh, shadowOpacity: 0, elevation: 0 },
+  identifyPrimaryText: { fontSize: 14, fontWeight: Typography.weight.extrabold, color: CF.black, letterSpacing: 0.5 },
   captureProgressText: { color: CF.textSub, fontSize: 11 },
   captureProgressDots: { flexDirection: 'row', gap: 6 },
   captureProgressDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: CF.border },
