@@ -222,6 +222,14 @@ CONFIDENCE FRAMEWORK:
 - 0.30–0.49: Broad category identification only
 - Below 0.30: Cannot reliably identify — return UNIDENTIFIED
 
+CROSS-FIELD CONSISTENCY (CRITICAL):
+- The canonicalTitle and candidateIdentification MUST agree with the actual evidenceSupporting, coinFields, and observedCharacteristics.
+- Never output a Roman/Greek/Byzantine candidate if the evidence you describe is Indian princely-state, Maratha, Mughal, or Persian/Arabic-script coinage unless you can explicitly explain a genuine historical reason supported by the images.
+- Never use generic design words (round flan, lines, stylized symbols, copper colour) alone to justify a precise ruler, denomination, or region.
+- When the evidence points to a broad family but not a specific issue, give that family as the provisional primaryCandidate and list 2–3 plausible alternatives only when evidence supports them. Example: "Possible Indian princely-state paisa, possibly Maratha/Mughal-influenced; issuing authority unconfirmed" is preferable to an unrelated named denomination.
+- If the candidate conflicts with your own evidence, downgrade to observation_only or a broad provisional candidate; do not preserve a confident-looking title simply because a candidate was generated.
+- "No Numista match" means catalogue verification failed; it does NOT prove there is no plausible historical candidate. Preserve a well-supported provisional candidate while clearly marking it unverified.
+
 MANDATORY "NOT ESTABLISHED" POLICY:
 Return "Not established" for any field you cannot confirm from VISIBLE evidence or user-supplied data.
 
@@ -948,6 +956,51 @@ function applyNumistaToIdentification(identification: any, numista: NumistaVerif
 
 function enforceEvidenceConstraints(identification: any, vehicleMode: boolean, clothingMode: boolean): any {
   const result = { ...identification };
+
+  // Cross-field contradiction guard: do not let a hallucinated dynasty/title survive
+  // when the model's own evidence clearly describes a different numismatic tradition.
+  // Keep the observations, but correct the headline to the broad family the evidence supports.
+  if (!vehicleMode && !clothingMode && result.objectType === 'coin') {
+    const titleText = String(result.canonicalTitle ?? '').toLowerCase();
+    const evidenceText = [
+      ...(Array.isArray(result.evidenceSupporting) ? result.evidenceSupporting : []),
+      ...(Array.isArray(result.evidenceContradictory) ? result.evidenceContradictory : []),
+      result.coinFields?.country, result.coinFields?.issuer, result.coinFields?.period,
+      result.coinFields?.obverseDescription, result.coinFields?.reverseDescription,
+      result.coinFields?.legendFragment, result.candidateIdentification?.whyCandidateSelected,
+    ].filter(Boolean).join(' ').toLowerCase();
+    const romanCandidate = /roman|denarius|denarii|imperial rome|ric\b/.test(titleText);
+    const indianTraditionEvidence = /indian princely|maratha|mughal|persian\/arabic|arabic script|persian script|indo-islamic|indian coinage|paisa/.test(evidenceText);
+    if (romanCandidate && indianTraditionEvidence) {
+      result.canonicalTitle = 'Possible Indian princely-state copper paisa — provisional';
+      result.identificationState = 'candidate';
+      result.identificationSource = 'inferred';
+      result.confidence = Math.min(Number(result.confidence ?? 0.3), 0.42);
+      result.confidenceTier = 'low';
+      result.candidateIdentification = {
+        ...(result.candidateIdentification ?? {}),
+        primaryCandidate: 'Possible Indian princely-state copper paisa, potentially Maratha/Mughal-influenced; exact issuing authority unconfirmed',
+        alternativeCandidates: Array.isArray(result.candidateIdentification?.alternativeCandidates)
+          ? result.candidateIdentification.alternativeCandidates.filter((v: unknown) => !/roman|denarius/i.test(String(v))).slice(0, 3)
+          : [],
+        whyCandidateSelected: 'The supplied evidence describes Indian princely-state coinage and Persian/Arabic-style script, which conflicts with a Roman Imperial denarius attribution. The broad Indian paisa family is only a provisional research direction, not a confirmed identification.',
+        whyUncertain: 'Exact legends, ruler, mint, date, weight, diameter, and catalogue match are not established.',
+      };
+      result.coinFields = {
+        ...(result.coinFields ?? {}),
+        country: 'Indian princely-state region — provisional',
+        period: 'Not established',
+        denomination: 'Possible paisa — provisional',
+        issuer: 'Not established',
+        mint: 'Not established',
+        catalogueHint: 'Not established',
+      };
+      result.warnings = Array.isArray(result.warnings) ? result.warnings : [];
+      if (!result.warnings.some((w: string) => /candidate conflicts with its own evidence/i.test(w))) {
+        result.warnings.push('Candidate conflicts with the model’s own evidence; the Roman attribution was rejected. Indian princely-state paisa is a provisional research lead only.');
+      }
+    }
+  }
 
   result.valuationLow = 0; result.valuationMid = 0; result.valuationHigh = 0;
   result.valuationConfidence = 'insufficient_data'; result.saleProb30d = null;
