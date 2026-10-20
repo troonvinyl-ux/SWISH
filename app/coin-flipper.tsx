@@ -512,8 +512,10 @@ function CaptureTab({
   const incompleteQuickCoins = quickCaptures.filter(coin => !coin.reverseUri).length;
   const completeQuickCoins = quickCaptures.length - incompleteQuickCoins;
   const hasRequired = COIN_SLOTS.filter(s => s.required).every(s => capturedImages.some(i => i.slotId === s.id));
-  const imageProcessing = capturedImages.some(i => (i.slotId === 'obverse' || i.slotId === 'reverse') && i.enhancementStatus === 'processing');
-  const canIdentify = hasRequired && !imageProcessing;
+  const requiredSides = ['obverse', 'reverse'].map(side => capturedImages.find(i => i.slotId === side));
+  const imagePipelineReady = requiredSides.every(image => !!image && ['ready', 'failed'].includes(image.enhancementStatus ?? ''));
+  const imageProcessing = hasRequired && !imagePipelineReady;
+  const canIdentify = hasRequired && imagePipelineReady;
   const accentColor = selectedSpecialist.color;
 
   // Move directly from the first face to the reverse capture slot.
