@@ -18,6 +18,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { getSupabaseClient } from '@/template';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
+import { getProductionNicheSpecialistIds, resolveProductionNiche } from '@/services/nicheRouting';
 import { useMemo } from 'react';
 import { useAlert } from '@/template';
 
@@ -400,12 +401,14 @@ const hc = StyleSheet.create({
 // ── Niche theme for eBay Hub header ─────────────────────────────────────────
 function useNicheHubStyle(activeNicheId: string | null | undefined) {
   return useMemo(() => {
-    const id = (activeNicheId ?? '').toLowerCase();
-    if (id === 'motocross' || id === 'mx') return { accent: '#FF5500', icon: 'two-wheeler' as const, label: 'MX', specialistIds: ['motocross'] };
-    if (id === 'bicycles' || id === 'cycling' || id === 'bikes') return { accent: '#6ED020', icon: 'pedal-bike' as const, label: 'Bikes', specialistIds: ['bicycles', 'cycling'] };
-    if (id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers' || id === 'trainers') return { accent: '#E91E8C', icon: 'checkroom' as const, label: 'Fashion', specialistIds: ['clothing', 'trainers_sneakers'] };
-    if (id === 'surplus_flip' || id === 'catalog_flip' || id === 'catalog_surplus') return { accent: '#14B8A6', icon: 'inventory-2' as const, label: 'Surplus', specialistIds: ['surplus_trader'] };
-    return { accent: Colors.primary, icon: 'toll' as const, label: 'Coins', specialistIds: ['coins', 'coins_uk', 'coins_world', 'islamic_silver', 'banknotes', 'gold', 'silver', 'ancient_artefacts'] };
+    const niche = resolveProductionNiche(activeNicheId);
+    const specialistIds = getProductionNicheSpecialistIds(activeNicheId);
+    if (niche === 'motocross') return { accent: '#FF5500', icon: 'two-wheeler' as const, label: 'MX', specialistIds };
+    if (niche === 'bicycles') return { accent: '#6ED020', icon: 'pedal-bike' as const, label: 'Bikes', specialistIds };
+    if (niche === 'clothing') return { accent: '#E91E8C', icon: 'checkroom' as const, label: 'Fashion', specialistIds };
+    if (niche === 'surplus_flip') return { accent: '#14B8A6', icon: 'inventory-2' as const, label: 'Surplus', specialistIds };
+    if (niche === 'coins') return { accent: Colors.primary, icon: 'toll' as const, label: 'Coins', specialistIds };
+    return { accent: Colors.primary, icon: 'toll' as const, label: 'Select niche', specialistIds: [] as string[] };
   }, [activeNicheId]);
 }
 
@@ -451,7 +454,7 @@ export default function EbayHubScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [tenant?.id, showAlert]);
+  }, [tenant?.id, showAlert, nicheStyle.specialistIds.join('|')]);
 
   // ── Silent token refresh ──────────────────────────────────────────────────
   const handleTokenRefresh = useCallback(async () => {
