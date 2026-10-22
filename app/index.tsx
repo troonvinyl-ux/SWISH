@@ -23,33 +23,7 @@ import { Redirect } from 'expo-router';
 import { useApp } from '@/hooks/useApp';
 import { View, ActivityIndicator } from 'react-native';
 import { Colors } from '@/constants/theme';
-import type { NicheId } from '@/constants/niches';
-
-// Maps a niche ID to its dedicated entry route path
-function nicheToEntryRoute(nicheId: NicheId | null | undefined): string {
-  if (!nicheId) return '/entry/coins'; // fallback
-
-  const id = nicheId.toLowerCase();
-
-  if (
-    id === 'coins' || id === 'coins_uk' || id === 'coins_world' ||
-    id === 'banknotes' || id === 'gold' || id === 'silver' ||
-    id === 'islamic_silver' || id === 'ancient_artefacts' ||
-    id === 'curiosities_collectibles' || id.includes('coin')
-  ) return '/entry/coins';
-
-  if (id === 'motocross' || id === 'mx') return '/entry/motocross';
-
-  if (id === 'bicycles' || id === 'cycling' || id === 'bikes') return '/entry/bicycles';
-
-  if (
-    id === 'clothing' || id === 'fashion' ||
-    id === 'trainers_sneakers' || id === 'trainers' || id === 'threads_flip'
-  ) return '/entry/clothing';
-
-  // Unrecognised niche — fall back to coins entry (will prompt niche selection via onboarding)
-  return '/entry/coins';
-}
+import { nicheToEntryRoute } from '@/services/nicheRouting';
 
 function AppRouter() {
   const { businessConfig, tenantLoading, activeNicheId } = useApp();
@@ -69,9 +43,12 @@ function AppRouter() {
     return <Redirect href="/onboarding" />;
   }
 
-  // Route to the correct niche-specific entry point.
-  // This prevents all subscribers from silently entering a single shared shell.
+  // Fail closed: an unset/unknown niche must never silently open Coins.
+  // Ask the user to select a product until a registered niche is available.
   const entryRoute = nicheToEntryRoute(activeNicheId);
+  if (!entryRoute) return <Redirect href="/niche-select" />;
+
+  // Route to the correct niche-specific entry point.
   return <Redirect href={entryRoute as any} />;
 }
 
