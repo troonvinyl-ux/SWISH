@@ -1,0 +1,71 @@
+name: SWISH branded web production builds
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'components/**'
+      - 'constants/**'
+      - 'contexts/**'
+      - 'services/**'
+      - 'hooks/**'
+      - 'assets/**'
+      - 'app.config.js'
+      - 'eas.json'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/branded-web-builds.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: swish-branded-web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  export-web:
+    name: Export web — ${{ matrix.niche }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        niche: [coins, motocross, bicycles, clothing, surplus_flip]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.3
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Validate branded app identity
+        env:
+          SWISH_NICHE: ${{ matrix.niche }}
+        run: pnpm exec expo config --type public
+
+      - name: Export static web application
+        env:
+          SWISH_NICHE: ${{ matrix.niche }}
+        run: pnpm exec expo export --platform web --output-dir dist/web
+
+      - name: Upload web build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: swish-web-${{ matrix.niche }}
+          path: dist/web/
+          if-no-files-found: error
+          retention-days: 14
