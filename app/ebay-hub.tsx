@@ -48,6 +48,8 @@ interface EbayMetrics {
   pendingOffers: number;
   awaitingSellerAction: number;
   pendingPayout: number;
+  availableFunds: number | null;
+  fundsCurrency: string;
   totalFeesMonth: number;
   netProfitMonth: number;
   feedbackScore: number;
@@ -73,7 +75,7 @@ function emptyEbayMetrics(): EbayMetrics {
     totalListings: 0, gmv: 0, awaitingDispatch: 0, labelsCreated: 0, dispatchedToday: 0,
     totalOrdersThisMonth: 0, revenueToday: 0, revenueWeek: 0, revenueMonth: 0,
     unreadMessages: 0, openReturns: 0, openCases: 0, pendingOffers: 0,
-    awaitingSellerAction: 0, pendingPayout: 0, totalFeesMonth: 0, netProfitMonth: 0,
+    awaitingSellerAction: 0, pendingPayout: 0, availableFunds: null, fundsCurrency: 'GBP', totalFeesMonth: 0, netProfitMonth: 0,
     feedbackScore: 0, positivePercent: 100,
   };
 }
@@ -132,7 +134,7 @@ async function loadEbayMetrics(tenantId: string, specialistIds?: string[]): Prom
   const [
     connectorRes, listingCountsRes, ordersDispatchRes, dispatchedTodayRes,
     salesTodayRes, salesWeekRes, salesMonthRes,
-    messagesRes, returnsRes, casesRes, offersRes, financialsRes, feedbackRes,
+    messagesRes, returnsRes, casesRes, offersRes, financialsRes, feedbackRes, fundsSummaryRes,
   ] = await Promise.all([
     supabase.from('marketplace_connectors').select('status, access_token_expires_at, seller_account_id, last_sync_at').eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle(),
     listingQuery,
@@ -147,6 +149,7 @@ async function loadEbayMetrics(tenantId: string, specialistIds?: string[]): Prom
     supabase.from('ebay_offers').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('status', 'pending'),
     supabase.from('ebay_financials').select('amount, transaction_type').eq('tenant_id', tenantId).gte('transaction_date', monthStart),
     supabase.from('ebay_feedback').select('rating').eq('tenant_id', tenantId),
+    supabase.functions.invoke('swish-ebay-finances', { body: { tenantId, route: 'get_funds_summary' } }),
   ]);
 
   const connector = connectorRes.data;
@@ -178,6 +181,10 @@ async function loadEbayMetrics(tenantId: string, specialistIds?: string[]): Prom
   const pendingPayout = financials.filter(f => f.transaction_type === 'PAYOUT').reduce((s, f) => s + Math.abs(Number(f.amount ?? 0)), 0);
   const totalFeesMonth = Math.abs(financials.filter(f => String(f.transaction_type ?? '').includes('FINAL_VALUE_FEE') && Number(f.amount ?? 0) < 0).reduce((s, f) => s + Number(f.amount ?? 0), 0));
   const netProfitMonth = salesMonthRes.data?.reduce((s, r) => s + Number(r.net_revenue ?? 0), 0) ?? 0;
+  const fundsPayload = fundsSummaryRes.data?.success ? fundsSummaryRes.data.fundsSummary : null;
+  const availableFundsRaw = fundsPayload?.availableFunds;
+  const availableFunds = availableFundsRaw?.value != null ? Number(availableFundsRaw.value) : null;
+  const fundsCurrency = String(availableFundsRaw?.currency ?? 'GBP');
   const feedbackRows = feedbackRes.data ?? [];
   const positiveCount = feedbackRows.filter(f => f.rating === 'Positive').length;
   const positivePercent = feedbackRows.length > 0 ? Math.round((positiveCount / feedbackRows.length) * 100) : 100;
@@ -192,7 +199,7 @@ async function loadEbayMetrics(tenantId: string, specialistIds?: string[]): Prom
     revenueToday, revenueWeek, revenueMonth,
     unreadMessages, openReturns, openCases, pendingOffers,
     awaitingSellerAction: awaitingSellerCases,
-    pendingPayout, totalFeesMonth, netProfitMonth,
+    pendingPayout, availableFunds, fundsCurrency, totalFeesMonth, netProfitMonth,
     feedbackScore: feedbackRows.length, positivePercent,
   };
 }
@@ -764,7 +771,7 @@ export default function EbayHubScreen() {
         <View style={s.metricsRow}>
           <MetricCard icon="label" label="Labels Ready" value={String(metrics?.labelsCreated ?? 0)} subValue="to dispatch" color={metrics?.labelsCreated ? Colors.info : Colors.textTertiary} onPress={() => router.push('/dispatch' as any)} />
           <MetricCard icon="local-shipping" label="Dispatched" value={String(metrics?.dispatchedToday ?? 0)} subValue="today" color={Colors.success} onPress={() => router.push('/dispatch' as any)} />
-          <MetricCard icon="account-balance-wallet" label="Seller Funds" value="View" subValue="available balance" color={Colors.primary} onPress={() => router.push('/ebay-finances' as any)} />
+          <MetricCard icon="account-balance-wallet" label="Available Funds" value={metrics?.availableFunds == null ? '—' : new Intl.NumberFormat('en-GB', { style: 'currency', currency: metrics.fundsCurrency || 'GBP', maximumFractionDigits: 0 }).format(metrics.availableFunds)} subValue={metrics?.availableFunds == null ? 'tap to view' : 'eBay balance'} color={metrics?.availableFunds ? Colors.success : Colors.primary} onPress={() => router.push('/ebay-finances' as any)} />
         </View>
 
         {/* ── Action Centre ── */}
