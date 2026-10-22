@@ -135,7 +135,7 @@ Deno.serve(async (req: Request) => {
       const resp = await fetch(url.toString(), { headers: { ...hdrs, ...signatureHeaders }, signal: AbortSignal.timeout(15000) });
       // eBay returns 204 when there are no pending, processing, or held funds.
       if (resp.status === 204) {
-        return jr({ success: true, fundsSummary: {}, financesApiAvailable: true, noPendingFunds: true });
+        return jr({ success: true, fundsSummary: { availableFunds: { value: '0', currency: 'GBP' }, processingFunds: { value: '0', currency: 'GBP' }, fundsOnHold: { value: '0', currency: 'GBP' }, totalFunds: { value: '0', currency: 'GBP' } }, financesApiAvailable: true, noPendingFunds: true });
       }
       if (!resp.ok) {
         const t = await resp.text().catch(() => '');
