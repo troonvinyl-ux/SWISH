@@ -1,6 +1,6 @@
 // SWISH — eBay Finances API Sync Edge Function
 // Syncs real financial transaction data from eBay Managed Payments API.
-// Routes: sync_transactions | get_payouts | get_summary
+// Routes: sync_transactions | get_payouts | get_funds_summary | get_summary
 // POST body: { tenantId, route?, daysBack? }
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
