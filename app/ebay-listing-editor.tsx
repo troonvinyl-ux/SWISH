@@ -1374,7 +1374,7 @@ export default function EbayListingEditorScreen() {
           id, canonical_title, description, condition, condition_grade,
           specialist_id, quantity, sku, inventory_id, attributes, media,
           valuation_mid, expected_selling_price,
-          catalogue_number, inventory_id,
+          catalogue_number,
           ruler, denomination, country_of_origin, period, mint,
           weight_grams, dimensions_mm, material, manufacturer, year_made,
           folder_number, storage_location
