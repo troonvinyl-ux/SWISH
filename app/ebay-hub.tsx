@@ -454,7 +454,7 @@ export default function EbayHubScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [tenant?.id, showAlert, nicheStyle.specialistIds.join('|')]);
+  }, [tenant?.id, showAlert, nicheStyle.specialistIds]);
 
   // ── Silent token refresh ──────────────────────────────────────────────────
   const handleTokenRefresh = useCallback(async () => {
@@ -465,14 +465,14 @@ export default function EbayHubScreen() {
         body: { tenantId: tenant.id, mode: 'refresh_token_only' },
       });
       if (error || !data?.success) router.push('/marketplaces' as any);
-      const m = await loadEbayMetrics(tenant.id);
+      const m = await loadEbayMetrics(tenant.id, nicheStyle.specialistIds);
       setMetrics(m);
     } catch {
       router.push('/marketplaces' as any);
     } finally {
       setTokenRefreshing(false);
     }
-  }, [tenant?.id, tokenRefreshing, supabase, router, load]);
+  }, [tenant?.id, tokenRefreshing, supabase, router, load, nicheStyle.specialistIds]);
 
   // ── Sync with eBay ────────────────────────────────────────────────────────
   const handleHubSync = useCallback(async () => {
