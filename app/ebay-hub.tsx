@@ -761,6 +761,11 @@ export default function EbayHubScreen() {
           <MetricCard icon="trending-up" label="This Week" value={`£${(metrics?.revenueWeek ?? 0).toFixed(0)}`} color={Colors.primary} />
           <MetricCard icon="calendar-month" label="This Month" value={`£${(metrics?.revenueMonth ?? 0).toFixed(0)}`} color={Colors.accent} />
         </View>
+        <View style={s.metricsRow}>
+          <MetricCard icon="label" label="Labels Ready" value={String(metrics?.labelsCreated ?? 0)} subValue="to dispatch" color={metrics?.labelsCreated ? Colors.info : Colors.textTertiary} onPress={() => router.push('/dispatch' as any)} />
+          <MetricCard icon="local-shipping" label="Dispatched" value={String(metrics?.dispatchedToday ?? 0)} subValue="today" color={Colors.success} onPress={() => router.push('/dispatch' as any)} />
+          <MetricCard icon="account-balance-wallet" label="Seller Funds" value="View" subValue="available balance" color={Colors.primary} onPress={() => router.push('/ebay-finances' as any)} />
+        </View>
 
         {/* ── Action Centre ── */}
         {actions.length > 0 ? (
