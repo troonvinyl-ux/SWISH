@@ -41,6 +41,18 @@ interface FinanceSummary {
   feeDataSource: 'actual_ebay' | 'estimate';
 }
 
+interface FundsSummaryAmount {
+  value: string;
+  currency: string;
+}
+
+interface FundsSummary {
+  totalFunds?: FundsSummaryAmount;
+  availableFunds?: FundsSummaryAmount;
+  processingFunds?: FundsSummaryAmount;
+  fundsOnHold?: FundsSummaryAmount;
+}
+
 interface SaleRecord {
   id: string;
   itemTitle: string;
@@ -160,6 +172,8 @@ export default function EbayFinancesScreen() {
   const { showAlert } = useAlert();
 
   const [summary, setSummary] = useState<FinanceSummary | null>(null);
+  const [fundsSummary, setFundsSummary] = useState<FundsSummary | null>(null);
+  const [fundsSummaryError, setFundsSummaryError] = useState<string | null>(null);
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -272,6 +286,18 @@ export default function EbayFinancesScreen() {
         return;
       }
 
+      // Fetch eBay's actual funds summary separately from historical transaction totals.
+      const { data: fundsData, error: fundsInvokeError } = await supabase.functions.invoke('swish-ebay-finances', {
+        body: { tenantId: tenant.id, route: 'get_funds_summary' },
+      });
+      if (fundsInvokeError || !fundsData?.success) {
+        setFundsSummary(null);
+        setFundsSummaryError(fundsData?.error ?? fundsInvokeError?.message ?? 'Available funds could not be retrieved.');
+      } else {
+        setFundsSummary(fundsData.fundsSummary as FundsSummary);
+        setFundsSummaryError(null);
+      }
+
       showAlert('Finances Synced', `${data.fetched} transactions synced. ${data.inserted} new, ${data.updated} updated.`);
       await loadData();
     } finally {
@@ -280,6 +306,7 @@ export default function EbayFinancesScreen() {
   }, [tenant, showAlert, loadData]);
 
   const fmtGBP = (v?: number) => v != null ? `£${v.toFixed(2)}` : '—';
+  const formatFunds = (amount?: FundsSummaryAmount) => amount ? new Intl.NumberFormat('en-GB', { style: 'currency', currency: amount.currency || 'GBP' }).format(Number(amount.value ?? 0)) : '—';
   const hasRealData = summary?.financesApiAvailable ?? false;
 
   return (
@@ -343,6 +370,23 @@ export default function EbayFinancesScreen() {
               <Text style={s.heroLabel}>Net Revenue</Text>
               <Text style={[s.heroValue, { color: Colors.success }]}>{fmtGBP(summary?.netRevenueMonth)}</Text>
               <Text style={s.heroSub}>after fees</Text>
+            </View>
+          </View>
+
+          {/* Live seller funds — distinct from historical sales/payout totals */}
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>SELLER FUNDS</Text>
+            <View style={s.sectionCard}>
+              {fundsSummary ? (
+                <>
+                  <StatRow icon="account-balance-wallet" label="Available Funds" sub="Available to be paid out" value={formatFunds(fundsSummary.availableFunds)} color={Colors.success} highlight badge="LIVE" />
+                  <StatRow icon="schedule" label="Processing Funds" value={formatFunds(fundsSummary.processingFunds)} color={Colors.info} />
+                  <StatRow icon="pause-circle-outline" label="Funds on Hold" value={formatFunds(fundsSummary.fundsOnHold)} color={Colors.warning} />
+                  <StatRow icon="payments" label="Total Pending Funds" value={formatFunds(fundsSummary.totalFunds)} color={Colors.primary} />
+                </>
+              ) : (
+                <StatRow icon="account-balance-wallet" label="Available Funds" sub={fundsSummaryError ?? 'Tap Sync to retrieve live eBay funds'} value="—" color={Colors.textTertiary} />
+              )}
             </View>
           </View>
 
