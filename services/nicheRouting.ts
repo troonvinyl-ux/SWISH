@@ -63,7 +63,7 @@ const PRODUCTION_PRODUCT_SPECIALISTS: Record<ProductionNicheId, string[]> = {
   motocross: ['motocross'],
   bicycles: ['bicycles'],
   clothing: ['clothing', 'trainers_sneakers'],
-  surplus_flip: ['surplus_flip'],
+  surplus_flip: ['surplus_trader'],
 };
 
 export function getProductionNicheSpecialistIds(
