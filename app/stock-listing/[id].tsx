@@ -851,13 +851,22 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
     const strongNumistaMatch =
       ['verified', 'strong_match'].includes(String(numistaStatus)) &&
       numistaMatchScore >= 80 && numista.physicalMatchGood === true;
+    // An exact retrieved N# supplies catalogue metadata even if the image match
+    // still needs review. Match confidence governs identity confidence, not data availability.
+    const hasResolvedNumistaRecord = Boolean(
+      numistaTypeId && (numista.title || r.numistaTitle) &&
+      (numista.numistaUrl || r.numistaUrl || numistaN)
+    );
+    const useCatalogueMetadata = strongNumistaMatch || hasResolvedNumistaRecord;
     const catalogueSuggestions = (r.attributes?.numista_catalogue_suggestions ?? {}) as Record<string, any>;
     const usableCatalogueText = (value: unknown): string | undefined => {
       const text = String(value ?? '').trim();
       return text && !/^(not established|not supplied|unknown|n.a|—|-)$/i.test(text) ? text : undefined;
     };
-    const suggestedYear = strongNumistaMatch && (catalogueSuggestions.issuedFrom != null || catalogueSuggestions.issuedTo != null)
-      ? `${catalogueSuggestions.issuedFrom ?? '?'}–${catalogueSuggestions.issuedTo ?? '?'}`
+    const issuedFrom = numista.issuedFrom ?? catalogueSuggestions.issuedFrom;
+    const issuedTo = numista.issuedTo ?? catalogueSuggestions.issuedTo;
+    const suggestedYear = useCatalogueMetadata && (issuedFrom != null || issuedTo != null)
+      ? `${issuedFrom ?? '?'}–${issuedTo ?? '?'}`
       : undefined;
     const measuredWeight = Number(r.attributes?.supplied_weight_g ?? r.attributes?.weight_g ?? 0);
     const measuredDiameter = Number(r.attributes?.supplied_diameter_mm ?? r.attributes?.diameter_mm ?? 0);
@@ -881,12 +890,12 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
       // never replace an existing value from a weaker candidate. The match tier
       // and contradictions remain attached in attributes for explicit review.
       ...(usableCatalogueText(numistaN) && !item.catalogueNumber ? { catalogueNumber: numistaN } : {}),
-      ...(!item.ruler && usableCatalogueText(numista.issuer ?? (strongNumistaMatch ? catalogueSuggestions.issuer : undefined) ?? r.coinFields?.issuer) ? { ruler: usableCatalogueText(numista.issuer ?? catalogueSuggestions.issuer ?? r.coinFields?.issuer) } : {}),
-      ...(!item.denomination && usableCatalogueText(numista.denomination ?? (strongNumistaMatch ? catalogueSuggestions.denomination : undefined) ?? r.coinFields?.denomination) ? { denomination: usableCatalogueText(numista.denomination ?? catalogueSuggestions.denomination ?? r.coinFields?.denomination) } : {}),
-      ...(!item.period && usableCatalogueText((strongNumistaMatch ? catalogueSuggestions.period : undefined) ?? r.coinFields?.period) ? { period: usableCatalogueText(catalogueSuggestions.period ?? r.coinFields?.period) } : {}),
-      ...(!item.mint && usableCatalogueText(numista.mint ?? (strongNumistaMatch ? catalogueSuggestions.mint : undefined) ?? r.coinFields?.mint) ? { mint: usableCatalogueText(numista.mint ?? catalogueSuggestions.mint ?? r.coinFields?.mint) } : {}),
-      ...(!item.material && usableCatalogueText(numista.composition ?? (strongNumistaMatch ? catalogueSuggestions.material : undefined) ?? r.coinFields?.composition) ? { material: usableCatalogueText(numista.composition ?? catalogueSuggestions.material ?? r.coinFields?.composition) } : {}),
-      ...(!item.countryOfOrigin && usableCatalogueText(numista.country ?? (strongNumistaMatch ? catalogueSuggestions.country : undefined) ?? r.coinFields?.country) ? { countryOfOrigin: usableCatalogueText(numista.country ?? catalogueSuggestions.country ?? r.coinFields?.country) } : {}),
+      ...(!item.ruler && usableCatalogueText(numista.issuer ?? (useCatalogueMetadata ? catalogueSuggestions.issuer : undefined) ?? r.coinFields?.issuer) ? { ruler: usableCatalogueText(numista.issuer ?? catalogueSuggestions.issuer ?? r.coinFields?.issuer) } : {}),
+      ...(!item.denomination && usableCatalogueText(numista.denomination ?? (useCatalogueMetadata ? catalogueSuggestions.denomination : undefined) ?? r.coinFields?.denomination) ? { denomination: usableCatalogueText(numista.denomination ?? catalogueSuggestions.denomination ?? r.coinFields?.denomination) } : {}),
+      ...(!item.period && usableCatalogueText((useCatalogueMetadata ? catalogueSuggestions.period : undefined) ?? r.coinFields?.period) ? { period: usableCatalogueText(catalogueSuggestions.period ?? r.coinFields?.period) } : {}),
+      ...(!item.mint && usableCatalogueText(numista.mint ?? (useCatalogueMetadata ? catalogueSuggestions.mint : undefined) ?? r.coinFields?.mint) ? { mint: usableCatalogueText(numista.mint ?? catalogueSuggestions.mint ?? r.coinFields?.mint) } : {}),
+      ...(!item.material && usableCatalogueText(numista.composition ?? (useCatalogueMetadata ? catalogueSuggestions.material : undefined) ?? r.coinFields?.composition) ? { material: usableCatalogueText(numista.composition ?? catalogueSuggestions.material ?? r.coinFields?.composition) } : {}),
+      ...(!item.countryOfOrigin && usableCatalogueText(numista.country ?? (useCatalogueMetadata ? catalogueSuggestions.country : undefined) ?? r.coinFields?.country) ? { countryOfOrigin: usableCatalogueText(numista.country ?? catalogueSuggestions.country ?? r.coinFields?.country) } : {}),
       ...(!item.yearMade && usableCatalogueText(r.attributes?.user_supplied_year ?? suggestedYear) ? { yearMade: usableCatalogueText(r.attributes?.user_supplied_year ?? suggestedYear) } : {}),
       ...(item.weightGrams == null && Number.isFinite(measuredWeight) && measuredWeight > 0 ? { weightGrams: measuredWeight } : {}),
       ...(item.diameterMm == null && Number.isFinite(measuredDiameter) && measuredDiameter > 0 ? { diameterMm: measuredDiameter } : {}),
