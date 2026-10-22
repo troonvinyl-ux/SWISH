@@ -22,8 +22,8 @@ export async function ebayFinancesSignatureHeaders(
   url: URL,
   method = 'GET',
 ): Promise<Record<string, string>> {
-  const privateKeyPem = Deno.env.get('EBAY_SIGNATURE_PRIVATE_KEY');
-  const publicKeyJwe = Deno.env.get('EBAY_SIGNATURE_KEY_JWE');
+  const privateKeyPem = Deno.env.get('EBAY_SIGNATURE_PRIVATE_KEY')?.trim();
+  const publicKeyJwe = Deno.env.get('EBAY_SIGNATURE_KEY_JWE')?.trim();
   if (!privateKeyPem || !publicKeyJwe) {
     throw new Error('eBay Finances API digital-signature secrets are not configured. Set EBAY_SIGNATURE_PRIVATE_KEY and EBAY_SIGNATURE_KEY_JWE in the server secret store.');
   }
