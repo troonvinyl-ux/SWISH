@@ -3,7 +3,7 @@
 // AES-256-GCM encryption for eBay credentials stored in marketplace_connectors.credential_ref.
 // Encryption/decryption happens ONLY inside Edge Functions — never on the client.
 //
-// Key: SWISH_CREDENTIAL_KEY env var — base64-encoded 32-byte random value.
+// Key: SWISH_CREDENTIAL_KEY env var — base64-encoded or 64-character hex 32-byte random value.
 // Format: "enc:v1:<base64-iv>:<base64-ciphertext>"
 //
 // Migration path:
@@ -25,20 +25,22 @@ async function getKey(): Promise<CryptoKey> {
   const raw = Deno.env.get('SWISH_CREDENTIAL_KEY');
   if (!raw) throw new Error('[CredentialCrypto] SWISH_CREDENTIAL_KEY is not set');
 
-  // Accept both base64 and hex for flexibility
+  // Accept a 64-character hex key explicitly BEFORE attempting base64.
+  // atob() can successfully decode many hex strings as base64, producing the
+  // wrong byte length and preventing the intended hex fallback from running.
+  const trimmed = raw.trim();
   let keyBytes: Uint8Array;
-  try {
-    // Try base64 first
-    const decoded = atob(raw.trim());
-    keyBytes = new Uint8Array(decoded.length);
-    for (let i = 0; i < decoded.length; i++) keyBytes[i] = decoded.charCodeAt(i);
-  } catch {
-    // Try hex
-    if (/^[0-9a-fA-F]{64}$/.test(raw.trim())) {
-      const hex = raw.trim();
-      keyBytes = new Uint8Array(32);
-      for (let i = 0; i < 32; i++) keyBytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-    } else {
+  if (/^[0-9a-fA-F]{64}$/.test(trimmed)) {
+    keyBytes = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      keyBytes[i] = parseInt(trimmed.slice(i * 2, i * 2 + 2), 16);
+    }
+  } else {
+    try {
+      const decoded = atob(trimmed);
+      keyBytes = new Uint8Array(decoded.length);
+      for (let i = 0; i < decoded.length; i++) keyBytes[i] = decoded.charCodeAt(i);
+    } catch {
       throw new Error('[CredentialCrypto] SWISH_CREDENTIAL_KEY must be base64 or hex-encoded 32-byte key');
     }
   }
