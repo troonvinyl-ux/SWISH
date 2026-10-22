@@ -25,20 +25,20 @@ async function getKey(): Promise<CryptoKey> {
   const raw = Deno.env.get('SWISH_CREDENTIAL_KEY');
   if (!raw) throw new Error('[CredentialCrypto] SWISH_CREDENTIAL_KEY is not set');
 
-  // Accept both base64 and hex for flexibility
+  // Accept a 64-character hex key or a base64-encoded 32-byte key.
+  // Detect hex first: a hex string is also valid base64 syntax, so trying
+  // atob() first can decode it to the wrong byte length and reject a valid key.
   let keyBytes: Uint8Array;
-  try {
-    // Try base64 first
-    const decoded = atob(raw.trim());
-    keyBytes = new Uint8Array(decoded.length);
-    for (let i = 0; i < decoded.length; i++) keyBytes[i] = decoded.charCodeAt(i);
-  } catch {
-    // Try hex
-    if (/^[0-9a-fA-F]{64}$/.test(raw.trim())) {
-      const hex = raw.trim();
-      keyBytes = new Uint8Array(32);
-      for (let i = 0; i < 32; i++) keyBytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-    } else {
+  const trimmed = raw.trim();
+  if (/^[0-9a-fA-F]{64}$/.test(trimmed)) {
+    keyBytes = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) keyBytes[i] = parseInt(trimmed.slice(i * 2, i * 2 + 2), 16);
+  } else {
+    try {
+      const decoded = atob(trimmed);
+      keyBytes = new Uint8Array(decoded.length);
+      for (let i = 0; i < decoded.length; i++) keyBytes[i] = decoded.charCodeAt(0);
+    } catch {
       throw new Error('[CredentialCrypto] SWISH_CREDENTIAL_KEY must be base64 or hex-encoded 32-byte key');
     }
   }
