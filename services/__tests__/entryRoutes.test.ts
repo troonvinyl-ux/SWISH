@@ -11,7 +11,7 @@
 // Run with: npx jest services/__tests__/entryRoutes.test.ts
 // (No native modules required — pure TypeScript logic tests.)
 
-import { nicheToEntryRoute, resolveProductionNiche } from '@/services/nicheRouting';
+import { nicheToEntryRoute, resolveProductionNiche, getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 
 type NicheId =
   | 'coins' | 'trading_cards' | 'antiques' | 'bicycles' | 'motocross'
@@ -1655,5 +1655,30 @@ describe('SWISH-030 Issue 3: Android CI/CD Signing (Static Config Inspection)', 
     test('bicycles and clothing have different entry routes', () => {
       expect(nicheToEntryRoute('bicycles')).not.toBe(nicheToEntryRoute('clothing'));
     });
+  });
+});
+
+
+describe('Production seller-operations niche allowlists', () => {
+  test('coins allowlist excludes generic collectibles and unrelated niches', () => {
+    const ids = getProductionNicheSpecialistIds('coins');
+    expect(ids).toContain('islamic_silver');
+    expect(ids).toContain('ancient_artefacts');
+    expect(ids).not.toContain('curiosities_collectibles');
+    expect(ids).not.toContain('bicycles');
+    expect(ids).not.toContain('motocross');
+    expect(ids).not.toContain('clothing');
+  });
+
+  test('motocross, bicycles, and clothing allowlists stay disjoint', () => {
+    expect(getProductionNicheSpecialistIds('motocross')).toEqual(['motocross']);
+    expect(getProductionNicheSpecialistIds('bicycles')).toEqual(['bicycles']);
+    expect(getProductionNicheSpecialistIds('clothing')).toEqual(['clothing', 'trainers_sneakers']);
+  });
+
+  test('unknown or inactive niche fails closed with no seller records', () => {
+    expect(getProductionNicheSpecialistIds('general')).toEqual([]);
+    expect(getProductionNicheSpecialistIds('made_up_niche')).toEqual([]);
+    expect(getProductionNicheSpecialistIds(null)).toEqual([]);
   });
 });
