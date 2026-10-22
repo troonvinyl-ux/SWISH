@@ -64,6 +64,18 @@ interface ActionItem {
 
 // ── Load metrics from DB ───────────────────────────────────────────────────────
 
+function emptyEbayMetrics(): EbayMetrics {
+  return {
+    isConnected: false, tokenExpiry: null, tokenHealthy: false, sellerAccount: '',
+    lastSync: null, activeListings: 0, draftListings: 0, endedListings: 0,
+    totalListings: 0, gmv: 0, awaitingDispatch: 0, dispatchedToday: 0,
+    totalOrdersThisMonth: 0, revenueToday: 0, revenueWeek: 0, revenueMonth: 0,
+    unreadMessages: 0, openReturns: 0, openCases: 0, pendingOffers: 0,
+    awaitingSellerAction: 0, pendingPayout: 0, totalFeesMonth: 0, netProfitMonth: 0,
+    feedbackScore: 0, positivePercent: 100,
+  };
+}
+
 async function loadEbayMetrics(tenantId: string, specialistIds?: string[]): Promise<EbayMetrics> {
   const supabase = getSupabaseClient();
   const now = new Date();
@@ -71,12 +83,40 @@ async function loadEbayMetrics(tenantId: string, specialistIds?: string[]): Prom
   const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-  // Build niche-filtered listing query
+  // Build niche-filtered listing, order and sales queries. Seller-account-level
+  // messages, returns, offers and financial transactions remain account-wide;
+  // item-linked operational and revenue counts must respect the active niche.
   let listingQuery = supabase
     .from('listings')
-    .select('status, items(specialist_id)')
+    .select('status, items!inner(specialist_id)')
     .eq('tenant_id', tenantId)
     .eq('marketplace_id', 'ebay');
+
+  if (specialistIds) {
+    if (specialistIds.length === 0) {
+      return emptyEbayMetrics();
+    }
+    listingQuery = listingQuery.in('items.specialist_id', specialistIds) as any;
+  }
+
+  const salesQuery = (fromDate: string) => {
+    let query = supabase
+      .from('sales')
+      .select(specialistIds ? 'sale_price, net_revenue, items!inner(specialist_id)' : 'sale_price, net_revenue')
+      .eq('tenant_id', tenantId)
+      .eq('marketplace_id', 'ebay')
+      .gte('sold_at', fromDate);
+    if (specialistIds) query = query.in('items.specialist_id', specialistIds) as any;
+    return query;
+  };
+
+  let ordersQuery = supabase
+    .from('orders')
+    .select(specialistIds ? 'id, fulfilment_status, dispatched_at, items!inner(specialist_id)' : 'id, fulfilment_status, dispatched_at')
+    .eq('tenant_id', tenantId)
+    .eq('marketplace_id', 'ebay')
+    .in('fulfilment_status', ['awaiting_dispatch', 'packing', 'label_created']);
+  if (specialistIds) ordersQuery = ordersQuery.in('items.specialist_id', specialistIds) as any;
 
   const [
     connectorRes, listingCountsRes, ordersDispatchRes,
@@ -85,10 +125,10 @@ async function loadEbayMetrics(tenantId: string, specialistIds?: string[]): Prom
   ] = await Promise.all([
     supabase.from('marketplace_connectors').select('status, access_token_expires_at, seller_account_id, last_sync_at').eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle(),
     listingQuery,
-    supabase.from('orders').select('id, fulfilment_status, dispatched_at').eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').in('fulfilment_status', ['awaiting_dispatch', 'packing', 'label_created']),
-    supabase.from('sales').select('sale_price, net_revenue').eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').gte('sold_at', todayStart),
-    supabase.from('sales').select('sale_price, net_revenue').eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').gte('sold_at', weekStart),
-    supabase.from('sales').select('sale_price, net_revenue').eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').gte('sold_at', monthStart),
+    ordersQuery,
+    salesQuery(todayStart),
+    salesQuery(weekStart),
+    salesQuery(monthStart),
     supabase.from('ebay_messages').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('is_read', false).eq('direction', 'inbound'),
     supabase.from('ebay_returns').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).neq('status', 'closed'),
     supabase.from('ebay_cases').select('id, status').eq('tenant_id', tenantId).neq('status', 'closed').neq('status', 'resolved'),
