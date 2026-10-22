@@ -1,11 +1,9 @@
 name: Publish SWISH temporary site to GitHub Pages
 
+# SWISH is hosted through the existing Capture Station Pages site.
+# Keep this legacy temporary publisher manual-only; do not attempt to enable
+# GitHub Pages in the private SWISH repository on every documentation change.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'docs/**'
-      - '.github/workflows/github-pages.yml'
   workflow_dispatch:
 
 permissions:
