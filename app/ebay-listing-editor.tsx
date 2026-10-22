@@ -1372,9 +1372,9 @@ export default function EbayListingEditorScreen() {
         *,
         items(
           id, canonical_title, description, condition, condition_grade,
-          specialist_id, quantity, attributes, media,
+          specialist_id, quantity, sku, inventory_id, attributes, media,
           valuation_mid, expected_selling_price,
-          catalogue_number, inventory_id,
+          catalogue_number,
           ruler, denomination, country_of_origin, period, mint,
           weight_grams, dimensions_mm, material, manufacturer, year_made,
           folder_number, storage_location
@@ -1605,7 +1605,9 @@ export default function EbayListingEditorScreen() {
       price: (Number(row.price ?? 0)).toFixed(2),
       shippingCost: (Number(row.shipping_cost ?? 0)).toFixed(2),
       quantity: String(item?.quantity ?? 1),
-      sku: item?.inventory_id ?? '',
+      // Prefer the established custom item/SKU field, then fall back to the
+      // internal inventory reference so existing records are auto-populated.
+      sku: String(item?.sku ?? item?.inventory_id ?? '').trim(),
       categoryId: defaultCat?.id ?? '',
       categoryName: defaultCat?.name ?? '',
       condition: item?.condition ?? 'Very Good',
@@ -1713,6 +1715,7 @@ export default function EbayListingEditorScreen() {
         condition: data.condition,
         condition_grade: data.conditionDescription,
         quantity: parseInt(data.quantity) || 1,
+        sku: data.sku.trim() || null,
         inventory_id: data.sku.trim() || null,
         updated_at: new Date().toISOString(),
       })
@@ -1776,8 +1779,14 @@ export default function EbayListingEditorScreen() {
                 return;
               }
               if (result?.success) {
-                await supabase.from('items').update({ inventory_id: sku, updated_at: new Date().toISOString() })
-                  .eq('id', data.itemId).eq('tenant_id', tenant.id);
+                const { error: itemSkuError } = await supabase.from('items').update({
+                  sku,
+                  inventory_id: sku,
+                  updated_at: new Date().toISOString(),
+                }).eq('id', data.itemId).eq('tenant_id', tenant.id);
+                if (itemSkuError) {
+                  showAlert('SKU Sync Warning', `eBay accepted SKU ${sku}, but SWISH could not save it locally: ${itemSkuError.message}`);
+                }
                 setData(prev => prev ? { ...prev, sku } : prev);
                 setHasChanges(false);
                 showAlert('SKU Updated', `eBay listing #${data.externalListingId} now has SKU ${sku}. Photos and other listing fields were not sent.`);
@@ -1836,6 +1845,7 @@ export default function EbayListingEditorScreen() {
                   conditionDescription: data.conditionDescription,
                   listingType: data.listingType,
                   quantity: parseInt(data.quantity) || 1,
+                  sku: data.sku.trim(),
                   startPrice: parseFloat(data.startPrice) || undefined,
                   reservePrice: parseFloat(data.reservePrice) || undefined,
                   bestOfferEnabled: data.bestOfferEnabled,

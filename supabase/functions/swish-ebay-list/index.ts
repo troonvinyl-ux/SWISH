@@ -1220,9 +1220,10 @@ function buildReviseBuyItNowXML(params: {
   token: string; externalItemId: string; title: string; description: string;
   categoryId: string; conditionId: string; price: number; quantity: number;
   itemSpecifics: Array<{ name: string; value: string }>;
-  mediaUrls: string[]; sellerProfilesXml: string; bestOfferEnabled?: boolean;
+  mediaUrls: string[]; sellerProfilesXml: string; bestOfferEnabled?: boolean; sku?: string;
 }): string {
   const specifics = buildItemSpecifics(params.itemSpecifics);
+  const skuXml = params.sku?.trim() ? `<SKU>${xmlEscape(params.sku.trim())}</SKU>` : '';
   const pictures = buildPictureDetails(params.mediaUrls);
   const bestOfferXml = params.bestOfferEnabled
     ? '<BestOfferDetails><BestOfferEnabled>true</BestOfferEnabled></BestOfferDetails>' : '';
@@ -1234,6 +1235,7 @@ function buildReviseBuyItNowXML(params: {
   <RequesterCredentials><eBayAuthToken>${params.token}</eBayAuthToken></RequesterCredentials>
   <Item>
     <ItemID>${xmlEscape(params.externalItemId)}</ItemID>
+    ${skuXml}
     <Title>${xmlEscape(params.title.slice(0, 80))}</Title>
     <Description><![CDATA[${params.description}]]></Description>
     ${categoryXml}
@@ -1252,9 +1254,10 @@ function buildReviseAuctionXML(params: {
   token: string; externalItemId: string; title: string; description: string;
   categoryId: string; conditionId: string; reservePrice?: number;
   itemSpecifics: Array<{ name: string; value: string }>;
-  mediaUrls: string[]; sellerProfilesXml: string;
+  mediaUrls: string[]; sellerProfilesXml: string; sku?: string;
 }): string {
   const specifics = buildItemSpecifics(params.itemSpecifics);
+  const skuXml = params.sku?.trim() ? `<SKU>${xmlEscape(params.sku.trim())}</SKU>` : '';
   const pictures = buildPictureDetails(params.mediaUrls);
   const reservePriceXml = params.reservePrice && params.reservePrice > 0
     ? `<ReservePrice currencyID="GBP">${params.reservePrice.toFixed(2)}</ReservePrice>` : '';
@@ -1266,6 +1269,7 @@ function buildReviseAuctionXML(params: {
   <RequesterCredentials><eBayAuthToken>${params.token}</eBayAuthToken></RequesterCredentials>
   <Item>
     <ItemID>${xmlEscape(params.externalItemId)}</ItemID>
+    ${skuXml}
     <Title>${xmlEscape(params.title.slice(0, 80))}</Title>
     <Description><![CDATA[${params.description}]]></Description>
     ${categoryXml}
@@ -1769,6 +1773,72 @@ async function handleRequest(req: Request): Promise<Response> {
     return jsonResponse({ success: true, isLeaf: true, aspects });
   }
 
+  // ── Route: revise_sku — update only eBay's custom label (SKU) ─────────────
+  if (route === 'revise_sku') {
+    const { listingId, sku: requestedSku, externalListingId: requestedExternalListingId } = body;
+    if (!listingId) return jsonResponse({ success: false, error: 'listingId required' }, 400);
+    const sku = String(requestedSku ?? '').trim().slice(0, 50);
+    if (!sku) return jsonResponse({ success: false, error: 'SKU is required.' }, 400);
+
+    // Resolve IDs from a tenant-owned SWISH listing; never trust client IDs for API writes.
+    const { data: ownedListing, error: ownedListingError } = await supabase
+      .from('listings')
+      .select('id, item_id, external_listing_id')
+      .eq('id', listingId)
+      .eq('tenant_id', tenantId)
+      .eq('marketplace_id', 'ebay')
+      .maybeSingle();
+    if (ownedListingError || !ownedListing) {
+      return jsonResponse({ success: false, error: 'Listing not found or access denied.' }, 404);
+    }
+
+    const externalId = String(ownedListing.external_listing_id ?? '').trim();
+    if (!externalId) return jsonResponse({ success: false, error: 'This listing has no saved eBay item ID.' }, 400);
+    if (requestedExternalListingId && String(requestedExternalListingId).trim() !== externalId) {
+      return jsonResponse({ success: false, error: 'The supplied eBay item ID does not match the saved listing.' }, 403);
+    }
+    const itemId = String(ownedListing.item_id ?? '').trim();
+    if (!itemId) return jsonResponse({ success: false, error: 'The listing has no linked inventory item.' }, 400);
+
+    const { data: ownedItem, error: ownedItemError } = await supabase
+      .from('items')
+      .select('id')
+      .eq('id', itemId)
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+    if (ownedItemError || !ownedItem) {
+      return jsonResponse({ success: false, error: 'Linked inventory item not found or access denied.' }, 404);
+    }
+
+    const creds = await getEbayCredentials(supabase, tenantId, true);
+    if ('error' in creds) return jsonResponse({ success: false, error: creds.error }, 400);
+
+    // SKU-only request: no title, price, quantity, category, policies or media.
+    const skuXml = `<?xml version="1.0" encoding="utf-8"?>
+<ReviseInventoryStatusRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <RequesterCredentials><eBayAuthToken>${creds.accessToken}</eBayAuthToken></RequesterCredentials>
+  <InventoryStatus>
+    <ItemID>${xmlEscape(externalId)}</ItemID>
+    <SKU>${xmlEscape(sku)}</SKU>
+  </InventoryStatus>
+</ReviseInventoryStatusRequest>`;
+    const { xml: skuResponse, ok: skuOk } = await callEbayTradingApi(skuXml, 'ReviseInventoryStatus', creds.clientId);
+    if (!skuOk) {
+      const errors = parseErrors(skuResponse);
+      return jsonResponse({ success: false, error: friendlyError(errors, 'eBay rejected the SKU update.'), errors }, 400);
+    }
+
+    const now = new Date().toISOString();
+    const { error: saveError } = await supabase.from('items')
+      .update({ sku, inventory_id: sku, updated_at: now })
+      .eq('id', ownedItem.id)
+      .eq('tenant_id', tenantId);
+    if (saveError) {
+      return jsonResponse({ success: true, externalListingId: externalId, sku, warning: 'eBay accepted the SKU, but SWISH could not save the local item reference. Run a listing sync to reconcile.' });
+    }
+    return jsonResponse({ success: true, externalListingId: externalId, sku });
+  }
+
   // ── Route: end ────────────────────────────────────────────────────────────
   if (route === 'end') {
     const { listingId, externalListingId: requestedExternalListingId } = body;
@@ -1848,7 +1918,7 @@ async function handleRequest(req: Request): Promise<Response> {
     const {
       listingId, externalListingId, title = '', description: bodyDescription, price = 0,
       condition = '', conditionDescription = '', listingType = 'FixedPriceItem',
-      quantity = 1, itemSpecifics = [], mediaUrls: rawMediaUrls = [], categoryId: bodyCategoryId = '',
+      quantity = 1, itemSpecifics = [], mediaUrls: rawMediaUrls = [], categoryId: bodyCategoryId = '', sku = '',
     } = body;
     if (!externalListingId) return jsonResponse({ error: 'externalListingId required for revise' }, 400);
 
@@ -1930,9 +2000,9 @@ async function handleRequest(req: Request): Promise<Response> {
     const conditionId = mapConditionId(condition, '');
     let reviseXml: string;
     if (listingType === 'Chinese') {
-      reviseXml = buildReviseAuctionXML({ token: creds.accessToken, externalItemId: externalListingId, title, description, categoryId: resolvedCategoryId || 'REVISE_PRESERVE', conditionId, itemSpecifics, mediaUrls: resolvedMediaUrls, sellerProfilesXml });
+      reviseXml = buildReviseAuctionXML({ token: creds.accessToken, externalItemId: externalListingId, title, description, categoryId: resolvedCategoryId || 'REVISE_PRESERVE', conditionId, itemSpecifics, mediaUrls: resolvedMediaUrls, sellerProfilesXml, sku: String(sku ?? '') });
     } else {
-      reviseXml = buildReviseBuyItNowXML({ token: creds.accessToken, externalItemId: externalListingId, title, description, categoryId: resolvedCategoryId || 'REVISE_PRESERVE', conditionId, price: Number(price), quantity: Number(quantity), itemSpecifics, mediaUrls: resolvedMediaUrls, sellerProfilesXml });
+      reviseXml = buildReviseBuyItNowXML({ token: creds.accessToken, externalItemId: externalListingId, title, description, categoryId: resolvedCategoryId || 'REVISE_PRESERVE', conditionId, price: Number(price), quantity: Number(quantity), itemSpecifics, mediaUrls: resolvedMediaUrls, sellerProfilesXml, sku: String(sku ?? '') });
     }
     const { xml: revResp, ok: revOk } = await callEbayTradingApi(reviseXml, listingType === 'Chinese' ? 'ReviseItem' : 'ReviseFixedPriceItem', creds.clientId);
     if (!revOk) {
@@ -1951,6 +2021,17 @@ async function handleRequest(req: Request): Promise<Response> {
         updatePayload.category_id = resolvedCategoryId;
       }
       await supabase.from('listings').update(updatePayload).eq('id', listingId).eq('tenant_id', tenantId);
+      if (String(sku ?? '').trim()) {
+        const cleanSku = String(sku).trim().slice(0, 50);
+        const { data: linkedListing } = await supabase.from('listings')
+          .select('item_id').eq('id', listingId).eq('tenant_id', tenantId).maybeSingle();
+        if (linkedListing?.item_id) {
+          const { error: itemSkuError } = await supabase.from('items')
+            .update({ sku: cleanSku, inventory_id: cleanSku, updated_at: new Date().toISOString() })
+            .eq('id', linkedListing.item_id).eq('tenant_id', tenantId);
+          if (itemSkuError) console.error('[SWISH revise] SKU local persistence failed:', itemSkuError.message);
+        }
+      }
     }
     return jsonResponse({ success: true, externalListingId });
   }
