@@ -36,6 +36,7 @@ interface EbayMetrics {
   totalListings: number;
   gmv: number;
   awaitingDispatch: number;
+  labelsCreated: number;
   dispatchedToday: number;
   totalOrdersThisMonth: number;
   revenueToday: number;
@@ -69,7 +70,7 @@ function emptyEbayMetrics(): EbayMetrics {
   return {
     isConnected: false, tokenExpiry: null, tokenHealthy: false, sellerAccount: '',
     lastSync: null, activeListings: 0, draftListings: 0, endedListings: 0,
-    totalListings: 0, gmv: 0, awaitingDispatch: 0, dispatchedToday: 0,
+    totalListings: 0, gmv: 0, awaitingDispatch: 0, labelsCreated: 0, dispatchedToday: 0,
     totalOrdersThisMonth: 0, revenueToday: 0, revenueWeek: 0, revenueMonth: 0,
     unreadMessages: 0, openReturns: 0, openCases: 0, pendingOffers: 0,
     awaitingSellerAction: 0, pendingPayout: 0, totalFeesMonth: 0, netProfitMonth: 0,
@@ -119,14 +120,24 @@ async function loadEbayMetrics(tenantId: string, specialistIds?: string[]): Prom
     .in('fulfilment_status', ['awaiting_dispatch', 'packing', 'label_created']);
   if (specialistIds) ordersQuery = ordersQuery.in('items.specialist_id', specialistIds) as any;
 
+  let dispatchedQuery = supabase
+    .from('orders')
+    .select(specialistIds ? 'id, items!inner(specialist_id)' : 'id')
+    .eq('tenant_id', tenantId)
+    .eq('marketplace_id', 'ebay')
+    .eq('fulfilment_status', 'dispatched')
+    .gte('dispatched_at', todayStart);
+  if (specialistIds) dispatchedQuery = dispatchedQuery.in('items.specialist_id', specialistIds) as any;
+
   const [
-    connectorRes, listingCountsRes, ordersDispatchRes,
+    connectorRes, listingCountsRes, ordersDispatchRes, dispatchedTodayRes,
     salesTodayRes, salesWeekRes, salesMonthRes,
     messagesRes, returnsRes, casesRes, offersRes, financialsRes, feedbackRes,
   ] = await Promise.all([
     supabase.from('marketplace_connectors').select('status, access_token_expires_at, seller_account_id, last_sync_at').eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle(),
     listingQuery,
     ordersQuery,
+    dispatchedQuery,
     salesQuery(todayStart),
     salesQuery(weekStart),
     salesQuery(monthStart),
@@ -151,6 +162,8 @@ async function loadEbayMetrics(tenantId: string, specialistIds?: string[]): Prom
   const draftListings = listingRows.filter(l => l.status === 'draft' || l.status === 'pending').length;
   const endedListings = listingRows.filter(l => l.status === 'ended').length;
   const awaitingDispatch = ordersDispatchRes.data?.length ?? 0;
+  const labelsCreated = ordersDispatchRes.data?.filter(order => order.fulfilment_status === 'label_created').length ?? 0;
+  const dispatchedToday = dispatchedTodayRes.data?.length ?? 0;
   const sumRevenue = (rows: any[]) => rows.reduce((s, r) => s + Number(r.sale_price ?? 0), 0);
   const revenueToday = sumRevenue(salesTodayRes.data ?? []);
   const revenueWeek = sumRevenue(salesWeekRes.data ?? []);
@@ -175,7 +188,7 @@ async function loadEbayMetrics(tenantId: string, specialistIds?: string[]): Prom
     lastSync: connector?.last_sync_at ?? null,
     activeListings, draftListings, endedListings,
     totalListings: listingRows.length, gmv: 0,
-    awaitingDispatch, dispatchedToday: 0, totalOrdersThisMonth,
+    awaitingDispatch, labelsCreated, dispatchedToday, totalOrdersThisMonth,
     revenueToday, revenueWeek, revenueMonth,
     unreadMessages, openReturns, openCases, pendingOffers,
     awaitingSellerAction: awaitingSellerCases,
