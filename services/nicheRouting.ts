@@ -50,3 +50,25 @@ export function nicheToEntryRoute(nicheId: string | null | undefined): ProductEn
   }
   return null;
 }
+
+
+/**
+ * Strict product boundary used for seller orders and dispatch queues.
+ * Do not use the broader NICHES[].specialists lists here: those intentionally
+ * include generic cross-category classifiers for identification and can cause
+ * unrelated inventory to appear in seller operations.
+ */
+const PRODUCTION_PRODUCT_SPECIALISTS: Record<ProductionNicheId, string[]> = {
+  coins: ['coins', 'coins_uk', 'coins_world', 'islamic_silver', 'banknotes', 'gold', 'silver', 'ancient_artefacts'],
+  motocross: ['motocross'],
+  bicycles: ['bicycles'],
+  clothing: ['clothing', 'trainers_sneakers'],
+  surplus_flip: ['surplus_flip'],
+};
+
+export function getProductionNicheSpecialistIds(
+  nicheId: string | null | undefined,
+): string[] {
+  const niche = resolveProductionNiche(nicheId);
+  return niche ? [...PRODUCTION_PRODUCT_SPECIALISTS[niche]] : [];
+}
