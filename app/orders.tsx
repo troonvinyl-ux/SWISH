@@ -20,6 +20,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
+import { NICHES } from '@/constants/niches';
 import { useAlert } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { getSupabaseClient } from '@/template';
@@ -521,7 +522,8 @@ const dm = StyleSheet.create({
 export default function OrdersScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant } = useApp();
+  const { tenant, activeNicheId } = useApp();
+  const specialistIds = NICHES[activeNicheId]?.specialists ?? [];
   const { showAlert } = useAlert();
 
   const [orders, setOrders] = useState<OrderWithItem[]>([]);
@@ -538,11 +540,11 @@ export default function OrdersScreen() {
 
   const load = useCallback(async () => {
     if (!tenant) return;
-    const { orders: data } = await getAllOrders(tenant.id);
+    const { orders: data } = await getAllOrders(tenant.id, undefined, specialistIds);
     setOrders(data);
     setLoading(false);
     setRefreshing(false);
-  }, [tenant?.id]);
+  }, [tenant?.id, activeNicheId]);
 
   useEffect(() => { load(); }, [load]);
 
