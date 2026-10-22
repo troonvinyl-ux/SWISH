@@ -180,6 +180,26 @@ export default function EbayFinancesScreen() {
   const [syncingFinances, setSyncingFinances] = useState(false);
   const [period, setPeriod] = useState<TimePeriod>('month');
 
+  const loadFundsSummary = useCallback(async () => {
+    if (!tenant?.id) return;
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase.functions.invoke('swish-ebay-finances', {
+        body: { tenantId: tenant.id, route: 'get_funds_summary' },
+      });
+      if (error || !data?.success) {
+        setFundsSummary(null);
+        setFundsSummaryError(data?.error ?? error?.message ?? 'Available funds could not be retrieved.');
+        return;
+      }
+      setFundsSummary(data.fundsSummary as FundsSummary);
+      setFundsSummaryError(null);
+    } catch (e: any) {
+      setFundsSummary(null);
+      setFundsSummaryError(e?.message ?? 'Available funds could not be retrieved.');
+    }
+  }, [tenant?.id]);
+
   const loadData = useCallback(async () => {
     if (!tenant) return;
     const supabase = getSupabaseClient();
@@ -256,6 +276,7 @@ export default function EbayFinancesScreen() {
   }, [tenant?.id, period]);
 
   useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { loadFundsSummary(); }, [loadFundsSummary]);
   const onRefresh = useCallback(() => { setRefreshing(true); loadData(); }, [loadData]);
 
   // ── Sync eBay Finances API ─────────────────────────────────────────────────
@@ -287,23 +308,14 @@ export default function EbayFinancesScreen() {
       }
 
       // Fetch eBay's actual funds summary separately from historical transaction totals.
-      const { data: fundsData, error: fundsInvokeError } = await supabase.functions.invoke('swish-ebay-finances', {
-        body: { tenantId: tenant.id, route: 'get_funds_summary' },
-      });
-      if (fundsInvokeError || !fundsData?.success) {
-        setFundsSummary(null);
-        setFundsSummaryError(fundsData?.error ?? fundsInvokeError?.message ?? 'Available funds could not be retrieved.');
-      } else {
-        setFundsSummary(fundsData.fundsSummary as FundsSummary);
-        setFundsSummaryError(null);
-      }
+      await loadFundsSummary();
 
       showAlert('Finances Synced', `${data.fetched} transactions synced. ${data.inserted} new, ${data.updated} updated.`);
       await loadData();
     } finally {
       setSyncingFinances(false);
     }
-  }, [tenant, showAlert, loadData]);
+  }, [tenant, showAlert, loadData, loadFundsSummary]);
 
   const fmtGBP = (v?: number) => v != null ? `£${v.toFixed(2)}` : '—';
   const formatFunds = (amount?: FundsSummaryAmount) => amount ? new Intl.NumberFormat('en-GB', { style: 'currency', currency: amount.currency || 'GBP' }).format(Number(amount.value ?? 0)) : '—';
