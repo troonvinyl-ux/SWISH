@@ -133,6 +133,10 @@ Deno.serve(async (req: Request) => {
       const url = new URL(`${EBAY_FINANCES_API}/seller_funds_summary`);
       const signatureHeaders = await ebayFinancesSignatureHeaders(url, 'GET');
       const resp = await fetch(url.toString(), { headers: { ...hdrs, ...signatureHeaders }, signal: AbortSignal.timeout(15000) });
+      // eBay returns 204 when there are no pending, processing, or held funds.
+      if (resp.status === 204) {
+        return jr({ success: true, fundsSummary: {}, financesApiAvailable: true, noPendingFunds: true });
+      }
       if (!resp.ok) {
         const t = await resp.text().catch(() => '');
         return jr({ success: false, error: `Seller funds summary API ${resp.status}: ${t.slice(0, 200)}`, financesApiAvailable: false }, 400);
