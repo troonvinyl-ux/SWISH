@@ -5,6 +5,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
+import { ebayFinancesSignatureHeaders } from '../_shared/ebayDigitalSignature.ts';
 
 const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const EBAY_FINANCES_API = 'https://apiz.ebay.com/sell/finances/v1';
@@ -73,7 +74,8 @@ Deno.serve(async (req: Request) => {
         const url = new URL(`${EBAY_FINANCES_API}/transaction`);
         url.searchParams.set('filter', `transactionDate:[${fromDate}..]`);
         url.searchParams.set('limit', '200'); url.searchParams.set('offset', String(offset));
-        const resp = await fetch(url.toString(), { headers: hdrs, signal: AbortSignal.timeout(20000) });
+        const signatureHeaders = await ebayFinancesSignatureHeaders(url, 'GET');
+        const resp = await fetch(url.toString(), { headers: { ...hdrs, ...signatureHeaders }, signal: AbortSignal.timeout(20000) });
         if (!resp.ok) {
           const et = await resp.text().catch(() => '');
           if (resp.status === 403 || resp.status === 401) fetchErr = `eBay Finances API requires Managed Payments and sell.finances scope (HTTP ${resp.status}). Re-authorise eBay to enable exact fee data.`;
@@ -127,10 +129,23 @@ Deno.serve(async (req: Request) => {
       return jr({ success: true, financesApiAvailable: true, fetched: allTx.length, inserted, updated, errors: errors.slice(0, 10), partialError: fetchErr ?? null });
     }
 
+    if (route === 'get_funds_summary') {
+      const url = new URL(`${EBAY_FINANCES_API}/seller_funds_summary`);
+      const signatureHeaders = await ebayFinancesSignatureHeaders(url, 'GET');
+      const resp = await fetch(url.toString(), { headers: { ...hdrs, ...signatureHeaders }, signal: AbortSignal.timeout(15000) });
+      if (!resp.ok) {
+        const t = await resp.text().catch(() => '');
+        return jr({ success: false, error: `Seller funds summary API ${resp.status}: ${t.slice(0, 200)}`, financesApiAvailable: false }, 400);
+      }
+      const data = await resp.json();
+      return jr({ success: true, fundsSummary: data, financesApiAvailable: true });
+    }
+
     if (route === 'get_payouts') {
       const url = new URL(`${EBAY_FINANCES_API}/payout`);
       url.searchParams.set('filter', `lastAttemptedPayoutDate:[${fromDate}..]`); url.searchParams.set('limit', '100');
-      const resp = await fetch(url.toString(), { headers: hdrs, signal: AbortSignal.timeout(15000) });
+      const signatureHeaders = await ebayFinancesSignatureHeaders(url, 'GET');
+      const resp = await fetch(url.toString(), { headers: { ...hdrs, ...signatureHeaders }, signal: AbortSignal.timeout(15000) });
       if (!resp.ok) { const t = await resp.text(); return jr({ success: false, error: `Payouts API ${resp.status}: ${t.slice(0, 200)}`, financesApiAvailable: false }, 400); }
       const data = await resp.json();
       return jr({ success: true, payouts: data.payouts ?? [], financesApiAvailable: true });
