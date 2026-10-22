@@ -20,7 +20,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
-import { NICHES } from '@/constants/niches';
+import { getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 import { useAlert } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { getSupabaseClient } from '@/template';
@@ -523,7 +523,7 @@ export default function OrdersScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { tenant, activeNicheId } = useApp();
-  const specialistIds = NICHES[activeNicheId]?.specialists ?? [];
+  const specialistIds = getProductionNicheSpecialistIds(activeNicheId);
   const { showAlert } = useAlert();
 
   const [orders, setOrders] = useState<OrderWithItem[]>([]);
