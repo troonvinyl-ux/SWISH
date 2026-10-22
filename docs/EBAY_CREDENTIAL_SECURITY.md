@@ -9,6 +9,18 @@ SWISH's Edge Functions encrypt connector credentials in `marketplace_connectors.
 3. Do not place the key in app configuration, client-side environment variables, source control, logs, or an API response. Do not send it to the mobile/web client.
 4. Deploy the updated `credentialCrypto.ts`, `swish-migrate-credentials`, OAuth, order, finance, messages, sync, listing, browse, and image-download functions together so all credential consumers use the same key.
 
+## UK/EU seller-finance digital signatures
+
+eBay requires digital signatures for all Finances API calls made for UK/EU-domiciled sellers. SWISH's Finances Edge Function now signs its GET requests using the eBay-generated Ed25519 keypair. To enable live available-funds and transaction data:
+
+1. Use eBay's Key Management API to create a signing key for the same eBay application keyset.
+2. Store the returned private key as the server-only secret `EBAY_SIGNATURE_PRIVATE_KEY` (PKCS#8 PEM).
+3. Store the matching `publicKeyJwe` value as the server-only secret `EBAY_SIGNATURE_KEY_JWE`.
+4. Keep both values out of client configuration, source control, logs, and API responses.
+5. Deploy the shared `ebayDigitalSignature.ts` helper and the updated `swish-ebay-finances` function, then test a real funds-summary call with the connected UK seller account.
+
+Without these two server secrets, the function intentionally fails rather than making unsigned Finances API calls that eBay will reject.
+
 ## Migrate existing credentials
 
 1. Sign in as the owner/admin of the relevant SWISH tenant.
