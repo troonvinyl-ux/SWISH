@@ -637,15 +637,18 @@ function mapOrder(row: any): OrderWithItem {
 
 export async function getOrdersToDispatch(
   tenantId: string,
+  specialistIds?: string[],
 ): Promise<{ orders: OrderWithItem[]; error: string | null }> {
+  if (specialistIds && specialistIds.length === 0) return { orders: [], error: null };
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from('orders')
-    .select('*, items(inventory_id, catalogue_number, folder_number, pocket_position, storage_location, canonical_title, media)')
+    .select(specialistIds ? '*, items!inner(inventory_id, catalogue_number, folder_number, pocket_position, storage_location, canonical_title, media, specialist_id)' : '*, items(inventory_id, catalogue_number, folder_number, pocket_position, storage_location, canonical_title, media)')
     .eq('tenant_id', tenantId)
     .in('fulfilment_status', ['awaiting_dispatch', 'packing', 'label_created'])
     .order('created_at', { ascending: true });
-
+  if (specialistIds) query = query.in('items.specialist_id', specialistIds);
+  const { data, error } = await query;
   if (error) return { orders: [], error: error.message };
   return { orders: (data ?? []).map(mapOrder), error: null };
 }
@@ -653,18 +656,17 @@ export async function getOrdersToDispatch(
 export async function getAllOrders(
   tenantId: string,
   fulfilmentStatus?: FulfilmentStatus,
+  specialistIds?: string[],
 ): Promise<{ orders: OrderWithItem[]; error: string | null }> {
+  if (specialistIds && specialistIds.length === 0) return { orders: [], error: null };
   const supabase = getSupabaseClient();
   let query = supabase
     .from('orders')
-    .select('*, items(inventory_id, catalogue_number, folder_number, pocket_position, storage_location, canonical_title, media)')
+    .select(specialistIds ? '*, items!inner(inventory_id, catalogue_number, folder_number, pocket_position, storage_location, canonical_title, media, specialist_id)' : '*, items(inventory_id, catalogue_number, folder_number, pocket_position, storage_location, canonical_title, media)')
     .eq('tenant_id', tenantId)
     .order('created_at', { ascending: false });
-
-  if (fulfilmentStatus) {
-    query = query.eq('fulfilment_status', fulfilmentStatus);
-  }
-
+  if (fulfilmentStatus) query = query.eq('fulfilment_status', fulfilmentStatus);
+  if (specialistIds) query = query.in('items.specialist_id', specialistIds);
   const { data, error } = await query.limit(200);
   if (error) return { orders: [], error: error.message };
   return { orders: (data ?? []).map(mapOrder), error: null };
