@@ -19,7 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
-import { NICHES } from '@/constants/niches';
+import { getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 import { useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
@@ -835,7 +835,7 @@ export default function DispatchScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { tenant, activeNicheId } = useApp();
-  const specialistIds = NICHES[activeNicheId]?.specialists ?? [];
+  const specialistIds = getProductionNicheSpecialistIds(activeNicheId);
   const { showAlert } = useAlert();
 
   const [orders, setOrders] = useState<OrderWithItem[]>([]);
