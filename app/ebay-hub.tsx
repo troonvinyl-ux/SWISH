@@ -162,8 +162,8 @@ async function loadEbayMetrics(tenantId: string, specialistIds?: string[]): Prom
   const awaitingSellerCases = casesRes.data?.filter(c => c.status === 'awaiting_seller').length ?? 0;
   const pendingOffers = offersRes.count ?? 0;
   const financials = financialsRes.data ?? [];
-  const pendingPayout = financials.filter(f => f.transaction_type === 'sale').reduce((s, f) => s + Number(f.amount ?? 0), 0);
-  const totalFeesMonth = Math.abs(financials.filter(f => f.transaction_type === 'fee').reduce((s, f) => s + Number(f.amount ?? 0), 0));
+  const pendingPayout = financials.filter(f => f.transaction_type === 'PAYOUT').reduce((s, f) => s + Math.abs(Number(f.amount ?? 0)), 0);
+  const totalFeesMonth = Math.abs(financials.filter(f => String(f.transaction_type ?? '').includes('FINAL_VALUE_FEE') && Number(f.amount ?? 0) < 0).reduce((s, f) => s + Number(f.amount ?? 0), 0));
   const netProfitMonth = salesMonthRes.data?.reduce((s, r) => s + Number(r.net_revenue ?? 0), 0) ?? 0;
   const feedbackRows = feedbackRes.data ?? [];
   const positiveCount = feedbackRows.filter(f => f.rating === 'Positive').length;
