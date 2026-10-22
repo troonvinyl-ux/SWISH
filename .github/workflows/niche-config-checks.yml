@@ -1,5 +1,9 @@
 name: SWISH niche routing and branded config
 
+concurrency:
+  group: swish-niche-checks-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
@@ -22,6 +26,7 @@ on:
       - 'contexts/AppContext.tsx'
       - 'app/index.tsx'
       - 'app/(tabs)/index.tsx'
+      - 'app/(tabs)/_layout.tsx'
       - 'app/niche-select.tsx'
       - 'app/onboarding.tsx'
       - 'supabase/functions/swish-create-checkout/index.ts'
