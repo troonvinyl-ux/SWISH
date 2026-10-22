@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
+import { NICHES } from '@/constants/niches';
 import { useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
@@ -833,7 +834,8 @@ const dm = StyleSheet.create({
 export default function DispatchScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant } = useApp();
+  const { tenant, activeNicheId } = useApp();
+  const specialistIds = NICHES[activeNicheId]?.specialists ?? [];
   const { showAlert } = useAlert();
 
   const [orders, setOrders] = useState<OrderWithItem[]>([]);
@@ -846,14 +848,14 @@ export default function DispatchScreen() {
   const load = useCallback(async () => {
     if (!tenant) return;
     const [ordersResult, servicesResult] = await Promise.all([
-      getOrdersToDispatch(tenant.id),
+      getOrdersToDispatch(tenant.id, specialistIds),
       getShippingServices(tenant.id),
     ]);
     setOrders(ordersResult.orders);
     setShippingServices(servicesResult.services);
     setLoading(false);
     setRefreshing(false);
-  }, [tenant?.id]);
+  }, [tenant?.id, activeNicheId]);
 
   useEffect(() => { load(); }, [load]);
 
