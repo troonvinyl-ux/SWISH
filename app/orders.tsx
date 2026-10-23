@@ -542,6 +542,7 @@ export default function OrdersScreen() {
   const load = useCallback(async () => {
     if (!tenant) {
       setOrders([]);
+      setLoadError('Your SWISH workspace is not ready. Return to the dashboard and try again.');
       setLoading(false);
       setRefreshing(false);
       return;
