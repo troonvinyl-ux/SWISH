@@ -30,6 +30,7 @@ import { ItemImage } from '@/components';
 import { getSupabaseClient } from '@/template';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
+import { getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 import { useAlert } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import {
@@ -783,7 +784,7 @@ function DispatchModal({
   const [tracking, setTracking] = useState('');
   const [carrier, setCarrier] = useState('Royal Mail');
   const [saving, setSaving] = useState(false);
-  const { tenant } = useApp();
+  const { tenant, activeNicheId } = useApp();
 
   useEffect(() => { if (visible) { setTracking(''); setCarrier('Royal Mail'); } }, [visible]);
 
@@ -1486,11 +1487,23 @@ export default function EbayAdminScreen() {
     if (!tenant) return;
     const supabase = getSupabaseClient();
 
+    // Strict niche isolation: the shared eBay account can contain listings
+    // for every SWISH product, but this screen must only show the active niche.
+    // If no niche is selected, fail closed rather than leaking cross-niche stock.
+    const specialistIds = getProductionNicheSpecialistIds(activeNicheId);
+    if (specialistIds.length === 0) {
+      setListings([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     const { data, error } = await supabase
       .from('listings')
-      .select(`*, items(id, canonical_title, status, condition, inventory_id, catalogue_number, folder_number, pocket_position, storage_location, media, ruler, denomination, country_of_origin)`)
+      .select(`*, items!inner(id, canonical_title, specialist_id, status, condition, inventory_id, catalogue_number, folder_number, pocket_position, storage_location, media, ruler, denomination, country_of_origin)`)
       .eq('tenant_id', tenant.id)
       .eq('marketplace_id', 'ebay')
+      .in('items.specialist_id', specialistIds)
       .order('updated_at', { ascending: false })
       .limit(500);
 
@@ -1525,7 +1538,7 @@ export default function EbayAdminScreen() {
 
     setLoading(false);
     setRefreshing(false);
-  }, [tenant?.id, showAlert]);
+  }, [tenant?.id, activeNicheId, showAlert]);
 
   useEffect(() => { load(); }, [load]);
 
