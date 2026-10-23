@@ -1017,6 +1017,9 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
       <MaterialIcons name="error-outline" size={42} color={Colors.danger} />
       <Text style={{ color: Colors.textPrimary, fontSize: Typography.size.lg, fontWeight: Typography.weight.bold, textAlign: 'center' }}>Orders couldn’t open</Text>
       <Text selectable style={{ color: Colors.textSecondary, fontSize: Typography.size.sm, textAlign: 'center' }}>{error?.message || 'An unexpected error occurred while rendering the Orders page.'}</Text>
+      <ScrollView style={{ maxHeight: 220, width: '100%', flexGrow: 0 }} contentContainerStyle={{ padding: Spacing.sm }}>
+        <Text selectable style={{ color: Colors.textTertiary, fontSize: 10, lineHeight: 15 }}>{error?.stack || 'No JavaScript stack trace was provided.'}</Text>
+      </ScrollView>
       <Pressable onPress={retry} style={{ backgroundColor: Colors.primary, borderRadius: Radius.md, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md }}>
         <Text style={{ color: Colors.background, fontWeight: Typography.weight.bold }}>Try again</Text>
       </Pressable>
