@@ -432,7 +432,7 @@ function useNicheHubStyle(activeNicheId: string | null | undefined) {
   }, [activeNicheId]);
 }
 
-export default function EbayHubScreen() {
+function EbayHubScreenContent() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { tenant, activeNicheId } = useApp();
@@ -464,11 +464,18 @@ export default function EbayHubScreen() {
   const [hubImgDl, setHubImgDl] = useState<ImgDlState>(EMPTY_IMGDL);
 
   const load = useCallback(async () => {
-    if (!tenant) return;
+    if (!tenant?.id) {
+      setMetrics(emptyEbayMetrics());
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
     try {
       const m = await loadEbayMetrics(tenant.id, nicheStyle.specialistIds);
       setMetrics(m);
     } catch (e: any) {
+      // Keep the hub usable even if a metrics query fails; do not leave a blank screen.
+      setMetrics(current => current ?? emptyEbayMetrics());
       showAlert('Load Error', e?.message ?? 'Failed to load eBay metrics');
     } finally {
       setLoading(false);
@@ -859,3 +866,53 @@ const s = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md },
   loadingText: { fontSize: Typography.size.sm, color: Colors.textTertiary },
 });
+
+
+// Guard the Hub route against render-time exceptions. A broken screen should
+// show a recoverable message instead of a completely white page.
+class EbayHubErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; message: string }
+> {
+  state = { hasError: false, message: '' };
+
+  static getDerivedStateFromError(error: unknown) {
+    return {
+      hasError: true,
+      message: error instanceof Error ? error.message : 'An unexpected rendering error occurred.',
+    };
+  }
+
+  componentDidCatch() {
+    // Intentionally do not log component state or any marketplace credentials.
+  }
+
+  private retry = () => this.setState({ hasError: false, message: '' });
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={[s.container, { flex: 1, justifyContent: 'center', padding: Spacing.base }]}>
+          <StatusBar style="light" />
+          <MaterialIcons name="error-outline" size={36} color={Colors.danger} />
+          <Text style={[s.title, { marginTop: Spacing.md }]}>eBay Hub couldn’t load</Text>
+          <Text style={[s.loadingText, { marginTop: Spacing.sm }]}>
+            {this.state.message || 'An unexpected error stopped this screen.'}
+          </Text>
+          <Pressable onPress={this.retry} style={[s.syncBtn, { marginTop: Spacing.lg }]}>
+            <Text style={s.syncBtnText}>Try again</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default function EbayHubScreen() {
+  return (
+    <EbayHubErrorBoundary>
+      <EbayHubScreenContent />
+    </EbayHubErrorBoundary>
+  );
+}
