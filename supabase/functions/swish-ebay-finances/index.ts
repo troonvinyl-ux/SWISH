@@ -14,14 +14,16 @@ const EBAY_TOKEN_URL = 'https://api.ebay.com/identity/v1/oauth2/token';
 function adminClient() { return createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''); }
 function jr(body: unknown, status = 200) { return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }); }
 
-async function getToken(supabase: ReturnType<typeof adminClient>, tenantId: string): Promise<{ accessToken: string } | { error: string }> {
+async function getToken(supabase: ReturnType<typeof adminClient>, tenantId: string, refreshForFinances = false): Promise<{ accessToken: string } | { error: string }> {
   const { data: conn } = await supabase.from('marketplace_connectors').select('credential_ref, status').eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle();
   if (!conn?.credential_ref || conn.status !== 'connected') return { error: 'eBay not connected' };
   let creds: any;
   try { creds = await decryptCredentials(conn.credential_ref); } catch (e: any) { return { error: e.message }; }
   if (!creds.accessToken) return { error: 'No access token' };
   const shouldRefresh = creds.expiresAt ? Date.now() + 5 * 60_000 >= new Date(creds.expiresAt).getTime() : false;
-  if (shouldRefresh && creds.refreshToken) {
+  // Other SWISH endpoints previously requested a restricted OAuth scope during refresh.
+  // Refresh once before Finance API calls (without a scope parameter) to restore all permissions already consented to.
+  if ((refreshForFinances || shouldRefresh) && creds.refreshToken) {
     try {
       const resp = await fetch(EBAY_TOKEN_URL, { method: 'POST', headers: { Authorization: `Basic ${btoa(`${creds.clientId}:${creds.clientSecret}`)}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: creds.refreshToken }).toString(), signal: AbortSignal.timeout(12000) });
       const data = await resp.json();
@@ -56,7 +58,7 @@ Deno.serve(async (req: Request) => {
     if (!m) return jr({ error: 'Access denied.' }, 403);
   } catch (e: any) { return jr({ error: e.message }, 401); }
 
-  const tr = await getToken(supabase, tenantId);
+  const tr = await getToken(supabase, tenantId, ['sync_transactions', 'get_funds_summary', 'get_payouts'].includes(route));
   if ('error' in tr) return jr({ error: tr.error, requiresReauth: true, financesApiAvailable: false }, 400);
   const { accessToken } = tr;
   const hdrs = { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json', 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_GB' };
