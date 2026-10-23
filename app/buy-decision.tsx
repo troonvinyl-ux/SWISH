@@ -191,8 +191,8 @@ export default function BuyDecisionScreen() {
     setError(null);
     setResult(null);
 
-    const apiKey = (globalThis as any).__ONSPACE_AI_API_KEY__ ?? process.env.EXPO_PUBLIC_ONSPACE_AI_KEY;
-    // Use the Supabase functions invoke approach for security (keeps API key server-side)
+    // API secrets are read only by Edge Functions; the client sends input through
+    // the existing authenticated Supabase client and never reads provider keys.
     const supabase = getSupabaseClient();
 
     try {
@@ -226,7 +226,7 @@ export default function BuyDecisionScreen() {
         niche: nicheConfig?.shortName ?? 'General',
       });
 
-      // Call OnSpace AI via edge function pattern (or directly if available)
+      // AI requests always go through authenticated Edge Functions.
       const { data, error: fnError } = await supabase.functions.invoke('swish-identify', {
         body: {
           images: imageData.filter(d => d.startsWith('data:')),
@@ -257,9 +257,9 @@ export default function BuyDecisionScreen() {
       setResult(parsed);
 
     } catch (e: any) {
-      // Fallback: use Gemini directly through OnSpace AI if available
+      // Fallback also invokes a server-side Edge Function; no provider key is exposed.
       try {
-        setLoadingStep('Running direct AI analysis...');
+        setLoadingStep('Running server-side AI analysis...');
         const parsed = await runDirectGeminiBuyDecision({
           photos,
           askingPrice: askingPrice ? parseFloat(askingPrice) : null,

@@ -73,21 +73,6 @@ export interface QuotaExceededError {
   message: string;
 }
 
-export interface CoinResearchCandidate {
-  source: 'CANOA' | 'OCRE' | 'CRRO' | 'RPC';
-  title: string;
-  url: string;
-  reference?: string;
-  snippet?: string;
-}
-export interface CoinResearchResult {
-  status: string;
-  searched: string[];
-  candidates: CoinResearchCandidate[];
-  sources: Record<string, { status: string; count: number }>;
-  note: string;
-}
-
 export interface AIIdentificationResult {
   canonicalTitle: string;
   specialistId: SpecialistId;
@@ -159,8 +144,6 @@ export interface AIIdentificationResult {
   warnings: string[];
   suggestedDisposition: string;
   dispositionDecision: DispositionDecision;
-  // Cross-catalogue research (candidate discovery only; not an identity verdict)
-  coinResearch?: CoinResearchResult | null;
   // v3: Numista verification
   numistaVerification?: NumistaVerification | null;
   numistaStatus?: string;
@@ -440,7 +423,6 @@ export async function identifyItemWithAI(
       suggestedDisposition: id.suggestedDisposition ?? '',
       dispositionDecision: (id.dispositionDecision ?? 'sell_individual') as DispositionDecision,
       // v3/v4: Numista
-      coinResearch: id.coinResearch ?? data.coinResearch ?? null,
       numistaVerification: numistaV,
       numistaStatus: id.numistaStatus ?? numistaV?.status ?? null,
       numistaTypeId: id.numistaTypeId ?? numistaV?.typeId ?? null,
@@ -529,79 +511,6 @@ export async function uploadItemImages(
     }
   }
 
-  return { urls, errors };
-}
-
-
-/** Persist rendered coin references separately from items.media (the eBay source). */
-export async function saveCoinReferenceImages(
-  tenantId: string,
-  itemId: string,
-  images: CapturedImage[],
-): Promise<{ urls: Record<string, string>; errors: string[] }> {
-  const supabase = getSupabaseClient();
-  const urls: Record<string, string> = {};
-  const errors: string[] = [];
-
-  for (const img of images) {
-    if (!img.enhancedUri) continue;
-    try {
-      const safeSlot = img.slotId.replace(/[^a-zA-Z0-9_-]/g, '_');
-      const path = `${itemId}/coin-reference_${safeSlot}.jpg`;
-      let body: Blob | ArrayBuffer;
-      if (/^https?:\/\//i.test(img.enhancedUri)) {
-        urls[img.slotId] = img.enhancedUri;
-        continue;
-      } else if (/^data:image\//i.test(img.enhancedUri)) {
-        const base64 = img.enhancedUri.slice(img.enhancedUri.indexOf(',') + 1);
-        const binary = atob(base64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        body = bytes.buffer;
-      } else if (Platform.OS === 'web') {
-        const response = await fetch(img.enhancedUri);
-        body = await response.blob();
-      } else {
-        const base64 = await FileSystem.readAsStringAsync(img.enhancedUri, { encoding: FileSystem.EncodingType.Base64 });
-        const binary = atob(base64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        body = bytes.buffer;
-      }
-
-      const { error } = await supabase.storage.from(ITEM_IMAGES_BUCKET).upload(path, body, {
-        contentType: 'image/jpeg',
-        upsert: true,
-      });
-      if (error) {
-        errors.push(`${img.slotLabel}: ${error.message}`);
-        continue;
-      }
-      const { data } = supabase.storage.from(ITEM_IMAGES_BUCKET).getPublicUrl(path);
-      if (data?.publicUrl) urls[img.slotId] = data.publicUrl;
-    } catch (error: any) {
-      errors.push(`${img.slotLabel}: ${error?.message ?? 'Reference upload failed'}`);
-    }
-  }
-
-  if (Object.keys(urls).length > 0) {
-    const { data: row, error: readError } = await supabase.from('items')
-      .select('attributes').eq('id', itemId).eq('tenant_id', tenantId).maybeSingle();
-    if (readError) errors.push(`Reference metadata: ${readError.message}`);
-    else if (row) {
-      const existing = row.attributes && typeof row.attributes === 'object' ? row.attributes : {};
-      const merged: Record<string, any> = {
-        ...existing,
-        swish_coin_reference_images: { ...(existing.swish_coin_reference_images ?? {}), ...urls },
-      };
-      const primary = urls.obverse ?? urls.camera_capture ?? Object.values(urls)[0];
-      if (primary) merged.swish_coin_reference_url = primary;
-      const { error: updateError } = await supabase.from('items').update({
-        attributes: merged, updated_at: new Date().toISOString(),
-      }).eq('id', itemId).eq('tenant_id', tenantId);
-      if (updateError) errors.push(`Reference metadata: ${updateError.message}`);
-    }
-  }
   return { urls, errors };
 }
 

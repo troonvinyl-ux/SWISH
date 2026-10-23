@@ -11,7 +11,7 @@ import { Colors, Typography, Spacing, Radius } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { getLiveListingCount } from '@/services/listingService';
 import { IS_TV } from '@/hooks/useTVNavigation';
-import { getProductionNicheSpecialistIds } from '@/services/nicheRouting';
+import { NICHES } from '@/constants/niches';
 import { SPECIALISTS } from '@/constants/specialists';
 
 // Derive the home tab icon and label from the active niche
@@ -34,8 +34,12 @@ function useLiveListingCount() {
   const { tenant, activeNicheId } = useApp();
   const [count, setCount] = useState(0);
 
-  // Use the same strict production allowlist as inventory, orders, and dispatch.
-  const nicheSpecialistIds = getProductionNicheSpecialistIds(activeNicheId);
+  // Derive specialist IDs for the active niche so badge only shows niche-relevant listings
+  const nicheSpecialistIds = (() => {
+    if (!activeNicheId) return [];
+    const niche = NICHES[activeNicheId as keyof typeof NICHES];
+    return niche?.specialists ?? [];
+  })();
 
   const refresh = useCallback(async () => {
     if (!tenant?.id) return;

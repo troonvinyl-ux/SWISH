@@ -188,16 +188,8 @@ export default function EbayFinancesScreen() {
         body: { tenantId: tenant.id, route: 'get_funds_summary' },
       });
       if (error || !data?.success) {
-        let message = error?.message ?? 'Available funds could not be retrieved.';
-        if (error instanceof FunctionsHttpError) {
-          try {
-            const responseText = await error.context?.text();
-            const parsed = responseText ? JSON.parse(responseText) : null;
-            message = parsed?.error ?? responseText ?? message;
-          } catch {}
-        }
         setFundsSummary(null);
-        setFundsSummaryError(data?.error ?? message);
+        setFundsSummaryError(data?.error ?? error?.message ?? 'Available funds could not be retrieved.');
         return;
       }
       setFundsSummary(data.fundsSummary as FundsSummary);

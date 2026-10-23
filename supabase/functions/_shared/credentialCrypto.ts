@@ -37,7 +37,7 @@ async function getKey(): Promise<CryptoKey> {
     try {
       const decoded = atob(trimmed);
       keyBytes = new Uint8Array(decoded.length);
-      for (let i = 0; i < decoded.length; i++) keyBytes[i] = decoded.charCodeAt(i);
+      for (let i = 0; i < decoded.length; i++) keyBytes[i] = decoded.charCodeAt(0);
     } catch {
       throw new Error('[CredentialCrypto] SWISH_CREDENTIAL_KEY must be base64 or hex-encoded 32-byte key');
     }

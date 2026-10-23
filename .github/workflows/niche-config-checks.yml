@@ -9,6 +9,16 @@ on:
     branches: [main]
     paths:
       - 'app.config.js'
+      - 'app.json'
+      # Secret-boundary checks cover every client source change, not just niche routes.
+      - 'app/**'
+      - 'services/**'
+      - 'hooks/**'
+      - 'contexts/**'
+      - 'components/**'
+      - 'constants/**'
+      - 'template/**'
+      - 'plugins/**'
       - 'eas.json'
       - 'services/nicheRouting.ts'
       - 'constants/niches.ts'
@@ -56,6 +66,16 @@ on:
   pull_request:
     paths:
       - 'app.config.js'
+      - 'app.json'
+      # Secret-boundary checks cover every client source change, not just niche routes.
+      - 'app/**'
+      - 'services/**'
+      - 'hooks/**'
+      - 'contexts/**'
+      - 'components/**'
+      - 'constants/**'
+      - 'template/**'
+      - 'plugins/**'
       - 'eas.json'
       - 'services/nicheRouting.ts'
       - 'constants/niches.ts'
@@ -128,8 +148,8 @@ jobs:
       - name: Install Jest runner for pure service regression tests
         run: pnpm add -D jest@29.7.0
 
-      - name: Run routing and build-identity regression tests
-        run: npx jest --config jest.config.ci.js --runInBand services/__tests__/entryRoutes.test.ts services/__tests__/nicheIsolation.test.ts services/__tests__/brandedBuildConfig.test.ts services/__tests__/surplusFlipRouting.test.ts
+      - name: Run routing, build-identity, and server-only secret regression tests
+        run: npx jest --config jest.config.ci.js --runInBand services/__tests__/entryRoutes.test.ts services/__tests__/nicheIsolation.test.ts services/__tests__/brandedBuildConfig.test.ts services/__tests__/surplusFlipRouting.test.ts services/__tests__/serverOnlySecrets.test.ts
 
       - name: Validate all five Expo branded configurations
         shell: bash

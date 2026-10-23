@@ -253,8 +253,7 @@ function UnifiedCard({
 }) {
   const router = useRouter();
   const title = item.canonical_title ?? item.canonicalTitle ?? '';
-  const referenceThumb = item.attributes?.swish_coin_reference_url as string | undefined;
-  const hasPhoto = !!referenceThumb || (item.media ?? []).length > 0;
+  const hasPhoto = (item.media ?? []).length > 0;
   const price = item.listing_price ?? item.expected_selling_price ?? item.valuation_mid ?? 0;
   const isLive = tab === 'live';
   const isDraft = tab === 'draft';
@@ -275,7 +274,7 @@ function UnifiedCard({
       {/* Thumbnail */}
       <View style={uc.thumbWrap}>
         {hasPhoto ? (
-          <ItemImage uri={referenceThumb ?? item.media![0]} style={uc.thumb} contentFit="cover" transition={150} />
+          <ItemImage uri={item.media![0]} style={uc.thumb} contentFit="cover" transition={150} />
         ) : (
           <View style={[uc.thumbPlaceholder, { backgroundColor: theme.accentDim }]}>
             <MaterialIcons name={isLive ? 'storefront' : isSold ? 'check-circle' : theme.icon as any} size={20} color={tabAccent} />

@@ -573,23 +573,19 @@ async function searchNumistaIslamicSilver(
       }
     }
 
-    // If the explicit N# resolved successfully, stop here: do not run broad
-    // catalogue searches that could add unrelated records and confuse the result.
-    if (!(suppliedReferenceId && candidateMap.has(suppliedReferenceId))) {
-      for (const q of queries) {
-        const resp = await fetch(
-          `${NUMISTA_API}/types?q=${encodeURIComponent(q)}&lang=en&count=20`,
-          { headers: { 'Numista-API-Key': apiKey }, signal: AbortSignal.timeout(10000) },
-        );
-        if (!resp.ok) {
-          firstError ||= `Numista API error: ${resp.status}`;
-          continue;
-        }
-        successfulQueries++;
-        const data = await resp.json();
-        for (const t of (data.types ?? [])) {
-          if (t?.id != null) candidateMap.set(Number(t.id), t);
-        }
+    for (const q of queries) {
+      const resp = await fetch(
+        `${NUMISTA_API}/types?q=${encodeURIComponent(q)}&lang=en&count=20`,
+        { headers: { 'Numista-API-Key': apiKey }, signal: AbortSignal.timeout(10000) },
+      );
+      if (!resp.ok) {
+        firstError ||= `Numista API error: ${resp.status}`;
+        continue;
+      }
+      successfulQueries++;
+      const data = await resp.json();
+      for (const t of (data.types ?? [])) {
+        if (t?.id != null) candidateMap.set(Number(t.id), t);
       }
     }
 
@@ -700,7 +696,7 @@ function scoreNumistaIslamic(
   return {
     typeId: type.id,
     numistaN: `N#${type.id}`,
-    numistaUrl: `https://numista.com/${type.id}`,
+    numistaUrl: `https://en.numista.com/catalogue/index.php?r=${type.id}`,
     title: type.title ?? '',
     denomination: type.min_unit?.name,
     issuedFrom: type.issued_from,
