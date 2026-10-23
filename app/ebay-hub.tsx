@@ -420,16 +420,38 @@ const hc = StyleSheet.create({
 
 // ── Niche theme for eBay Hub header ─────────────────────────────────────────
 function useNicheHubStyle(activeNicheId: string | null | undefined) {
-  return useMemo(() => {
-    const niche = resolveProductionNiche(activeNicheId);
-    const specialistIds = getProductionNicheSpecialistIds(activeNicheId);
-    if (niche === 'motocross') return { accent: '#FF5500', icon: 'two-wheeler' as const, label: 'MX', specialistIds };
-    if (niche === 'bicycles') return { accent: '#6ED020', icon: 'pedal-bike' as const, label: 'Bikes', specialistIds };
-    if (niche === 'clothing') return { accent: '#E91E8C', icon: 'checkroom' as const, label: 'Fashion', specialistIds };
-    if (niche === 'surplus_flip') return { accent: '#14B8A6', icon: 'inventory-2' as const, label: 'Surplus', specialistIds };
-    if (niche === 'coins') return { accent: Colors.primary, icon: 'toll' as const, label: 'Coins', specialistIds };
-    return { accent: Colors.primary, icon: 'toll' as const, label: 'Select niche', specialistIds: [] as string[] };
-  }, [activeNicheId]);
+  // Keep this route resilient if a stale OnSpace bundle omits a nicheRouting
+  // export. The Hub must still render; niche filtering falls back conservatively.
+  let niche: string | null = null;
+  let specialistIds: string[] = [];
+  try {
+    if (typeof resolveProductionNiche === 'function') {
+      niche = resolveProductionNiche(activeNicheId);
+    }
+    if (typeof getProductionNicheSpecialistIds === 'function') {
+      specialistIds = getProductionNicheSpecialistIds(activeNicheId);
+    }
+  } catch {
+    niche = null;
+    specialistIds = [];
+  }
+
+  // Local aliases are only a display fallback; they do not broaden inventory queries.
+  if (!niche && activeNicheId) {
+    const id = activeNicheId.trim().toLowerCase();
+    if (['coins', 'coins_uk', 'coins_world', 'coins_currency', 'banknotes', 'gold', 'silver', 'islamic_silver', 'numismatic'].includes(id) || id.includes('coin')) niche = 'coins';
+    else if (['motocross', 'mx', 'flipper_mx'].includes(id)) niche = 'motocross';
+    else if (['bicycles', 'cycling', 'bikes', 'bike_flipper'].includes(id)) niche = 'bicycles';
+    else if (['clothing', 'fashion', 'trainers_sneakers', 'trainers', 'threads_flip'].includes(id)) niche = 'clothing';
+    else if (['surplus_flip', 'surplus-flip', 'catalog_flip', 'catalog_surplus', 'surplus_trader'].includes(id)) niche = 'surplus_flip';
+  }
+
+  if (niche === 'motocross') return { accent: '#FF5500', icon: 'two-wheeler' as const, label: 'MX', specialistIds };
+  if (niche === 'bicycles') return { accent: '#6ED020', icon: 'pedal-bike' as const, label: 'Bikes', specialistIds };
+  if (niche === 'clothing') return { accent: '#E91E8C', icon: 'checkroom' as const, label: 'Fashion', specialistIds };
+  if (niche === 'surplus_flip') return { accent: '#14B8A6', icon: 'inventory-2' as const, label: 'Surplus', specialistIds };
+  if (niche === 'coins') return { accent: Colors.primary, icon: 'toll' as const, label: 'Coins', specialistIds };
+  return { accent: Colors.primary, icon: 'toll' as const, label: 'Select niche', specialistIds: [] as string[] };
 }
 
 function EbayHubScreenContent() {
