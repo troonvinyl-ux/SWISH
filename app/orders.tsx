@@ -539,12 +539,26 @@ export default function OrdersScreen() {
   // ── Load ─────────────────────────────────────────────────────────────────
 
   const load = useCallback(async () => {
-    if (!tenant) return;
-    const { orders: data } = await getAllOrders(tenant.id, undefined, specialistIds);
-    setOrders(data);
-    setLoading(false);
-    setRefreshing(false);
-  }, [tenant?.id, activeNicheId]);
+    if (!tenant) {
+      setOrders([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+    try {
+      const { orders: data, error } = await getAllOrders(tenant.id, undefined, specialistIds);
+      if (error) {
+        showAlert('Orders could not load', error);
+        return;
+      }
+      setOrders(data);
+    } catch (error: unknown) {
+      showAlert('Orders could not load', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [tenant?.id, activeNicheId, showAlert]);
 
   useEffect(() => { load(); }, [load]);
 
