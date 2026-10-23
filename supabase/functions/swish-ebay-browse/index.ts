@@ -15,12 +15,8 @@ const corsHeaders = {
 const EBAY_TOKEN_URL    = 'https://api.ebay.com/identity/v1/oauth2/token';
 const EBAY_BROWSE_BASE  = 'https://api.ebay.com/buy/browse/v1';
 const APP_TOKEN_SCOPE   = 'https://api.ebay.com/oauth/api_scope';
-const TRADING_REFRESH_SCOPE = [
-  'https://api.ebay.com/oauth/api_scope/sell.inventory',
-  'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
-  'https://api.ebay.com/oauth/api_scope/sell.account',
-  'https://api.ebay.com/oauth/api_scope/commerce.identity.readonly',
-].join(' ');
+// Token refresh requests omit the scope parameter so eBay retains all consented permissions,
+// including sell.finances; do not narrow access tokens during unrelated Browse operations.
 
 const TRADING_API = 'https://api.ebay.com/ws/api.dll';
 const SITE_ID = '3'; // eBay UK
@@ -51,7 +47,7 @@ async function refreshUserToken(
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
     refresh_token: refreshToken,
-    scope: TRADING_REFRESH_SCOPE,
+    // Omit scope to preserve the full scope set granted at OAuth consent.
   });
   const resp = await fetch(EBAY_TOKEN_URL, {
     method: 'POST',
