@@ -446,6 +446,17 @@ function useNicheHubStyle(activeNicheId: string | null | undefined) {
     else if (['surplus_flip', 'surplus-flip', 'catalog_flip', 'catalog_surplus', 'surplus_trader'].includes(id)) niche = 'surplus_flip';
   }
 
+  // Always provide the strict product boundary even if a helper export is
+  // unavailable in a stale/mismatched OnSpace bundle. This avoids the empty
+  // specialist list short-circuiting metrics and falsely showing "not connected".
+  if (specialistIds.length === 0) {
+    if (niche === 'coins') specialistIds = ['coins', 'coins_uk', 'coins_world', 'islamic_silver', 'banknotes', 'gold', 'silver', 'ancient_artefacts'];
+    else if (niche === 'motocross') specialistIds = ['motocross'];
+    else if (niche === 'bicycles') specialistIds = ['bicycles'];
+    else if (niche === 'clothing') specialistIds = ['clothing', 'trainers_sneakers'];
+    else if (niche === 'surplus_flip') specialistIds = ['surplus_trader'];
+  }
+
   if (niche === 'motocross') return { accent: '#FF5500', icon: 'two-wheeler' as const, label: 'MX', specialistIds };
   if (niche === 'bicycles') return { accent: '#6ED020', icon: 'pedal-bike' as const, label: 'Bikes', specialistIds };
   if (niche === 'clothing') return { accent: '#E91E8C', icon: 'checkroom' as const, label: 'Fashion', specialistIds };
