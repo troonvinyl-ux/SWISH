@@ -14,6 +14,22 @@ const EBAY_TOKEN_URL = 'https://api.ebay.com/identity/v1/oauth2/token';
 function adminClient() { return createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''); }
 function jr(body: unknown, status = 200) { return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }); }
 
+async function checkManagedPayments(accessToken: string): Promise<{ status?: string; error?: string }> {
+  try {
+    const url = 'https://api.ebay.com/sell/account/v1/payments_program/EBAY_GB/EBAY_PAYMENTS';
+    const resp = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(10000),
+    });
+    const body = await resp.text();
+    if (!resp.ok) return { error: `Account API HTTP ${resp.status}` };
+    const data = body ? JSON.parse(body) : {};
+    return { status: String(data.status ?? 'UNKNOWN') };
+  } catch {
+    return { error: 'Account API check unavailable' };
+  }
+}
+
 async function getToken(supabase: ReturnType<typeof adminClient>, tenantId: string, refreshForFinances = false): Promise<{ accessToken: string } | { error: string }> {
   const { data: conn } = await supabase.from('marketplace_connectors').select('credential_ref, status').eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle();
   if (!conn?.credential_ref || conn.status !== 'connected') return { error: 'eBay not connected' };
@@ -80,8 +96,15 @@ Deno.serve(async (req: Request) => {
         const resp = await fetch(url.toString(), { headers: { ...hdrs, ...signatureHeaders }, signal: AbortSignal.timeout(20000) });
         if (!resp.ok) {
           const et = await resp.text().catch(() => '');
-          if (resp.status === 403 || resp.status === 401) fetchErr = `eBay Finances API requires Managed Payments and sell.finances scope (HTTP ${resp.status}). Re-authorise eBay to enable exact fee data.`;
-          else fetchErr = `Finances API HTTP ${resp.status}: ${et.slice(0, 200)}`;
+          if (resp.status === 403 || resp.status === 401) {
+            const payments = await checkManagedPayments(accessToken);
+            const diagnosis = payments.status === 'OPTED_IN'
+              ? 'eBay reports Managed Payments is enabled; this points to a missing sell.finances grant or an eBay app-key permission issue. Re-authorise eBay in SWISH, then retry. If it still fails, verify sell.finances is assigned to the Production keyset in eBay Developer Portal.'
+              : payments.status
+                ? `eBay Managed Payments status: ${payments.status}. Check seller payments onboarding and re-authorise eBay in SWISH.`
+                : 'SWISH could not verify Managed Payments status. Re-authorise eBay in SWISH and check the Production keyset scopes.';
+            fetchErr = `eBay Finances API HTTP ${resp.status}. ${diagnosis}`;
+          } else fetchErr = `Finances API HTTP ${resp.status}: ${et.slice(0, 200)}`;
           hasMore = false; break;
         }
         const data = await resp.json();
@@ -141,6 +164,15 @@ Deno.serve(async (req: Request) => {
       }
       if (!resp.ok) {
         const t = await resp.text().catch(() => '');
+        if (resp.status === 401 || resp.status === 403) {
+          const payments = await checkManagedPayments(accessToken);
+          const diagnosis = payments.status === 'OPTED_IN'
+            ? 'eBay reports Managed Payments is enabled; this points to a missing sell.finances grant or an eBay app-key permission issue. Re-authorise eBay in SWISH, then retry. If it still fails, verify sell.finances is assigned to the Production keyset in eBay Developer Portal.'
+            : payments.status
+              ? `eBay Managed Payments status: ${payments.status}. Check seller payments onboarding and re-authorise eBay in SWISH.`
+              : 'SWISH could not verify Managed Payments status. Re-authorise eBay in SWISH and check the Production keyset scopes.';
+          return jr({ success: false, error: `Seller funds summary API HTTP ${resp.status}. ${diagnosis}`, financesApiAvailable: false, managedPaymentsStatus: payments.status ?? null, diagnostic: payments.error ?? null }, 400);
+        }
         return jr({ success: false, error: `Seller funds summary API ${resp.status}: ${t.slice(0, 200)}`, financesApiAvailable: false }, 400);
       }
       const data = await resp.json();
