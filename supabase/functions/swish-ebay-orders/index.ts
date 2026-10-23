@@ -320,7 +320,7 @@ async function importFulfillmentOrders(
   for (const order of ffOrders) {
     try {
       const orderId = order.orderId;
-      if (!orderId || existingOrderIds.has(orderId)) { skipped++; continue; }
+      if (!orderId) { skipped++; continue; }
 
       const totalStr = order.pricingSummary?.total?.value ?? '0';
       const salePrice = parseFloat(totalStr) || 0;
@@ -354,9 +354,36 @@ async function importFulfillmentOrders(
         }
       }
 
-      // Map fulfillment status
+      // Map the current eBay state before deciding whether to insert or refresh.
       const ff = (order.fulfillmentStatus ?? '').toUpperCase();
       const fulfilmentStatus = ff === 'FULFILLED' ? 'dispatched' : 'awaiting_dispatch';
+      const { data: existingRow } = await supabase.from('orders')
+        .select('id, fulfilment_status, tracking_number, carrier, dispatched_at')
+        .eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').eq('external_order_id', orderId)
+        .maybeSingle();
+
+      if (existingRow) {
+        // Sync must refresh existing orders too; otherwise later dispatches never reach SWISH.
+        const updatePayload: Record<string, unknown> = {
+          buyer_name: buyer?.username ?? shipTo?.fullName ?? null,
+          buyer_address: buyerAddress,
+          fulfilment_status: existingRow.fulfilment_status === 'delivered' || existingRow.fulfilment_status === 'completed'
+            ? existingRow.fulfilment_status : fulfilmentStatus,
+          sale_price: salePrice,
+          shipping_cost: shippingCost,
+          net_revenue: netRevenue,
+          updated_at: new Date().toISOString(),
+        };
+        if (fulfilmentStatus === 'dispatched' && !existingRow.dispatched_at) {
+          updatePayload.dispatched_at = order.lastUpdatedAt || new Date().toISOString();
+        }
+        const { error: updateErr } = await supabase.from('orders').update(updatePayload)
+          .eq('id', existingRow.id).eq('tenant_id', tenantId);
+        if (updateErr) errors.push(`Order ${orderId} status refresh: ${updateErr.message}`);
+        else skipped++;
+        existingOrderIds.add(orderId);
+        continue;
+      }
 
       const { data: inserted, error: insertErr } = await supabase.from('orders').insert({
         tenant_id: tenantId, item_id: matchedItemId, listing_id: matchedListingId,
@@ -422,7 +449,7 @@ async function importTradingOrders(
 
   for (const order of tradingOrders) {
     try {
-      if (!order.orderId || existingOrderIds.has(order.orderId)) { skipped++; continue; }
+      if (!order.orderId) { skipped++; continue; }
 
       let matchedItemId: string | null = null, matchedListingId: string | null = null;
       let salePrice = order.salePrice;
@@ -437,7 +464,36 @@ async function importTradingOrders(
       const netRevenue = Math.round((salePrice - marketplaceFee - shippingCost) * 100) / 100;
 
       const orderAge = Date.now() - new Date(order.createdAt || Date.now()).getTime();
-      const fulfilmentStatus = order.trackingNumber ? 'dispatched' : orderAge > 7 * 24 * 60 * 60 * 1000 ? 'completed' : 'awaiting_dispatch';
+      // Do not infer completion from order age. Only tracking/explicit eBay state may advance it.
+      const fulfilmentStatus = order.trackingNumber ? 'dispatched' : 'awaiting_dispatch';
+      const { data: existingRow } = await supabase.from('orders')
+        .select('id, fulfilment_status, tracking_number, carrier, dispatched_at')
+        .eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').eq('external_order_id', order.orderId)
+        .maybeSingle();
+
+      if (existingRow) {
+        const updatePayload: Record<string, unknown> = {
+          buyer_name: order.shippingAddress.name || order.buyerUsername || null,
+          buyer_email: order.buyerEmail || null,
+          buyer_address: order.shippingAddress,
+          sale_price: salePrice,
+          shipping_cost: shippingCost,
+          net_revenue: netRevenue,
+          fulfilment_status: existingRow.fulfilment_status === 'delivered' || existingRow.fulfilment_status === 'completed'
+            ? existingRow.fulfilment_status
+            : order.trackingNumber ? 'dispatched' : existingRow.fulfilment_status,
+          updated_at: new Date().toISOString(),
+        };
+        if (order.trackingNumber) updatePayload.tracking_number = order.trackingNumber;
+        if (order.carrier) updatePayload.carrier = order.carrier;
+        if (order.trackingNumber && !existingRow.dispatched_at) updatePayload.dispatched_at = order.createdAt || new Date().toISOString();
+        const { error: updateErr } = await supabase.from('orders').update(updatePayload)
+          .eq('id', existingRow.id).eq('tenant_id', tenantId);
+        if (updateErr) errors.push(`Order ${order.orderId} status refresh: ${updateErr.message}`);
+        else skipped++;
+        existingOrderIds.add(order.orderId);
+        continue;
+      }
 
       const { data: inserted, error: insertErr } = await supabase.from('orders').insert({
         tenant_id: tenantId, item_id: matchedItemId, listing_id: matchedListingId,
@@ -496,7 +552,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json();
-    const { tenantId, daysBack = 30, mode = 'both' } = body;
+    const { tenantId, daysBack = 90, mode = 'both' } = body;
     if (!tenantId) return jsonResponse({ error: 'tenantId is required' }, 400);
 
     const supabase = adminClient();
