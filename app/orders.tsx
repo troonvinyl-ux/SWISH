@@ -523,7 +523,17 @@ export default function OrdersScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { tenant, activeNicheId } = useApp();
-  const specialistIds = getProductionNicheSpecialistIds(activeNicheId);
+  // Guard the niche resolver so a stale/incompatible module export cannot crash the whole screen.
+  const specialistIds: string[] = (() => {
+    try {
+      return typeof getProductionNicheSpecialistIds === 'function'
+        ? getProductionNicheSpecialistIds(activeNicheId)
+        : [];
+    } catch (error) {
+      console.error('[Orders] Failed to resolve active niche:', error);
+      return [];
+    }
+  })();
   const { showAlert } = useAlert();
 
   const [orders, setOrders] = useState<OrderWithItem[]>([]);
