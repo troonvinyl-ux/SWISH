@@ -528,6 +528,7 @@ export default function OrdersScreen() {
 
   const [orders, setOrders] = useState<OrderWithItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -539,12 +540,28 @@ export default function OrdersScreen() {
   // ── Load ─────────────────────────────────────────────────────────────────
 
   const load = useCallback(async () => {
-    if (!tenant) return;
-    const { orders: data } = await getAllOrders(tenant.id, undefined, specialistIds);
-    setOrders(data);
-    setLoading(false);
-    setRefreshing(false);
-  }, [tenant?.id, activeNicheId]);
+    if (!tenant) {
+      setOrders([]);
+      setLoadError('Your SWISH workspace is not ready. Return to the dashboard and try again.');
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+    setLoadError(null);
+    try {
+      const { orders: data, error } = await getAllOrders(tenant.id, undefined, specialistIds);
+      if (error) {
+        setLoadError(error);
+        return;
+      }
+      setOrders(data);
+    } catch (error: unknown) {
+      setLoadError(error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [tenant?.id, activeNicheId, showAlert]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -759,6 +776,7 @@ export default function OrdersScreen() {
         <View style={s.flex}>
           <Text style={s.title}>Orders</Text>
           <Text style={s.subtitle}>{orders.length} orders · {fmt(stats.netRevenue)} net</Text>
+          {loadError ? <Text style={{ color: Colors.danger, fontSize: 10 }} numberOfLines={2}>Orders error: {loadError}</Text> : null}
         </View>
         <Pressable
           onPress={handleImportOrders}
