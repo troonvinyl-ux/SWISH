@@ -73,7 +73,7 @@ async function refreshToken(clientId: string, clientSecret: string, rToken: stri
     body: new URLSearchParams({
       grant_type: 'refresh_token',
       refresh_token: rToken,
-      scope: 'https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.fulfillment https://api.ebay.com/oauth/api_scope/sell.account',
+      // Intentionally omit scope: preserve every scope granted at OAuth consent, including sell.finances.
     }).toString(),
   });
   const data = await resp.json();
