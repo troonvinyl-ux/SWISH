@@ -1008,3 +1008,18 @@ const s = StyleSheet.create({
   },
   emptySyncBtnText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: Colors.background },
 });
+
+
+// Expo Router catches render-time failures here instead of leaving Orders as a white screen.
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
+  return (
+    <View style={{ flex: 1, backgroundColor: Colors.background, padding: Spacing.xl, justifyContent: 'center', alignItems: 'center', gap: Spacing.md }}>
+      <MaterialIcons name="error-outline" size={42} color={Colors.danger} />
+      <Text style={{ color: Colors.textPrimary, fontSize: Typography.size.lg, fontWeight: Typography.weight.bold, textAlign: 'center' }}>Orders couldn’t open</Text>
+      <Text selectable style={{ color: Colors.textSecondary, fontSize: Typography.size.sm, textAlign: 'center' }}>{error?.message || 'An unexpected error occurred while rendering the Orders page.'}</Text>
+      <Pressable onPress={retry} style={{ backgroundColor: Colors.primary, borderRadius: Radius.md, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md }}>
+        <Text style={{ color: Colors.background, fontWeight: Typography.weight.bold }}>Try again</Text>
+      </Pressable>
+    </View>
+  );
+}
