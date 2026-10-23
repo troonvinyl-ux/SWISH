@@ -883,8 +883,10 @@ class EbayHubErrorBoundary extends React.Component<
     };
   }
 
-  componentDidCatch() {
-    // Intentionally do not log component state or any marketplace credentials.
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    // Keep diagnostics on-screen only; never log marketplace credentials.
+    const details = [error?.stack, info?.componentStack].filter(Boolean).join('\n');
+    this.setState({ message: [error?.message, details].filter(Boolean).join('\n\n') });
   }
 
   private retry = () => this.setState({ hasError: false, message: '' });
