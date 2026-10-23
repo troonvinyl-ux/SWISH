@@ -633,7 +633,8 @@ export default function OrdersScreen() {
       if (skipped > 0) lines.push(`• ${skipped} already imported`);
       if (imported === 0 && total > 0) lines.push('• No new orders to import');
       showAlert('Sync Complete', lines.join('\n'));
-      if (imported > 0) await load();
+      // The sync also refreshes existing order statuses/tracking, so always reload.
+      await load();
     } finally {
       setImportingOrders(false);
     }
