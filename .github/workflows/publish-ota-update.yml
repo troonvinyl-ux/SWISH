@@ -52,12 +52,13 @@ jobs:
         if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
         env:
           SWISH_NICHE: ${{ matrix.niche }}
+          EXPO_NO_DOTENV: "1"
         run: |
-          # Expo can print dotenv diagnostics before the JSON. Extract the JSON
-          # object starting at its first line so the validator parses valid JSON.
+          # Expo may print dotenv diagnostics before its JSON output. Keep raw
+          # output for diagnosis and extract the JSON object before parsing.
           pnpm exec expo config --type public > /tmp/swish-expo-config-raw.txt
           sed -n '/^{/,$p' /tmp/swish-expo-config-raw.txt > /tmp/swish-expo-config.json
-          if ! node -e "const fs=require('fs'); const c=JSON.parse(fs.readFileSync('/tmp/swish-expo-config.json','utf8')); const expected='production-'+process.env.SWISH_NICHE; if (!c.updates?.url?.includes(process.env.EXPO_PROJECT_ID) || !c.runtimeVersion || c.updates?.requestHeaders?.['expo-channel-name'] !== expected) { console.error('OTA configuration missing expected project/runtime/channel'); process.exit(1); }"; then
+          if ! node -e "const fs=require('fs'); const raw=fs.readFileSync('/tmp/swish-expo-config.json','utf8').trim(); const c=JSON.parse(raw); const expected='production-'+process.env.SWISH_NICHE; if (!c.updates?.url?.includes(process.env.EXPO_PROJECT_ID) || !c.runtimeVersion || c.updates?.requestHeaders?.['expo-channel-name'] !== expected) { console.error('OTA configuration missing expected project/runtime/channel'); process.exit(1); }"; then
             echo "Expo config output (first 40 lines):"
             head -40 /tmp/swish-expo-config-raw.txt
             exit 1
