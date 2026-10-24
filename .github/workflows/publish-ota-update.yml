@@ -1,0 +1,55 @@
+name: Publish SWISH OTA update
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish-update:
+    name: Publish compatible JavaScript update
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
+    steps:
+      - name: Skip safely until Expo credentials are configured
+        if: ${{ env.EXPO_TOKEN == '' || env.EXPO_PROJECT_ID == '' }}
+        run: |
+          echo "::warning::OTA publishing skipped. Configure repository variable EXPO_PROJECT_ID and repository secret EXPO_TOKEN."
+          echo "The installed APK will not receive OTA updates until an OTA-enabled APK is installed and these settings are configured."
+
+      - name: Check out SWISH
+        if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up pnpm
+        if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.3
+
+      - name: Install dependencies
+        if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Validate Expo OTA configuration
+        if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
+        run: |
+          pnpm exec expo config --type public > /tmp/swish-expo-config.json
+          node -e "const c=require('/tmp/swish-expo-config.json'); if (!c.updates?.url?.includes(process.env.EXPO_PROJECT_ID) || !c.runtimeVersion) { console.error('OTA configuration missing URL/runtimeVersion'); process.exit(1); }"
+
+      - name: Publish production update
+        if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
+        run: npx eas-cli@latest update --branch production --message "SWISH OTA update ${GITHUB_SHA}" --non-interactive
