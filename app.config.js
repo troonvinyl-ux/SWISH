@@ -82,7 +82,10 @@ module.exports = ({ config }) => {
   return {
     ...baseConfig,
     name: niche.name,
-    slug: niche.slug,
+    // EAS Update requires the slug to match the single linked Expo project.
+    // Keep niche-specific slugs for native builds, but use the linked project slug
+    // when publishing OTA updates to separate niche channels.
+    slug: process.env.SWISH_OTA_PUBLISH === "1" ? "swish" : niche.slug,
     scheme: niche.scheme,
     ios: {
       ...config.ios,
