@@ -52,12 +52,8 @@ const NICHE_BUILDS = {
 
 module.exports = ({ config }) => {
   const selected = process.env.SWISH_NICHE;
-  // Preserve the existing app identity for OnSpace/legacy workflows unless
-  // an explicit branded build profile requests one of the four products.
-  if (!selected) return config;
-
-  const niche = NICHE_BUILDS[selected];
-  if (!niche) {
+  const niche = selected ? NICHE_BUILDS[selected] : null;
+  if (selected && !niche) {
     throw new Error(
       `Unsupported SWISH_NICHE "${selected}". Choose coins, motocross, bicycles, clothing, or surplus_flip.`,
     );
@@ -80,9 +76,11 @@ module.exports = ({ config }) => {
       }
     : {};
 
+  const baseConfig = { ...config, ...otaConfig };
+  if (!niche) return baseConfig;
+
   return {
-    ...config,
-    ...otaConfig,
+    ...baseConfig,
     name: niche.name,
     slug: niche.slug,
     scheme: niche.scheme,
@@ -95,7 +93,7 @@ module.exports = ({ config }) => {
       package: niche.androidPackage,
     },
     extra: {
-      ...config.extra,
+      ...(otaConfig.extra || config.extra || {}),
       swishNicheId: niche.id,
       swishAppScheme: niche.scheme,
     },
