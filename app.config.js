@@ -63,8 +63,26 @@ module.exports = ({ config }) => {
     );
   }
 
+  const easProjectId = process.env.EXPO_PROJECT_ID || process.env.EAS_PROJECT_ID || config.extra?.eas?.projectId;
+  const otaConfig = easProjectId
+    ? {
+        runtimeVersion: { policy: "appVersion" },
+        updates: {
+          url: `https://u.expo.dev/${easProjectId}`,
+          checkAutomatically: "ON_LOAD",
+          fallbackToCacheTimeout: 0,
+          requestHeaders: { "expo-channel-name": "production" },
+        },
+        extra: {
+          ...(config.extra || {}),
+          eas: { ...(config.extra?.eas || {}), projectId: easProjectId },
+        },
+      }
+    : {};
+
   return {
     ...config,
+    ...otaConfig,
     name: niche.name,
     slug: niche.slug,
     scheme: niche.scheme,
