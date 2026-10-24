@@ -67,7 +67,7 @@ module.exports = ({ config }) => {
           url: `https://u.expo.dev/${easProjectId}`,
           checkAutomatically: "ON_LOAD",
           fallbackToCacheTimeout: 0,
-          requestHeaders: { "expo-channel-name": "production" },
+          requestHeaders: { "expo-channel-name": `production-${selected || "default"}` },
         },
         extra: {
           ...(config.extra || {}),
