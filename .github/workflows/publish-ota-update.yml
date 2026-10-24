@@ -56,6 +56,15 @@ jobs:
           pnpm exec expo config --type public > /tmp/swish-expo-config.json
           node -e "const c=require('/tmp/swish-expo-config.json'); const expected='production-'+process.env.SWISH_NICHE; if (!c.updates?.url?.includes(process.env.EXPO_PROJECT_ID) || !c.runtimeVersion || c.updates?.requestHeaders?.['expo-channel-name'] !== expected) { console.error('OTA configuration missing expected project/runtime/channel'); process.exit(1); }"
 
+      - name: Ensure OTA branch and channel are linked
+        if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
+        env:
+          SWISH_NICHE: ${{ matrix.niche }}
+        run: |
+          BRANCH="production-${SWISH_NICHE}"
+          npx eas-cli@latest branch:create "$BRANCH" --non-interactive || true
+          npx eas-cli@latest channel:create "$BRANCH" --branch "$BRANCH" --non-interactive || npx eas-cli@latest channel:edit "$BRANCH" --branch "$BRANCH" --non-interactive
+
       - name: Publish niche-specific update
         if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
         env:
