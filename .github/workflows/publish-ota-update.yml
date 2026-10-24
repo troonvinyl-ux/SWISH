@@ -11,9 +11,13 @@ permissions:
 
 jobs:
   publish-update:
-    name: Publish compatible JavaScript update
+    name: Publish ${{ matrix.niche }} JavaScript update
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        niche: [coins, motocross, bicycles, clothing, surplus_flip]
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
@@ -46,10 +50,14 @@ jobs:
 
       - name: Validate Expo OTA configuration
         if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
+        env:
+          SWISH_NICHE: ${{ matrix.niche }}
         run: |
           pnpm exec expo config --type public > /tmp/swish-expo-config.json
-          node -e "const c=require('/tmp/swish-expo-config.json'); if (!c.updates?.url?.includes(process.env.EXPO_PROJECT_ID) || !c.runtimeVersion) { console.error('OTA configuration missing URL/runtimeVersion'); process.exit(1); }"
+          node -e "const c=require('/tmp/swish-expo-config.json'); const expected='production-'+process.env.SWISH_NICHE; if (!c.updates?.url?.includes(process.env.EXPO_PROJECT_ID) || !c.runtimeVersion || c.updates?.requestHeaders?.['expo-channel-name'] !== expected) { console.error('OTA configuration missing expected project/runtime/channel'); process.exit(1); }"
 
-      - name: Publish production update
+      - name: Publish niche-specific update
         if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
-        run: npx eas-cli@latest update --branch production --message "SWISH OTA update ${GITHUB_SHA}" --non-interactive
+        env:
+          SWISH_NICHE: ${{ matrix.niche }}
+        run: npx eas-cli@latest update --branch "production-${SWISH_NICHE}" --message "SWISH ${SWISH_NICHE} OTA update ${GITHUB_SHA}" --non-interactive
