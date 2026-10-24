@@ -49,6 +49,7 @@ jobs:
       - name: Generate Android project for selected niche
         env:
           SWISH_NICHE: ${{ inputs.niche }}
+          EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
         run: pnpm exec expo prebuild --platform android --clean
 
       # Cache Gradle dependencies and compiled transforms between runs. Expo prebuild
