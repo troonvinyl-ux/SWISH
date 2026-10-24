@@ -69,8 +69,19 @@ jobs:
           SWISH_NICHE: ${{ matrix.niche }}
         run: |
           BRANCH="production-${SWISH_NICHE}"
-          npx eas-cli@latest branch:create "$BRANCH" --non-interactive || true
-          npx eas-cli@latest channel:create "$BRANCH" --branch "$BRANCH" --non-interactive || npx eas-cli@latest channel:edit "$BRANCH" --branch "$BRANCH" --non-interactive
+          CHANNEL="$BRANCH"
+
+          # Create branch/channel if missing; otherwise reuse the existing object.
+          if ! npx eas-cli@latest branch:view "$BRANCH" --non-interactive >/dev/null 2>&1; then
+            npx eas-cli@latest branch:create "$BRANCH" --non-interactive
+          fi
+
+          if ! npx eas-cli@latest channel:view "$CHANNEL" --non-interactive >/dev/null 2>&1; then
+            npx eas-cli@latest channel:create "$CHANNEL" --non-interactive
+          fi
+
+          # Ensure this channel serves the corresponding niche branch.
+          npx eas-cli@latest channel:edit "$CHANNEL" --branch "$BRANCH" --non-interactive
 
       - name: Publish niche-specific update
         if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
