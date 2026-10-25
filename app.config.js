@@ -76,7 +76,7 @@ module.exports = ({ config }) => {
       }
     : {};
 
-  const baseConfig = { ...config, ...otaConfig };
+  const baseConfig = Object.keys(otaConfig).length ? { ...config, ...otaConfig } : config;
   if (!niche) return baseConfig;
 
   return {
