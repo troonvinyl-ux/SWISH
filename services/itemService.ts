@@ -70,7 +70,7 @@ export const ITEM_LIFECYCLE = {
   DRAFT_STATUSES: [
     'new', 'captured', 'identifying', 'identified',
     'researching', 'researched', 'assessing', 'assessed',
-    'pricing', 'priced', 'listing', 'review_required', 'error',
+    'pricing', 'priced', 'listing', 'review_required', 'review', 'error',
   ] as string[],
 
   // Items confirmed live on a marketplace
