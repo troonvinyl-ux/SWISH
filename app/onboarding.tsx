@@ -412,19 +412,19 @@ export default function OnboardingScreen() {
 
           let resolvedNiche: NicheClassification004;
 
+          // IMPORT SAFETY: onboarding import is scoped to the subscriber's selected
+          // niche. Never assign an unclassified listing to the selected niche by
+          // default: that caused unrelated items from a mixed eBay account to be
+          // imported into (for example) Threads Flip.
           if (classification.niche === 'unclassified') {
-            // Cannot be classified from eBay evidence — use the subscriber's
-            // selected niche as a best-effort assignment, keeping items visible.
-            resolvedNiche = subscriberNicheClassification !== 'unclassified'
-              ? subscriberNicheClassification
-              : 'unclassified';
-          } else {
-            // Definitively classified — respect the result regardless of the
-            // subscriber's selected niche. A coins subscriber who also sells a
-            // bicycle should have that bicycle imported with specialist_id='bicycles',
-            // not 'coins'.
-            resolvedNiche = classification.niche as NicheClassification004;
+            skipped++;
+            continue;
           }
+          if (classification.niche !== subscriberNicheClassification) {
+            skipped++;
+            continue;
+          }
+          resolvedNiche = classification.niche as NicheClassification004;
 
           // Map NicheClassification → SpecialistId
           const specialistId: SpecialistId = resolvedNiche === 'unclassified'
