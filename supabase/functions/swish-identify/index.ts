@@ -1594,7 +1594,7 @@ Deno.serve(async (req: Request) => {
     if (userError || !user) return new Response(JSON.stringify({ error: 'Invalid or expired authentication token.' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
     const body = await req.json();
-    const { images, imageLabels, existingImageUrls, specialistId, acquisitionContext, knownAttributes, tenantId: bodyTenantId } = body;
+    const { images, imageLabels, existingImageUrls, specialistId, acquisitionContext, knownAttributes, tenantId: bodyTenantId, outputMode } = body;
     const specialist = specialistId ?? 'curiosities_collectibles';
     const requestedNiche = nicheForSpecialist(specialist);
 
@@ -1655,7 +1655,20 @@ Deno.serve(async (req: Request) => {
     const vehicleMode = isVehicleSpecialist(specialist);
     const clothingMode = isClothingSpecialist(specialist);
 
-    const supplementalSchema = vehicleMode ? MX_SUPPLEMENTAL_SCHEMA : clothingMode ? CLOTHING_SUPPLEMENTAL_SCHEMA : '';
+    const listingCopyMode = outputMode === 'listing_copy' && clothingMode;
+    const LISTING_COPY_SCHEMA = `
+LISTING COPY OUTPUT (only for outputMode=listing_copy):
+Add this object to the same JSON response:
+{
+  "listingCopy": {
+    "title": "One searchable eBay UK title, maximum 80 characters, using only supported evidence; omit unknown facts.",
+    "description": "A factual, buyer-ready eBay UK description based on the photos and supplied attributes. Include condition and visible flaws when evidenced; omit unknown facts. Never claim authenticity or unverified fabric composition."
+  }
+}
+The caller will use only the requested output (title or description). Do not invent brand, size, colour, fabric, era, provenance, or condition.
+`;
+    const supplementalSchema = (vehicleMode ? MX_SUPPLEMENTAL_SCHEMA : clothingMode ? CLOTHING_SUPPLEMENTAL_SCHEMA : '') +
+      (listingCopyMode ? LISTING_COPY_SCHEMA : '');
 
     let learningContext = '';
     if (tenantId) {
