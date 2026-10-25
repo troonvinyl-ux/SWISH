@@ -95,7 +95,7 @@ function getNicheTheme(activeNicheId: string | null | undefined): NicheTheme {
     return {
       accent: '#FF5500', accentDim: '#2A0A00', icon: 'two-wheeler',
       label: 'MX Inventory', itemLabel: 'Bike', itemsLabel: 'MX Bikes',
-      specialistIds: ['motocross'],
+      specialistIds: ['motocross', 'mx'],
       subFilters: [
         { label: 'All MX', value: 'all', search: '' },
         { label: 'Running', value: 'running', search: 'rideable' },
@@ -116,7 +116,7 @@ function getNicheTheme(activeNicheId: string | null | undefined): NicheTheme {
     return {
       accent: '#6ED020', accentDim: '#0A2000', icon: 'pedal-bike',
       label: 'Bike Inventory', itemLabel: 'Bike', itemsLabel: 'Bikes',
-      specialistIds: ['bicycles'],
+      specialistIds: ['bicycles', 'bikes'],
       subFilters: [
         { label: 'All Bikes', value: 'all', search: '' },
         { label: 'Mountain', value: 'mtb', search: 'mountain' },
@@ -136,7 +136,7 @@ function getNicheTheme(activeNicheId: string | null | undefined): NicheTheme {
     return {
       accent: '#14B8A6', accentDim: '#062A28', icon: 'inventory-2',
       label: 'Surplus Inventory', itemLabel: 'Product', itemsLabel: 'Products',
-      specialistIds: ['surplus_trader'],
+      specialistIds: ['surplus_trader', 'surplus_flip'],
       subFilters: [
         { label: 'All Products', value: 'all', search: '' },
         { label: 'Manifest Stock', value: 'manifest', search: 'supplier_manifest' },
