@@ -754,10 +754,10 @@ export default function OnboardingScreen() {
                         </View>
                         <View style={s.importFoundText}>
                           <Text style={s.importFoundCount}>
-                            {listingCount} eBay listing{listingCount === 1 ? '' : 's'} found
+                            {listingCount} eBay listing{listingCount === 1 ? '' : 's'} found in your seller account
                           </Text>
                           <Text style={s.importFoundSub}>
-                            Bring them into SWISH to manage your inventory in one place
+                            Only listings confidently classified as {ONBOARDING_NICHES.find(n => n.id === selectedNiche)?.name ?? 'your selected niche'} will be imported. Unrelated or unclassified listings are skipped.
                           </Text>
                         </View>
                       </View>
@@ -771,7 +771,7 @@ export default function OnboardingScreen() {
                           : <MaterialIcons name="cloud-download" size={18} color={Colors.background} />
                         }
                         <Text style={s.importNowBtnText}>
-                          {importing ? 'Importing...' : 'Import My Listings'}
+                          {importing ? 'Importing...' : 'Import Matching Listings'}
                         </Text>
                       </Pressable>
                       <Pressable onPress={() => setImportDone(true)} style={s.importSkipBtn}>
