@@ -30,26 +30,94 @@ async function checkManagedPayments(accessToken: string): Promise<{ status?: str
   }
 }
 
-async function getToken(supabase: ReturnType<typeof adminClient>, tenantId: string, refreshForFinances = false): Promise<{ accessToken: string } | { error: string }> {
-  const { data: conn } = await supabase.from('marketplace_connectors').select('credential_ref, status').eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle();
+async function getToken(
+  supabase: ReturnType<typeof adminClient>,
+  tenantId: string,
+  refreshForFinances = false,
+): Promise<{ accessToken: string } | { error: string }> {
+  const { data: conn, error: connectorError } = await supabase
+    .from('marketplace_connectors')
+    .select('credential_ref, status')
+    .eq('tenant_id', tenantId)
+    .eq('marketplace_id', 'ebay')
+    .maybeSingle();
+
+  if (connectorError) return { error: 'Unable to read the eBay connector. Please retry.' };
   if (!conn?.credential_ref || conn.status !== 'connected') return { error: 'eBay not connected' };
-  let creds: any;
-  try { creds = await decryptCredentials(conn.credential_ref); } catch (e: any) { return { error: e.message }; }
-  if (!creds.accessToken) return { error: 'No access token' };
-  const shouldRefresh = creds.expiresAt ? Date.now() + 5 * 60_000 >= new Date(creds.expiresAt).getTime() : false;
-  // Other SWISH endpoints previously requested a restricted OAuth scope during refresh.
-  // Refresh once before Finance API calls (without a scope parameter) to restore all permissions already consented to.
-  if ((refreshForFinances || shouldRefresh) && creds.refreshToken) {
-    try {
-      const resp = await fetch(EBAY_TOKEN_URL, { method: 'POST', headers: { Authorization: `Basic ${btoa(`${creds.clientId}:${creds.clientSecret}`)}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: creds.refreshToken }).toString(), signal: AbortSignal.timeout(12000) });
-      const data = await resp.json();
-      if (data.access_token) {
-        creds = { ...creds, accessToken: data.access_token, expiresAt: new Date(Date.now() + (data.expires_in ?? 7200) * 1000).toISOString() };
-        const ref = await encryptCredentials(creds);
-        await supabase.from('marketplace_connectors').update({ credential_ref: ref, access_token_expires_at: creds.expiresAt, updated_at: new Date().toISOString() }).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay');
-      }
-    } catch {}
+
+  let creds: Record<string, unknown> & {
+    accessToken?: string;
+    refreshToken?: string;
+    clientId?: string;
+    clientSecret?: string;
+    expiresAt?: string;
+  };
+  try {
+    creds = await decryptCredentials(conn.credential_ref) as typeof creds;
+  } catch {
+    // Do not return raw decrypt exceptions or credential metadata to the client.
+    return { error: 'Stored eBay credentials could not be decrypted. Reconnect eBay or contact support.' };
   }
+  if (!creds.accessToken) return { error: 'No eBay access token. Reconnect eBay.' };
+
+  const expiresAtMs = creds.expiresAt ? Date.parse(creds.expiresAt) : Number.NaN;
+  const needsRefresh = !Number.isFinite(expiresAtMs) || Date.now() + 5 * 60_000 >= expiresAtMs;
+  // Finance routes request an unrestricted refresh (no scope parameter) so a prior
+  // restricted refresh does not accidentally drop a previously consented scope.
+  if (refreshForFinances || needsRefresh) {
+    if (!creds.refreshToken || !creds.clientId || !creds.clientSecret) {
+      return { error: 'eBay authorisation has expired or is incomplete. Reconnect eBay.' };
+    }
+
+    let refreshResponse: Response;
+    try {
+      refreshResponse = await fetch(EBAY_TOKEN_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${btoa(`${creds.clientId}:${creds.clientSecret}`)}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: creds.refreshToken,
+        }).toString(),
+        signal: AbortSignal.timeout(12000),
+      });
+    } catch {
+      return { error: 'Unable to reach eBay token service. Please retry.' };
+    }
+
+    let data: { access_token?: string; expires_in?: number; error?: string; error_description?: string };
+    try {
+      data = await refreshResponse.json();
+    } catch {
+      return { error: 'eBay token service returned an invalid response. Please retry or reconnect eBay.' };
+    }
+    if (!refreshResponse.ok || !data.access_token) {
+      if (refreshResponse.status === 400 || refreshResponse.status === 401 || refreshResponse.status === 403) {
+        return { error: 'eBay authorisation is no longer valid. Reconnect eBay and retry.' };
+      }
+      return { error: 'eBay token refresh failed. Please retry.' };
+    }
+
+    const nextExpiry = new Date(Date.now() + (Number.isFinite(data.expires_in) && data.expires_in! > 0 ? data.expires_in! : 7200) * 1000).toISOString();
+    const nextCredentials = { ...creds, accessToken: data.access_token, expiresAt: nextExpiry };
+    const encryptedRef = await encryptCredentials(nextCredentials);
+    const { error: updateError } = await supabase
+      .from('marketplace_connectors')
+      .update({ credential_ref: encryptedRef, access_token_expires_at: nextExpiry, updated_at: new Date().toISOString() })
+      .eq('tenant_id', tenantId)
+      .eq('marketplace_id', 'ebay');
+
+    if (updateError) {
+      // Do not continue with an unpersisted token; a concurrent refresh or DB failure
+      // needs to be surfaced rather than silently making stale/ambiguous calls.
+      return { error: 'eBay token refreshed but could not be saved securely. Please retry.' };
+    }
+
+    return { accessToken: data.access_token };
+  }
+
   return { accessToken: creds.accessToken };
 }
 
@@ -58,13 +126,23 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return jr({ error: 'Method not allowed' }, 405);
   let body: any;
   try { body = await req.json(); } catch { return jr({ error: 'Invalid JSON' }, 400); }
-  const { tenantId, route = 'sync_transactions', daysBack = 90 } = body;
-  if (!tenantId) return jr({ error: 'tenantId required' }, 400);
+  const { tenantId, route = 'sync_transactions', daysBack: requestedDaysBack = 90 } = body;
+  if (typeof tenantId !== 'string' || tenantId.trim().length === 0 || tenantId.length > 200) {
+    return jr({ error: 'A valid tenantId is required.' }, 400);
+  }
+  const allowedRoutes = new Set(['sync_transactions', 'get_payouts', 'get_funds_summary', 'get_summary']);
+  if (typeof route !== 'string' || !allowedRoutes.has(route)) {
+    return jr({ error: 'Unsupported finances route.' }, 400);
+  }
+  const daysBack = Number(requestedDaysBack);
+  if (!Number.isInteger(daysBack) || daysBack < 1 || daysBack > 365) {
+    return jr({ error: 'daysBack must be a whole number between 1 and 365.' }, 400);
+  }
 
   const supabase = adminClient();
   const authHeader = req.headers.get('Authorization');
-  if (!authHeader) return jr({ error: 'Authentication required.' }, 401);
-  const tok = authHeader.replace('Bearer ', '').trim();
+  if (!authHeader?.startsWith('Bearer ')) return jr({ error: 'Authentication required.' }, 401);
+  const tok = authHeader.slice('Bearer '.length).trim();
   if (!tok || tok === Deno.env.get('SUPABASE_ANON_KEY')) return jr({ error: 'Authentication required.' }, 401);
   try {
     const uc = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_ANON_KEY') ?? '', { global: { headers: { Authorization: authHeader } } });
@@ -72,7 +150,9 @@ Deno.serve(async (req: Request) => {
     if (uErr || !user) return jr({ error: 'Invalid token.' }, 401);
     const { data: m } = await supabase.from('tenant_memberships').select('id').eq('tenant_id', tenantId).eq('user_id', user.id).maybeSingle();
     if (!m) return jr({ error: 'Access denied.' }, 403);
-  } catch (e: any) { return jr({ error: e.message }, 401); }
+  } catch {
+    return jr({ error: 'Unable to verify authentication. Please sign in again.' }, 401);
+  }
 
   const tr = await getToken(supabase, tenantId, ['sync_transactions', 'get_funds_summary', 'get_payouts'].includes(route));
   if ('error' in tr) return jr({ error: tr.error, requiresReauth: true, financesApiAvailable: false }, 400);
@@ -142,10 +222,10 @@ Deno.serve(async (req: Request) => {
           // Update actual fees on orders with real eBay data
           if ((txType === 'FINAL_VALUE_FEE' || txType === 'FINAL_VALUE_FEE_FIXED_PER_ORDER') && swishOrderId && amount < 0) {
             const actualFee = Math.abs(amount);
-            const { data: ord } = await supabase.from('orders').select('sale_price, shipping_cost').eq('id', swishOrderId).maybeSingle();
+            const { data: ord } = await supabase.from('orders').select('sale_price, shipping_cost').eq('id', swishOrderId).eq('tenant_id', tenantId).maybeSingle();
             if (ord) {
               const netRev = Math.round((Number(ord.sale_price) - actualFee - Number(ord.shipping_cost)) * 100) / 100;
-              await supabase.from('orders').update({ marketplace_fee: actualFee, net_revenue: netRev, notes: 'fee_note:ACTUAL_EBAY', updated_at: new Date().toISOString() }).eq('id', swishOrderId);
+              await supabase.from('orders').update({ marketplace_fee: actualFee, net_revenue: netRev, notes: 'fee_note:ACTUAL_EBAY', updated_at: new Date().toISOString() }).eq('id', swishOrderId).eq('tenant_id', tenantId);
               if (ebayOrderId) await supabase.from('sales').update({ marketplace_fee: actualFee, net_revenue: netRev }).eq('tenant_id', tenantId).eq('external_order_id', ebayOrderId);
             }
           }
@@ -207,7 +287,8 @@ Deno.serve(async (req: Request) => {
 
     return jr({ error: `Unknown route: ${route}` }, 400);
   } catch (err: any) {
-    console.error(`[SWISH Finances] Error:`, err.message);
-    return jr({ error: err.message ?? 'Internal error' }, 500);
+    // Log the server-side failure for operators without returning internal details.
+    console.error('[SWISH Finances] Request failed:', err instanceof Error ? err.message : 'unknown error');
+    return jr({ error: 'Financial request failed. Please retry; contact support if the issue continues.' }, 500);
   }
 });
