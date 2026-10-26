@@ -36,23 +36,38 @@ serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("Authorization header not provided");
 
-    const token = authHeader.replace("Bearer ", "");
+    if (!authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Authentication required." }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 401,
+      });
+    }
+    const token = authHeader.slice("Bearer ".length).trim();
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Authentication required." }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 401,
+      });
+    }
     const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
     if (userError || !userData.user?.email) {
       throw new Error("User not authenticated or email unavailable");
     }
     const user = userData.user;
-    logStep("User authenticated", { userId: user.id, email: user.email });
+    logStep("User authenticated", { userId: user.id });
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
-    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+    const customers = await stripe.customers.list({ email: user.email, limit: 100 });
 
-    if (customers.data.length === 0) {
-      throw new Error("No Stripe customer found for this user. Please subscribe first.");
+    // Only allow the billing portal for a customer explicitly linked to this
+    // authenticated Supabase account. Email equality alone is not an identity link.
+    const customer = customers.data.find(candidate => candidate.metadata?.user_id === user.id);
+    if (!customer) {
+      return new Response(JSON.stringify({ error: "No billing account is linked to this user. Please contact support." }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 404,
+      });
     }
 
-    const customerId = customers.data[0].id;
-    logStep("Stripe customer found", { customerId });
+    const customerId = customer.id;
+    logStep("Linked Stripe customer found", { customerId });
 
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: customerId,
@@ -66,10 +81,10 @@ serve(async (req) => {
       status: 200,
     });
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    logStep("Error", { message: msg });
+    const msg = error instanceof Error ? error.message : "unknown error";
+    logStep("Billing portal creation failed", { message: msg });
     return new Response(
-      JSON.stringify({ error: msg }),
+      JSON.stringify({ error: "Unable to open billing management. Please retry or contact support." }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 },
     );
   }

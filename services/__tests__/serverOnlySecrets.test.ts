@@ -320,3 +320,19 @@ describe('Credential migration tenant isolation', () => {
     expect(migration).not.toContain(".eq('user_id', user.id)\n      .in('role', ['owner', 'admin'])");
   });
 });
+
+
+describe('Stripe customer portal account isolation', () => {
+  const portal = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-customer-portal/index.ts'), 'utf8');
+
+  test('requires a verified Bearer token and a Stripe customer linked to the authenticated user', () => {
+    expect(portal).toContain('!authHeader.startsWith("Bearer ")');
+    expect(portal).toContain('candidate.metadata?.user_id === user.id');
+    expect(portal).not.toContain('customers.data[0].id');
+  });
+
+  test('does not return provider/internal error messages to clients', () => {
+    expect(portal).toContain('Unable to open billing management. Please retry or contact support.');
+    expect(portal).not.toContain('JSON.stringify({ error: msg })');
+  });
+});
