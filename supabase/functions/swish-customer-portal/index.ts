@@ -57,11 +57,33 @@ serve(async (req) => {
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
     const customers = await stripe.customers.list({ email: user.email, limit: 100 });
 
-    // Only allow the billing portal for a customer explicitly linked to this
-    // authenticated Supabase account. Email equality alone is not an identity link.
-    const customer = customers.data.find(candidate => candidate.metadata?.user_id === user.id);
+    // Prefer an explicit account link; never select a Stripe customer by email alone.
+    let customer = customers.data.find(candidate => candidate.metadata?.user_id === user.id);
+
+    // Safely preserve billing management for legacy subscribers. Auto-link only
+    // a confirmed account with exactly one unlinked customer holding an active
+    // SWISH Premium subscription that is not explicitly assigned to another user.
+    if (!customer && user.email_confirmed_at) {
+      const eligibleLegacyCustomers: typeof customers.data = [];
+      for (const candidate of customers.data.filter(item => !item.metadata?.user_id)) {
+        const subscriptions = await stripe.subscriptions.list({ customer: candidate.id, status: "all", limit: 100 });
+        const hasEligibleSubscription = subscriptions.data.some(sub =>
+          (sub.status === "active" || sub.status === "trialing") &&
+          (!sub.metadata?.user_id || sub.metadata.user_id === user.id) &&
+          (sub.items.data[0]?.price?.product as string | undefined) === "prod_VQ0JxUCL29SZPQ"
+        );
+        if (hasEligibleSubscription) eligibleLegacyCustomers.push(candidate);
+      }
+      if (eligibleLegacyCustomers.length === 1) {
+        customer = await stripe.customers.update(eligibleLegacyCustomers[0].id, {
+          metadata: { ...eligibleLegacyCustomers[0].metadata, user_id: user.id },
+        });
+        logStep("Linked one unambiguous legacy billing customer", { customerId: customer.id });
+      }
+    }
+
     if (!customer) {
-      return new Response(JSON.stringify({ error: "No billing account is linked to this user. Please contact support." }), {
+      return new Response(JSON.stringify({ error: "No billing account is safely linked to this user. Please contact support." }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 404,
       });
     }

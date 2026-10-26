@@ -272,6 +272,13 @@ describe('SWISH Stripe account binding', () => {
     expect(subscription).not.toContain('const customerId = customers.data[0].id');
   });
 
+  test('legacy subscription auto-link requires a confirmed account and one unambiguous live SWISH customer', () => {
+    expect(subscription).toContain('if (!customer && user.email_confirmed_at)');
+    expect(subscription).toContain('eligibleLegacyCustomers.length === 1');
+    expect(subscription).toContain("sub.metadata.user_id === user.id");
+    expect(subscription).toContain('stripe.customers.update(eligibleLegacyCustomers[0].id');
+  });
+
   test('subscription check returns only canonical production niche entitlements', () => {
     expect(subscription).toContain('const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing", "surplus_flip"])');
     expect(subscription).toContain('niche_entitlements: entitlements');
@@ -336,6 +343,13 @@ describe('Stripe customer portal account isolation', () => {
     expect(portal).toContain('!authHeader.startsWith("Bearer ")');
     expect(portal).toContain('candidate.metadata?.user_id === user.id');
     expect(portal).not.toContain('customers.data[0].id');
+  });
+
+  test('legacy billing customer linking is confirmed, subscription-backed, and ambiguity-safe', () => {
+    expect(portal).toContain('if (!customer && user.email_confirmed_at)');
+    expect(portal).toContain('eligibleLegacyCustomers.length === 1');
+    expect(portal).toContain("sub.metadata.user_id === user.id");
+    expect(portal).toContain('stripe.customers.update(eligibleLegacyCustomers[0].id');
   });
 
   test('does not return provider/internal error messages to clients', () => {

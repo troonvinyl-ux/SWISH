@@ -67,12 +67,34 @@ serve(async (req) => {
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
     const customers = await stripe.customers.list({ email: user.email, limit: 100 });
-    // Email is a search hint, not an account identity. Only a customer explicitly
-    // linked to this authenticated Supabase user can grant subscription access.
-    const customer = customers.data.find((candidate) => candidate.metadata?.user_id === user.id);
+    // Email is a search hint, not an account identity. Prefer an explicit user link.
+    let customer = customers.data.find((candidate) => candidate.metadata?.user_id === user.id);
+
+    // Compatibility path for legacy paying customers: only auto-link a confirmed
+    // Supabase account when exactly one unlinked customer has a live SWISH Premium
+    // subscription not explicitly assigned to a different user. Ambiguous matches
+    // fail closed and require support rather than guessing ownership.
+    if (!customer && user.email_confirmed_at) {
+      const eligibleLegacyCustomers: typeof customers.data = [];
+      for (const candidate of customers.data.filter((item) => !item.metadata?.user_id)) {
+        const legacySubs = await stripe.subscriptions.list({ customer: candidate.id, status: "all", limit: 100 });
+        const hasEligibleSubscription = legacySubs.data.some((sub) =>
+          (sub.status === "active" || sub.status === "trialing") &&
+          (!sub.metadata?.user_id || sub.metadata.user_id === user.id) &&
+          (sub.items.data[0]?.price?.product as string | undefined) === "prod_VQ0JxUCL29SZPQ"
+        );
+        if (hasEligibleSubscription) eligibleLegacyCustomers.push(candidate);
+      }
+      if (eligibleLegacyCustomers.length === 1) {
+        customer = await stripe.customers.update(eligibleLegacyCustomers[0].id, {
+          metadata: { ...eligibleLegacyCustomers[0].metadata, user_id: user.id },
+        });
+        logStep("Linked one unambiguous legacy subscription customer", { customerId: customer.id });
+      }
+    }
 
     if (!customer) {
-      logStep("No Stripe customer linked to authenticated user — user not subscribed");
+      logStep("No Stripe customer safely linked to authenticated user — user not subscribed");
       return new Response(
         JSON.stringify({ subscribed: false, product_id: null, price_id: null, subscription_end: null, niche_entitlements: [] }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
