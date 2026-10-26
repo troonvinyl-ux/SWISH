@@ -1,3 +1,5 @@
+import { afterEach, describe, expect, it } from '@jest/globals';
+
 describe('shared credential crypto rollout gate', () => {
   const original = process.env.SWISH_REJECT_PLAINTEXT_CREDENTIALS;
 
