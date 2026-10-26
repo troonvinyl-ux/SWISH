@@ -405,6 +405,7 @@ async function syncItemToSwish(
   supabase: ReturnType<typeof adminClient>,
   ebay: EbayItemData,
   existingItem: any,
+  tenantId: string,
 ): Promise<{ imageUrlsStored: number; titleFixed: boolean; updated: boolean; error?: string }> {
   let imageUrlsStored = 0;
   let titleFixed = false;
@@ -537,6 +538,7 @@ async function syncItemToSwish(
       .from('listings')
       .update(listingUpdate)
       .eq('item_id', existingItem.id)
+      .eq('tenant_id', tenantId)
       .eq('marketplace_id', 'ebay');
 
     // ── Update items record ──────────────────────────────────────────────────
@@ -545,7 +547,7 @@ async function syncItemToSwish(
       if (v !== undefined && v !== null) cleanUpdates[k] = v;
     }
 
-    const { error: itemErr } = await supabase.from('items').update(cleanUpdates).eq('id', existingItem.id);
+    const { error: itemErr } = await supabase.from('items').update(cleanUpdates).eq('id', existingItem.id).eq('tenant_id', tenantId);
     if (itemErr) {
       console.log(`[EbaySync] Item update error ${existingItem.id}: ${itemErr.message}`);
       return { imageUrlsStored: 0, titleFixed: false, updated: false, error: itemErr.message };
@@ -731,7 +733,7 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      const result = await syncItemToSwish(supabase, ebay, existingItem);
+      const result = await syncItemToSwish(supabase, ebay, existingItem, tenantId);
       if (result.updated) {
         updated++;
         imagesFetched += result.imageUrlsStored;
@@ -757,9 +759,9 @@ Deno.serve(async (req: Request) => {
     if (l.external_listing_id && !ebayActiveIds.has(l.external_listing_id)) {
       const ebayItem = allEbayListings.find(e => e.ebayItemId === l.external_listing_id);
       const newStatus = ebayItem?.ebayStatus === 'sold' ? 'sold' : 'ended';
-      await supabase.from('listings').update({ status: newStatus, ended_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', l.id);
+      await supabase.from('listings').update({ status: newStatus, ended_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', l.id).eq('tenant_id', tenantId);
       if (l.item_id) {
-        await supabase.from('items').update({ status: newStatus === 'sold' ? 'sold' : 'identified', updated_at: new Date().toISOString() }).eq('id', l.item_id);
+        await supabase.from('items').update({ status: newStatus === 'sold' ? 'sold' : 'identified', updated_at: new Date().toISOString() }).eq('id', l.item_id).eq('tenant_id', tenantId);
         orphansFixed++;
       }
     }
