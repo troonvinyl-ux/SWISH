@@ -1,5 +1,6 @@
 
 
+import { webcrypto } from 'node:crypto';
 import {
   decryptCredentials,
   encryptCredentials,
@@ -12,6 +13,7 @@ const originalDeno = (globalThis as typeof globalThis & { Deno?: unknown }).Deno
 
 beforeEach(() => {
   envValues.clear();
+  if (!globalThis.crypto?.subtle) Object.defineProperty(globalThis, 'crypto', { configurable: true, value: webcrypto });
   if (!globalThis.crypto?.subtle) Object.defineProperty(globalThis, 'crypto', { configurable: true, value: require('node:crypto').webcrypto });
   (globalThis as typeof globalThis & { Deno?: unknown }).Deno = {
     env: { get: (name: string) => envValues.get(name) },
