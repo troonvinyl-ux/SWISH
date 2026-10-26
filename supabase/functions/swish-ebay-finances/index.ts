@@ -55,15 +55,14 @@ async function getToken(
   try {
     creds = await decryptCredentials(conn.credential_ref) as typeof creds;
   } catch {
-    // Do not return raw decrypt exceptions or credential metadata to the client.
     return { error: 'Stored eBay credentials could not be decrypted. Reconnect eBay or contact support.' };
   }
-  if (!creds.accessToken) return { error: 'No eBay access token. Reconnect eBay.' };
 
+  if (!creds.accessToken) return { error: 'No eBay access token. Reconnect eBay.' };
   const expiresAtMs = creds.expiresAt ? Date.parse(creds.expiresAt) : Number.NaN;
   const needsRefresh = !Number.isFinite(expiresAtMs) || Date.now() + 5 * 60_000 >= expiresAtMs;
-  // Finance routes request an unrestricted refresh (no scope parameter) so a prior
-  // restricted refresh does not accidentally drop a previously consented scope.
+
+  // Finance routes refresh without a scope parameter to preserve permissions already consented to.
   if (refreshForFinances || needsRefresh) {
     if (!creds.refreshToken || !creds.clientId || !creds.clientSecret) {
       return { error: 'eBay authorisation has expired or is incomplete. Reconnect eBay.' };
@@ -87,34 +86,29 @@ async function getToken(
       return { error: 'Unable to reach eBay token service. Please retry.' };
     }
 
-    let data: { access_token?: string; expires_in?: number; error?: string; error_description?: string };
+    let data: { access_token?: string; expires_in?: number };
     try {
       data = await refreshResponse.json();
     } catch {
       return { error: 'eBay token service returned an invalid response. Please retry or reconnect eBay.' };
     }
     if (!refreshResponse.ok || !data.access_token) {
-      if (refreshResponse.status === 400 || refreshResponse.status === 401 || refreshResponse.status === 403) {
+      if ([400, 401, 403].includes(refreshResponse.status)) {
         return { error: 'eBay authorisation is no longer valid. Reconnect eBay and retry.' };
       }
       return { error: 'eBay token refresh failed. Please retry.' };
     }
 
-    const nextExpiry = new Date(Date.now() + (Number.isFinite(data.expires_in) && data.expires_in! > 0 ? data.expires_in! : 7200) * 1000).toISOString();
-    const nextCredentials = { ...creds, accessToken: data.access_token, expiresAt: nextExpiry };
-    const encryptedRef = await encryptCredentials(nextCredentials);
+    const expiresIn = Number(data.expires_in);
+    const nextExpiry = new Date(Date.now() + (Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn : 7200) * 1000).toISOString();
+    const encryptedRef = await encryptCredentials({ ...creds, accessToken: data.access_token, expiresAt: nextExpiry });
     const { error: updateError } = await supabase
       .from('marketplace_connectors')
       .update({ credential_ref: encryptedRef, access_token_expires_at: nextExpiry, updated_at: new Date().toISOString() })
       .eq('tenant_id', tenantId)
       .eq('marketplace_id', 'ebay');
 
-    if (updateError) {
-      // Do not continue with an unpersisted token; a concurrent refresh or DB failure
-      // needs to be surfaced rather than silently making stale/ambiguous calls.
-      return { error: 'eBay token refreshed but could not be saved securely. Please retry.' };
-    }
-
+    if (updateError) return { error: 'eBay token refreshed but could not be saved securely. Please retry.' };
     return { accessToken: data.access_token };
   }
 
