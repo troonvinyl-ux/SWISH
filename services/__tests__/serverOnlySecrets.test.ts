@@ -176,7 +176,8 @@ describe('Checkout request and branded callback regression', () => {
     expect(checkout).toContain('appScheme !== expectedSchemeByNiche[nicheId]');
     expect(checkout).toContain('${callbackScheme}://subscription/success');
     expect(checkout).toContain('${callbackScheme}://subscription/cancel');
-    expect(client).toContain('appScheme: Constants.expoConfig?.extra?.swishAppScheme');
+    expect(client).toContain('const resolvedScheme = appScheme ?? Constants.expoConfig?.extra?.swishAppScheme');
+    expect(client).toContain('{ nicheId, appScheme: resolvedScheme }');
   });
 
   test('does not return raw checkout provider errors to the client', () => {
