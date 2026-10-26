@@ -1402,7 +1402,7 @@ async function resolveTenantTier(
  * Check Stripe subscription as a secondary entitlement source.
  * Returns false on any error — does NOT throw.
  */
-async function checkStripeSubscription(userEmail: string, nicheId: string | null): Promise<boolean> {
+async function checkStripeSubscription(userId: string, userEmail: string, nicheId: string | null): Promise<boolean> {
   if (!nicheId) return false;
   const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
   if (!stripeKey) return false;
@@ -1417,15 +1417,20 @@ async function checkStripeSubscription(userEmail: string, nicheId: string | null
     if (!customerId) return false;
 
     const subsRes = await fetch(
-      `https://api.stripe.com/v1/subscriptions?customer=${customerId}&status=active&limit=5`,
+      `https://api.stripe.com/v1/subscriptions?customer=${customerId}&status=all&limit=100`,
       { headers: { Authorization: `Bearer ${stripeKey}` }, signal: AbortSignal.timeout(5000) },
     );
     if (!subsRes.ok) return false;
     const subsData = await subsRes.json();
     for (const sub of subsData.data ?? []) {
-      // Existing subscriptions without metadata remain mapped to Coins so
-      // legacy Coin Flipper subscribers do not lose access during migration.
-      const subscribedNiche = String(sub.metadata?.niche_id ?? 'coins').toLowerCase();
+      if (sub.status !== 'active' && sub.status !== 'trialing') continue;
+      // Checkout records the authenticated user in Stripe metadata. Never grant
+      // an explicitly user-linked subscription to a different SWISH account.
+      const linkedUserId = sub.metadata?.user_id;
+      if (linkedUserId && linkedUserId !== userId) continue;
+      // Existing subscriptions without niche metadata remain Coins for compatibility.
+      let subscribedNiche = String(sub.metadata?.niche_id ?? 'coins').toLowerCase();
+      if (subscribedNiche === 'surplus_trader') subscribedNiche = 'surplus_flip';
       if (subscribedNiche !== nicheId) continue;
       for (const item of sub.items?.data ?? []) {
         if (item.price?.product === STRIPE_PRODUCT_ID) return true;
@@ -1458,7 +1463,7 @@ async function determineIsPremium(
 
   // Step 2: Check Stripe (secondary — only if no qualifying tier)
   if (userEmail) {
-    const stripeActive = await checkStripeSubscription(userEmail, nicheId);
+    const stripeActive = await checkStripeSubscription(userId, userEmail, nicheId);
     if (stripeActive) {
       console.log(`[swish-identify] Premium via Stripe subscription (user=${userId})`);
       return { isPremium: true, source: 'stripe', tier };
@@ -1479,12 +1484,10 @@ async function incrementUsage(
     { p_tenant_id: tenantId, p_user_id: userId, p_feature: FEATURE_KEY, p_month_key: monthKey },
   );
   if (error) {
-    const { data: row } = await admin
-      .from('ai_usage')
-      .select('count')
-      .eq('tenant_id', tenantId).eq('user_id', userId).eq('feature', FEATURE_KEY).eq('month_key', monthKey)
-      .maybeSingle();
-    return { count: Number(row?.count ?? 1), error: null };
+    // A read-only fallback does not increment quota and would let free users
+    // bypass the monthly limit. Fail closed until the atomic RPC is available.
+    console.error('[swish-identify] Atomic AI usage increment failed.');
+    return { count: 0, error: 'Usage tracking is unavailable.' };
   }
   return { count: Number(data ?? 1), error: null };
 }
@@ -1495,11 +1498,12 @@ async function getUsage(
   userId: string,
   monthKey: string,
 ): Promise<number> {
-  const { data } = await admin
+  const { data, error } = await admin
     .from('ai_usage')
     .select('count')
     .eq('tenant_id', tenantId).eq('user_id', userId).eq('feature', FEATURE_KEY).eq('month_key', monthKey)
     .maybeSingle();
+  if (error) throw new Error('AI usage lookup failed.');
   return Number(data?.count ?? 0);
 }
 
@@ -1596,8 +1600,19 @@ Deno.serve(async (req: Request) => {
     const { data: { user }, error: userError } = await userClient.auth.getUser();
     if (userError || !user) return new Response(JSON.stringify({ error: 'Invalid or expired authentication token.' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-    const body = await req.json();
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(JSON.stringify({ error: 'Invalid identification request.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return new Response(JSON.stringify({ error: 'Request body must be a JSON object.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     const { images, imageLabels, existingImageUrls, specialistId, acquisitionContext, knownAttributes, tenantId: bodyTenantId, outputMode } = body;
+    if (typeof bodyTenantId !== 'string' || !bodyTenantId.trim() || bodyTenantId.length > 200) {
+      return new Response(JSON.stringify({ error: 'A valid tenantId is required.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     const specialist = specialistId ?? 'curiosities_collectibles';
     const requestedNiche = nicheForSpecialist(specialist);
 
@@ -1607,7 +1622,20 @@ Deno.serve(async (req: Request) => {
     );
 
     const monthKey = currentMonthKey();
-    const tenantId = bodyTenantId ?? '';
+    const tenantId = bodyTenantId.trim();
+    const { data: tenantMembership, error: tenantMembershipError } = await adminClient
+      .from('tenant_memberships')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (tenantMembershipError) {
+      console.error('[swish-identify] Could not verify tenant membership.');
+      return new Response(JSON.stringify({ error: 'Account access could not be verified. Please retry.' }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    if (!tenantMembership) {
+      return new Response(JSON.stringify({ error: 'Access denied for this account.' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
     // ── AUTHORITATIVE PREMIUM CHECK ────────────────────────────────────────────
     // Read current usage in parallel with premium determination
@@ -1642,9 +1670,15 @@ Deno.serve(async (req: Request) => {
     }
 
     // Increment BEFORE expensive AI call to prevent concurrent quota bypass
-    if (tenantId && !isPremium) {
+    if (!isPremium) {
       const { error: usageErr } = await incrementUsage(adminClient, tenantId, user.id, monthKey);
-      if (usageErr) console.error('[swish-identify] Usage tracking error (non-blocking):', usageErr);
+      if (usageErr) {
+        console.error('[swish-identify] AI usage could not be recorded; refusing free-tier request.');
+        return new Response(JSON.stringify({
+          error: 'USAGE_TRACKING_UNAVAILABLE',
+          message: 'We could not verify your AI usage allowance. Please retry shortly.',
+        }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
     }
     // ── END ENTITLEMENT CHECK ──────────────────────────────────────────────────
 
@@ -1749,7 +1783,8 @@ The caller will use only the requested output (title or description). Do not inv
           }).eq('tenant_id', tenantId).eq('user_id', user.id).eq('feature', FEATURE_KEY).eq('month_key', monthKey);
         } catch {}
       }
-      return new Response(JSON.stringify({ error: `OnSpace AI: ${errText}` }), { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      console.error('[swish-identify] AI provider request failed.');
+      return new Response(JSON.stringify({ error: 'Identification service is temporarily unavailable. Please retry.' }), { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const aiData = await aiResponse.json();
@@ -2017,7 +2052,7 @@ The caller will use only the requested output (title or description). Do not inv
     );
 
   } catch (err: any) {
-    console.error('[swish-identify v6] Error:', err);
-    return new Response(JSON.stringify({ error: err.message ?? 'Internal error' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    console.error('[swish-identify v6] Request failed:', err instanceof Error ? err.message : 'unknown error');
+    return new Response(JSON.stringify({ error: 'Identification request failed. Please retry.' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });
