@@ -826,11 +826,15 @@ function CombinedAnalysisSummary({
   ebayResult,
   confirmedCategory,
   onCategoryChange,
+  onSuggestCategory,
+  suggestingCategory,
 }: {
   item: Item;
   ebayResult: EbayVisualSearchResult | null;
   confirmedCategory: CategoryConfirmation | null;
   onCategoryChange: () => void;
+  onSuggestCategory: () => void;
+  suggestingCategory: boolean;
 }) {
   const idConf = item.identificationConfidence ?? 0;
   const confColor = idConf >= 0.75 ? Colors.success : idConf >= 0.50 ? Colors.warning : Colors.danger;
@@ -922,6 +926,10 @@ function CombinedAnalysisSummary({
             <MaterialIcons name="chevron-right" size={16} color={Colors.warning} />
           </Pressable>
         )}
+        <Pressable onPress={onSuggestCategory} disabled={suggestingCategory} style={[cas.aiSuggestBtn, suggestingCategory && { opacity: 0.65 }]}>
+          {suggestingCategory ? <ActivityIndicator size="small" color={Colors.primary} /> : <MaterialIcons name="auto-awesome" size={15} color={Colors.primary} />}
+          <Text style={cas.aiSuggestBtnText}>{suggestingCategory ? 'Finding best eBay category…' : 'Suggest category with AI'}</Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -941,6 +949,8 @@ const cas = StyleSheet.create({
   discrepancyTitle: { fontSize: Typography.size.xs, fontWeight: Typography.weight.bold, color: Colors.warning, marginBottom: 2 },
   discrepancyText: { fontSize: Typography.size.xs, color: Colors.warning + 'BB', lineHeight: 15 },
   catSection: { gap: Spacing.sm },
+  aiSuggestBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.primary + '70', backgroundColor: Colors.primary + '12' },
+  aiSuggestBtnText: { color: Colors.primary, fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold },
   catLabel: { fontSize: 9, fontWeight: Typography.weight.bold, color: Colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5 },
   catConfirmed: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.primaryDim, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.primary + '40' },
   catName: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: Colors.textPrimary },
@@ -976,6 +986,7 @@ export default function CreateListingScreen() {
   // Category state
   const [confirmedCategory, setConfirmedCategory] = useState<CategoryConfirmation | null>(null);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [suggestingCategory, setSuggestingCategory] = useState(false);
 
   // Listing generation
   const [generatingListing, setGeneratingListing] = useState(false);
@@ -1076,6 +1087,36 @@ export default function CreateListingScreen() {
       }
     }
   }, [tenant, ebaySearchRunning, confirmedCategory]);
+
+  // ── Title-based category suggestion works even if visual search has no usable image ──
+  const handleSuggestCategory = useCallback(async () => {
+    if (!item || !tenant) return;
+    const title = String(item.canonicalTitle || '').trim();
+    if (title.length < 2) {
+      showAlert('Add an item title', 'Enter a more descriptive item title before asking AI to suggest an eBay category.');
+      return;
+    }
+    setSuggestingCategory(true);
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase.functions.invoke('swish-ebay-list', {
+        body: { route: 'get_category_suggestions', tenantId: tenant.id, query: title.slice(0, 100) },
+      });
+      if (error) throw error;
+      const suggestions = Array.isArray(data?.suggestions) ? data.suggestions : [];
+      const best = suggestions.find((cat: any) => cat?.id && cat?.name && cat.isLeaf === true);
+      if (!data?.success || !best) {
+        showAlert('No category suggestion', data?.error || 'eBay could not find a matching leaf category. Try a more descriptive title, or select a category manually.');
+        return;
+      }
+      await handleCategorySelected(String(best.id), String(best.name));
+      showAlert('Category suggested', String(best.name) + ' (eBay category ' + String(best.id) + ') has been selected. Please check it is correct before publishing.');
+    } catch (e: any) {
+      showAlert('Category suggestion unavailable', e?.message || 'Could not retrieve an eBay category suggestion. You can still select one manually.');
+    } finally {
+      setSuggestingCategory(false);
+    }
+  }, [item, tenant, handleCategorySelected, showAlert]);
 
   // ── Category change — opens inline picker, NO navigation to listing editor ─
 
@@ -1319,6 +1360,8 @@ export default function CreateListingScreen() {
             ebayResult={ebayResult}
             confirmedCategory={confirmedCategory}
             onCategoryChange={handleCategoryChange}
+            onSuggestCategory={handleSuggestCategory}
+            suggestingCategory={suggestingCategory}
           />
         ) : null}
 
