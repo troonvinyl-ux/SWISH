@@ -254,7 +254,7 @@ async function getAndRefreshConnectorCreds(
         console.log(`[SWISH Market v7] Token refresh failed (${resp.status})`);
       }
     } catch (e: any) {
-      console.log(`[SWISH Market v7] Token refresh exception: ${e.message}`);
+      console.log('[SWISH Market v7] Token refresh failed unexpectedly.');
     }
   }
 
@@ -499,8 +499,8 @@ async function callTerapeak(
     };
 
   } catch (e: any) {
-    console.log(`[SWISH Market v8] Terapeak exception: ${e.message}`);
-    return { ...noResult, error: `Terapeak exception: ${e.message}` };
+    console.log('[SWISH Market v8] Terapeak request failed unexpectedly.');
+    return { ...noResult, error: 'Sold-data lookup is temporarily unavailable.' };
   }
 }
 
@@ -576,8 +576,8 @@ async function searchEbayBrowse(
     console.log(`[SWISH Market v8] Browse API: ${items.length} items (total ${data.total ?? items.length}) marketplace=${marketplaceLog}`);
     return { available: true, items, totalFound: Number(data.total ?? items.length), query };
   } catch (e: any) {
-    console.log(`[SWISH Market v8] Browse exception: ${e.message}`);
-    return { ...noResult, error: e.message };
+    console.log('[SWISH Market v8] Browse request failed unexpectedly.');
+    return { ...noResult, error: 'Active-listing lookup is temporarily unavailable.' };
   }
 }
 
@@ -676,7 +676,7 @@ async function runEbayVisualSearch(imageInput: string, appToken: string): Promis
     })).filter((i: any) => i.price > 0);
     console.log(`[SWISH Market v7] Visual search: ${items.length} items`);
     return { available: true, items, totalFound: Number(data.total ?? items.length) };
-  } catch (e: any) { return { ...noResult, error: e.message }; }
+  } catch { return { ...noResult, error: 'Visual search is temporarily unavailable.' }; }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -764,7 +764,7 @@ estimatedLow/Mid/High: typical eBay UK SOLD prices (not asking). 0 if unable to 
     };
     console.log(`[SWISH Market v8] Gemini: mid=£${result.estimatedMid} conf=${result.confidence}`);
     return result;
-  } catch (e: any) { return { ...noResult, error: `Gemini error: ${e.message}` }; }
+  } catch { return { ...noResult, error: 'AI market estimate is temporarily unavailable.' }; }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1355,7 +1355,7 @@ Deno.serve(async (req: Request) => {
         sale_prob_30d: valuation.saleProb30d, updated_at: new Date().toISOString(),
       }).eq('id', itemId).eq('tenant_id', tenantId);
       applied = true;
-    } catch (e: any) { console.log(`[SWISH Market v7] Auto-apply failed: ${e.message}`); }
+    } catch { console.log('[SWISH Market v7] Auto-apply failed.'); }
   }
 
   // ── Top comparables for audit trail ───────────────────────────────────────
@@ -1609,12 +1609,8 @@ Deno.serve(async (req: Request) => {
     },
   });
   } catch (err: any) {
-    // Keep unexpected runtime failures observable to the client without leaking credentials.
-    const detail = String(err?.message ?? err ?? 'Unknown runtime error')
-      .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
-      .replace(/(access[_ -]?token|refresh[_ -]?token|client[_ -]?secret)\s*[:=]\s*[^\s,;]+/gi, '$1=[redacted]')
-      .slice(0, 300);
-    console.error('[SWISH Market v8] Unhandled valuation error:', detail);
-    return jsonResponse({ error: 'Market valuation failed', details: detail }, 500);
+    // Do not expose runtime exception text, which may contain provider or request details.
+    console.error('[SWISH Market v8] Unhandled valuation error.');
+    return jsonResponse({ error: 'Market valuation failed. Please retry.' }, 500);
   }
 });
