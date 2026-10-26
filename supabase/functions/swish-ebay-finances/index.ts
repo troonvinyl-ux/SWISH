@@ -4,7 +4,7 @@
 // POST body: { tenantId, route?, daysBack? }
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
+import { encryptCredentials, decryptCredentials, isEncrypted } from '../_shared/credentialCrypto.ts';
 import { ebayFinancesSignatureHeaders } from '../_shared/ebayDigitalSignature.ts';
 
 const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -34,7 +34,7 @@ async function getToken(
   supabase: ReturnType<typeof adminClient>,
   tenantId: string,
   refreshForFinances = false,
-): Promise<{ accessToken: string } | { error: string }> {
+): Promise<{ accessToken: string } | { error: string; requiresReauth?: boolean }> {
   const { data: conn, error: connectorError } = await supabase
     .from('marketplace_connectors')
     .select('credential_ref, status')
@@ -43,7 +43,7 @@ async function getToken(
     .maybeSingle();
 
   if (connectorError) return { error: 'Unable to read the eBay connector. Please retry.' };
-  if (!conn?.credential_ref || conn.status !== 'connected') return { error: 'eBay not connected' };
+  if (!conn?.credential_ref || conn.status !== 'connected') return { error: 'eBay not connected', requiresReauth: true };
 
   let creds: Record<string, unknown> & {
     accessToken?: string;
@@ -56,10 +56,10 @@ async function getToken(
   try {
     creds = await decryptCredentials(conn.credential_ref) as typeof creds;
   } catch {
-    return { error: 'Stored eBay credentials could not be decrypted. Reconnect eBay or contact support.' };
+    return { error: 'Stored eBay credentials could not be decrypted. Reconnect eBay or contact support.', requiresReauth: true };
   }
 
-  if (!creds.accessToken) return { error: 'No eBay access token. Reconnect eBay.' };
+  if (!creds.accessToken) return { error: 'No eBay access token. Reconnect eBay.', requiresReauth: true };
   const expiresAtMs = creds.expiresAt ? Date.parse(creds.expiresAt) : Number.NaN;
   const needsRefresh = !Number.isFinite(expiresAtMs) || Date.now() + 5 * 60_000 >= expiresAtMs;
 
@@ -67,10 +67,10 @@ async function getToken(
   // need one no-scope refresh after that event, not on every request. The marker lives
   // inside the already-encrypted credential payload and is cleared by the scoped refresher.
   const financeRefreshAt = creds.financeScopeRefreshedAt ? Date.parse(creds.financeScopeRefreshedAt) : Number.NaN;
-  const needsFinanceScopeRefresh = refreshForFinances && !Number.isFinite(financeRefreshAt);
+  const needsFinanceScopeRefresh = refreshForFinances && (!isEncrypted(conn.credential_ref) || !Number.isFinite(financeRefreshAt));
   const hasRefreshCredentials = Boolean(creds.refreshToken && creds.clientId && creds.clientSecret);
   if (needsRefresh && !hasRefreshCredentials) {
-    return { error: 'eBay authorisation has expired or is incomplete. Reconnect eBay.' };
+    return { error: 'eBay authorisation has expired or is incomplete. Reconnect eBay.', requiresReauth: true };
   }
   if (needsRefresh || (needsFinanceScopeRefresh && hasRefreshCredentials)) {
 
@@ -100,7 +100,7 @@ async function getToken(
     }
     if (!refreshResponse.ok || !data.access_token) {
       if ([400, 401, 403].includes(refreshResponse.status)) {
-        return { error: 'eBay authorisation is no longer valid. Reconnect eBay and retry.' };
+        return { error: 'eBay authorisation is no longer valid. Reconnect eBay and retry.', requiresReauth: true };
       }
       return { error: 'eBay token refresh failed. Please retry.' };
     }
@@ -165,8 +165,18 @@ Deno.serve(async (req: Request) => {
   }
 
   const refreshForFinances = route === 'sync_transactions' || route === 'get_funds_summary' || route === 'get_payouts';
-  const tr = await getToken(supabase, tenantId, refreshForFinances);
-  if ('error' in tr) return jr({ error: tr.error, requiresReauth: true, financesApiAvailable: false }, 400);
+  let tr: Awaited<ReturnType<typeof getToken>>;
+  try {
+    tr = await getToken(supabase, tenantId, refreshForFinances);
+  } catch {
+    // Encryption/secret configuration errors must not escape as raw runtime exceptions.
+    console.error('[SWISH Finances] Could not prepare a secure eBay token.');
+    return jr({ error: 'Unable to prepare eBay authorisation securely. Check server configuration or contact support.' }, 500);
+  }
+  if ('error' in tr) {
+    const reauth = tr.requiresReauth === true;
+    return jr({ error: tr.error, requiresReauth: reauth, financesApiAvailable: false }, reauth ? 400 : 503);
+  }
   const { accessToken } = tr;
   const hdrs = { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json', 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_GB' };
   const fromDate = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString();
