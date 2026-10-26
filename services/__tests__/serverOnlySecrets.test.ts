@@ -575,4 +575,16 @@ describe('SWISH image download error sanitization', () => {
     expect(islamicIdentify).toContain("firstError ||= 'Numista direct lookup failed.'");
     expect(islamicIdentify).not.toContain('Numista direct lookup failed: ${e.message}');
   });
+
+  test('image download and category authentication failures do not expose raw exceptions', () => {
+    const category = fs.readFileSync(
+      path.join(projectRoot, 'supabase/functions/swish-ebay-category/index.ts'),
+      'utf8',
+    );
+    expect(imageDownload).toContain("Unable to prepare eBay authorisation. Please reconnect and retry.");
+    expect(imageDownload).not.toContain('error: isReauth ? \'eBay re-authorisation required.\' : e.message');
+    expect(imageDownload).not.toContain('Refresh failed: ${e.message}');
+    expect(category).toContain("Authentication could not be verified.");
+    expect(category).not.toContain('Auth error: ${e.message}');
+  });
 });
