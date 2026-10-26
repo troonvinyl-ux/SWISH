@@ -1671,13 +1671,24 @@ Deno.serve(async (req: Request) => {
 
     // Increment BEFORE expensive AI call to prevent concurrent quota bypass
     if (!isPremium) {
-      const { error: usageErr } = await incrementUsage(adminClient, tenantId, user.id, monthKey);
+      const { count: usageCount, error: usageErr } = await incrementUsage(adminClient, tenantId, user.id, monthKey);
       if (usageErr) {
         console.error('[swish-identify] AI usage could not be recorded; refusing free-tier request.');
         return new Response(JSON.stringify({
           error: 'USAGE_TRACKING_UNAVAILABLE',
           message: 'We could not verify your AI usage allowance. Please retry shortly.',
         }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      // The atomic RPC result is authoritative. This second check closes the race
+      // where parallel requests each observed a count below the quota before incrementing.
+      if (usageCount > FREE_MONTHLY_QUOTA) {
+        return new Response(JSON.stringify({
+          error: 'FREE_QUOTA_EXCEEDED',
+          message: `You have used all ${FREE_MONTHLY_QUOTA} free AI identifications for this month. Upgrade to SWISH Premium for unlimited identifications.`,
+          quotaUsed: Math.min(usageCount, FREE_MONTHLY_QUOTA),
+          quotaLimit: FREE_MONTHLY_QUOTA,
+          upgradeRequired: true,
+        }), { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
     }
     // ── END ENTITLEMENT CHECK ──────────────────────────────────────────────────
