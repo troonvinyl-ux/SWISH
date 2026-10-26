@@ -1,4 +1,4 @@
-import type { ProductionNicheId } from '@/constants/niches';
+import { NICHES, type ProductionNicheId } from '@/constants/niches';
 
 export type ProductEntryRoute =
   | '/entry/coins'
@@ -36,6 +36,19 @@ export function resolveProductionNiche(
   ) return 'clothing';
 
   return null;
+}
+
+/**
+ * Canonical specialist allow-list for the active production niche.
+ * Unknown or inactive niches receive no specialist access; callers must not
+ * fall back to a different niche's inventory.
+ */
+export function getProductionNicheSpecialistIds(
+  nicheId: string | null | undefined,
+): string[] {
+  const productionNiche = resolveProductionNiche(nicheId);
+  if (!productionNiche) return [];
+  return [...NICHES[productionNiche].specialists];
 }
 
 export function nicheToEntryRoute(nicheId: string | null | undefined): ProductEntryRoute | null {

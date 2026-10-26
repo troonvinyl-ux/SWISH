@@ -728,14 +728,13 @@ function DetailModal({
           <View style={dm.field}>
             <Text style={dm.fieldLabel}>YOUR RESPONSE</Text>
             <TextInput
-              style={dm.textInput}
+              style={[dm.textInput, { minHeight: 100 }]}
               value={responseText}
               onChangeText={setResponseText}
               multiline
               textAlignVertical="top"
               placeholder="Type your response to the buyer..."
               placeholderTextColor={Colors.textTertiary}
-              minHeight={100}
             />
           </View>
 
@@ -1086,7 +1085,7 @@ export default function EbayReturnsScreen() {
       {loading ? (
         <View style={s.loading}><ActivityIndicator color={Colors.primary} size="large" /></View>
       ) : (
-        <FlatList
+        <FlatList<any>
           data={section === 'returns' ? returns : cases}
           keyExtractor={i => i.id}
           contentContainerStyle={[s.list, { paddingBottom: insets.bottom + 80 }]}
@@ -1102,7 +1101,7 @@ export default function EbayReturnsScreen() {
               />
             ) : (
               <CaseRow
-                item={item as EbayCase}
+                item={item as unknown as EbayCase}
                 onPress={setSelectedCase}
                 onRespond={c => { setRespondCase(c); setRespondReturn(null); }}
               />

@@ -276,6 +276,11 @@ export interface KnownItemAttributes {
   manufacturer?: string;
   yearMade?: string;
   countryOfOrigin?: string;
+  ruler?: string;
+  denomination?: string;
+  period?: string;
+  mint?: string;
+  catalogueNumber?: string;
   sku?: string;
   condition?: string;
   conditionGrade?: string;

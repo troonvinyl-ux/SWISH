@@ -113,7 +113,7 @@ const cardStyles = StyleSheet.create({
 // ── Learning Insight Card ──────────────────────────────────────────────────
 
 function LearningCard({ insight }: { insight: LearningInsight }) {
-  const trendConfig = {
+  const trendConfig: Record<LearningInsight['trend'], { color: string; icon: string }> = {
     improving:          { color: Colors.success, icon: 'trending-up' },
     stable:             { color: Colors.primary, icon: 'trending-flat' },
     degrading:          { color: Colors.danger, icon: 'trending-down' },

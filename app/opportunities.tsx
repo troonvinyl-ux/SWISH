@@ -14,7 +14,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useOpportunities } from '@/hooks/useBusiness';
 import { useApp } from '@/hooks/useApp';
-import { Opportunity } from '@/services/opportunityService';
+import { Opportunity, scoreOpportunity } from '@/services/opportunityService';
 import { SPECIALISTS } from '@/constants/specialists';
 import {
   evaluateAcquisitionDecision, recordDecision,
@@ -176,10 +176,12 @@ const dpStyles = StyleSheet.create({
 
 // ── Opportunity Card ────────────────────────────────────────────────────────
 
+type ScoredOpportunity = Opportunity & { score: ReturnType<typeof scoreOpportunity> };
+
 function OpportunityCard({ opp, decisionResult, onDecisionMade, decisionLoading }: {
-  opp: Opportunity & { score: ReturnType<import('@/services/opportunityService').scoreOpportunity> };
+  opp: ScoredOpportunity;
   decisionResult: AcquisitionDecisionResult | null;
-  onDecisionMade: (opp: typeof opp, action: 'acquire' | 'pass') => void;
+  onDecisionMade: (opp: ScoredOpportunity, action: 'acquire' | 'pass') => void;
   decisionLoading: boolean;
 }) {
   const grade = opp.score.grade;
@@ -469,7 +471,7 @@ export default function OpportunitiesScreen() {
           'Acquisition Approved',
           `SWISH has approved this acquisition within your configured rules.\n\nMax recommended price: £${decision.maxRecommendedPrice.toFixed(0)}\n\nHead to Acquisitions to record the purchase.`,
           [
-            { text: 'View Acquisitions', onPress: () => router.navigate('/(tabs)/acquisitions') },
+            { text: 'View Acquisitions', onPress: () => router.navigate('/(tabs)/acquisitions' as any) },
             { text: 'OK' },
           ]
         );

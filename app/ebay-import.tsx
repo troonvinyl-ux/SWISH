@@ -875,7 +875,7 @@ export default function EbayImportScreen() {
               showAlert(
                 'Import Complete',
                 `${imported} item${imported === 1 ? '' : 's'} imported with KC Inventory IDs. Gallery images are being fetched automatically.`,
-                [{ text: 'Go to Inventory', onPress: () => router.navigate('/(tabs)/inventory') }],
+                [{ text: 'Go to Inventory', onPress: () => router.navigate('/(tabs)/inventory' as any) }],
               );
             } else {
               showAlert(
@@ -1027,7 +1027,7 @@ export default function EbayImportScreen() {
 
       {/* ── Import eBay Images banner ─────────────────────────────────────── */}
       <Pressable
-        onPress={imageProgress?.done ? () => router.navigate('/(tabs)/inventory') : handleImportImages}
+        onPress={imageProgress?.done ? () => router.navigate('/(tabs)/inventory' as any) : () => handleImportImages()}
         disabled={imageImporting}
         style={({ pressed }) => [s.imageBanner, pressed && !imageImporting && { opacity: 0.85 }]}
       >
@@ -1083,7 +1083,7 @@ export default function EbayImportScreen() {
               </Pressable>
             ) : null}
             <Pressable
-              onPress={(e) => { e.stopPropagation?.(); router.navigate('/(tabs)/inventory'); }}
+              onPress={(e) => { e.stopPropagation?.(); router.navigate('/(tabs)/inventory' as any); }}
               style={({ pressed }) => [s.imageBannerViewBtn, pressed && { opacity: 0.8 }]}
               hitSlop={4}
             >

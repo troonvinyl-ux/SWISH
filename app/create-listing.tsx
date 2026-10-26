@@ -721,7 +721,7 @@ function EbaySimilarItemsPanel({
       {/* Price range note */}
       {result.available && priceRange ? (
         <View style={ev.priceNote}>
-          <MaterialIcons name="price-tag" size={11} color={Colors.warning} />
+          <MaterialIcons name="local-offer" size={11} color={Colors.warning} />
           <Text style={ev.priceNoteText}>
             {priceRange} — current asking prices only, not realised sales
           </Text>

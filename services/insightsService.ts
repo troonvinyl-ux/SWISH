@@ -440,7 +440,7 @@ export async function getAcquisitionLeaderboard(tenantId: string): Promise<Acqui
 
 export async function getWeeklyRevenue(tenantId: string): Promise<WeekDay[]> {
   const supabase = getSupabaseClient();
-  const days: WeekDay[] = [];
+  const days: Array<WeekDay & { _start: string; _end: string }> = [];
   const now = new Date();
 
   for (let i = 6; i >= 0; i--) {
@@ -449,15 +449,15 @@ export async function getWeeklyRevenue(tenantId: string): Promise<WeekDay[]> {
     const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString();
     const dayEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).toISOString();
     const label = i === 0 ? 'Today' : d.toLocaleDateString('en-GB', { weekday: 'short' });
-    days.push({ label, value: 0, _start: dayStart, _end: dayEnd } as any);
+    days.push({ label, value: 0, _start: dayStart, _end: dayEnd });
   }
 
   const { data: sales } = await supabase
     .from('sales')
     .select('sale_price, sold_at')
     .eq('tenant_id', tenantId)
-    .gte('sold_at', days[0]['_start' as any])
-    .lte('sold_at', days[days.length - 1]['_end' as any]);
+    .gte('sold_at', days[0]._start)
+    .lte('sold_at', days[days.length - 1]._end);
 
   (sales ?? []).forEach((sale) => {
     const saleDate = new Date(sale.sold_at);

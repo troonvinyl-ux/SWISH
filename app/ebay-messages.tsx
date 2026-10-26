@@ -394,14 +394,13 @@ function ReplyModal({
           <View style={rm.composeBox}>
             <Text style={rm.composeLabel}>YOUR REPLY</Text>
             <TextInput
-              style={rm.composeInput}
+              style={[rm.composeInput, { minHeight: 180 }]}
               value={replyText}
               onChangeText={setReplyText}
               multiline
               textAlignVertical="top"
               placeholder="Type your reply..."
               placeholderTextColor={Colors.textTertiary}
-              minHeight={180}
             />
             <Text style={rm.charCount}>{replyText.length} chars</Text>
           </View>

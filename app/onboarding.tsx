@@ -373,6 +373,7 @@ export default function OnboardingScreen() {
         fossils:      'unclassified',
         beauty:       'unclassified',
         general:      'unclassified',
+        surplus_flip: 'unclassified',
       };
 
       const subscriberNicheClassification: NicheClassification004 =

@@ -3,12 +3,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { useApp } from './useApp';
 import {
   Acquisition,
-  DecompositionResult,
   listAcquisitions,
   createAcquisition,
   getAcquisition,
-  runDecomposition as runDecompositionService,
 } from '@/services/acquisitionService';
+import {
+  DecompositionResult,
+  runDecomposition as runDecompositionService,
+} from '@/services/decompositionService';
 import { Item, listItems } from '@/services/itemService';
 
 export function useAcquisitions() {
@@ -74,15 +76,30 @@ export function useAcquisitionDetail(acquisitionId: string) {
   }, [acquisitionId, tenant?.id]);
 
   const runDecomposition = useCallback(async () => {
-    if (!acquisition) return;
+    if (!acquisition || !tenant?.id) return;
     setDecomposing(true);
     try {
-      const result = await runDecompositionService(acquisition);
-      setDecomposition(result);
+      const response = await runDecompositionService(tenant.id, acquisition.id, {
+        acquisitionTitle: acquisition.title,
+        acquisitionDescription: acquisition.description,
+        acquisitionSource: acquisition.source,
+        purchasePrice: acquisition.purchasePrice,
+        itemCount: acquisition.itemCount,
+        existingItems: items.map(item => ({
+          title: item.canonicalTitle,
+          specialist: item.specialistId,
+          valuationMid: item.valuationMid,
+          condition: item.condition,
+        })),
+      });
+      if (response.error || !response.result) {
+        throw new Error(response.error ?? 'The decomposition service returned no result.');
+      }
+      setDecomposition(response.result);
     } finally {
       setDecomposing(false);
     }
-  }, [acquisition]);
+  }, [acquisition, items, tenant?.id]);
 
   return { acquisition, items, decomposition, loading, decomposing, runDecomposition };
 }

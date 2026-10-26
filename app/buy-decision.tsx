@@ -206,7 +206,7 @@ export default function BuyDecisionScreen() {
         } else {
           // Local file — read as base64
           try {
-            const { FileSystem } = await import('expo-file-system');
+            const FileSystem = await import('expo-file-system');
             const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
             imageData.push(`data:image/jpeg;base64,${b64}`);
           } catch {

@@ -183,7 +183,7 @@ export default function AcquisitionDetailScreen() {
 
   const handleAddItems = useCallback(() => {
     // Navigate to scan tab — acquisition context is already set
-    router.navigate('/(tabs)/scan');
+    router.navigate('/(tabs)/scan' as any);
   }, [router]);
 
   const handleRunDecomposition = useCallback(async () => {

@@ -1120,7 +1120,7 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
                           <Text style={{ fontSize: 11, color: Colors.textSecondary }}>
                             {refinedResult.coinResearch.candidates.length} catalogue lead(s) · results are candidates, not confirmed IDs
                           </Text>
-                          {(refinedResult.coinResearch.candidates ?? []).slice(0, 8).map((candidate, index) => (
+                          {(refinedResult.coinResearch.candidates ?? []).slice(0, 8).map((candidate: { source: string; url: string; title: string; reference?: string; snippet?: string }, index: number) => (
                             <View key={candidate.source + ':' + candidate.url + ':' + index} style={{ gap: 2, paddingTop: 5, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: Colors.surfaceBorder }}>
                               <Text style={{ fontSize: 9, fontWeight: Typography.weight.bold, color: Colors.info }}>{candidate.source}{candidate.reference ? ' · ' + candidate.reference : ''}</Text>
                               <Text onPress={() => Linking.openURL(candidate.url)} style={{ fontSize: 11, color: Colors.textPrimary, textDecorationLine: 'underline' }}>{candidate.title}</Text>
@@ -2180,7 +2180,13 @@ export default function StockListingScreen() {
             const { error } = await deleteListing(
               listing.id,
               tenant?.id ?? '',
-              isLive ? listing.externalListingId ?? undefined : undefined,
+              isLive
+                ? {
+                    itemId: listing.itemId,
+                    externalListingId: listing.externalListingId,
+                    status: listing.status,
+                  }
+                : undefined,
             );
             setEndingId(null);
             if (error) { showAlert('Delete Failed', error); return; }
@@ -2203,6 +2209,8 @@ export default function StockListingScreen() {
       }},
     ]);
   }, [item, showAlert]);
+
+  const activeListings = useMemo(() => listings.filter(l => l.status === 'active'), [listings]);
 
   // ── Facebook Marketplace export ─────────────────────────────────────────────
 
@@ -2249,7 +2257,6 @@ export default function StockListingScreen() {
     setItem(prev => prev ? { ...prev, conditionGrade: grade, condition: grade } : prev);
   }, [item, showAlert]);
 
-  const activeListings = useMemo(() => listings.filter(l => l.status === 'active'), [listings]);
   const draftListings = useMemo(() => listings.filter(l => l.status === 'draft' || l.status === 'pending'), [listings]);
   const canonicalAttrs = useMemo(() => item ? canonicalizeAttributes(item.attributes) : [], [item?.attributes]);
 
@@ -2611,7 +2618,7 @@ export default function StockListingScreen() {
                 const pr = formatAskingPriceRange(ebayVisualResult.items);
                 return pr ? (
                   <View style={[s.intelWarning, { borderColor: Colors.warning + '25' }]}>
-                    <MaterialIcons name="price-tag" size={11} color={Colors.warning} />
+                    <MaterialIcons name="local-offer" size={11} color={Colors.warning} />
                     <Text style={s.intelWarningText}>{pr} — current asking prices, not sold prices</Text>
                   </View>
                 ) : null;
@@ -2805,7 +2812,7 @@ export default function StockListingScreen() {
         {/* ── NICHE-AWARE ITEM DETAILS ── */}
         {(() => {
           const specialist = item.specialistId ?? '';
-          const isBike = specialist === 'bicycles' || specialist === 'cycling';
+          const isBike = specialist === 'bicycles';
           const isMXSpec = specialist === 'motocross';
           const isClothing = specialist === 'clothing' || specialist === 'trainers_sneakers';
           const isCoin = !isBike && !isMXSpec && !isClothing;
