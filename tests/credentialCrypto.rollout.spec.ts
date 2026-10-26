@@ -1,11 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { webcrypto } from 'node:crypto';
+
+
 import {
   decryptCredentials,
   encryptCredentials,
   isEncrypted,
   rejectsPlaintextCredentials,
-} from '../supabase/functions/_shared/credentialCrypto.ts';
+} from '../supabase/functions/_shared/credentialCrypto';
 
 const envValues = new Map<string, string>();
 const originalDeno = (globalThis as typeof globalThis & { Deno?: unknown }).Deno;
