@@ -285,6 +285,8 @@ describe('SWISH AI identification tenant and quota safeguards', () => {
   test('fails closed when the atomic AI usage increment or usage lookup fails', () => {
     expect(identify).toContain("return { count: 0, error: 'Usage tracking is unavailable.' }");
     expect(identify).toContain("error: 'USAGE_TRACKING_UNAVAILABLE'");
+    expect(identify).toContain('if (usageCount > FREE_MONTHLY_QUOTA)');
+    expect(identify).toContain('The atomic RPC result is authoritative.');
     expect(identify).toContain("if (error) throw new Error('AI usage lookup failed.')");
     expect(identify).not.toContain("return { count: Number(row?.count ?? 1), error: null }");
   });
