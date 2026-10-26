@@ -180,6 +180,7 @@ export default function SurplusFlipScreen() {
   const [minutesToClose, setMinutesToClose] = useState('60');
   const [bidIncrement, setBidIncrement] = useState('1');
   const [safetyBufferPct, setSafetyBufferPct] = useState('5');
+  const [soldEvidenceVerified, setSoldEvidenceVerified] = useState(false);
   const [auctionClosesAtMs, setAuctionClosesAtMs] = useState<number | null>(null);
   const [clockNow, setClockNow] = useState(Date.now());
   useEffect(() => { const timer = setInterval(() => setClockNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
@@ -254,9 +255,9 @@ export default function SurplusFlipScreen() {
     vatOnPremiumRate: Math.max(0, Math.min(100, Number(premiumVatPct) || 0)) / 100,
     fixedAuctionCosts: Math.max(0, Number(fixedAuctionCosts) || 0), transportAndOtherCosts: Math.max(0, Number(transportCost) || 0),
     nowIso: new Date(clockNow).toISOString(), closesAtIso: new Date(closesAtMs).toISOString(),
-    evidenceSufficient: rows.length > 0 && manifestRrp > 0, bidIncrement: Math.max(0, Number(bidIncrement) || 0),
+    evidenceSufficient: soldEvidenceVerified && rows.length > 0 && manifestRrp > 0, bidIncrement: Math.max(0, Number(bidIncrement) || 0),
     safetyBufferRate: Math.max(0, Math.min(100, Number(safetyBufferPct) || 0)) / 100,
-  }), [allInPurchaseBudget, currentBid, buyerPremiumPct, premiumVatPct, fixedAuctionCosts, transportCost, clockNow, closesAtMs, rows.length, manifestRrp, bidIncrement, safetyBufferPct]);
+  }), [allInPurchaseBudget, currentBid, buyerPremiumPct, premiumVatPct, fixedAuctionCosts, transportCost, clockNow, closesAtMs, rows.length, manifestRrp, soldEvidenceVerified, bidIncrement, safetyBufferPct]);
   const formatMoney = (value: number) => '£' + value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const timeLeft = bidAnalysis.secondsRemaining > 0 ? Math.floor(bidAnalysis.secondsRemaining / 3600) + 'h ' + Math.floor((bidAnalysis.secondsRemaining % 3600) / 60) + 'm ' + (bidAnalysis.secondsRemaining % 60) + 's' : 'Closed / time not set';
 
@@ -497,10 +498,11 @@ export default function SurplusFlipScreen() {
             <Field label="Bid increment (£)" value={bidIncrement} keyboardType="decimal-pad" onChangeText={setBidIncrement} />
             <Field label="Safety buffer (%)" value={safetyBufferPct} keyboardType="decimal-pad" onChangeText={setSafetyBufferPct} />
           </View>
+          <Pressable onPress={() => setSoldEvidenceVerified(value => !value)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 }} accessibilityRole="checkbox" accessibilityState={{ checked: soldEvidenceVerified }}><MaterialIcons name={soldEvidenceVerified ? 'check-box' : 'check-box-outline-blank'} size={22} color={soldEvidenceVerified ? Colors.success : Colors.textSecondary} /><View style={{ flex: 1 }}><Text style={{ color: Colors.textPrimary, fontWeight: '600' }}>I checked recent sold listings for this lot</Text><Text style={{ color: Colors.textSecondary, fontSize: 12 }}>Only tick after checking comparable sold prices and likely sell-through.</Text></View></Pressable>
           <Pressable onPress={() => setAuctionClosesAtMs(Date.now() + Math.max(0, Number(minutesToClose) || 0) * 60000)} style={s.countdownBtn}><MaterialIcons name="timer" size={16} color={Colors.primary} /><Text style={s.countdownBtnText}>Start / reset countdown</Text></Pressable>
           <Text style={s.bidTimer}>Time remaining: {timeLeft}</Text>
           <View style={[s.bidVerdict, bidAnalysis.status === 'OVER_LIMIT' || bidAnalysis.status === 'NO_BID_INSUFFICIENT_EVIDENCE' ? s.bidVerdictDanger : s.bidVerdictSafe]}><Text style={s.bidVerdictText}>{bidAnalysis.recommendation}</Text></View>
-          <Text style={s.bidDisclaimer}>Planning estimate only: resale is modelled as {resaleRrpPct || '0'}% of RRP and purchase cap as {buyBudgetPct || '0'}% of estimated gross resale. These are editable assumptions, not verified sold-price evidence. Research sold listings and confirm auction VAT terms before bidding. Live auction fetching is not connected.</Text>
+          <Text style={s.bidDisclaimer}>Planning estimate only: resale is modelled as {resaleRrpPct || '0'}% of RRP and purchase cap as {buyBudgetPct || '0'}% of estimated gross resale. These are editable assumptions, not verified sold-price evidence. The engine will not recommend bidding until you confirm that you checked recent sold listings. This checkbox is a manual confirmation, not an automated market-data check. Confirm auction VAT terms before bidding. Live auction fetching is not connected.</Text>
         </View>
         {rows.length > 0 ? (
           <>
