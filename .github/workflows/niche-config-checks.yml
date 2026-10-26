@@ -201,7 +201,7 @@ jobs:
         run: pnpm dlx jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/entryRoutes.test.ts services/__tests__/nicheIsolation.test.ts services/__tests__/brandedBuildConfig.test.ts services/__tests__/surplusFlipRouting.test.ts services/__tests__/serverOnlySecrets.test.ts
 
       - name: Bundle Android production JavaScript
-        run: npx expo export --platform android --output-dir /tmp/swish-android-export
+        run: npx expo export --platform android --output-dir dist-ci-android && rm -rf dist-ci-android
 
       - name: Validate all five Expo branded configurations
         shell: bash
