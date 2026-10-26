@@ -226,7 +226,7 @@ async function fetchAllEbayImages(
 
     console.log(`[v6] GetItem ebay=${ebayItemId} found=${urls.length} PictureURL elements`);
     return urls.slice(0, MAX_IMAGES);
-  } catch (e: any) {
+  } catch {
     console.log('[v6] GetItem request failed.');
     return [];
   }
