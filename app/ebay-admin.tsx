@@ -734,7 +734,7 @@ const ml = StyleSheet.create({
   fieldHint: { fontSize: 10, color: Colors.textTertiary, lineHeight: 14 },
   charCount: { fontSize: 10, color: Colors.textTertiary, textAlign: 'right' },
   required: { color: Colors.danger },
-  optional: { color: Colors.textTertiary, fontWeight: Typography.weight.normal, fontSize: 9 },
+  optional: { color: Colors.textTertiary, fontWeight: Typography.weight.regular, fontSize: 9 },
 
   simpleDeliveryBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 3,

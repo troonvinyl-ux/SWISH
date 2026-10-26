@@ -399,7 +399,7 @@ export default function KeenOnCoinsScreen() {
         tenant.id,
         'item',
         item.id,
-        'time_to_sale',
+        'time_to_sale_days',
         90,
         idResult.confidenceTier === 'high' || idResult.confidenceTier === 'very_high' ? 'medium' : 'low',
         `Coins specialist identification at ${Math.round(idResult.confidence * 100)}% confidence`,

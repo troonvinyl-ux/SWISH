@@ -728,14 +728,13 @@ function DetailModal({
           <View style={dm.field}>
             <Text style={dm.fieldLabel}>YOUR RESPONSE</Text>
             <TextInput
-              style={dm.textInput}
+              style={[dm.textInput, { minHeight: 100 }]}
               value={responseText}
               onChangeText={setResponseText}
               multiline
               textAlignVertical="top"
               placeholder="Type your response to the buyer..."
               placeholderTextColor={Colors.textTertiary}
-              minHeight={100}
             />
           </View>
 
