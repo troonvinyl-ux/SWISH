@@ -94,8 +94,8 @@ Deno.serve(async (req) => {
     });
 
     if (!response.ok) {
-      const detail = (await response.text()).slice(0, 500);
-      console.error('[swish-coin-image-enhance] model request failed', response.status, detail);
+      // Provider bodies may contain user data or internal diagnostics; never log them.
+      console.error('[swish-coin-image-enhance] model request failed', response.status);
       return jsonResponse({ error: 'AI image enhancement is temporarily unavailable. The original photo is safe.', code: 'MODEL_UNAVAILABLE' }, 502);
     }
 
