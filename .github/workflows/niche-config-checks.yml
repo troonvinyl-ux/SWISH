@@ -126,18 +126,23 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Check coin scanner and AI service TypeScript diagnostics
+      - name: Report project-wide TypeScript diagnostics and gate core coin files
         shell: bash
         run: |
           set +e
           npx tsc --noEmit --pretty false > /tmp/swish-tsc.log 2>&1
+          tsc_status=$?
           set -e
+          cat /tmp/swish-tsc.log
           if grep -E 'app/coin-flipper.tsx|services/aiIdentificationService.ts|services/islamicIdentificationService.ts' /tmp/swish-tsc.log; then
             echo "TypeScript diagnostics found in the coin scanner or its AI services."
             exit 1
           fi
-          echo "No TypeScript diagnostics in the coin scanner or AI services."
-          echo "The existing project-wide check also reports unrelated errors in other files; those are not used as a gate here."
+          if [ "$tsc_status" -ne 0 ]; then
+            echo "::warning::Project-wide TypeScript diagnostics remain outside the core coin files. They are printed above and remain a release blocker; this workflow does not suppress their output."
+          else
+            echo "Project-wide TypeScript check passed."
+          fi
 
       - name: Run routing, build-identity, and server-only secret regression tests
         run: pnpm dlx jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/entryRoutes.test.ts services/__tests__/nicheIsolation.test.ts services/__tests__/brandedBuildConfig.test.ts services/__tests__/surplusFlipRouting.test.ts services/__tests__/serverOnlySecrets.test.ts
