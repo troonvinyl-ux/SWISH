@@ -20,13 +20,21 @@
 
 const ENC_PREFIX = 'enc:v1:';
 
+type ServerEnvironment = { env: { get(name: string): string | undefined } };
+
+function readServerEnv(name: string): string | undefined {
+  const denoRuntime = (globalThis as typeof globalThis & { Deno?: ServerEnvironment }).Deno;
+  if (!denoRuntime) throw new Error('[CredentialCrypto] Server secret environment is unavailable');
+  return denoRuntime.env.get(name);
+}
+
 function plaintextFallbackEnabled(): boolean {
-  return Deno.env.get('SWISH_REJECT_PLAINTEXT_CREDENTIALS') !== 'true';
+  return readServerEnv('SWISH_REJECT_PLAINTEXT_CREDENTIALS') !== 'true';
 }
 
 /** Derive a non-exportable AES-256-GCM key from the server-side secret. */
 async function getKey(): Promise<CryptoKey> {
-  const raw = Deno.env.get('SWISH_CREDENTIAL_KEY');
+  const raw = readServerEnv('SWISH_CREDENTIAL_KEY');
   if (!raw) throw new Error('[CredentialCrypto] Server credential encryption is not configured');
 
   let keyBytes: Uint8Array;
