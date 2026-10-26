@@ -147,7 +147,7 @@ jobs:
           tsc_status=$?
           set -e
           cat /tmp/swish-tsc.log
-          if grep -E 'app/coin-flipper.tsx|services/aiIdentificationService.ts|services/islamicIdentificationService.ts' /tmp/swish-tsc.log; then
+          if grep -E 'app/coin-flipper.tsx|services/aiIdentificationService.ts|services/islamicIdentificationService.ts|supabase/functions/swish-islamic-identify/index.ts' /tmp/swish-tsc.log; then
             echo "TypeScript diagnostics found in the coin scanner or its AI services."
             exit 1
           fi
