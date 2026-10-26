@@ -463,6 +463,6 @@ describe('SWISH coin image enhancement provider error safety', () => {
   test('requires an authenticated user and bounds image input size', () => {
     expect(imageEnhance).toContain("await userClient.auth.getUser()");
     expect(imageEnhance).toContain('imageDataUrl.length > 8_000_000');
-    expect(imageEnhance).toContain("imageDataUrl.startsWith");
+    expect(imageEnhance).toContain("A base64 image data URL is required.");
   });
 });
