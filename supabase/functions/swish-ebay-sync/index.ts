@@ -100,12 +100,17 @@ async function getValidToken(supabase: ReturnType<typeof adminClient>, tenantId:
   if (expired && creds.refreshToken) {
     try {
       const { accessToken, expiresAt: newExp } = await refreshToken(creds.clientId, creds.clientSecret, creds.refreshToken);
-      const updatedRef = await encryptCredentials({ ...creds, accessToken, expiresAt: newExp });
+      // This refresh specifies a restricted OAuth scope set that excludes sell.finances.
+      // Clear the marker written by swish-ebay-finances so the next finance request can
+      // restore the full scope set with its existing no-scope refresh path.
+      const updatedCredentials = { ...creds, accessToken, expiresAt: newExp };
+      delete updatedCredentials.financeScopeRefreshedAt;
+      const updatedRef = await encryptCredentials(updatedCredentials);
       await supabase.from('marketplace_connectors').update({
         credential_ref: updatedRef, access_token_expires_at: newExp,
         status: 'connected', last_error: null, updated_at: new Date().toISOString(),
       }).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay');
-      creds = { ...creds, accessToken, expiresAt: newExp };
+      creds = updatedCredentials;
       console.log('[EbaySync] Token refreshed successfully');
     } catch (e: any) {
       await supabase.from('marketplace_connectors').update({ status: 'requires_reauth', last_error: 'Token refresh failed', updated_at: new Date().toISOString() })
