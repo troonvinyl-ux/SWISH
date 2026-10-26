@@ -61,7 +61,7 @@ export default function StockCheckPage() {
   if (!user) return <View style={[s.center,{paddingTop:insets.top}]}><Text style={s.title}>SWISH Stock Check</Text><Text style={s.muted}>Please sign in through the SWISH app to access inventory.</Text></View>;
   return <View style={[s.page,{paddingTop:Math.max(insets.top,16)}]}>
     <Stack.Screen options={{ title: 'SWISH Stock Check', headerShown: true }} />
-    <View style={s.header}><View style={{flex:1}}><Text style={s.title}>Stock Check</Text><Text style={s.muted}>Shared SWISH inventory · Surplus Flip</Text></View><Pressable style={s.secondary} onPress={load}><Text style={s.buttonText}>Refresh</Text></Pressable></View>
+    <View style={s.header}><View style={{flex:1}}><Text style={s.title}>Stock Check</Text><Text style={s.muted}>Shared SWISH inventory · Surplus Flip</Text></View><Pressable style={s.secondaryButton} onPress={load}><Text style={s.buttonText}>Refresh</Text></Pressable></View>
     <View style={s.stats}><Text style={s.stat}>{rows.length} items</Text><Text style={s.stat}>{checked.length} selected</Text><Text style={s.stat}>{changed.length} changed</Text></View>
     <TextInput value={search} onChangeText={setSearch} placeholder="Search title or SKU…" placeholderTextColor="#85859a" style={s.search}/>
     <View style={s.bulk}><Pressable onPress={()=>setRows(p=>p.map(r=>({...r,checked:true})))}><Text style={s.link}>Select all</Text></Pressable><Pressable onPress={()=>setRows(p=>p.map(r=>({...r,checked:false})))}><Text style={s.link}>Select none</Text></Pressable><Pressable onPress={()=>setReviewOpen(v=>!v)}><Text style={s.link}>{reviewOpen?'Hide review':'Review changes'}</Text></Pressable></View>

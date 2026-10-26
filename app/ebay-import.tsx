@@ -875,7 +875,7 @@ export default function EbayImportScreen() {
               showAlert(
                 'Import Complete',
                 `${imported} item${imported === 1 ? '' : 's'} imported with KC Inventory IDs. Gallery images are being fetched automatically.`,
-                [{ text: 'Go to Inventory', onPress: () => router.navigate('/(tabs)/inventory') }],
+                [{ text: 'Go to Inventory', onPress: () => router.navigate('/(tabs)/inventory' as any) }],
               );
             } else {
               showAlert(

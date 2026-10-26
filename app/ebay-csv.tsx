@@ -839,7 +839,7 @@ async function importOrderRows(
           external_transaction_id: orderId,
           external_order_id: orderId,
           import_source: 'csv',
-        }).then(() => null).catch(() => null);
+        });
 
         await supabase.from('items').update({
           status: 'sold',
@@ -1349,10 +1349,11 @@ export default function EbayCsvScreen() {
                   targetNiche,
                 );
               } else if (csvType === 'orders' || csvType === 'sold_history') {
-                importResult = await importOrderRows(
+                const orderImportResult = await importOrderRows(
                   tenant.id, parsedCsv.rows, mapping, sessionId,
                   (c, t) => setProgress({ current: c, total: t }),
                 );
+                importResult = { ...orderImportResult, nicheFiltered: 0 };
               } else {
                 importResult = {
                   imported: 0, updated: 0, skipped: parsedCsv.rows.length,
@@ -1450,7 +1451,7 @@ export default function EbayCsvScreen() {
           <ResultsView
             result={result}
             onImportAnother={handleReset}
-            onViewInventory={() => router.navigate('/(tabs)/inventory')}
+            onViewInventory={() => router.navigate('/(tabs)/inventory' as any)}
           />
         ) : null}
 
