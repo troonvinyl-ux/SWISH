@@ -96,3 +96,27 @@ describe('SWISH eBay Finances input and refresh safety', () => {
     expect(source).not.toContain("return jr({ error: err.message ?? 'Internal error' }, 500)");
   });
 });
+
+
+describe('SWISH eBay finance scope refresh coordination', () => {
+  const finance = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-ebay-finances/index.ts'), 'utf8');
+  const sync = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-ebay-sync/index.ts'), 'utf8');
+
+  test('finance API restores broad scopes only when its encrypted marker is absent or token is near expiry', () => {
+    expect(finance).toContain("isEncrypted(conn.credential_ref)");
+    expect(finance).toContain('needsFinanceScopeRefresh');
+    expect(finance).toContain('financeScopeRefreshedAt: new Date().toISOString()');
+    expect(finance).toContain('needsRefresh || (needsFinanceScopeRefresh && hasRefreshCredentials)');
+  });
+
+  test('scope-restricted sync refresh clears the finance-scope marker', () => {
+    expect(sync).toContain("scope: 'https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.fulfillment https://api.ebay.com/oauth/api_scope/sell.account'");
+    expect(sync).toContain('delete updatedCredentials.financeScopeRefreshedAt');
+  });
+
+  test('temporary token-service failures are retryable, not falsely marked as reauthentication-required', () => {
+    expect(finance).toContain("Unable to reach eBay token service. Please retry.");
+    expect(finance).toContain("requiresReauth: reauth");
+    expect(finance).toContain("reauth ? 400 : 503");
+  });
+});
