@@ -1921,7 +1921,7 @@ The caller will use only the requested output (title or description). Do not inv
       constrained.numistaStatus = 'unavailable';
       constrained.warnings = constrained.warnings ?? [];
       if (objectType === 'medal') constrained.warnings.push('Object classified as MEDAL — Numista coin verification not applicable.');
-      else if (objectType !== 'coin') constrained.warnings.push(`Object classified as ${objectType.replace(/_/g, ' ').toUpperCase()} — coin catalogue verification not applicable.`);
+      else constrained.warnings.push(`Object classified as ${objectType.replace(/_/g, ' ').toUpperCase()} — coin catalogue verification not applicable.`);
     }
 
     // ── COIN SECOND-PASS ADJUDICATION ──────────────────────────────────────────
