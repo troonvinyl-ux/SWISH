@@ -496,6 +496,10 @@ function EbayHubScreenContent() {
   const EMPTY_IMGDL: ImgDlState = { state: 'idle', downloaded: 0, failed: 0, notFound: 0 };
   const [hubImgDl, setHubImgDl] = useState<ImgDlState>(EMPTY_IMGDL);
 
+  // Use a stable value for the niche filter dependency. useNicheHubStyle creates
+  // a fresh specialistIds array on every render; depending on that array directly
+  // makes this effect reload metrics after every setMetrics render.
+  const specialistIdsKey = nicheStyle.specialistIds.join('|');
   const load = useCallback(async () => {
     if (!tenant?.id) {
       setMetrics(emptyEbayMetrics());
@@ -504,7 +508,8 @@ function EbayHubScreenContent() {
       return;
     }
     try {
-      const m = await loadEbayMetrics(tenant.id, nicheStyle.specialistIds);
+      const specialistIds = specialistIdsKey ? specialistIdsKey.split('|') : [];
+      const m = await loadEbayMetrics(tenant.id, specialistIds);
       setMetrics(m);
     } catch (e: any) {
       // Keep the hub usable even if a metrics query fails; do not leave a blank screen.
@@ -514,7 +519,7 @@ function EbayHubScreenContent() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [tenant?.id, showAlert, nicheStyle.specialistIds]);
+  }, [tenant?.id, showAlert, specialistIdsKey]);
 
   // ── Silent token refresh ──────────────────────────────────────────────────
   const handleTokenRefresh = useCallback(async () => {
