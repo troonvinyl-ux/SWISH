@@ -97,6 +97,13 @@ serve(async (req) => {
       // Stripe free-trial subscriptions are 'trialing', not 'active'. Treat
       // both as valid entitlements while Stripe confirms the subscription.
       if (sub.status !== "active" && sub.status !== "trialing") continue;
+      // Checkout records the authenticated Supabase user in verified Stripe metadata.
+      // Never let a customer match by email alone cross an explicitly linked account boundary.
+      const linkedUserId = sub.metadata?.user_id;
+      if (linkedUserId && linkedUserId !== user.id) {
+        logStep("Skipping subscription linked to a different user");
+        continue;
+      }
       const subProductId = sub.items.data[0]?.price?.product as string | undefined;
       if (subProductId !== "prod_VQ0JxUCL29SZPQ") continue;
 
