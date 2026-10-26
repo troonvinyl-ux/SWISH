@@ -63,6 +63,36 @@ describe('Server-only API secret boundary', () => {
   });
 });
 
+describe('Credential encryption fail-closed regression', () => {
+  const cryptoSource = fs.readFileSync(
+    path.join(projectRoot, 'supabase/functions/_shared/credentialCrypto.ts'),
+    'utf8',
+  );
+  const migrationSource = fs.readFileSync(
+    path.join(projectRoot, 'supabase/functions/swish-migrate-credentials/index.ts'),
+    'utf8',
+  );
+
+  test('normal credential decryption rejects plaintext instead of accepting a legacy fallback', () => {
+    expect(cryptoSource).toContain('Plaintext credential_ref rejected');
+    expect(cryptoSource).toContain('if (!isEncrypted(stored))');
+    expect(cryptoSource).not.toContain('MIGRATION REQUIRED: credential_ref is unencrypted plaintext');
+  });
+
+  test('legacy plaintext parsing is confined to the explicit migration helper', () => {
+    expect(cryptoSource).toContain('function parseLegacyCredentials');
+    expect(cryptoSource).toContain('const credentials = parseLegacyCredentials(stored)');
+    expect(migrationSource).toContain('migrateToEncrypted');
+    expect(migrationSource).toContain(".eq('tenant_id', row.tenant_id)");
+  });
+
+  test('migration errors do not include credential payloads in responses or logs', () => {
+    expect(cryptoSource).toContain('Legacy credential payload is not valid JSON object data');
+    expect(cryptoSource).not.toContain('console.log(credentials)');
+    expect(migrationSource).toContain('Row encryption failed');
+  });
+});
+
 describe('SWISH eBay Finances input and refresh safety', () => {
   const functionPath = path.join(projectRoot, 'supabase/functions/swish-ebay-finances/index.ts');
   const source = fs.readFileSync(functionPath, 'utf8');
