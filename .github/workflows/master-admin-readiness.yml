@@ -1,0 +1,154 @@
+name: SWISH Master Admin readiness pipelines
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_extended_tests:
+        description: Run the extended regression suite
+        type: boolean
+        default: true
+  pull_request:
+    paths:
+      - 'app/master-admin.tsx'
+      - 'services/__tests__/**'
+      - 'constants/niches.ts'
+      - 'services/nicheRouting.ts'
+      - 'supabase/functions/**'
+      - '.github/workflows/master-admin-readiness.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app/master-admin.tsx'
+      - 'services/__tests__/**'
+      - 'constants/niches.ts'
+      - 'services/nicheRouting.ts'
+      - 'supabase/functions/**'
+      - '.github/workflows/master-admin-readiness.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: swish-master-admin-readiness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    name: Regression and niche isolation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
+      - name: Run targeted SWISH regression tests
+        run: >-
+          pnpm dlx jest@29.7.0 --config jest.config.ci.js --runInBand
+          services/__tests__/entryRoutes.test.ts
+          services/__tests__/nicheIsolation.test.ts
+          services/__tests__/brandedBuildConfig.test.ts
+          services/__tests__/surplusFlipRouting.test.ts
+          services/__tests__/serverOnlySecrets.test.ts
+          services/__tests__/surplusAuctionBidEngine.test.ts
+
+  edge-function-syntax:
+    name: Edge Function syntax and secret-boundary guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Transpile-check every Supabase Edge Function
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const ts = require('typescript');
+          const files = [];
+          function walk(dir) {
+            for (const item of fs.readdirSync(dir, { withFileTypes: true })) {
+              const full = path.join(dir, item.name);
+              if (item.isDirectory()) walk(full);
+              else if (item.isFile() && full.endsWith('.ts')) files.push(full);
+            }
+          }
+          walk('supabase/functions');
+          const failures = [];
+          for (const file of files) {
+            const result = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+              fileName: file,
+              reportDiagnostics: true,
+              compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+            });
+            for (const d of result.diagnostics ?? []) {
+              if (d.category === ts.DiagnosticCategory.Error) {
+                failures.push(file + ': ' + ts.flattenDiagnosticMessageText(d.messageText, '\n'));
+              }
+            }
+          }
+          if (failures.length) { console.error(failures.join('\n')); process.exit(1); }
+          console.log('Syntax checked ' + files.length + ' Edge Function TypeScript files.');
+          NODE
+      - name: Run client secret-boundary regression test
+        run: pnpm dlx jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/serverOnlySecrets.test.ts
+
+  niche-builds:
+    name: Branded configuration and Android bundle
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        niche: [coins, motocross, bicycles, clothing, surplus_flip]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Validate branded Expo config
+        env:
+          SWISH_NICHE: ${{ matrix.niche }}
+        run: npx expo config --type public
+      - name: Bundle Android JavaScript
+        env:
+          SWISH_NICHE: ${{ matrix.niche }}
+        run: npx expo export --platform android --output-dir dist-ci-${{ matrix.niche }}
+
+  external-integrations:
+    name: Live integration checks (explicitly gated)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Report live checks require configured test credentials
+        shell: bash
+        run: |
+          {
+            echo "## Live integration checks"
+            echo ""
+            echo "This repository workflow deliberately does not call production eBay, Stripe, or Supabase APIs."
+            echo "Live OAuth/token refresh, order/finance reconciliation, Stripe entitlement and deployed Edge Function checks must be run in a dedicated test environment with approved secrets."
+            echo "No credentials were available to this workflow, so these checks are NOT CLAIMED as passed."
+          } >> "$GITHUB_STEP_SUMMARY"
