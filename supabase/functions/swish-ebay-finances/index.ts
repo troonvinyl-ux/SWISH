@@ -211,7 +211,13 @@ Deno.serve(async (req: Request) => {
             payout_id: tx.payoutId ?? null, payout_status: tx.payoutStatus ?? null,
             transaction_date: tx.transactionDate ?? new Date().toISOString(),
           }, { onConflict: 'ebay_transaction_id,tenant_id', ignoreDuplicates: false });
-          if (ue) { if (ue.code === '23505') updated++; else errors.push(`TX ${txId}: ${ue.message}`); } else inserted++;
+          if (ue) {
+            // With the configured ON CONFLICT target, a remaining unique violation means
+            // another constraint failed; it was not an update and must not be counted as one.
+            errors.push(`TX ${txId}: transaction could not be persisted (database constraint).`);
+          } else {
+            inserted++;
+          }
 
           // Update actual fees on orders with real eBay data
           if ((txType === 'FINAL_VALUE_FEE' || txType === 'FINAL_VALUE_FEE_FIXED_PER_ORDER') && swishOrderId && amount < 0) {
@@ -247,7 +253,7 @@ Deno.serve(async (req: Request) => {
               : 'SWISH could not verify Managed Payments status. Re-authorise eBay in SWISH and check the Production keyset scopes.';
           return jr({ success: false, error: `Seller funds summary API HTTP ${resp.status}. ${diagnosis}`, financesApiAvailable: false, managedPaymentsStatus: payments.status ?? null, diagnostic: payments.error ?? null }, 400);
         }
-        return jr({ success: false, error: `Seller funds summary API ${resp.status}: ${t.slice(0, 200)}`, financesApiAvailable: false }, 400);
+        return jr({ success: false, error: `Seller funds summary API returned HTTP ${resp.status}.`, financesApiAvailable: false }, 400);
       }
       const data = await resp.json();
       return jr({ success: true, fundsSummary: data, financesApiAvailable: true });
@@ -258,7 +264,7 @@ Deno.serve(async (req: Request) => {
       url.searchParams.set('filter', `lastAttemptedPayoutDate:[${fromDate}..]`); url.searchParams.set('limit', '100');
       const signatureHeaders = await ebayFinancesSignatureHeaders(url, 'GET');
       const resp = await fetch(url.toString(), { headers: { ...hdrs, ...signatureHeaders }, signal: AbortSignal.timeout(15000) });
-      if (!resp.ok) { const t = await resp.text(); return jr({ success: false, error: `Payouts API ${resp.status}: ${t.slice(0, 200)}`, financesApiAvailable: false }, 400); }
+      if (!resp.ok) return jr({ success: false, error: `Payouts API returned HTTP ${resp.status}.`, financesApiAvailable: false }, 400);
       const data = await resp.json();
       return jr({ success: true, payouts: data.payouts ?? [], financesApiAvailable: true });
     }
