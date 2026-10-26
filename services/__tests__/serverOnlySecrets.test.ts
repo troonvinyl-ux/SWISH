@@ -431,3 +431,18 @@ describe('AI Edge Function error response safety', () => {
     expect(islamicIdentify).not.toContain("JSON.stringify({ error: err.message ?? 'Internal error' })");
   });
 });
+
+
+describe('SWISH market valuation error sanitization', () => {
+  const marketValue = fs.readFileSync(
+    path.join(projectRoot, 'supabase/functions/swish-market-value/index.ts'),
+    'utf8',
+  );
+
+  test('does not return raw authentication exceptions or log credential decryption details', () => {
+    expect(marketValue).toContain("error: 'Authentication could not be verified.'");
+    expect(marketValue).toContain("Credential decryption failed.");
+    expect(marketValue).not.toContain('Auth error: ${e.message}');
+    expect(marketValue).not.toContain('Credential decrypt error: ${e.message}');
+  });
+});
