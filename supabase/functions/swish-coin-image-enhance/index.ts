@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
       warning: 'AI-rendered reference only. Always use the original photo for eBay listings and final attribution.',
     });
   } catch (error) {
-    console.error('[swish-coin-image-enhance] request failed', error instanceof Error ? error.message : 'unknown error');
+    console.error('[swish-coin-image-enhance] request failed.');
     return jsonResponse({ error: 'Image enhancement failed safely. The original photo is unchanged.' }, 500);
   }
 });
