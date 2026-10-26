@@ -57,8 +57,17 @@ serve(async (req) => {
     const user = userData.user;
 
     let body: Record<string, unknown> = {};
-    try {
-      const parsed: unknown = await req.json();
+    const rawBody = await req.text();
+    if (rawBody.trim()) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(rawBody);
+      } catch {
+        return new Response(JSON.stringify({ error: "Invalid checkout request." }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        });
+      }
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
         return new Response(JSON.stringify({ error: "Request body must be a JSON object." }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -66,15 +75,6 @@ serve(async (req) => {
         });
       }
       body = parsed as Record<string, unknown>;
-    } catch (error) {
-      // Empty body remains supported for older clients; malformed non-empty JSON is rejected.
-      const raw = await req.clone().text().catch(() => "");
-      if (raw.trim()) {
-        return new Response(JSON.stringify({ error: "Invalid checkout request." }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 400,
-        });
-      }
     }
     let nicheId = typeof body.nicheId === "string" ? body.nicheId.trim().toLowerCase() : "coins";
     // Checkout metadata must use a recognised production niche so the same
