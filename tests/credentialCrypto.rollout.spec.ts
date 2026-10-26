@@ -12,9 +12,7 @@ const originalDeno = (globalThis as typeof globalThis & { Deno?: unknown }).Deno
 beforeEach(() => {
   envValues.clear();
   (globalThis as typeof globalThis & { Deno?: unknown }).Deno = {
-    env: {
-      get: (name: string) => envValues.get(name),
-    },
+    env: { get: (name: string) => envValues.get(name) },
   };
 });
 
@@ -28,7 +26,7 @@ afterEach(() => {
 });
 
 describe('shared credential crypto rollout gate', () => {
-  it('keeps plaintext compatibility enabled until strict mode is explicitly enabled', () => {
+  it('enables legacy compatibility only while the strict flag is not true', () => {
     expect(rejectsPlaintextCredentials()).toBe(false);
     envValues.set('SWISH_REJECT_PLAINTEXT_CREDENTIALS', 'false');
     expect(rejectsPlaintextCredentials()).toBe(false);
@@ -36,28 +34,27 @@ describe('shared credential crypto rollout gate', () => {
     expect(rejectsPlaintextCredentials()).toBe(true);
   });
 
-  it('rejects legacy plaintext in strict mode without parsing or returning it', async () => {
+  it('rejects legacy plaintext in strict mode before parsing the payload', async () => {
     envValues.set('SWISH_REJECT_PLAINTEXT_CREDENTIALS', 'true');
     await expect(decryptCredentials(JSON.stringify({ accessToken: 'fixture-token' })))
       .rejects.toThrow('Legacy plaintext credentials are disabled');
   });
 
-  it('accepts a legacy object only during compatibility mode', async () => {
-    envValues.delete('SWISH_REJECT_PLAINTEXT_CREDENTIALS');
+  it('accepts an object-like legacy payload only during compatibility mode', async () => {
     jest.spyOn(console, 'warn').mockImplementation(() => undefined);
     await expect(decryptCredentials(JSON.stringify({ clientId: 'fixture-id' })))
       .resolves.toEqual({ clientId: 'fixture-id' });
   });
 
-  it('recognises only the versioned encrypted prefix', () => {
+  it('recognises encrypted format without treating plaintext JSON as encrypted', () => {
     expect(isEncrypted(JSON.stringify({ accessToken: 'fixture-token' }))).toBe(false);
     expect(isEncrypted('enc:v1:dGVzdA==:dGVzdA==')).toBe(true);
     expect(isEncrypted('enc:v2:dGVzdA==:dGVzdA==')).toBe(false);
     expect(isEncrypted(null as unknown as string)).toBe(false);
   });
 
-  it('round-trips credentials with authenticated encryption and a server-only key', async () => {
-    // Deterministic test key only. Never use this value outside the test.
+  it('round-trips credentials using AES-GCM and a server-side key fixture', async () => {
+    // Test-only key. Never use this value outside automated tests.
     envValues.set('SWISH_CREDENTIAL_KEY', '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff');
     const input = { clientId: 'fixture-id', clientSecret: 'fixture-secret', accessToken: 'fixture-token' };
     const encrypted = await encryptCredentials(input);
@@ -71,7 +68,10 @@ describe('shared credential crypto rollout gate', () => {
     const encrypted = await encryptCredentials({ accessToken: 'fixture-token' });
     const [, iv, ciphertext] = encrypted.split(':');
     await expect(decryptCredentials(`enc:v1:${iv}:abc`)).rejects.toThrow('invalid lengths');
-    const altered = `enc:v1:${iv}:${Buffer.from(ciphertext, 'base64').toString('base64').slice(0, -4)}AAAA`;
-    await expect(decryptCredentials(altered)).rejects.toThrow();
+
+    const bytes = Uint8Array.from(Buffer.from(ciphertext, 'base64'));
+    bytes[0] ^= 0x01;
+    const altered = `enc:v1:${iv}:${Buffer.from(bytes).toString('base64')}`;
+    await expect(decryptCredentials(altered)).rejects.toThrow('Credentials cannot be decrypted');
   });
 });
