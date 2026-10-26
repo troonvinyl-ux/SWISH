@@ -1088,36 +1088,6 @@ export default function CreateListingScreen() {
     }
   }, [tenant, ebaySearchRunning, confirmedCategory]);
 
-  // ── Title-based category suggestion works even if visual search has no usable image ──
-  const handleSuggestCategory = useCallback(async () => {
-    if (!item || !tenant) return;
-    const title = String(item.canonicalTitle || '').trim();
-    if (title.length < 2) {
-      showAlert('Add an item title', 'Enter a more descriptive item title before asking AI to suggest an eBay category.');
-      return;
-    }
-    setSuggestingCategory(true);
-    try {
-      const supabase = getSupabaseClient();
-      const { data, error } = await supabase.functions.invoke('swish-ebay-list', {
-        body: { route: 'get_category_suggestions', tenantId: tenant.id, query: title.slice(0, 100) },
-      });
-      if (error) throw error;
-      const suggestions = Array.isArray(data?.suggestions) ? data.suggestions : [];
-      const best = suggestions.find((cat: any) => cat?.id && cat?.name && cat.isLeaf === true);
-      if (!data?.success || !best) {
-        showAlert('No category suggestion', data?.error || 'eBay could not find a matching leaf category. Try a more descriptive title, or select a category manually.');
-        return;
-      }
-      await handleCategorySelected(String(best.id), String(best.name));
-      showAlert('Category suggested', String(best.name) + ' (eBay category ' + String(best.id) + ') has been selected. Please check it is correct before publishing.');
-    } catch (e: any) {
-      showAlert('Category suggestion unavailable', e?.message || 'Could not retrieve an eBay category suggestion. You can still select one manually.');
-    } finally {
-      setSuggestingCategory(false);
-    }
-  }, [item, tenant, handleCategorySelected, showAlert]);
-
   // ── Category change — opens inline picker, NO navigation to listing editor ─
 
   const handleCategoryChange = useCallback(() => {
@@ -1148,6 +1118,36 @@ export default function CreateListingScreen() {
       runEbayVisualSearch(item, catId);
     }
   }, [item, tenant, ebaySearchDone, runEbayVisualSearch]);
+
+  // ── Title-based category suggestion works even if visual search has no usable image ──
+  const handleSuggestCategory = useCallback(async () => {
+    if (!item || !tenant) return;
+    const title = String(item.canonicalTitle || '').trim();
+    if (title.length < 2) {
+      showAlert('Add an item title', 'Enter a more descriptive item title before asking AI to suggest an eBay category.');
+      return;
+    }
+    setSuggestingCategory(true);
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase.functions.invoke('swish-ebay-list', {
+        body: { route: 'get_category_suggestions', tenantId: tenant.id, query: title.slice(0, 100) },
+      });
+      if (error) throw error;
+      const suggestions = Array.isArray(data?.suggestions) ? data.suggestions : [];
+      const best = suggestions.find((cat: any) => cat?.id && cat?.name && cat.isLeaf === true);
+      if (!data?.success || !best) {
+        showAlert('No category suggestion', data?.error || 'eBay could not find a matching leaf category. Try a more descriptive title, or select a category manually.');
+        return;
+      }
+      await handleCategorySelected(String(best.id), String(best.name));
+      showAlert('Category suggested', String(best.name) + ' (eBay category ' + String(best.id) + ') has been selected. Please check it is correct before publishing.');
+    } catch (e: any) {
+      showAlert('Category suggestion unavailable', e?.message || 'Could not retrieve an eBay category suggestion. You can still select one manually.');
+    } finally {
+      setSuggestingCategory(false);
+    }
+  }, [item, tenant, handleCategorySelected, showAlert]);
 
   // ── Legacy handleConfirmCategory kept for backwards compat ───────────────
   const handleConfirmCategory = useCallback(async (catId?: string, catName?: string) => {
