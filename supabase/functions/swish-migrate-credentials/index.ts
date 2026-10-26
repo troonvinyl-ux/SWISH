@@ -67,14 +67,26 @@ Deno.serve(async (req: Request) => {
   }
 
   // ── Parse body ─────────────────────────────────────────────────────────────
-  let body: { tenantId?: string } = {};
-  try { body = await req.json(); } catch { /* empty body is fine */ }
-  const { tenantId } = body;
+  let body: { tenantId?: unknown };
+  try {
+    const parsed: unknown = await req.json();
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return error('Request body must be a JSON object containing tenantId', 400);
+    }
+    body = parsed as { tenantId?: unknown };
+  } catch {
+    return error('A tenantId is required for credential migration.', 400);
+  }
+  const tenantId = typeof body.tenantId === 'string' ? body.tenantId.trim() : '';
+  if (!tenantId) {
+    // Never let a tenant owner trigger a service-role query spanning other tenants.
+    return error('A tenantId is required. Migrate one tenant at a time.', 400);
+  }
 
-  // ── Verify caller is owner/admin of the specified tenant (or all tenants) ──
-  // We use the service-role client for the actual data access, but we validate
-  // membership using the authed client so RLS applies.
-  if (tenantId) {
+  // ── Verify caller is owner/admin of the specified tenant ───────────────────
+  // We use the service-role client for data access, but validate membership
+  // using the caller's JWT so the caller cannot migrate another tenant.
+  {
     const { data: membership, error: mErr } = await authedClient
       .from('tenant_memberships')
       .select('role, is_owner')
@@ -92,23 +104,6 @@ Deno.serve(async (req: Request) => {
     if (!isPrivileged) {
       return error('Owner or admin role required', 403);
     }
-  } else {
-    // No tenantId — caller must be a superuser (has membership across many tenants).
-    // We simply confirm the caller has at least one owner/admin membership.
-    const { data: memberships, error: mErr } = await authedClient
-      .from('tenant_memberships')
-      .select('role, is_owner')
-      .eq('user_id', user.id)
-      .in('role', ['owner', 'admin']);
-
-    const hasPrivileged =
-      !mErr &&
-      memberships != null &&
-      memberships.some(m => m.is_owner === true || m.role === 'owner' || m.role === 'admin');
-
-    if (!hasPrivileged) {
-      return error('Owner or admin role required for cross-tenant migration', 403);
-    }
   }
 
   // ── Service-role client for credential access ──────────────────────────────
@@ -125,9 +120,7 @@ Deno.serve(async (req: Request) => {
     .not('credential_ref', 'is', null)
     .neq('credential_ref', '');
 
-  if (tenantId) {
-    query = query.eq('tenant_id', tenantId);
-  }
+  query = query.eq('tenant_id', tenantId);
 
   const { data: rows, error: fetchErr } = await query;
   if (fetchErr) {

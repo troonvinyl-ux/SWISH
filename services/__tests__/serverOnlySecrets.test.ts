@@ -308,3 +308,15 @@ describe('SWISH AI identification tenant and quota safeguards', () => {
     expect(identify).not.toContain("JSON.stringify({ error: err.message ?? 'Internal error' })");
   });
 });
+
+
+describe('Credential migration tenant isolation', () => {
+  const migration = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-migrate-credentials/index.ts'), 'utf8');
+
+  test('requires one tenant ID and rejects cross-tenant migration requests', () => {
+    expect(migration).toContain('A tenantId is required. Migrate one tenant at a time.');
+    expect(migration).toContain("query = query.eq('tenant_id', tenantId)");
+    expect(migration).not.toContain('cross-tenant migration');
+    expect(migration).not.toContain(".eq('user_id', user.id)\n      .in('role', ['owner', 'admin'])");
+  });
+});
