@@ -506,3 +506,21 @@ describe('SWISH AI provider error response sanitization', () => {
     expect(islamicIdentify).not.toContain('Zeno search error for "${query}": ${e.message}');
   });
 });
+
+
+describe('SWISH market valuation provider error sanitization', () => {
+  const marketValue = fs.readFileSync(
+    path.join(projectRoot, 'supabase/functions/swish-market-value/index.ts'),
+    'utf8',
+  );
+
+  test('does not return raw provider or runtime exception details', () => {
+    expect(marketValue).toContain("Market valuation failed. Please retry.");
+    expect(marketValue).toContain("Sold-data lookup is temporarily unavailable.");
+    expect(marketValue).toContain("Active-listing lookup is temporarily unavailable.");
+    expect(marketValue).not.toContain('details: detail');
+    expect(marketValue).not.toContain('Terapeak exception: ${e.message}');
+    expect(marketValue).not.toContain('error: e.message');
+    expect(marketValue).not.toContain('Gemini error: ${e.message}');
+  });
+});
