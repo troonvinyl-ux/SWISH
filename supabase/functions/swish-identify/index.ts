@@ -1780,7 +1780,13 @@ The caller will use only the requested output (title or description). Do not inv
           await adminClient.from('ai_usage').update({
             count: Math.max(0, currentUsage),
             updated_at: new Date().toISOString(),
-          }).eq('tenant_id', tenantId).eq('user_id', user.id).eq('feature', FEATURE_KEY).eq('month_key', monthKey);
+          })
+            .eq('tenant_id', tenantId)
+            .eq('user_id', user.id)
+            .eq('feature', FEATURE_KEY)
+            .eq('month_key', monthKey)
+            // Do not overwrite a higher count written by a concurrent request.
+            .eq('count', currentUsage + 1);
         } catch {}
       }
       console.error('[swish-identify] AI provider request failed.');
