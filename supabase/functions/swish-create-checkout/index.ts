@@ -111,19 +111,11 @@ serve(async (req) => {
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
-    // Reuse only a Stripe customer linked to this authenticated account.
-    // If an older customer matches by email but has no user link, attach the
-    // verified account ID. Never reuse a customer explicitly linked elsewhere.
+    // Reuse only a Stripe customer explicitly linked to this authenticated account.
+    // Email is a search hint, not proof of billing ownership. Legacy unlinked
+    // customers are resolved only by the guarded subscription/portal flow.
     const customers = await stripe.customers.list({ email: user.email, limit: 100 });
     let customer = customers.data.find(candidate => candidate.metadata?.user_id === user.id);
-    if (!customer) {
-      const unlinkedCustomer = customers.data.find(candidate => !candidate.metadata?.user_id);
-      if (unlinkedCustomer) {
-        customer = await stripe.customers.update(unlinkedCustomer.id, {
-          metadata: { ...unlinkedCustomer.metadata, user_id: user.id },
-        });
-      }
-    }
     if (!customer) {
       customer = await stripe.customers.create({
         email: user.email,
