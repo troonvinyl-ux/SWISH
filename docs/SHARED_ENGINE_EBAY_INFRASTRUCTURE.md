@@ -54,3 +54,15 @@ GitHub Actions can validate code and fixtures, but it cannot by itself prove dep
 - Verify mobile and web use the same Edge Function input/response/error contracts and all five niche routes select the correct specialist.
 - Run the complete regression suite and relevant app/web builds on the final revision.
 - Verify deployment secret configuration and run tenant-by-tenant migration in the deployed environment; these actions cannot be completed through repository-only changes.
+
+
+## Web contract audit (repository observation)
+
+The web client is `troonvinyl-ux/SwishWeb`; its `src/lib/supabase.ts` centralises Supabase client creation and an Edge Function invocation wrapper. Current web pages use the shared function names for important eBay flows, including:
+- `EbayHub.tsx`: `swish-ebay-oauth` and `swish-ebay-sync`.
+- `EbayFinances.tsx`: `swish-ebay-finances`.
+- `EbayMessages.tsx`: `swish-ebay-messages`.
+- `EbayReturns.tsx`: `swish-ebay-post-order`.
+- `ListingEditor.tsx` / `ListingNew.tsx`: `swish-ebay-list`.
+
+This confirms reuse of the current shared function names, but not full response/error-contract parity for every route. The web parity document itself warns that some web pages rely on earlier table/function names. A caller-by-caller contract comparison and safe web build remain explicit release gates.
