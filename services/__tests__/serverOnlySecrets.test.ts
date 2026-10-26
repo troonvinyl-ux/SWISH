@@ -199,3 +199,26 @@ describe('Subscription endpoint boundary regression', () => {
     expect(checker).not.toContain('JSON.stringify({ error: msg })');
   });
 });
+
+
+describe('Surplus Flip product-boundary regression', () => {
+  const identify = fs.readFileSync(
+    path.join(projectRoot, 'supabase/functions/swish-identify/index.ts'),
+    'utf8',
+  );
+  const marketValue = fs.readFileSync(
+    path.join(projectRoot, 'supabase/functions/swish-market-value/index.ts'),
+    'utf8',
+  );
+
+  test('maps Surplus Flip identification requests to their own subscription niche', () => {
+    expect(identify).toContain("'surplus_flip' | null");
+    expect(identify).toContain("['surplus_flip', 'surplus_trader', 'catalog_flip', 'catalog_surplus'].includes(sid)");
+    expect(identify).not.toContain("function nicheForSpecialist(sid: string): 'coins' | 'motocross' | 'bicycles' | 'clothing' | null");
+  });
+
+  test('does not classify Surplus Flip valuation items as Coins', () => {
+    expect(marketValue).toContain("if (['surplus_flip', 'surplus_trader', 'catalog_flip', 'catalog_surplus'].includes(id)) return 'surplus_flip';");
+    expect(marketValue).not.toContain("'jewellery_precious_metals', 'curiosities_collectibles',\n    // Surplus Flip is a distinct product boundary; legacy and current IDs are aliases.\n    'surplus_trader', 'surplus_flip',");
+  });
+});
