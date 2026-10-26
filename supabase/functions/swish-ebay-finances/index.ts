@@ -250,8 +250,10 @@ Deno.serve(async (req: Request) => {
             transaction_date: tx.transactionDate ?? new Date().toISOString(),
           }, { onConflict: 'ebay_transaction_id,tenant_id', ignoreDuplicates: false });
           if (ue) {
-            // A remaining constraint error means the write failed; never count it as inserted/updated.
+            // A remaining constraint error means the write failed; do not apply downstream
+            // order fee side effects when the source transaction was not persisted.
             errors.push(`TX ${txId}: transaction could not be persisted (database constraint).`);
+            continue;
           } else if (existingTx) {
             updated++;
           } else {
