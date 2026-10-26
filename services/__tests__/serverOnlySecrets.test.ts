@@ -224,3 +224,24 @@ describe('Surplus Flip product-boundary regression', () => {
     expect(marketValue).not.toContain("'jewellery_precious_metals', 'curiosities_collectibles',\n    // Surplus Flip is a distinct product boundary; legacy and current IDs are aliases.\n    'surplus_trader', 'surplus_flip',");
   });
 });
+
+
+describe('SWISH eBay inventory sync tenant write isolation', () => {
+  const sync = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-ebay-sync/index.ts'), 'utf8');
+
+  test('threads the verified tenant ID through item sync and scopes item/listing writes', () => {
+    expect(sync).toContain('existingItem: any,\n  tenantId: string');
+    expect(sync).toContain(".eq('item_id', existingItem.id)\n      .eq('tenant_id', tenantId)\n      .eq('marketplace_id', 'ebay')");
+    expect(sync).toContain(".eq('id', existingItem.id).eq('tenant_id', tenantId)");
+    expect(sync).toContain("syncItemToSwish(supabase, ebay, existingItem, tenantId)");
+  });
+
+  test('tenant-scopes orphan listing and item status transitions', () => {
+    expect(sync).toContain(".eq('id', l.id).eq('tenant_id', tenantId)");
+    expect(sync).toContain(".eq('id', l.item_id).eq('tenant_id', tenantId)");
+  });
+
+  test('clears finance scope marker when the restricted eBay sync flow refreshes a token', () => {
+    expect(sync).toContain('delete updatedCredentials.financeScopeRefreshedAt');
+  });
+});
