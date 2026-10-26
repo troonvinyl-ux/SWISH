@@ -2204,6 +2204,8 @@ export default function StockListingScreen() {
     ]);
   }, [item, showAlert]);
 
+  const activeListings = useMemo(() => listings.filter(l => l.status === 'active'), [listings]);
+
   // ── Facebook Marketplace export ─────────────────────────────────────────────
 
   const handleExportFacebook = useCallback(async () => {
@@ -2249,7 +2251,6 @@ export default function StockListingScreen() {
     setItem(prev => prev ? { ...prev, conditionGrade: grade, condition: grade } : prev);
   }, [item, showAlert]);
 
-  const activeListings = useMemo(() => listings.filter(l => l.status === 'active'), [listings]);
   const draftListings = useMemo(() => listings.filter(l => l.status === 'draft' || l.status === 'pending'), [listings]);
   const canonicalAttrs = useMemo(() => item ? canonicalizeAttributes(item.attributes) : [], [item?.attributes]);
 
