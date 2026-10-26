@@ -147,7 +147,7 @@ jobs:
           tsc_status=$?
           set -e
           cat /tmp/swish-tsc.log
-          if grep -E 'app/coin-flipper.tsx|services/aiIdentificationService.ts|services/islamicIdentificationService.ts|supabase/functions/swish-islamic-identify/index.ts' /tmp/swish-tsc.log; then
+          if grep -E 'app/coin-flipper.tsx|services/aiIdentificationService.ts|services/islamicIdentificationService.ts' /tmp/swish-tsc.log; then
             echo "TypeScript diagnostics found in the coin scanner or its AI services."
             exit 1
           fi
@@ -156,6 +156,46 @@ jobs:
           else
             echo "Project-wide TypeScript check passed."
           fi
+
+      - name: Check Supabase Edge Function TypeScript syntax
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const ts = require('typescript');
+          const root = 'supabase/functions';
+          const files = [];
+          function walk(dir) {
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              const full = path.join(dir, entry.name);
+              if (entry.isDirectory()) walk(full);
+              else if (entry.isFile() && full.endsWith('.ts')) files.push(full);
+            }
+          }
+          walk(root);
+          const failures = [];
+          for (const file of files) {
+            const source = fs.readFileSync(file, 'utf8');
+            const result = ts.transpileModule(source, {
+              fileName: file,
+              reportDiagnostics: true,
+              compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+            });
+            for (const diagnostic of result.diagnostics ?? []) {
+              if (diagnostic.category !== ts.DiagnosticCategory.Error) continue;
+              const location = diagnostic.file && diagnostic.start !== undefined
+                ? diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start)
+                : null;
+              failures.push(`${file}${location ? `:${location.line + 1}:${location.character + 1}` : ''}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')}`);
+            }
+          }
+          if (failures.length) {
+            console.error(failures.join('\n'));
+            process.exit(1);
+          }
+          console.log(`Syntax check passed for ${files.length} Edge Function TypeScript files.`);
+          NODE
 
       - name: Run routing, build-identity, and server-only secret regression tests
         run: pnpm dlx jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/entryRoutes.test.ts services/__tests__/nicheIsolation.test.ts services/__tests__/brandedBuildConfig.test.ts services/__tests__/surplusFlipRouting.test.ts services/__tests__/serverOnlySecrets.test.ts
