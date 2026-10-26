@@ -247,3 +247,26 @@ describe('SWISH eBay inventory sync tenant write isolation', () => {
     expect(sync).toContain('delete updatedCredentials.financeScopeRefreshedAt');
   });
 });
+
+
+describe('SWISH Stripe account binding', () => {
+  const checkout = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-create-checkout/index.ts'), 'utf8');
+  const subscription = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-check-subscription/index.ts'), 'utf8');
+
+  test('checkout creates niche entitlement metadata for the authenticated user and validates product scheme', () => {
+    expect(checkout).toContain('metadata: { user_id: user.id, niche_id: nicheId }');
+    expect(checkout).toContain('subscription_data:');
+    expect(checkout).toContain('if (appScheme && appScheme !== expectedSchemeByNiche[nicheId])');
+  });
+
+  test('subscription check refuses a subscription explicitly linked to a different user', () => {
+    expect(subscription).toContain('const linkedUserId = sub.metadata?.user_id');
+    expect(subscription).toContain('if (linkedUserId && linkedUserId !== user.id)');
+    expect(subscription).toContain('Skipping subscription linked to a different user');
+  });
+
+  test('subscription check returns only canonical production niche entitlements', () => {
+    expect(subscription).toContain('const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing", "surplus_flip"])');
+    expect(subscription).toContain('niche_entitlements: entitlements');
+  });
+});
