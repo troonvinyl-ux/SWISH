@@ -2,7 +2,7 @@
 // Imports Joblot XLSX/CSV manifests, uses supplier image URLs, tracks stock units,
 // and creates SWISH inventory items using the existing tenant and item service.
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import {
   ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput,
   View, Alert,
@@ -21,6 +21,7 @@ import { createItem } from '@/services/itemService';
 import { generateListing, saveListing } from '@/services/listingService';
 import { getSupabaseClient } from '@/template';
 import { useAlert } from '@/template';
+import { calculateSurplusMaximumBid } from '@/services/surplusAuctionBidEngine';
 
 
 function decodeBase64(base64: string): ArrayBuffer {
@@ -169,6 +170,19 @@ export default function SurplusFlipScreen() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [search, setSearch] = useState('');
+  const [currentBid, setCurrentBid] = useState('0');
+  const [resaleRrpPct, setResaleRrpPct] = useState('37.5');
+  const [buyBudgetPct, setBuyBudgetPct] = useState('25');
+  const [buyerPremiumPct, setBuyerPremiumPct] = useState('20');
+  const [premiumVatPct, setPremiumVatPct] = useState('20');
+  const [transportCost, setTransportCost] = useState('0');
+  const [fixedAuctionCosts, setFixedAuctionCosts] = useState('0');
+  const [minutesToClose, setMinutesToClose] = useState('60');
+  const [bidIncrement, setBidIncrement] = useState('1');
+  const [safetyBufferPct, setSafetyBufferPct] = useState('5');
+  const [auctionClosesAtMs, setAuctionClosesAtMs] = useState<number | null>(null);
+  const [clockNow, setClockNow] = useState(Date.now());
+  useEffect(() => { const timer = setInterval(() => setClockNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
 
   const updateRow = useCallback((id: string, patch: Partial<ManifestRow>) => {
     setRows(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
@@ -230,6 +244,21 @@ export default function SurplusFlipScreen() {
   }, [rows, search]);
   const selectedCount = rows.filter(r => r.selected && !r.imported).length;
   const matchedCount = rows.filter(r => r.photoUri).length;
+  const manifestRrp = useMemo(() => rows.reduce((sum, row) => sum + Math.max(0, row.unitRrp) * Math.max(0, row.quantity), 0), [rows]);
+  const estimatedQuickFlipSales = manifestRrp * (Math.max(0, Math.min(100, Number(resaleRrpPct) || 0)) / 100);
+  const allInPurchaseBudget = estimatedQuickFlipSales * (Math.max(0, Math.min(100, Number(buyBudgetPct) || 0)) / 100);
+  const closesAtMs = auctionClosesAtMs ?? (clockNow + Math.max(0, Number(minutesToClose) || 0) * 60000);
+  const bidAnalysis = useMemo(() => calculateSurplusMaximumBid({
+    maximumAllInAcquisitionBudget: allInPurchaseBudget, currentBid: Math.max(0, Number(currentBid) || 0),
+    buyerPremiumRate: Math.max(0, Math.min(100, Number(buyerPremiumPct) || 0)) / 100,
+    vatOnPremiumRate: Math.max(0, Math.min(100, Number(premiumVatPct) || 0)) / 100,
+    fixedAuctionCosts: Math.max(0, Number(fixedAuctionCosts) || 0), transportAndOtherCosts: Math.max(0, Number(transportCost) || 0),
+    nowIso: new Date(clockNow).toISOString(), closesAtIso: new Date(closesAtMs).toISOString(),
+    evidenceSufficient: rows.length > 0 && manifestRrp > 0, bidIncrement: Math.max(0, Number(bidIncrement) || 0),
+    safetyBufferRate: Math.max(0, Math.min(100, Number(safetyBufferPct) || 0)) / 100,
+  }), [allInPurchaseBudget, currentBid, buyerPremiumPct, premiumVatPct, fixedAuctionCosts, transportCost, clockNow, closesAtMs, rows.length, manifestRrp, bidIncrement, safetyBufferPct]);
+  const formatMoney = (value: number) => '£' + value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const timeLeft = bidAnalysis.secondsRemaining > 0 ? Math.floor(bidAnalysis.secondsRemaining / 3600) + 'h ' + Math.floor((bidAnalysis.secondsRemaining % 3600) / 60) + 'm ' + (bidAnalysis.secondsRemaining % 60) + 's' : 'Closed / time not set';
 
   const importSelected = useCallback(async () => {
     if (!tenant?.id) {
@@ -452,6 +481,27 @@ export default function SurplusFlipScreen() {
           <MaterialIcons name="chevron-right" size={20} color={Colors.background} />
         </Pressable>
 
+        <View style={s.bidPanel}>
+          <View style={s.bidPanelHeading}><MaterialIcons name="gavel" size={22} color={Colors.primary} /><View style={{ flex: 1 }}><Text style={s.bidPanelTitle}>Quick-flip maximum bid</Text><Text style={s.bidPanelSub}>One manifest = one auction lot. Hard ceiling includes auction charges.</Text></View></View>
+          <View style={s.bidResult}><Text style={s.bidResultLabel}>MAXIMUM HAMMER BID</Text><Text style={s.bidResultValue}>{rows.length && manifestRrp > 0 ? formatMoney(bidAnalysis.maximumBid) : 'Load manifest'}</Text><Text style={s.bidResultMeta}>Current bid {formatMoney(Number(currentBid) || 0)} · Headroom {formatMoney(bidAnalysis.headroom)}</Text></View>
+          <View style={s.bidMetrics}><View style={s.bidMetric}><Text style={s.bidMetricLabel}>Manifest RRP</Text><Text style={s.bidMetricValue}>{formatMoney(manifestRrp)}</Text></View><View style={s.bidMetric}><Text style={s.bidMetricLabel}>Estimated quick-flip sales</Text><Text style={s.bidMetricValue}>{formatMoney(estimatedQuickFlipSales)}</Text></View><View style={s.bidMetric}><Text style={s.bidMetricLabel}>All-in acquisition cap</Text><Text style={s.bidMetricValue}>{formatMoney(allInPurchaseBudget)}</Text></View></View>
+          <View style={s.bidFields}>
+            <Field label="Current bid (£)" value={currentBid} keyboardType="decimal-pad" onChangeText={v => { setCurrentBid(v); setAuctionClosesAtMs(null); }} />
+            <Field label="Minutes to close" value={minutesToClose} keyboardType="numeric" onChangeText={v => { setMinutesToClose(v); setAuctionClosesAtMs(null); }} />
+            <Field label="Resale estimate (% of RRP)" value={resaleRrpPct} keyboardType="decimal-pad" onChangeText={setResaleRrpPct} />
+            <Field label="Purchase cap (% of resale)" value={buyBudgetPct} keyboardType="decimal-pad" onChangeText={setBuyBudgetPct} />
+            <Field label="Buyer premium (%)" value={buyerPremiumPct} keyboardType="decimal-pad" onChangeText={setBuyerPremiumPct} />
+            <Field label="VAT on premium (%)" value={premiumVatPct} keyboardType="decimal-pad" onChangeText={setPremiumVatPct} />
+            <Field label="Delivery / collection (£)" value={transportCost} keyboardType="decimal-pad" onChangeText={setTransportCost} />
+            <Field label="Other auction fees (£)" value={fixedAuctionCosts} keyboardType="decimal-pad" onChangeText={setFixedAuctionCosts} />
+            <Field label="Bid increment (£)" value={bidIncrement} keyboardType="decimal-pad" onChangeText={setBidIncrement} />
+            <Field label="Safety buffer (%)" value={safetyBufferPct} keyboardType="decimal-pad" onChangeText={setSafetyBufferPct} />
+          </View>
+          <Pressable onPress={() => setAuctionClosesAtMs(Date.now() + Math.max(0, Number(minutesToClose) || 0) * 60000)} style={s.countdownBtn}><MaterialIcons name="timer" size={16} color={Colors.primary} /><Text style={s.countdownBtnText}>Start / reset countdown</Text></Pressable>
+          <Text style={s.bidTimer}>Time remaining: {timeLeft}</Text>
+          <View style={[s.bidVerdict, bidAnalysis.status === 'OVER_LIMIT' || bidAnalysis.status === 'NO_BID_INSUFFICIENT_EVIDENCE' ? s.bidVerdictDanger : s.bidVerdictSafe]}><Text style={s.bidVerdictText}>{bidAnalysis.recommendation}</Text></View>
+          <Text style={s.bidDisclaimer}>Planning estimate only: resale is modelled as {resaleRrpPct || '0'}% of RRP and purchase cap as {buyBudgetPct || '0'}% of estimated gross resale. These are editable assumptions, not verified sold-price evidence. Research sold listings and confirm auction VAT terms before bidding. Live auction fetching is not connected.</Text>
+        </View>
         {rows.length > 0 ? (
           <>
             <View style={s.statsRow}>
@@ -544,6 +594,27 @@ const s = StyleSheet.create({
   headerAction: { flexDirection: 'row', alignItems: 'center', alignSelf: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 8, borderRadius: Radius.md, backgroundColor: Colors.primaryDim, borderWidth: 1, borderColor: Colors.primary + '35' },
   headerActionText: { fontSize: Typography.size.xs, fontWeight: Typography.weight.bold, color: Colors.primary },
   content: { padding: Spacing.base, gap: Spacing.md },
+  bidPanel: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.primary + '55', borderRadius: Radius.xl, padding: Spacing.base, gap: Spacing.md },
+  bidPanelHeading: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  bidPanelTitle: { fontSize: Typography.size.md, fontWeight: Typography.weight.bold, color: Colors.textPrimary },
+  bidPanelSub: { fontSize: 10, color: Colors.textTertiary, marginTop: 3, lineHeight: 15 },
+  bidResult: { padding: Spacing.base, borderRadius: Radius.lg, backgroundColor: Colors.primaryDim, alignItems: 'center', gap: 4 },
+  bidResultLabel: { fontSize: 10, fontWeight: Typography.weight.bold, color: Colors.primary, letterSpacing: 1 },
+  bidResultValue: { fontSize: 32, fontWeight: Typography.weight.extrabold, color: Colors.primary },
+  bidResultMeta: { fontSize: 11, color: Colors.textSecondary },
+  bidMetrics: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  bidMetric: { flexGrow: 1, minWidth: '28%', padding: Spacing.sm, borderRadius: Radius.md, backgroundColor: Colors.surfaceHighlight },
+  bidMetricLabel: { fontSize: 9, color: Colors.textTertiary, marginBottom: 4 },
+  bidMetricValue: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: Colors.textPrimary },
+  bidFields: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  countdownBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderColor: Colors.primary + '60', borderRadius: Radius.md, padding: Spacing.sm },
+  countdownBtnText: { fontSize: 11, color: Colors.primary, fontWeight: Typography.weight.bold },
+  bidTimer: { textAlign: 'center', fontSize: 12, fontWeight: Typography.weight.bold, color: Colors.textSecondary },
+  bidVerdict: { padding: Spacing.md, borderRadius: Radius.md, borderWidth: 1 },
+  bidVerdictSafe: { backgroundColor: Colors.successDim, borderColor: Colors.success + '60' },
+  bidVerdictDanger: { backgroundColor: Colors.dangerDim, borderColor: Colors.danger + '60' },
+  bidVerdictText: { color: Colors.textPrimary, fontSize: Typography.size.xs, lineHeight: 17, fontWeight: Typography.weight.semibold },
+  bidDisclaimer: { fontSize: 10, color: Colors.textTertiary, lineHeight: 15 },
   hero: { flexDirection: 'row', gap: Spacing.md, padding: Spacing.base, backgroundColor: Colors.surface, borderRadius: Radius.xl, borderWidth: 1, borderColor: Colors.primary + '40', ...Shadow.sm },
   heroTitle: { fontSize: Typography.size.md, fontWeight: Typography.weight.bold, color: Colors.textPrimary, marginBottom: 5 },
   heroText: { fontSize: Typography.size.xs, color: Colors.textSecondary, lineHeight: 17 },
