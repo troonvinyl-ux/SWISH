@@ -136,6 +136,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
+      - name: Export regenerated lockfile for reproducibility repair
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-pnpm-lockfile
+          path: pnpm-lock.yaml
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Run project lint
         run: pnpm lint
 
