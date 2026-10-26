@@ -597,9 +597,10 @@ export async function saveCoinReferenceImages(
       const fileName = `${itemId}/references/${safeSlot}.${extension}`;
       const uploadBuffer = new ArrayBuffer(bytes.byteLength);
       new Uint8Array(uploadBuffer).set(bytes);
+      const uploadBlob = new Blob([uploadBuffer], { type: contentType });
       const { error: uploadError } = await supabase.storage
         .from(ITEM_IMAGES_BUCKET)
-        .upload(fileName, uploadBuffer, { contentType, upsert: true });
+        .upload(fileName, uploadBlob, { contentType, upsert: true });
       if (uploadError) throw new Error('Rendered image upload failed.');
 
       const { data } = supabase.storage.from(ITEM_IMAGES_BUCKET).getPublicUrl(fileName);
