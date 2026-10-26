@@ -336,3 +336,15 @@ describe('Stripe customer portal account isolation', () => {
     expect(portal).not.toContain('JSON.stringify({ error: msg })');
   });
 });
+
+
+describe('Stripe checkout customer isolation', () => {
+  const checkout = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-create-checkout/index.ts'), 'utf8');
+
+  test('only reuses a Stripe customer linked to this user or an unlinked customer', () => {
+    expect(checkout).toContain('candidate.metadata?.user_id === user.id');
+    expect(checkout).toContain('!candidate.metadata?.user_id');
+    expect(checkout).toContain('metadata: { user_id: user.id }');
+    expect(checkout).not.toContain('customers.data[0].id');
+  });
+});
