@@ -373,7 +373,7 @@ function ReplyModal({
         >
           {/* Original message */}
           <View style={rm.originalCard}>
-            <Text style={rm.originalLabel}>BUYER'S MESSAGE</Text>
+            <Text style={rm.originalLabel}>BUYER&apos;S MESSAGE</Text>
             <Text style={rm.originalText}>{message.body}</Text>
             {message.ebayItemId ? (
               <Text style={rm.itemRef}>eBay Item #{message.ebayItemId}</Text>

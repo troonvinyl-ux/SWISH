@@ -840,7 +840,7 @@ function EbayHubScreenContent() {
         <View style={s.apiNoteCard}>
           <MaterialIcons name="info-outline" size={14} color={Colors.textTertiary} />
           <Text style={s.apiNoteText}>
-            Sections marked "API" require additional eBay partner approval. All other
+            Sections marked &quot;API&quot; require additional eBay partner approval. All other
             sections use the eBay Trading API, Fulfillment API, and Browse API with
             your existing OAuth credentials.
           </Text>

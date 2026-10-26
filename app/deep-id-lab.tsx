@@ -244,7 +244,7 @@ export default function DeepIdLabScreen() {
               auditTrail: valuation.auditTrail,
               applied: valuation.applied,
             })}</Text>
-            <Text style={styles.helper}>Sold evidence, active asking prices, catalogue references and AI estimates are kept distinct. Catalogue references do not establish a coin's identity or market price.</Text>
+            <Text style={styles.helper}>Sold evidence, active asking prices, catalogue references and AI estimates are kept distinct. Catalogue references do not establish a coin&apos;s identity or market price.</Text>
           </Panel>
         ) : null}
         {valuationNote ? <Text style={styles.helper}>{valuationNote}</Text> : null}

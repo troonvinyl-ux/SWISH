@@ -182,7 +182,7 @@ export default function EbayDraftSyncTestScreen() {
         </Pressable>
 
         <Text style={styles.sectionTitle}>3 · Sync a category change from eBay</Text>
-        <Text style={styles.body}>After changing the category on eBay (leave the offer unpublished), use this to copy eBay's exact category ID into the linked SWISH draft.</Text>
+        <Text style={styles.body}>After changing the category on eBay (leave the offer unpublished), use this to copy eBay&apos;s exact category ID into the linked SWISH draft.</Text>
         <Pressable disabled={busy} onPress={() => runTest('sync_category_from_ebay')} style={[styles.button, styles.secondaryButton, busy && styles.disabled]}>
           <MaterialIcons name="sync-alt" size={18} color={Colors.background} />
           <Text style={styles.buttonText}>Sync category from eBay to SWISH</Text>

@@ -615,7 +615,7 @@ function CategoryPickerModal({
             </Pressable>
             <Pressable onPress={handleSelectCurrentLevel} style={cp.selectCurrentBtn}>
               <MaterialIcons name="sell" size={11} color={Colors.background} />
-              <Text style={cp.selectCurrentBtnText}>Use "{breadcrumbs[breadcrumbs.length - 1].name}"</Text>
+              <Text style={cp.selectCurrentBtnText}>Use &quot;{breadcrumbs[breadcrumbs.length - 1].name}&quot;</Text>
             </Pressable>
           </View>
         ) : null}
@@ -675,7 +675,7 @@ function CategoryPickerModal({
               {staticFiltered.length === 0 ? (
                 <View style={cp.noResults}>
                   <MaterialIcons name="search-off" size={22} color={Colors.textTertiary} />
-                  <Text style={cp.noResultsText}>No categories match "{search}"</Text>
+                  <Text style={cp.noResultsText}>No categories match &quot;{search}&quot;</Text>
                 </View>
               ) : null}
               {staticFiltered.map(cat => (
@@ -2240,7 +2240,7 @@ export default function EbayListingEditorScreen() {
             <View style={[s.revisionNote, { borderColor: Colors.warning + '30', backgroundColor: Colors.warningDim, marginBottom: 0 }]}>
               <MaterialIcons name="warning" size={14} color={Colors.warning} />
               <Text style={[s.revisionNoteText, { color: Colors.warning }]}>
-                No category selected. Tap "Suggest with AI" or browse the live eBay category tree to choose a valid leaf category before publishing.
+                No category selected. Tap &quot;Suggest with AI&quot; or browse the live eBay category tree to choose a valid leaf category before publishing.
               </Text>
             </View>
           )}
@@ -2344,14 +2344,14 @@ export default function EbayListingEditorScreen() {
         {!data.externalListingId ? (
           <View style={s.revisionNote}>
             <MaterialIcons name="info-outline" size={14} color={Colors.info} />
-            <Text style={s.revisionNoteText}>This listing is not yet live on eBay. Save changes here, then use "List on eBay" from the Admin screen to publish it.</Text>
+            <Text style={s.revisionNoteText}>This listing is not yet live on eBay. Save changes here, then use &quot;List on eBay&quot; from the Admin screen to publish it.</Text>
           </View>
         ) : (
           <View style={[s.revisionNote, { borderColor: Colors.success + '30', backgroundColor: Colors.successDim }]}>
             <MaterialIcons name="published-with-changes" size={14} color={Colors.success} />
             <View style={{ flex: 1 }}>
               <Text style={[s.revisionNoteText, { color: Colors.success }]}>Live on eBay · Listing #{data.externalListingId}</Text>
-              <Text style={[s.revisionNoteText, { color: Colors.textSecondary, marginTop: 2 }]}>Tap "Revise on eBay" to push all changes to the live listing.</Text>
+              <Text style={[s.revisionNoteText, { color: Colors.textSecondary, marginTop: 2 }]}>Tap &quot;Revise on eBay&quot; to push all changes to the live listing.</Text>
             </View>
           </View>
         )}
