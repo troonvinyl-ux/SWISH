@@ -84,12 +84,11 @@ async function verifyTenantAccess(
 // do not gain access to an item's valuation context.
 function productForSpecialist(specialistId: string | null | undefined): string | null {
   const id = String(specialistId ?? '').trim().toLowerCase();
+  if (['surplus_flip', 'surplus_trader', 'catalog_flip', 'catalog_surplus'].includes(id)) return 'surplus_flip';
   if ([
     'coins', 'coins_uk', 'coins_world', 'coins_currency', 'islamic_silver',
     'banknotes', 'gold', 'silver', 'ancient_artefacts',
     'jewellery_precious_metals', 'curiosities_collectibles',
-    // Surplus Flip is a distinct product boundary; legacy and current IDs are aliases.
-    'surplus_trader', 'surplus_flip',
   ].includes(id) || id.includes('coin')) return 'coins';
   if (id === 'motocross' || id === 'mx' || id === 'flipper_mx') return 'motocross';
   if (id === 'bicycles' || id === 'cycling' || id === 'bike_flipper') return 'bicycles';
