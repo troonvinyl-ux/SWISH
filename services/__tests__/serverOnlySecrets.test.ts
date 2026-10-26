@@ -524,3 +524,32 @@ describe('SWISH market valuation provider error sanitization', () => {
     expect(marketValue).not.toContain('Gemini error: ${e.message}');
   });
 });
+
+
+describe('SWISH remaining provider diagnostics stay server-safe', () => {
+  const marketValue = fs.readFileSync(
+    path.join(projectRoot, 'supabase/functions/swish-market-value/index.ts'),
+    'utf8',
+  );
+  const imageEnhance = fs.readFileSync(
+    path.join(projectRoot, 'supabase/functions/swish-coin-image-enhance/index.ts'),
+    'utf8',
+  );
+  const identify = fs.readFileSync(
+    path.join(projectRoot, 'supabase/functions/swish-identify/index.ts'),
+    'utf8',
+  );
+
+  test('sold-market and visual lookup errors are generic', () => {
+    expect(marketValue).toContain('Marketplace Insights sold-data lookup is unavailable.');
+    expect(marketValue).not.toContain('Marketplace Insights: ${e?.message');
+    expect(marketValue).not.toContain('Unhandled valuation error:',);
+  });
+
+  test('coin image and tier lookup exception details are not logged', () => {
+    expect(imageEnhance).toContain("console.error('[swish-coin-image-enhance] request failed.')");
+    expect(imageEnhance).not.toContain("error instanceof Error ? error.message");
+    expect(identify).toContain("console.error('[swish-identify] Tenant tier lookup failed.')");
+    expect(identify).not.toContain('Tenant tier lookup failed: ${e.message}');
+  });
+});
