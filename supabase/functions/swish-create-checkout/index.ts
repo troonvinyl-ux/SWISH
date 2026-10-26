@@ -40,8 +40,18 @@ serve(async (req) => {
     let nicheId = "coins";
     try {
       const body = await req.json();
-      if (body?.nicheId) nicheId = body.nicheId;
+      if (body?.nicheId) nicheId = String(body.nicheId).trim().toLowerCase();
     } catch {}
+    // Checkout metadata must use a recognised production niche so the same
+    // entitlement can be read consistently by swish-check-subscription.
+    if (nicheId === "surplus_trader") nicheId = "surplus_flip";
+    const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing", "surplus_flip"]);
+    if (!allowedNiches.has(nicheId)) {
+      return new Response(JSON.stringify({ error: "Unknown SWISH subscription niche." }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+      });
+    }
 
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY not configured");
