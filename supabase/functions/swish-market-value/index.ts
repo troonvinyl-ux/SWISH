@@ -253,7 +253,7 @@ async function getAndRefreshConnectorCreds(
       } else {
         console.log(`[SWISH Market v7] Token refresh failed (${resp.status})`);
       }
-    } catch (e: any) {
+    } catch {
       console.log('[SWISH Market v7] Token refresh failed unexpectedly.');
     }
   }
@@ -498,7 +498,7 @@ async function callTerapeak(
       dataSource: 'terapeak_product_research',
     };
 
-  } catch (e: any) {
+  } catch {
     console.log('[SWISH Market v8] Terapeak request failed unexpectedly.');
     return { ...noResult, error: 'Sold-data lookup is temporarily unavailable.' };
   }
@@ -575,7 +575,7 @@ async function searchEbayBrowse(
     })).filter((i: any) => i.price > 0 && i.title);
     console.log(`[SWISH Market v8] Browse API: ${items.length} items (total ${data.total ?? items.length}) marketplace=${marketplaceLog}`);
     return { available: true, items, totalFound: Number(data.total ?? items.length), query };
-  } catch (e: any) {
+  } catch {
     console.log('[SWISH Market v8] Browse request failed unexpectedly.');
     return { ...noResult, error: 'Active-listing lookup is temporarily unavailable.' };
   }
@@ -628,8 +628,8 @@ async function searchEbaySoldListings(appToken: string | null, query: string, ma
       };
     }).filter((item: any) => item.title && item.price > 0);
     return { available: true, items, totalFound: Number(data.total ?? data.totalItems ?? items.length) };
-  } catch (e: any) {
-    return { ...empty, error: `Marketplace Insights: ${e?.message ?? 'request failed'}` };
+  } catch {
+    return { ...empty, error: 'Marketplace Insights sold-data lookup is unavailable.' };
   }
 }
 
@@ -1608,7 +1608,7 @@ Deno.serve(async (req: Request) => {
       warningFlags: valuation.valuationWarnings,
     },
   });
-  } catch (err: any) {
+  } catch {
     // Do not expose runtime exception text, which may contain provider or request details.
     console.error('[SWISH Market v8] Unhandled valuation error.');
     return jsonResponse({ error: 'Market valuation failed. Please retry.' }, 500);
