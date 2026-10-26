@@ -653,12 +653,17 @@ export async function getOrdersToDispatch(
 export async function getAllOrders(
   tenantId: string,
   fulfilmentStatus?: FulfilmentStatus,
+  specialistIds: string[] = [],
 ): Promise<{ orders: OrderWithItem[]; error: string | null }> {
   const supabase = getSupabaseClient();
+  // Fail closed: orders must be attached to an item belonging to the active niche.
+  // Never return tenant-wide orders when niche resolution is missing.
+  if (!specialistIds.length) return { orders: [], error: null };
   let query = supabase
     .from('orders')
-    .select('*, items(inventory_id, catalogue_number, folder_number, pocket_position, storage_location, canonical_title, media)')
+    .select('*, items!inner(specialist_id, inventory_id, catalogue_number, folder_number, pocket_position, storage_location, canonical_title, media)')
     .eq('tenant_id', tenantId)
+    .in('items.specialist_id', specialistIds)
     .order('created_at', { ascending: false });
 
   if (fulfilmentStatus) {
