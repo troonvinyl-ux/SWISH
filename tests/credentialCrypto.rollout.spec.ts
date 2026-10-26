@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { webcrypto } from 'node:crypto';
 import {
   decryptCredentials,
   encryptCredentials,
@@ -11,6 +12,7 @@ const originalDeno = (globalThis as typeof globalThis & { Deno?: unknown }).Deno
 
 beforeEach(() => {
   envValues.clear();
+  if (!globalThis.crypto?.subtle) Object.defineProperty(globalThis, 'crypto', { configurable: true, value: webcrypto });
   (globalThis as typeof globalThis & { Deno?: unknown }).Deno = {
     env: { get: (name: string) => envValues.get(name) },
   };
