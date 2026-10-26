@@ -532,6 +532,109 @@ export async function updateItemMedia(
 }
 
 // ── Persist an AI identification result as a real database Item ───────────────
+/**
+ * Persist AI-rendered coin references separately from canonical item.media.
+ * These images are for SWISH display/research only and must never become eBay
+ * listing photos unless the seller explicitly adds them through the listing UI.
+ */
+export async function saveCoinReferenceImages(
+  tenantId: string,
+  itemId: string,
+  images: CapturedImage[],
+): Promise<{ urls: Record<string, string>; errors: string[] }> {
+  const supabase = getSupabaseClient();
+  const urls: Record<string, string> = {};
+  const errors: string[] = [];
+
+  for (const image of images) {
+    const source = image.enhancedUri;
+    if (!source) continue;
+
+    try {
+      let bytes: Uint8Array;
+      let contentType = 'image/jpeg';
+
+      if (source.startsWith('data:image/')) {
+        const match = source.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/i);
+        if (!match) throw new Error('Unsupported rendered image format.');
+        contentType = match[1].toLowerCase();
+        const binary = atob(match[2]);
+        bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      } else if (/^https:\/\//i.test(source)) {
+        const response = await fetch(source);
+        if (!response.ok) throw new Error('Rendered image download failed.');
+        const receivedType = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
+        if (!receivedType || !/^image\/(?:jpeg|png|webp)$/.test(receivedType)) {
+          throw new Error('Rendered image is not a supported image format.');
+        }
+        contentType = receivedType;
+        bytes = new Uint8Array(await response.arrayBuffer());
+      } else {
+        const base64 = await FileSystem.readAsStringAsync(source, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        const binary = atob(base64);
+        bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      }
+
+      if (bytes.byteLength === 0) throw new Error('Rendered image is empty.');
+      const extension = contentType === 'image/png' ? 'png' : contentType === 'image/webp' ? 'webp' : 'jpg';
+      const safeSlot = image.slotId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40) || 'reference';
+      const fileName = `${itemId}/references/${safeSlot}.${extension}`;
+      const { error: uploadError } = await supabase.storage
+        .from(ITEM_IMAGES_BUCKET)
+        .upload(fileName, bytes.buffer, { contentType, upsert: true });
+      if (uploadError) throw new Error('Rendered image upload failed.');
+
+      const { data } = supabase.storage.from(ITEM_IMAGES_BUCKET).getPublicUrl(fileName);
+      if (data?.publicUrl) urls[image.slotId] = data.publicUrl;
+      else errors.push(`Reference image (${safeSlot}) could not be saved.`);
+    } catch {
+      errors.push(`Reference image (${image.slotId}) could not be saved.`);
+    }
+  }
+
+  if (Object.keys(urls).length > 0) {
+    const { data: item, error: readError } = await supabase
+      .from('items')
+      .select('attributes')
+      .eq('id', itemId)
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+
+    if (readError || !item) {
+      errors.push('Rendered references uploaded but could not be linked to this inventory item.');
+      return { urls: {}, errors };
+    }
+
+    const attributes = item.attributes && typeof item.attributes === 'object' && !Array.isArray(item.attributes)
+      ? item.attributes as Record<string, unknown>
+      : {};
+    const existing = attributes._coin_reference_images &&
+      typeof attributes._coin_reference_images === 'object' &&
+      !Array.isArray(attributes._coin_reference_images)
+      ? attributes._coin_reference_images as Record<string, string>
+      : {};
+    const { error: updateError } = await supabase
+      .from('items')
+      .update({
+        attributes: { ...attributes, _coin_reference_images: { ...existing, ...urls } },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', itemId)
+      .eq('tenant_id', tenantId);
+
+    if (updateError) {
+      errors.push('Rendered references uploaded but could not be linked to this inventory item.');
+      return { urls: {}, errors };
+    }
+  }
+
+  return { urls, errors };
+}
+
 export async function saveIdentifiedItem(
   tenantId: string,
   result: AIIdentificationResult,
