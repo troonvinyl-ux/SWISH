@@ -642,3 +642,30 @@ describe('SWISH image download error sanitization', () => {
     expect(category).not.toContain('Auth error: ${e.message}');
   });
 });
+
+
+describe('eBay OAuth custom credential privilege boundary', () => {
+  const oauthSource = fs.readFileSync(
+    path.join(projectRoot, 'supabase/functions/swish-ebay-oauth/index.ts'),
+    'utf8',
+  );
+
+  test('custom eBay application credentials require tenant owner/admin role', () => {
+    expect(oauthSource).toContain(".select('id, role, is_owner')");
+    expect(oauthSource).toContain('requireOwnerOrAdmin && !(');
+    expect(oauthSource).toContain("membership.role === 'owner'");
+    expect(oauthSource).toContain("membership.role === 'admin'");
+    const authorizeStart = oauthSource.indexOf('async function handleAuthorize(');
+    const callbackStart = oauthSource.indexOf('// ═', authorizeStart);
+    const authorizeSource = oauthSource.slice(authorizeStart, callbackStart);
+    expect(authorizeSource).toContain('verifyUserAndTenant(authHeader, tenantId, supabase, true)');
+  });
+
+  test('normal subscriber authorization keeps the existing tenant-member flow', () => {
+    const subscriberStart = oauthSource.indexOf('async function handleSubscriberAuthorization(');
+    const authorizeStart = oauthSource.indexOf('async function handleAuthorize(');
+    const subscriberSource = oauthSource.slice(subscriberStart, authorizeStart);
+    expect(subscriberSource).toContain('verifyUserAndTenant(authHeader, tenantId, supabase)');
+    expect(subscriberSource).not.toContain('supabase, true');
+  });
+});
