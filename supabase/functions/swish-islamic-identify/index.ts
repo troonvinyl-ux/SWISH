@@ -466,10 +466,10 @@ async function searchZeno(
       searchUrl, totalFound: rawCandidates.length,
     };
   } catch (e: any) {
-    console.error(`[swish-islamic-identify] Zeno search error for "${query}": ${e.message}`);
+    console.error('[swish-islamic-identify] Zeno search request failed.');
     return {
       available: false, query, candidates: [], searchUrl,
-      error: `Network error: ${e.message}`, totalFound: 0,
+      error: 'Zeno search is temporarily unavailable.', totalFound: 0,
     };
   }
 }
@@ -612,7 +612,7 @@ async function searchNumistaIslamicSilver(
     const scoredCandidates = [...candidateMap.values()].map(t => scoreNumistaIslamic(t, aiOutput, physicalData)).sort((a, b) => b.matchScore - a.matchScore);
     const directCandidate = suppliedReferenceId ? scoredCandidates.find(candidate => candidate.typeId === suppliedReferenceId) : undefined;
     const candidates = directCandidate ? [directCandidate, ...scoredCandidates.filter(candidate => candidate.typeId !== suppliedReferenceId)] : scoredCandidates;
-    return { available: successfulQueries > 0, query, candidates: candidates.slice(0, 12), error: `Numista error: ${e.message}`, totalFound: candidateMap.size };
+    return { available: successfulQueries > 0, query, candidates: candidates.slice(0, 12), error: 'Numista search is temporarily unavailable.', totalFound: candidateMap.size };
   }
 }
 
@@ -1191,7 +1191,7 @@ Deno.serve(async (req: Request) => {
             console.log(`[swish-islamic-identify] Premium via tenant tier: ${tenantRow.subscription_tier}`);
           }
         }
-      } catch (e: any) { console.error('[swish-islamic-identify] Tier lookup error:', e.message); }
+      } catch { console.error('[swish-islamic-identify] Tier lookup failed.'); }
     }
 
     // Secondary: Stripe check (only if no qualifying tier)
@@ -1228,7 +1228,7 @@ Deno.serve(async (req: Request) => {
             }
           }
         }
-      } catch (e: any) { console.error('[swish-islamic-identify] Stripe check error (non-blocking):', e.message); }
+      } catch { console.error('[swish-islamic-identify] Stripe entitlement check failed.'); }
     }
 
     // Quota check
@@ -1681,7 +1681,7 @@ Deno.serve(async (req: Request) => {
           updated_at: new Date().toISOString(),
         }).eq('id', itemId).eq('tenant_id', tenantId);
       } catch (e: any) {
-        console.error(`[swish-islamic-identify] DB save error: ${e.message}`);
+        console.error('[swish-islamic-identify] Identification result could not be saved.');
       }
     }
 
