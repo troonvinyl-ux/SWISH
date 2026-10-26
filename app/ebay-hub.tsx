@@ -154,7 +154,7 @@ async function loadEbayMetrics(tenantId: string, specialistIds?: string[]): Prom
 
   const connector = connectorRes.data;
   const isConnected = connector?.status === 'connected';
-  const tokenExpiry = connector?.access_token_expires_at ?? null;
+  const tokenExpiry = connector?.accessTokenExpiresAt ?? null;
   const tokenHealthy = tokenExpiry ? new Date(tokenExpiry) > new Date(Date.now() + 60 * 60 * 1000) : false;
   // Apply niche filter to listing rows
   const allListingRows = listingCountsRes.data ?? [];
