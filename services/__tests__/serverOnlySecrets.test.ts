@@ -446,3 +446,23 @@ describe('SWISH market valuation error sanitization', () => {
     expect(marketValue).not.toContain('Credential decrypt error: ${e.message}');
   });
 });
+
+
+describe('SWISH coin image enhancement provider error safety', () => {
+  const imageEnhance = fs.readFileSync(
+    path.join(projectRoot, 'supabase/functions/swish-coin-image-enhance/index.ts'),
+    'utf8',
+  );
+
+  test('does not log raw AI provider response bodies', () => {
+    expect(imageEnhance).toContain("console.error('[swish-coin-image-enhance] model request failed', response.status)");
+    expect(imageEnhance).not.toContain("response.text()).slice(0, 500)");
+    expect(imageEnhance).not.toContain("response.status, detail");
+  });
+
+  test('requires an authenticated user and bounds image input size', () => {
+    expect(imageEnhance).toContain("await userClient.auth.getUser()");
+    expect(imageEnhance).toContain('imageDataUrl.length > 8_000_000');
+    expect(imageEnhance).toContain("imageDataUrl.startsWith");
+  });
+});
