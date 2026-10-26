@@ -155,7 +155,8 @@ Deno.serve(async (req: Request) => {
     return jr({ error: 'Unable to verify authentication. Please sign in again.' }, 401);
   }
 
-  const tr = await getToken(supabase, tenantId, ['sync_transactions', 'get_funds_summary', 'get_payouts'].includes(route));
+  const refreshForFinances = route === 'sync_transactions' || route === 'get_funds_summary' || route === 'get_payouts';
+  const tr = await getToken(supabase, tenantId, refreshForFinances);
   if ('error' in tr) return jr({ error: tr.error, requiresReauth: true, financesApiAvailable: false }, 400);
   const { accessToken } = tr;
   const hdrs = { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json', 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_GB' };
