@@ -312,6 +312,7 @@ export interface ListingWithItem extends SavedListing {
   itemTitle: string;
   itemSpecialistId: string;
   itemAcquiredCost: number;
+  itemMedia: string[];
   categoryId?: string;
 }
 
@@ -324,7 +325,7 @@ export async function getAllListings(
 
   let query = supabase
     .from('listings')
-    .select('*, items!inner(canonical_title, specialist_id, acquired_cost)')
+    .select('*, items!inner(canonical_title, specialist_id, acquired_cost, media)')
     .eq('tenant_id', tenantId)
     .order('updated_at', { ascending: false });
 
@@ -346,6 +347,7 @@ export async function getAllListings(
     itemTitle: row.items?.canonical_title ?? 'Unknown Item',
     itemSpecialistId: row.items?.specialist_id ?? '',
     itemAcquiredCost: Number(row.items?.acquired_cost ?? 0),
+    itemMedia: Array.isArray(row.items?.media) ? row.items.media.filter((url: unknown) => typeof url === 'string' && url.length > 0) : [],
     categoryId: row.category_id ?? undefined,
   }));
 
