@@ -118,9 +118,12 @@ async function getToken(
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jr({ error: 'Method not allowed' }, 405);
-  let body: any;
+  let body: unknown;
   try { body = await req.json(); } catch { return jr({ error: 'Invalid JSON' }, 400); }
-  const { tenantId, route = 'sync_transactions', daysBack: requestedDaysBack = 90 } = body;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return jr({ error: 'Request body must be a JSON object.' }, 400);
+  }
+  const { tenantId, route = 'sync_transactions', daysBack: requestedDaysBack = 90 } = body as Record<string, unknown>;
   if (typeof tenantId !== 'string' || tenantId.trim().length === 0 || tenantId.length > 200) {
     return jr({ error: 'A valid tenantId is required.' }, 400);
   }
@@ -202,6 +205,17 @@ Deno.serve(async (req: Request) => {
             const { data: ord } = await supabase.from('orders').select('id').eq('tenant_id', tenantId).eq('external_order_id', ebayOrderId).maybeSingle();
             swishOrderId = ord?.id ?? null;
           }
+          const { data: existingTx, error: existingTxError } = await supabase
+            .from('ebay_financials')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .eq('ebay_transaction_id', txId)
+            .maybeSingle();
+          if (existingTxError) {
+            errors.push(`TX ${txId}: unable to check existing transaction state.`);
+            continue;
+          }
+
           const { error: ue } = await supabase.from('ebay_financials').upsert({
             tenant_id: tenantId, ebay_transaction_id: txId, transaction_type: txType,
             order_id: swishOrderId, ebay_order_id: ebayOrderId, amount,
@@ -212,9 +226,10 @@ Deno.serve(async (req: Request) => {
             transaction_date: tx.transactionDate ?? new Date().toISOString(),
           }, { onConflict: 'ebay_transaction_id,tenant_id', ignoreDuplicates: false });
           if (ue) {
-            // With the configured ON CONFLICT target, a remaining unique violation means
-            // another constraint failed; it was not an update and must not be counted as one.
+            // A remaining constraint error means the write failed; never count it as inserted/updated.
             errors.push(`TX ${txId}: transaction could not be persisted (database constraint).`);
+          } else if (existingTx) {
+            updated++;
           } else {
             inserted++;
           }
