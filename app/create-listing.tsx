@@ -561,13 +561,13 @@ function InlineCategoryPicker({
               <View style={icp.staticNote}>
                 <MaterialIcons name="info-outline" size={12} color={Colors.info} />
                 <Text style={icp.staticNoteText}>
-                  Showing offline category list. Tap "Retry Live" to browse the full eBay category tree when connected.
+                  Showing offline category list. Tap &quot;Retry Live&quot; to browse the full eBay category tree when connected.
                 </Text>
               </View>
               {staticFiltered.length === 0 ? (
                 <View style={icp.emptyState}>
                   <MaterialIcons name="search-off" size={24} color={Colors.textTertiary} />
-                  <Text style={icp.emptyText}>No categories match "{search}"</Text>
+                  <Text style={icp.emptyText}>No categories match &quot;{search}&quot;</Text>
                 </View>
               ) : (
                 staticFiltered.map(cat => (

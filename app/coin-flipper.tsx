@@ -1105,7 +1105,7 @@ function IdentifyTab({ result, capturedImages, onSave, saving, savedItemId, uplo
           <MaterialIcons name="warning-amber" size={19} color={Colors.warning} />
           <View style={{ flex: 1, gap: 4 }}>
             <Text style={{ color: Colors.warning, fontSize: Typography.size.sm, fontWeight: Typography.weight.extrabold }}>Unconfirmed identification</Text>
-            <Text style={{ color: CF.textPrimary, fontSize: Typography.size.sm, lineHeight: 19 }}>The catalogue found no match and confidence is very low. Do not treat a ruler, period or denomination as confirmed. Add the coin's measured weight and diameter and review clearer photos before listing.</Text>
+            <Text style={{ color: CF.textPrimary, fontSize: Typography.size.sm, lineHeight: 19 }}>The catalogue found no match and confidence is very low. Do not treat a ruler, period or denomination as confirmed. Add the coin&apos;s measured weight and diameter and review clearer photos before listing.</Text>
           </View>
         </View>
       ) : null}
