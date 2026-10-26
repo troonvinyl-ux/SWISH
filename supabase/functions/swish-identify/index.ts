@@ -1393,7 +1393,7 @@ async function resolveTenantTier(
       .maybeSingle();
     return tenantRow?.subscription_tier ?? null;
   } catch (e: any) {
-    console.error(`[swish-identify] Tenant tier lookup failed: ${e.message}`);
+    console.error('[swish-identify] Tenant tier lookup failed.');
     return null;
   }
 }
