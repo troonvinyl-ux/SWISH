@@ -1447,7 +1447,7 @@ const row = StyleSheet.create({
 export default function EbayAdminScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant } = useApp();
+  const { tenant, activeNicheId } = useApp();
   const { showAlert } = useAlert();
 
   const [listings, setListings] = useState<EbayListing[]>([]);
