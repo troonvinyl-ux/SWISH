@@ -323,7 +323,7 @@ export default function OnboardingScreen() {
       const supabase = getSupabaseClient();
 
       const { data: browseData, error: browseError } = await supabase.functions.invoke('swish-ebay-browse', {
-        body: { tenantId: tenant.id, route: 'my_active_listings', limit: 200 },
+        body: { tenantId: tenant.id, route: 'my_active_listings', limit: 400 },
       });
 
       if (browseError) {
@@ -757,7 +757,7 @@ export default function OnboardingScreen() {
                             {listingCount} eBay listing{listingCount === 1 ? '' : 's'} found in your seller account
                           </Text>
                           <Text style={s.importFoundSub}>
-                            Only listings confidently classified as {ONBOARDING_NICHES.find(n => n.id === selectedNiche)?.name ?? 'your selected niche'} will be imported. Unrelated or unclassified listings are skipped.
+                            Only listings classified as {ONBOARDING_NICHES.find(n => n.id === selectedNiche)?.name ?? 'your selected niche'} will be imported. Unrelated or unclassified listings are skipped.
                           </Text>
                         </View>
                       </View>
