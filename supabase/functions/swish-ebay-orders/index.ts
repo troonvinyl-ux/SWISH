@@ -110,7 +110,10 @@ interface FulfillmentOrder {
   orderId: string;
   legacyOrderId?: string;
   orderStatus: string;
-  fulfillmentStatus: string;
+  // eBay Fulfillment API returns `orderFulfillmentStatus` (not `fulfillmentStatus`).
+  // Keep the legacy alias optional for any previously-normalized payloads.
+  orderFulfillmentStatus?: string;
+  fulfillmentStatus?: string;
   createdAt: string;
   lastUpdatedAt: string;
   buyer: { username: string; buyerRegistrationAddress?: any };
@@ -355,7 +358,7 @@ async function importFulfillmentOrders(
       }
 
       // Map the current eBay state before deciding whether to insert or refresh.
-      const ff = (order.fulfillmentStatus ?? '').toUpperCase();
+      const ff = (order.orderFulfillmentStatus ?? order.fulfillmentStatus ?? '').toUpperCase();
       const fulfilmentStatus = ff === 'FULFILLED' ? 'dispatched' : 'awaiting_dispatch';
       const { data: existingRow } = await supabase.from('orders')
         .select('id, fulfilment_status, tracking_number, carrier, dispatched_at')
