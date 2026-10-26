@@ -553,3 +553,26 @@ describe('SWISH remaining provider diagnostics stay server-safe', () => {
     expect(identify).not.toContain('Tenant tier lookup failed: ${e.message}');
   });
 });
+
+
+describe('SWISH image download error sanitization', () => {
+  const imageDownload = fs.readFileSync(
+    path.join(projectRoot, 'supabase/functions/swish-image-download/index.ts'),
+    'utf8',
+  );
+  const islamicIdentify = fs.readFileSync(
+    path.join(projectRoot, 'supabase/functions/swish-islamic-identify/index.ts'),
+    'utf8',
+  );
+
+  test('image download response does not include raw processing exception text', () => {
+    expect(imageDownload).toContain('An item image could not be processed.');
+    expect(imageDownload).not.toContain('errors.push(`item=${item.id}: ${e.message}`)');
+    expect(imageDownload).not.toContain('processItem exception item=${item.id}: ${e.message}');
+  });
+
+  test('direct Numista lookup failures use a generic diagnostic', () => {
+    expect(islamicIdentify).toContain("firstError ||= 'Numista direct lookup failed.'");
+    expect(islamicIdentify).not.toContain('Numista direct lookup failed: ${e.message}');
+  });
+});
