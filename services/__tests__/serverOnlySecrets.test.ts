@@ -384,3 +384,27 @@ describe('SWISH eBay OAuth error boundary', () => {
     expect(oauth).not.toContain('error: `Could not create OAuth session: ${sessionErr.message}`');
   });
 });
+
+
+describe('eBay connector error response safety', () => {
+  const messages = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-ebay-messages/index.ts'), 'utf8');
+  const listing = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-ebay-list/index.ts'), 'utf8');
+  const fulfilment = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-ebay-post-order/index.ts'), 'utf8');
+
+  test('does not include credential-decryption exception text in client errors', () => {
+    expect(messages).toContain('Unable to read eBay connection securely.');
+    expect(listing).toContain('Unable to read eBay connection securely.');
+    expect(fulfilment).toContain('Unable to read eBay connection securely.');
+    expect(messages).not.toContain('eBay credentials are corrupted: ${e.message}');
+    expect(listing).not.toContain('eBay credentials are corrupted: ${e.message}');
+    expect(fulfilment).not.toContain('eBay credentials corrupted: ${e.message}');
+  });
+
+  test('uses generic client responses for unhandled provider failures', () => {
+    expect(messages).toContain('Unable to complete the eBay messages request.');
+    expect(listing).toContain('Unable to complete the eBay listing request.');
+    expect(fulfilment).toContain('Unable to complete the eBay fulfilment request.');
+    expect(messages).not.toContain("return jsonResponse({ error: e.message ?? 'Internal server error' }, 500)");
+    expect(fulfilment).not.toContain("return jsonResponse({ error: err.message ?? 'Internal error' }, 500)");
+  });
+});
