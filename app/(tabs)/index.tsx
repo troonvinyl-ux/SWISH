@@ -46,7 +46,7 @@ export default function NicheHomeScreen() {
   if (product === 'bicycles') return <BikeFlipperScreen key={activeNicheId} isHomeTab />;
   if (product === 'clothing') return <ThreadsFlipScreen key={activeNicheId} isHomeTab />;
   if (product === 'surplus_flip') return <SurplusFlipScreen key={activeNicheId} />;
-  return <Redirect href="/niche-select" />;
+  return <Redirect href={"/niche-select" as any} />;
 }
 
 const s = StyleSheet.create({
