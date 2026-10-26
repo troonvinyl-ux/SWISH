@@ -20,21 +20,11 @@ Five niche routes are registered in the main app: Coins, Motocross, Bicycles, Cl
 
 ## Credential migration and rollout
 
-The shared credential helper now supports a controlled fail-closed switch:
+The authoritative credential policy is fail-closed: ordinary calls to `decryptCredentials()` reject plaintext and malformed values. Legacy plaintext parsing belongs only to `migrateToEncrypted()` in the owner-authorised `swish-migrate-credentials` Edge Function. Do not introduce a runtime plaintext compatibility toggle or competing credential policy.
 
-- Default compatibility mode: legacy plaintext JSON can still be read during migration, with a structural warning only. Never log the stored value or fields.
-- Strict mode: set the Edge Function secret `SWISH_REJECT_PLAINTEXT_CREDENTIALS=true`. In this mode, plaintext values are rejected. Do not enable before all existing tenant connector rows have been migrated and checked.
-- The key remains a server-only secret named `SWISH_CREDENTIAL_KEY`; use one supported random 32-byte key encoding (hex or base64) consistently across all credential-consuming functions.
-- The migration endpoint is `swish-migrate-credentials`, invoked per tenant by an authenticated owner/admin. It reports counts and row-safe errors without returning credential material.
-
-Deployment checklist:
-1. Confirm `SWISH_CREDENTIAL_KEY` exists in the deployed Edge Function secret store; never paste it into GitHub or chat.
-2. Deploy the shared crypto helper and every Edge Function that imports it as one coordinated release.
-3. Run the credential migration from Settings for every tenant with an eBay connector.
-4. Verify `failed = 0` and `migrated + alreadyEncrypted = totalRows` for each tenant. The function's summary does not inspect database values after write, so an owner must also verify the migration output/connector health without exposing credential contents.
-5. Test connection status, OAuth reconnect, token refresh, listing draft/update, images, sync, orders, messages, finance and dispatch against the approved controlled/live environment.
-6. Only after all connector rows are confirmed encrypted, set `SWISH_REJECT_PLAINTEXT_CREDENTIALS=true` for all deployed functions and verify affected health checks.
-7. Rotate any eBay app or signing credentials if there is evidence they were exposed. Do not rotate the encryption key blindly: encrypted existing records require a deliberate decrypt/re-encrypt migration.
+- `SWISH_CREDENTIAL_KEY` remains a server-only secret, a random 32-byte value encoded consistently as hex or base64.
+- The migration endpoint is invoked one tenant at a time by an authenticated owner/admin. It returns counts and row-safe errors, never credential material.
+- Before deployment, confirm the server secret exists and every tenant's connector rows have been migrated. The owner must verify counts and connection health; source-only checks cannot prove production rows are encrypted.
 
 ## eBay requirements
 
