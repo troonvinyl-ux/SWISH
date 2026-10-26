@@ -198,7 +198,7 @@ jobs:
           NODE
 
       - name: Run routing, build-identity, and server-only secret regression tests
-        run: pnpm dlx jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/entryRoutes.test.ts services/__tests__/nicheIsolation.test.ts services/__tests__/brandedBuildConfig.test.ts services/__tests__/surplusFlipRouting.test.ts services/__tests__/serverOnlySecrets.test.ts
+        run: pnpm dlx jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/entryRoutes.test.ts services/__tests__/nicheIsolation.test.ts services/__tests__/brandedBuildConfig.test.ts services/__tests__/surplusFlipRouting.test.ts services/__tests__/serverOnlySecrets.test.ts services/__tests__/credentialCrypto.rollout.test.ts
 
       - name: Bundle Android production JavaScript
         run: npx expo export --platform android --output-dir dist-ci-android && rm -rf dist-ci-android
