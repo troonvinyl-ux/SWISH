@@ -347,7 +347,7 @@ export async function getAllListings(
     itemTitle: row.items?.canonical_title ?? 'Unknown Item',
     itemSpecialistId: row.items?.specialist_id ?? '',
     itemAcquiredCost: Number(row.items?.acquired_cost ?? 0),
-    itemMedia: Array.isArray(row.items?.media) ? row.items.media.filter((url: unknown) => typeof url === 'string' && url.length > 0) : [],
+    itemMedia: [...new Set([...(Array.isArray(row.items?.media) ? row.items.media : []), ...(Array.isArray(row.images) ? row.images : []), row.image_url].filter((url: unknown) => typeof url === 'string' && url.length > 0))] as string[],
     categoryId: row.category_id ?? undefined,
   }));
 
