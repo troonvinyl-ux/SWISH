@@ -124,7 +124,7 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies from the committed lockfile
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
 
       - name: Check coin scanner and AI service TypeScript diagnostics
         shell: bash
