@@ -227,7 +227,7 @@ async function fetchAllEbayImages(
     console.log(`[v6] GetItem ebay=${ebayItemId} found=${urls.length} PictureURL elements`);
     return urls.slice(0, MAX_IMAGES);
   } catch (e: any) {
-    console.log(`[v6] GetItem error for ebay=${ebayItemId}: ${e.message}`);
+    console.log('[v6] GetItem request failed.');
     return [];
   }
 }
@@ -583,9 +583,9 @@ Deno.serve(async (req: Request) => {
     let result: ProcessResult;
     try {
       result = await processItem(supabase, tenantId, item, accessToken, clientId);
-    } catch (e: any) {
-      console.log(`[v6] processItem exception item=${item.id}: ${e.message}`);
-      errors.push(`item=${item.id}: ${e.message}`);
+    } catch {
+      console.log('[v6] Image processing failed for an item.');
+      errors.push('An item image could not be processed.');
       itemsFailed++;
       continue;
     }
