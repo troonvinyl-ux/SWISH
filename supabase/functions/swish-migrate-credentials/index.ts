@@ -1,9 +1,9 @@
 // SWISH — swish-migrate-credentials Edge Function
 //
-// One-time admin operation: reads every marketplace_connectors row, checks
-// whether credential_ref is plaintext (unencrypted), and re-encrypts it with
-// AES-256-GCM via migrateToEncrypted().  The encrypted value is persisted back
-// to the row immediately so each row is only migrated once.
+// One-tenant-at-a-time admin operation: checks marketplace_connectors rows
+// belonging to the explicitly supplied tenant, then re-encrypts plaintext
+// credential_ref values with AES-256-GCM via migrateToEncrypted(). The encrypted
+// value is persisted immediately so each row is only migrated once.
 //
 // SECURITY INVARIANTS
 //   - Only callable by authenticated tenants whose membership is owner/admin.
@@ -11,8 +11,9 @@
 //   - Credential contents are NEVER logged — only structural metadata.
 //   - Runs server-side only.  No credential material leaves this function.
 //
-// REQUEST:  POST  { tenantId?: string }
-//   - tenantId filters to one tenant.  Omit to migrate all tenants (owner/admin only).
+// REQUEST:  POST  { tenantId: string }
+//   - tenantId is required. Only an owner/admin of that tenant may migrate its rows.
+//   - Cross-tenant migration is deliberately unsupported.
 //
 // RESPONSE: { migrated: number; alreadyEncrypted: number; failed: number; errors: string[] }
 
@@ -124,8 +125,8 @@ Deno.serve(async (req: Request) => {
 
   const { data: rows, error: fetchErr } = await query;
   if (fetchErr) {
-    console.error('[swish-migrate-credentials] DB fetch error:', fetchErr.message);
-    return error(`Database error: ${fetchErr.message}`, 500);
+    console.error('[swish-migrate-credentials] Database fetch failed:', fetchErr.message);
+    return error('Credential migration could not read connector records. Please retry or contact support.', 500);
   }
 
   if (!rows || rows.length === 0) {
@@ -169,9 +170,9 @@ Deno.serve(async (req: Request) => {
 
       if (updateErr) {
         failed++;
-        const msg = `Row ${row.id} (${row.marketplace_id}): update failed — ${updateErr.message}`;
+        const msg = `Row ${row.id} (${row.marketplace_id}): update failed`;
         errors.push(msg);
-        console.error('[swish-migrate-credentials]', msg);
+        console.error('[swish-migrate-credentials] Row update failed:', { rowId: row.id, marketplace: row.marketplace_id, code: updateErr.code });
       } else {
         migrated++;
         // Log only structural metadata — never the credential content
@@ -182,9 +183,9 @@ Deno.serve(async (req: Request) => {
       }
     } catch (e: any) {
       failed++;
-      const msg = `Row ${row.id} (${row.marketplace_id}): ${e?.message ?? 'Unknown error'}`;
+      const msg = `Row ${row.id} (${row.marketplace_id}): encryption failed`;
       errors.push(msg);
-      console.error('[swish-migrate-credentials]', msg);
+      console.error('[swish-migrate-credentials] Row encryption failed:', { rowId: row.id, marketplace: row.marketplace_id, reason: e instanceof Error ? e.message : 'unknown error' });
     }
   }
 
