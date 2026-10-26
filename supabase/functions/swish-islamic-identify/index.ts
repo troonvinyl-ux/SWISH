@@ -89,6 +89,7 @@ interface CandidateIdentification {
   dynasty?: string;
   ruler?: string;
   denomination?: string;
+  coinFamily?: string;
   mint?: string;
   dateAH?: string;
   dateCE?: string;
