@@ -270,3 +270,39 @@ describe('SWISH Stripe account binding', () => {
     expect(subscription).toContain('niche_entitlements: entitlements');
   });
 });
+
+
+describe('SWISH AI identification tenant and quota safeguards', () => {
+  const identify = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-identify/index.ts'), 'utf8');
+
+  test('requires a tenant ID and verified membership before performing identification work', () => {
+    expect(identify).toContain("typeof bodyTenantId !== 'string' || !bodyTenantId.trim() || bodyTenantId.length > 200");
+    expect(identify).toContain(".eq('tenant_id', tenantId)\n      .eq('user_id', user.id)");
+    expect(identify).toContain("if (!tenantMembership)");
+    expect(identify).toContain("error: 'Access denied for this account.'");
+  });
+
+  test('fails closed when the atomic AI usage increment or usage lookup fails', () => {
+    expect(identify).toContain("return { count: 0, error: 'Usage tracking is unavailable.' }");
+    expect(identify).toContain("error: 'USAGE_TRACKING_UNAVAILABLE'");
+    expect(identify).toContain("if (error) throw new Error('AI usage lookup failed.')");
+    expect(identify).not.toContain("return { count: Number(row?.count ?? 1), error: null }");
+  });
+
+  test('does not roll quota counters backward over a concurrent request', () => {
+    expect(identify).toContain(".eq('count', currentUsage + 1)");
+  });
+
+  test('checks active and trialing subscription state and verifies linked user metadata', () => {
+    expect(identify).toContain("if (sub.status !== 'active' && sub.status !== 'trialing') continue;");
+    expect(identify).toContain('const linkedUserId = sub.metadata?.user_id');
+    expect(identify).toContain('if (linkedUserId && linkedUserId !== userId) continue;');
+    expect(identify).toContain("if (subscribedNiche === 'surplus_trader') subscribedNiche = 'surplus_flip';");
+  });
+
+  test('does not send raw unhandled or AI-provider errors back to the client', () => {
+    expect(identify).toContain("error: 'Identification request failed. Please retry.'");
+    expect(identify).toContain("error: 'Identification service is temporarily unavailable. Please retry.'");
+    expect(identify).not.toContain("JSON.stringify({ error: err.message ?? 'Internal error' })");
+  });
+});
