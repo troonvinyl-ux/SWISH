@@ -61,7 +61,7 @@ serve(async (req) => {
 
     const subscriptions = await stripe.subscriptions.list({
       customer: customerId,
-      status: "active",
+      status: "all",
       limit: 100,
     });
 
@@ -74,6 +74,9 @@ serve(async (req) => {
     const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing", "surplus_flip"]);
 
     for (const sub of subscriptions.data) {
+      // Stripe free-trial subscriptions are 'trialing', not 'active'. Treat
+      // both as valid entitlements while Stripe confirms the subscription.
+      if (sub.status !== "active" && sub.status !== "trialing") continue;
       const subProductId = sub.items.data[0]?.price?.product as string | undefined;
       if (subProductId !== "prod_VQ0JxUCL29SZPQ") continue;
 
