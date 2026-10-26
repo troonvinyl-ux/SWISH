@@ -76,7 +76,7 @@ async function verifyTenantAccess(
     const { data: member } = await supabase.from('tenant_memberships').select('id').eq('tenant_id', tenantId).eq('user_id', user.id).maybeSingle();
     if (!member) return { ok: false, error: 'Access denied.' };
     return { ok: true };
-  } catch (e: any) { return { ok: false, error: `Auth error: ${e.message}` }; }
+  } catch { return { ok: false, error: 'Authentication could not be verified.' }; }
 }
 
 // Resolve item specialists to the four production product boundaries.
@@ -215,7 +215,7 @@ async function getAndRefreshConnectorCreds(
 
   let creds: any;
   try { creds = await decryptCredentials(conn.credential_ref); }
-  catch (e: any) { console.log(`[SWISH Market v7] Credential decrypt error: ${e.message}`); return null; }
+  catch { console.log('[SWISH Market v7] Credential decryption failed.'); return null; }
 
   if (!creds?.accessToken || !creds?.clientId) {
     console.log(`[SWISH Market v7] Missing accessToken or clientId`);
