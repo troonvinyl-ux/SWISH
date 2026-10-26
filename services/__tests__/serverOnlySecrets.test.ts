@@ -88,6 +88,8 @@ describe('SWISH eBay Finances input and refresh safety', () => {
   test('counts transaction updates only when an existing transaction was found', () => {
     expect(source).toContain(".eq('tenant_id', tenantId)\n            .eq('ebay_transaction_id', txId)");
     expect(source).toContain('else if (existingTx)');
+    expect(source).toContain('transaction could not be persisted (database constraint).');
+    expect(source).toContain('continue;');
     expect(source).not.toContain("if (ue) { if (ue.code === '23505') updated++");
   });
 
