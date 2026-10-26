@@ -164,9 +164,11 @@ async function loadEbayMetrics(tenantId: string, specialistIds?: string[]): Prom
   const activeListings = listingRows.filter(l => l.status === 'active').length;
   const draftListings = listingRows.filter(l => l.status === 'draft' || l.status === 'pending').length;
   const endedListings = listingRows.filter(l => l.status === 'ended').length;
-  const awaitingDispatch = ordersDispatchRes.data?.length ?? 0;
-  const labelsCreated = ordersDispatchRes.data?.filter(order => order.fulfilment_status === 'label_created').length ?? 0;
-  const dispatchedToday = dispatchedTodayRes.data?.length ?? 0;
+  const dispatchRows = (ordersDispatchRes.data ?? []) as any[];
+  const dispatchedTodayRows = (dispatchedTodayRes.data ?? []) as any[];
+  const awaitingDispatch = dispatchRows.length;
+  const labelsCreated = dispatchRows.filter(order => order.fulfilment_status === 'label_created').length;
+  const dispatchedToday = dispatchedTodayRows.length;
   const sumRevenue = (rows: any[]) => rows.reduce((s, r) => s + Number(r.sale_price ?? 0), 0);
   const revenueToday = sumRevenue(salesTodayRes.data ?? []);
   const revenueWeek = sumRevenue(salesWeekRes.data ?? []);
@@ -180,7 +182,8 @@ async function loadEbayMetrics(tenantId: string, specialistIds?: string[]): Prom
   const financials = financialsRes.data ?? [];
   const pendingPayout = financials.filter(f => f.transaction_type === 'PAYOUT').reduce((s, f) => s + Math.abs(Number(f.amount ?? 0)), 0);
   const totalFeesMonth = Math.abs(financials.filter(f => String(f.transaction_type ?? '').includes('FINAL_VALUE_FEE') && Number(f.amount ?? 0) < 0).reduce((s, f) => s + Number(f.amount ?? 0), 0));
-  const netProfitMonth = salesMonthRes.data?.reduce((s, r) => s + Number(r.net_revenue ?? 0), 0) ?? 0;
+  const salesMonthRows = (salesMonthRes.data ?? []) as any[];
+  const netProfitMonth = salesMonthRows.reduce((s, r) => s + Number(r.net_revenue ?? 0), 0);
   const fundsPayload = fundsSummaryRes.data?.success ? fundsSummaryRes.data.fundsSummary : null;
   const availableFundsRaw = fundsPayload?.availableFunds;
   const availableFunds = availableFundsRaw?.value != null ? Number(availableFundsRaw.value) : null;

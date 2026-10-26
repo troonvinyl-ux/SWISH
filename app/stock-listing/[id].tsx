@@ -2618,7 +2618,7 @@ export default function StockListingScreen() {
                 const pr = formatAskingPriceRange(ebayVisualResult.items);
                 return pr ? (
                   <View style={[s.intelWarning, { borderColor: Colors.warning + '25' }]}>
-                    <MaterialIcons name="price-tag" size={11} color={Colors.warning} />
+                    <MaterialIcons name="local-offer" size={11} color={Colors.warning} />
                     <Text style={s.intelWarningText}>{pr} — current asking prices, not sold prices</Text>
                   </View>
                 ) : null;

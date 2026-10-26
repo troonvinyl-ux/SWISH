@@ -1085,7 +1085,7 @@ export default function EbayReturnsScreen() {
       {loading ? (
         <View style={s.loading}><ActivityIndicator color={Colors.primary} size="large" /></View>
       ) : (
-        <FlatList
+        <FlatList<any>
           data={section === 'returns' ? returns : cases}
           keyExtractor={i => i.id}
           contentContainerStyle={[s.list, { paddingBottom: insets.bottom + 80 }]}
@@ -1101,7 +1101,7 @@ export default function EbayReturnsScreen() {
               />
             ) : (
               <CaseRow
-                item={item as EbayCase}
+                item={item as unknown as EbayCase}
                 onPress={setSelectedCase}
                 onRespond={c => { setRespondCase(c); setRespondReturn(null); }}
               />
