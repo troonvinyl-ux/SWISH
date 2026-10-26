@@ -59,6 +59,7 @@ jobs:
           services/__tests__/surplusFlipRouting.test.ts
           services/__tests__/serverOnlySecrets.test.ts
           services/__tests__/surplusAuctionBidEngine.test.ts
+          tests/credentialCrypto.rollout.test.ts
 
   edge-function-syntax:
     name: Edge Function syntax and secret-boundary guard
