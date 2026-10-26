@@ -21,36 +21,36 @@ jobs:
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
-      SWISH_OTA_PUBLISH: "1"
+      SWISH_OTA_PUBLISH: ${{ vars.SWISH_OTA_PUBLISH }}
     steps:
       - name: Skip safely until Expo credentials are configured
-        if: ${{ env.EXPO_TOKEN == '' || env.EXPO_PROJECT_ID == '' }}
+        if: ${{ env.SWISH_OTA_PUBLISH != '1' || env.EXPO_TOKEN == '' || env.EXPO_PROJECT_ID == '' }}
         run: |
-          echo "::warning::OTA publishing skipped. Configure repository variable EXPO_PROJECT_ID and repository secret EXPO_TOKEN."
-          echo "The installed APK will not receive OTA updates until an OTA-enabled APK is installed and these settings are configured."
+          echo "::warning::OTA publishing skipped. Set repository variable SWISH_OTA_PUBLISH=1 only after production rollout checks pass."
+          echo "Also verify repository variable EXPO_PROJECT_ID and repository secret EXPO_TOKEN are configured."
 
       - name: Check out SWISH
-        if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
+        if: ${{ env.SWISH_OTA_PUBLISH == '1' && env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
         uses: actions/checkout@v4
 
       - name: Set up Node.js
-        if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
+        if: ${{ env.SWISH_OTA_PUBLISH == '1' && env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Set up pnpm
-        if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
+        if: ${{ env.SWISH_OTA_PUBLISH == '1' && env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
         uses: pnpm/action-setup@v4
         with:
           version: 9.15.9
 
       - name: Install dependencies
-        if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
+        if: ${{ env.SWISH_OTA_PUBLISH == '1' && env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
         run: pnpm install --no-frozen-lockfile
 
       - name: Validate Expo OTA configuration
-        if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
+        if: ${{ env.SWISH_OTA_PUBLISH == '1' && env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
         env:
           SWISH_NICHE: ${{ matrix.niche }}
           EXPO_NO_DOTENV: "1"
@@ -65,7 +65,7 @@ jobs:
           fi
 
       - name: Ensure OTA branch and channel are linked
-        if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
+        if: ${{ env.SWISH_OTA_PUBLISH == '1' && env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
         env:
           SWISH_NICHE: ${{ matrix.niche }}
         run: |
@@ -85,7 +85,7 @@ jobs:
           npx eas-cli@latest channel:edit "$CHANNEL" --branch "$BRANCH" --non-interactive
 
       - name: Publish niche-specific update
-        if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
+        if: ${{ env.SWISH_OTA_PUBLISH == '1' && env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
         env:
           SWISH_NICHE: ${{ matrix.niche }}
         run: npx eas-cli@latest update --branch "production-${SWISH_NICHE}" --message "SWISH ${SWISH_NICHE} OTA update ${GITHUB_SHA}" --non-interactive
