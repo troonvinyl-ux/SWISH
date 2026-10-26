@@ -62,11 +62,15 @@ async function getToken(
   const expiresAtMs = creds.expiresAt ? Date.parse(creds.expiresAt) : Number.NaN;
   const needsRefresh = !Number.isFinite(expiresAtMs) || Date.now() + 5 * 60_000 >= expiresAtMs;
 
-  // Finance routes refresh without a scope parameter to preserve permissions already consented to.
-  if (refreshForFinances || needsRefresh) {
-    if (!creds.refreshToken || !creds.clientId || !creds.clientSecret) {
-      return { error: 'eBay authorisation has expired or is incomplete. Reconnect eBay.' };
-    }
+  // Finance routes request an unrestricted refresh when refresh credentials are available,
+  // to preserve permissions already consented to. Do not break an otherwise-valid access
+  // token simply because an older connector lacks a refresh token; an actually expired token
+  // still requires re-authorisation.
+  const hasRefreshCredentials = Boolean(creds.refreshToken && creds.clientId && creds.clientSecret);
+  if (needsRefresh && !hasRefreshCredentials) {
+    return { error: 'eBay authorisation has expired or is incomplete. Reconnect eBay.' };
+  }
+  if (needsRefresh || (refreshForFinances && hasRefreshCredentials)) {
 
     let refreshResponse: Response;
     try {
