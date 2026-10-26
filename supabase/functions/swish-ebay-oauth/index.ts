@@ -85,6 +85,7 @@ async function verifyUserAndTenant(
   authHeader: string | null,
   tenantId: string,
   supabase: ReturnType<typeof adminClient>,
+  requireOwnerOrAdmin = false,
 ): Promise<{ ok: boolean; userId?: string; error?: string; status?: number }> {
   if (!authHeader) return { ok: false, error: 'Authentication required. Please sign in to SWISH.', status: 401 };
   const token = authHeader.replace('Bearer ', '').trim();
@@ -102,13 +103,21 @@ async function verifyUserAndTenant(
   }
   const { data: membership } = await supabase
     .from('tenant_memberships')
-    .select('id')
+    .select('id, role, is_owner')
     .eq('tenant_id', tenantId)
     .eq('user_id', user.id)
     .maybeSingle();
   if (!membership) {
     console.warn(`[SWISH Security] swish-ebay-oauth: User ${user.id} attempted tenant ${tenantId} — not a member`);
     return { ok: false, error: 'Access denied: you are not a member of this organisation.', status: 403 };
+  }
+  if (requireOwnerOrAdmin && !(
+    membership.is_owner === true ||
+    membership.role === 'owner' ||
+    membership.role === 'admin'
+  )) {
+    console.warn(`[SWISH Security] swish-ebay-oauth: User ${user.id} attempted privileged eBay credential setup for tenant ${tenantId}`);
+    return { ok: false, error: 'Owner or admin role required to configure custom eBay application credentials.', status: 403 };
   }
   return { ok: true, userId: user.id };
 }
@@ -239,7 +248,7 @@ async function handleAuthorize(
   }
 
   const supabase = adminClient();
-  const verify = await verifyUserAndTenant(authHeader, tenantId, supabase);
+  const verify = await verifyUserAndTenant(authHeader, tenantId, supabase, true);
   if (!verify.ok) return jsonResponse({ error: verify.error }, verify.status ?? 403);
 
   if (clientId.trim() === clientSecret.trim()) {
