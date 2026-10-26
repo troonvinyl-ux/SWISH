@@ -71,13 +71,14 @@ serve(async (req) => {
     let productId: string | null = null;
     let subscriptionEnd: string | null = null;
     let priceId: string | null = null;
-    const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing"]);
+    const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing", "surplus_flip"]);
 
     for (const sub of subscriptions.data) {
       const subProductId = sub.items.data[0]?.price?.product as string | undefined;
       if (subProductId !== "prod_VQ0JxUCL29SZPQ") continue;
 
-      const nicheId = String(sub.metadata?.niche_id ?? "coins").toLowerCase();
+      let nicheId = String(sub.metadata?.niche_id ?? "coins").toLowerCase();
+      if (nicheId === "surplus_trader") nicheId = "surplus_flip";
       if (!allowedNiches.has(nicheId)) continue;
       nicheEntitlements.add(nicheId);
 
