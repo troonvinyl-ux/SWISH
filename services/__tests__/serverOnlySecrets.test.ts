@@ -67,7 +67,8 @@ describe('SWISH eBay Finances input and refresh safety', () => {
   const functionPath = path.join(projectRoot, 'supabase/functions/swish-ebay-finances/index.ts');
   const source = fs.readFileSync(functionPath, 'utf8');
 
-  test('validates route and date-window inputs before calling the eBay API', () => {
+  test('validates request-object, route, and date-window inputs before calling the eBay API', () => {
+    expect(source).toContain('Request body must be a JSON object.');
     expect(source).toContain("new Set(['sync_transactions', 'get_payouts', 'get_funds_summary', 'get_summary'])");
     expect(source).toContain('daysBack < 1 || daysBack > 365');
     expect(source).toContain('Unsupported finances route.');
@@ -82,6 +83,12 @@ describe('SWISH eBay Finances input and refresh safety', () => {
   test('scopes order lookups and updates by both order ID and tenant ID', () => {
     expect(source).toContain(".eq('id', swishOrderId).eq('tenant_id', tenantId).maybeSingle()");
     expect(source).toContain(".eq('id', swishOrderId).eq('tenant_id', tenantId);");
+  });
+
+  test('counts transaction updates only when an existing transaction was found', () => {
+    expect(source).toContain(".eq('tenant_id', tenantId)\n            .eq('ebay_transaction_id', txId)");
+    expect(source).toContain('else if (existingTx)');
+    expect(source).not.toContain("if (ue) { if (ue.code === '23505') updated++");
   });
 
   test('does not return raw internal failures in the HTTP response', () => {
