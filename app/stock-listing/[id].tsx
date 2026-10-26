@@ -2180,7 +2180,13 @@ export default function StockListingScreen() {
             const { error } = await deleteListing(
               listing.id,
               tenant?.id ?? '',
-              isLive ? listing.externalListingId ?? undefined : undefined,
+              isLive
+                ? {
+                    itemId: listing.itemId,
+                    externalListingId: listing.externalListingId,
+                    status: listing.status,
+                  }
+                : undefined,
             );
             setEndingId(null);
             if (error) { showAlert('Delete Failed', error); return; }
