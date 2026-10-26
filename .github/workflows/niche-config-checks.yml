@@ -139,6 +139,10 @@ jobs:
           echo "No TypeScript diagnostics in the coin scanner or AI services."
           echo "The existing project-wide check also reports unrelated errors in other files; those are not used as a gate here."
 
+      - name: Verify the regression test runner is declared
+        run: |
+          node -e "const p=require('./package.json'); if (!p.devDependencies?.jest) { console.error('Jest is not declared in package.json; add it together with the lockfile before enabling this test step.'); process.exit(1); }"
+
       - name: Run routing, build-identity, and server-only secret regression tests
         run: pnpm exec jest --config jest.config.ci.js --runInBand services/__tests__/entryRoutes.test.ts services/__tests__/nicheIsolation.test.ts services/__tests__/brandedBuildConfig.test.ts services/__tests__/surplusFlipRouting.test.ts services/__tests__/serverOnlySecrets.test.ts
 
