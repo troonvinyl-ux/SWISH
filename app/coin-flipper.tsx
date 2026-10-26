@@ -2213,28 +2213,20 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
           </View>
           {isPremium ? <View style={main.proBadge}><Text style={main.proBadgeText}>PRO</Text></View> : null}
         </Pressable>
-        {/* Specialist indicator in header */}
-        {activeTab === 'capture' && selectedSpecialist.id !== 'general' ? (
-          <View style={[main.specialistIndicator, { backgroundColor: selectedSpecialist.color + '20', borderColor: selectedSpecialist.color + '50' }]}>
-            <MaterialIcons name={selectedSpecialist.icon as any} size={11} color={selectedSpecialist.color} />
-            <Text style={[main.specialistIndicatorText, { color: selectedSpecialist.color }]}>{selectedSpecialist.label}</Text>
-          </View>
-        ) : (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.xs }}>
-            <Pressable
-              onPress={() => router.push('/deep-id-lab' as any)}
-              style={main.myCoinsBtn}
-              hitSlop={6}
-              accessibilityLabel="Open Deep ID and Re-ID Lab"
-              accessibilityRole="button"
-            >
-              <MaterialIcons name="science" size={17} color={CF.gold} />
-            </Pressable>
-            <Pressable onPress={() => router.push('/(tabs)/inventory' as any)} style={main.myCoinsBtn} hitSlop={6} accessibilityLabel="View my coin inventory" accessibilityRole="button">
-              <MaterialIcons name="inventory-2" size={16} color={CF.gold} />
-            </Pressable>
-          </View>
-        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.xs }}>
+          <Pressable
+            onPress={() => router.push('/deep-id-lab' as any)}
+            style={main.myCoinsBtn}
+            hitSlop={6}
+            accessibilityLabel="Open Deep ID and Re-ID Lab"
+            accessibilityRole="button"
+          >
+            <MaterialIcons name="science" size={17} color={CF.gold} />
+          </Pressable>
+          <Pressable onPress={() => router.push('/(tabs)/inventory' as any)} style={main.myCoinsBtn} hitSlop={6} accessibilityLabel="View my coin inventory" accessibilityRole="button">
+            <MaterialIcons name="inventory-2" size={16} color={CF.gold} />
+          </Pressable>
+        </View>
       </View>
 
       {/* ── Tab bar ── */}
