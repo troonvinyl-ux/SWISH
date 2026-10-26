@@ -37,7 +37,7 @@ async function getToken(
 ): Promise<{ accessToken: string } | { error: string; requiresReauth?: boolean }> {
   const { data: conn, error: connectorError } = await supabase
     .from('marketplace_connectors')
-    .select('credential_ref, status')
+    .select('credential_ref, status, access_token_expires_at')
     .eq('tenant_id', tenantId)
     .eq('marketplace_id', 'ebay')
     .maybeSingle();
@@ -60,7 +60,8 @@ async function getToken(
   }
 
   if (!creds.accessToken) return { error: 'No eBay access token. Reconnect eBay.', requiresReauth: true };
-  const expiresAtMs = creds.expiresAt ? Date.parse(creds.expiresAt) : Number.NaN;
+  const storedExpiry = creds.expiresAt ?? (conn.access_token_expires_at as string | null | undefined) ?? undefined;
+  const expiresAtMs = storedExpiry ? Date.parse(storedExpiry) : Number.NaN;
   const needsRefresh = !Number.isFinite(expiresAtMs) || Date.now() + 5 * 60_000 >= expiresAtMs;
 
   // swish-ebay-sync refreshes using a restricted scope set. Finance routes therefore
