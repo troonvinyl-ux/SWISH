@@ -146,7 +146,7 @@ async function createOAuthSession(
 
   if (upsertErr) {
     console.error('Connector upsert error:', upsertErr.message);
-    return { consentUrl: '', error: `Database error: ${upsertErr.message}` };
+    return { consentUrl: '', error: 'Unable to save eBay connection setup. Please retry or contact support.' };
   }
 
   const stateNonce = generateStateNonce();
@@ -164,7 +164,7 @@ async function createOAuthSession(
 
   if (sessionErr) {
     console.error('OAuth session insert error:', sessionErr.message);
-    return { consentUrl: '', error: `Could not create OAuth session: ${sessionErr.message}` };
+    return { consentUrl: '', error: 'Unable to start eBay authorization. Please retry or contact support.' };
   }
 
   const params = new URLSearchParams({

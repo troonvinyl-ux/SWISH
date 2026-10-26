@@ -369,3 +369,18 @@ describe('Stripe checkout customer isolation', () => {
     expect(checkout).not.toContain('customers.data[0].id');
   });
 });
+
+
+describe('SWISH eBay OAuth error boundary', () => {
+  const oauth = fs.readFileSync(
+    path.join(projectRoot, 'supabase/functions/swish-ebay-oauth/index.ts'),
+    'utf8',
+  );
+
+  test('does not return raw database error details from OAuth setup to clients', () => {
+    expect(oauth).toContain("error: 'Unable to save eBay connection setup. Please retry or contact support.'");
+    expect(oauth).toContain("error: 'Unable to start eBay authorization. Please retry or contact support.'");
+    expect(oauth).not.toContain('error: `Database error: ${upsertErr.message}`');
+    expect(oauth).not.toContain('error: `Could not create OAuth session: ${sessionErr.message}`');
+  });
+});
