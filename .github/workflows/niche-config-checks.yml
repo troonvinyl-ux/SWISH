@@ -49,7 +49,6 @@ on:
       - 'supabase/functions/swish-ebay-post-order/index.ts'
       - 'supabase/functions/swish-ebay-finances/index.ts'
       - 'supabase/functions/_shared/credentialCrypto.ts'
-      - 'tests/credentialCrypto.rollout.spec.ts'
       - 'supabase/functions/_shared/ebayDigitalSignature.ts'
       - 'supabase/functions/swish-migrate-credentials/index.ts'
       - 'app/ebay-finances.tsx'
