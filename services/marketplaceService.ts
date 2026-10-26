@@ -337,7 +337,6 @@ export async function getOrCreateConnector(
     return { connector: mapConnector(fetched), error: null };
   }
 
-  if (error) return { connector: null, error: error.message };
   return { connector: mapConnector(data), error: null };
 }
 

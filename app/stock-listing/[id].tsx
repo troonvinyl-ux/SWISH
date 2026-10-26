@@ -1120,7 +1120,7 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
                           <Text style={{ fontSize: 11, color: Colors.textSecondary }}>
                             {refinedResult.coinResearch.candidates.length} catalogue lead(s) · results are candidates, not confirmed IDs
                           </Text>
-                          {(refinedResult.coinResearch.candidates ?? []).slice(0, 8).map((candidate, index) => (
+                          {(refinedResult.coinResearch.candidates ?? []).slice(0, 8).map((candidate: { source: string; url: string; title: string; reference?: string; snippet?: string }, index: number) => (
                             <View key={candidate.source + ':' + candidate.url + ':' + index} style={{ gap: 2, paddingTop: 5, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: Colors.surfaceBorder }}>
                               <Text style={{ fontSize: 9, fontWeight: Typography.weight.bold, color: Colors.info }}>{candidate.source}{candidate.reference ? ' · ' + candidate.reference : ''}</Text>
                               <Text onPress={() => Linking.openURL(candidate.url)} style={{ fontSize: 11, color: Colors.textPrimary, textDecorationLine: 'underline' }}>{candidate.title}</Text>
@@ -2812,7 +2812,7 @@ export default function StockListingScreen() {
         {/* ── NICHE-AWARE ITEM DETAILS ── */}
         {(() => {
           const specialist = item.specialistId ?? '';
-          const isBike = specialist === 'bicycles' || specialist === 'cycling';
+          const isBike = specialist === 'bicycles';
           const isMXSpec = specialist === 'motocross';
           const isClothing = specialist === 'clothing' || specialist === 'trainers_sneakers';
           const isCoin = !isBike && !isMXSpec && !isClothing;

@@ -22,6 +22,8 @@ export interface SpecialistRoute {
   estimatedValue: number;
   strategy: 'individual' | 'bundle' | 'lot' | 'scrap' | 'hold';
   notes: string;
+  expectedLabourHours?: number;
+  profitPerHour?: number;
 }
 
 export interface DecompositionResult {

@@ -96,6 +96,8 @@ export interface MarketValueResult {
   auditTrail: Record<string, any>;
   numista?: {
     title: string;
+    typeId?: number;
+    numistaN?: string;
     matchScore: number;
     accepted: boolean;
     matchFactors: string[];
