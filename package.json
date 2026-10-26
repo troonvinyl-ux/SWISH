@@ -155,8 +155,7 @@
     "eslint": "^9.25.0",
     "eslint-config-expo": "~9.2.0",
     "react-dev-inspector": "^2.0.1",
-    "typescript": "~5.8.3",
-    "jest": "^29.7.0"
+    "typescript": "~5.8.3"
   },
   "private": true
 }
