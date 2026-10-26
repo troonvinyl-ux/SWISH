@@ -51,6 +51,7 @@ async function getToken(
     clientId?: string;
     clientSecret?: string;
     expiresAt?: string;
+    financeScopeRefreshedAt?: string;
   };
   try {
     creds = await decryptCredentials(conn.credential_ref) as typeof creds;
@@ -62,15 +63,16 @@ async function getToken(
   const expiresAtMs = creds.expiresAt ? Date.parse(creds.expiresAt) : Number.NaN;
   const needsRefresh = !Number.isFinite(expiresAtMs) || Date.now() + 5 * 60_000 >= expiresAtMs;
 
-  // Finance routes request an unrestricted refresh when refresh credentials are available,
-  // to preserve permissions already consented to. Do not break an otherwise-valid access
-  // token simply because an older connector lacks a refresh token; an actually expired token
-  // still requires re-authorisation.
+  // swish-ebay-sync refreshes using a restricted scope set. Finance routes therefore
+  // need one no-scope refresh after that event, not on every request. The marker lives
+  // inside the already-encrypted credential payload and is cleared by the scoped refresher.
+  const financeRefreshAt = creds.financeScopeRefreshedAt ? Date.parse(creds.financeScopeRefreshedAt) : Number.NaN;
+  const needsFinanceScopeRefresh = refreshForFinances && !Number.isFinite(financeRefreshAt);
   const hasRefreshCredentials = Boolean(creds.refreshToken && creds.clientId && creds.clientSecret);
   if (needsRefresh && !hasRefreshCredentials) {
     return { error: 'eBay authorisation has expired or is incomplete. Reconnect eBay.' };
   }
-  if (needsRefresh || (refreshForFinances && hasRefreshCredentials)) {
+  if (needsRefresh || (needsFinanceScopeRefresh && hasRefreshCredentials)) {
 
     let refreshResponse: Response;
     try {
@@ -105,7 +107,14 @@ async function getToken(
 
     const expiresIn = Number(data.expires_in);
     const nextExpiry = new Date(Date.now() + (Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn : 7200) * 1000).toISOString();
-    const encryptedRef = await encryptCredentials({ ...creds, accessToken: data.access_token, expiresAt: nextExpiry });
+    const nextCredentials = {
+      ...creds,
+      accessToken: data.access_token,
+      expiresAt: nextExpiry,
+      // This endpoint deliberately omits the OAuth scope parameter, preserving the consented scopes.
+      financeScopeRefreshedAt: new Date().toISOString(),
+    };
+    const encryptedRef = await encryptCredentials(nextCredentials);
     const { error: updateError } = await supabase
       .from('marketplace_connectors')
       .update({ credential_ref: encryptedRef, access_token_expires_at: nextExpiry, updated_at: new Date().toISOString() })
