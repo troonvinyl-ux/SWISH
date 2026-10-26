@@ -1,22 +1,15 @@
 // SWISH — Credential Encryption Utility
 //
-// AES-256-GCM encryption for eBay credentials stored in
-// marketplace_connectors.credential_ref. This module must only be imported by
-// trusted Supabase Edge Functions.
-//
-// Key: SWISH_CREDENTIAL_KEY env var — base64-encoded or hex-encoded 32-byte key.
+// AES-256-GCM encryption for eBay credentials stored in marketplace_connectors.credential_ref.
+// Encryption/decryption happens ONLY inside trusted Edge Functions.
+// Key: SWISH_CREDENTIAL_KEY server secret, base64- or hex-encoded 32-byte value.
 // Format: "enc:v1:<base64-iv>:<base64-ciphertext>"
 //
-// Legacy plaintext reads are a temporary compatibility mode, disabled when
-// SWISH_REJECT_PLAINTEXT_CREDENTIALS=true. Enable that switch only after the
-// owner has run the credential migration for every tenant and confirmed that
-// no plaintext rows remain. The fail-closed mode prevents legacy credentials
-// from being used again if the migration rollout has been completed.
-//
 // SECURITY INVARIANTS:
-// - Credential contents are never logged or returned to clients.
-// - The encryption key is read exclusively from Edge Function secrets.
-// - Callers must verify user/tenant membership before accessing credentials.
+//   - Normal credential reads fail closed for plaintext and malformed payloads.
+//   - Legacy plaintext parsing is isolated to migrateToEncrypted() only.
+//   - Credential contents are never logged or returned to clients.
+//   - Callers must verify tenant membership and resource ownership before access.
 
 const ENC_PREFIX = 'enc:v1:';
 
@@ -28,14 +21,9 @@ function readServerEnv(name: string): string | undefined {
   return denoRuntime.env.get(name);
 }
 
-function plaintextFallbackEnabled(): boolean {
-  return readServerEnv('SWISH_REJECT_PLAINTEXT_CREDENTIALS') !== 'true';
-}
-
-/** Derive a non-exportable AES-256-GCM key from the server-side secret. */
 async function getKey(): Promise<CryptoKey> {
   const raw = readServerEnv('SWISH_CREDENTIAL_KEY');
-  if (!raw) throw new Error('[CredentialCrypto] Server credential encryption is not configured');
+  if (!raw) throw new Error('[CredentialCrypto] SWISH_CREDENTIAL_KEY is not set');
 
   let keyBytes: Uint8Array;
   const trimmed = raw.trim();
@@ -45,110 +33,99 @@ async function getKey(): Promise<CryptoKey> {
   } else {
     try {
       const decoded = atob(trimmed);
-      keyBytes = Uint8Array.from(decoded, (c) => c.charCodeAt(0));
+      keyBytes = new Uint8Array(decoded.length);
+      for (let i = 0; i < decoded.length; i++) keyBytes[i] = decoded.charCodeAt(0);
     } catch {
-      throw new Error('[CredentialCrypto] Server credential encryption key must be base64 or hex encoded');
+      throw new Error('[CredentialCrypto] SWISH_CREDENTIAL_KEY must be base64 or hex-encoded 32-byte key');
     }
   }
 
   if (keyBytes.length !== 32) {
-    throw new Error('[CredentialCrypto] Server credential encryption key must be exactly 32 bytes');
+    throw new Error('[CredentialCrypto] SWISH_CREDENTIAL_KEY must be exactly 32 bytes');
   }
 
   return crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
 }
 
-/** Encrypt credentials with AES-GCM and a fresh 96-bit IV. */
 export async function encryptCredentials(credentials: Record<string, unknown>): Promise<string> {
-  if (!credentials || typeof credentials !== 'object' || Array.isArray(credentials)) {
-    throw new Error('[CredentialCrypto] Credential payload must be an object');
-  }
   const plaintextBytes = new TextEncoder().encode(JSON.stringify(credentials));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const key = await getKey();
-  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintextBytes);
-  const toB64 = (bytes: Uint8Array) => btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join(''));
-  return `${ENC_PREFIX}${toB64(iv)}:${toB64(new Uint8Array(ciphertext))}`;
+  const ciphertextBuffer = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintextBytes);
+  const ivB64 = btoa(String.fromCharCode(...iv));
+  const ctB64 = btoa(String.fromCharCode(...new Uint8Array(ciphertextBuffer)));
+  return `${ENC_PREFIX}${ivB64}:${ctB64}`;
 }
 
-/**
- * Decrypt an encrypted value. Legacy plaintext JSON is accepted only during the
- * explicitly controlled compatibility window. Set SWISH_REJECT_PLAINTEXT_CREDENTIALS
- * to "true" after all tenants have migrated to make plaintext credentials fail closed.
- */
+/** Decrypt encrypted credentials only. Plaintext legacy values are rejected. */
 export async function decryptCredentials(stored: string): Promise<Record<string, unknown>> {
-  if (!stored) throw new Error('[CredentialCrypto] Empty credential reference');
-
-  if (!stored.startsWith(ENC_PREFIX)) {
-    if (!plaintextFallbackEnabled()) {
-      throw new Error('[CredentialCrypto] Legacy plaintext credentials are disabled; migrate or reconnect eBay');
-    }
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(stored);
-    } catch {
-      throw new Error('[CredentialCrypto] Credential reference format is invalid');
-    }
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new Error('[CredentialCrypto] Legacy credential payload must be a JSON object');
-    }
-    // Structural warning only. Never log the value or any credential fields.
-    console.warn('[CredentialCrypto] Legacy plaintext credential encountered; owner migration is required');
-    return parsed as Record<string, unknown>;
+  if (!stored) throw new Error('[CredentialCrypto] Empty credential_ref');
+  if (!isEncrypted(stored)) {
+    throw new Error('[CredentialCrypto] Plaintext credential_ref rejected; run the owner-authorised credential migration');
   }
 
-  const parts = stored.slice(ENC_PREFIX.length).split(':');
-  if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    throw new Error('[CredentialCrypto] Encrypted credential reference format is invalid');
-  }
+  const withoutPrefix = stored.slice(ENC_PREFIX.length);
+  const colonIdx = withoutPrefix.indexOf(':');
+  if (colonIdx === -1) throw new Error('[CredentialCrypto] Malformed encrypted credential_ref');
 
+  const ivB64 = withoutPrefix.slice(0, colonIdx);
+  const ctB64 = withoutPrefix.slice(colonIdx + 1);
   let iv: Uint8Array;
   let ciphertext: Uint8Array;
   try {
-    iv = Uint8Array.from(atob(parts[0]), (c) => c.charCodeAt(0));
-    ciphertext = Uint8Array.from(atob(parts[1]), (c) => c.charCodeAt(0));
+    iv = Uint8Array.from(atob(ivB64), c => c.charCodeAt(0));
+    ciphertext = Uint8Array.from(atob(ctB64), c => c.charCodeAt(0));
   } catch {
-    throw new Error('[CredentialCrypto] Encrypted credential reference encoding is invalid');
+    throw new Error('[CredentialCrypto] Malformed encrypted credential_ref');
   }
-  if (iv.length !== 12 || ciphertext.length < 16) {
-    throw new Error('[CredentialCrypto] Encrypted credential reference has invalid lengths');
+  if (iv.length !== 12 || ciphertext.length < 17) {
+    throw new Error('[CredentialCrypto] Malformed encrypted credential_ref');
   }
 
   const key = await getKey();
-  let plaintext: ArrayBuffer;
+  let plaintextBuffer: ArrayBuffer;
   try {
-    plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+    plaintextBuffer = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
   } catch {
-    throw new Error('[CredentialCrypto] Credentials cannot be decrypted; verify the server key or reconnect eBay');
+    throw new Error('[CredentialCrypto] Decryption failed — wrong key or corrupted data');
   }
 
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(new TextDecoder().decode(plaintext));
+    const parsed: unknown = JSON.parse(new TextDecoder().decode(plaintextBuffer));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('invalid credential object');
+    }
+    return parsed as Record<string, unknown>;
   } catch {
     throw new Error('[CredentialCrypto] Decrypted credential payload is invalid');
   }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('[CredentialCrypto] Decrypted credential payload must be an object');
-  }
-  return parsed as Record<string, unknown>;
 }
 
-/** True only for the versioned authenticated-encryption format. */
 export function isEncrypted(stored: string): boolean {
   return typeof stored === 'string' && stored.startsWith(ENC_PREFIX);
 }
 
-/** Convert one legacy plaintext credential payload to encrypted storage. */
-export async function migrateToEncrypted(stored: string): Promise<string | null> {
-  if (!stored || isEncrypted(stored)) return null;
-  const credentials = await decryptCredentials(stored);
-  const encrypted = await encryptCredentials(credentials);
-  console.log('[CredentialCrypto] Migrated one legacy credential reference to encrypted format');
-  return encrypted;
+/** Parse legacy plaintext only inside the explicit, owner-authorised migration path. */
+function parseLegacyCredentials(stored: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(stored);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Do not expose parse details or stored credential contents.
+  }
+  throw new Error('[CredentialCrypto] Legacy credential payload is not valid JSON object data');
 }
 
-/** Testable policy helper, useful for the Edge Function regression suite. */
-export function rejectsPlaintextCredentials(): boolean {
-  return !plaintextFallbackEnabled();
+/** Convert one legacy plaintext credential_ref. Returns null if already encrypted. */
+export async function migrateToEncrypted(stored: string): Promise<string | null> {
+  if (!stored || isEncrypted(stored)) return null;
+  const credentials = parseLegacyCredentials(stored);
+  const encrypted = await encryptCredentials(credentials);
+  console.log('[CredentialCrypto] Migrated legacy credential_ref to encrypted format', {
+    plaintextLength: stored.length,
+    encryptedLength: encrypted.length,
+  });
+  return encrypted;
 }
