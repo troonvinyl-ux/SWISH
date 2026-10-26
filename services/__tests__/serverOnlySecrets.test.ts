@@ -180,3 +180,22 @@ describe('Checkout request and branded callback regression', () => {
     expect(checkout).not.toContain('JSON.stringify({ error: msg })');
   });
 });
+
+
+describe('Subscription endpoint boundary regression', () => {
+  const checker = fs.readFileSync(
+    path.join(projectRoot, 'supabase/functions/swish-check-subscription/index.ts'),
+    'utf8',
+  );
+
+  test('allows only intended methods and requires a bearer token', () => {
+    expect(checker).toContain('req.method !== "POST" && req.method !== "GET"');
+    expect(checker).toContain('authHeader?.startsWith("Bearer ")');
+    expect(checker).toContain('User authentication could not be verified.');
+  });
+
+  test('returns a generic client error instead of raw Stripe exception details', () => {
+    expect(checker).toContain('Subscription status could not be checked. Please retry.');
+    expect(checker).not.toContain('JSON.stringify({ error: msg })');
+  });
+});
