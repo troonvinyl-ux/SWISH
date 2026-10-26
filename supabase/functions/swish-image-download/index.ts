@@ -116,7 +116,7 @@ async function getValidAccessToken(
 
   let credentials: any;
   try { credentials = await decryptCredentials(connector.credential_ref); }
-  catch (e: any) { throw new Error(`eBay credentials malformed: ${e.message}`); }
+  catch { throw new Error('eBay credentials could not be read securely. Reconnect eBay and retry.'); }
   if (!credentials.clientId || !credentials.accessToken) throw new Error('eBay credentials incomplete');
 
   const expiresAt = credentials.expiresAt ?? connector.access_token_expires_at;
@@ -141,9 +141,9 @@ async function getValidAccessToken(
       credentials = { ...credentials, accessToken: newToken, expiresAt: newExpiry };
     } catch (e: any) {
       await supabase.from('marketplace_connectors').update({
-        status: 'requires_reauth', last_error: `Refresh failed: ${e.message}`, updated_at: new Date().toISOString(),
+        status: 'requires_reauth', last_error: 'eBay token refresh failed; reconnect eBay and retry.', updated_at: new Date().toISOString(),
       }).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay');
-      throw new Error(`REQUIRES_REAUTH: Token refresh failed: ${e.message}`);
+      throw new Error('REQUIRES_REAUTH: eBay token refresh failed. Reconnect eBay and retry.');
     }
   }
   return { accessToken: credentials.accessToken, clientId: credentials.clientId, credentials };
@@ -492,7 +492,7 @@ Deno.serve(async (req: Request) => {
   } catch (e: any) {
     const isReauth = e.message?.startsWith('REQUIRES_REAUTH:');
     return jsonResp({
-      error: isReauth ? 'eBay re-authorisation required.' : e.message,
+      error: isReauth ? 'eBay re-authorisation required.' : 'Unable to prepare eBay authorisation. Please reconnect and retry.',
       requiresReauth: isReauth,
       authFailed: true,
     }, 401);
