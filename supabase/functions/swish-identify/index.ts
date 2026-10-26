@@ -42,11 +42,14 @@ function isCoinLikeSpecialist(sid: string): boolean {
 
 // Resolve the paid product from the requested specialist, never from a client-supplied
 // nicheId. Generic/unknown specialists do not inherit another niche's subscription.
-function nicheForSpecialist(sid: string): 'coins' | 'motocross' | 'bicycles' | 'clothing' | null {
+function nicheForSpecialist(
+  sid: string,
+): 'coins' | 'motocross' | 'bicycles' | 'clothing' | 'surplus_flip' | null {
   if (isCoinLikeSpecialist(sid)) return 'coins';
-  if (sid === 'motocross') return 'motocross';
-  if (sid === 'bicycles') return 'bicycles';
-  if (sid === 'clothing' || sid === 'trainers_sneakers') return 'clothing';
+  if (sid === 'motocross' || sid === 'mx' || sid === 'flipper_mx') return 'motocross';
+  if (sid === 'bicycles' || sid === 'cycling' || sid === 'bike_flipper') return 'bicycles';
+  if (sid === 'clothing' || sid === 'trainers_sneakers' || sid === 'threads_flip') return 'clothing';
+  if (['surplus_flip', 'surplus_trader', 'catalog_flip', 'catalog_surplus'].includes(sid)) return 'surplus_flip';
   return null;
 }
 function isVehicleSpecialist(sid: string): boolean { return sid === 'motocross'; }
