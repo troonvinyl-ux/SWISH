@@ -466,3 +466,43 @@ describe('SWISH coin image enhancement provider error safety', () => {
     expect(imageEnhance).toContain("A base64 image data URL is required.");
   });
 });
+
+
+describe('SWISH AI provider error response sanitization', () => {
+  const listGenerate = fs.readFileSync(
+    path.join(projectRoot, 'supabase/functions/swish-list-generate/index.ts'),
+    'utf8',
+  );
+  const reprice = fs.readFileSync(
+    path.join(projectRoot, 'supabase/functions/swish-reprice/index.ts'),
+    'utf8',
+  );
+  const islamicIdentify = fs.readFileSync(
+    path.join(projectRoot, 'supabase/functions/swish-islamic-identify/index.ts'),
+    'utf8',
+  );
+
+  test('listing generation never returns raw AI provider bodies or exception strings', () => {
+    expect(listGenerate).toContain("Listing generation is temporarily unavailable. Please retry.");
+    expect(listGenerate).toContain("Unable to generate the listing. Please retry.");
+    expect(listGenerate).not.toContain('OnSpace AI: ${errText}');
+    expect(listGenerate).not.toContain('JSON.stringify({ error: String(err) })');
+    expect(listGenerate).not.toContain('rawContent.slice(0, 400)');
+  });
+
+  test('repricing never returns raw AI provider bodies or exception strings', () => {
+    expect(reprice).toContain("Repricing is temporarily unavailable. Please retry.");
+    expect(reprice).toContain("Unable to reprice this listing. Please retry.");
+    expect(reprice).not.toContain('OnSpace AI: ${errText}');
+    expect(reprice).not.toContain('JSON.stringify({ error: String(err) })');
+    expect(reprice).not.toContain("console.error('Failed to parse AI response:', rawContent)");
+  });
+
+  test('Islamic identification keeps external search exception details out of results and logs', () => {
+    expect(islamicIdentify).toContain("Zeno search is temporarily unavailable.");
+    expect(islamicIdentify).toContain("Numista search is temporarily unavailable.");
+    expect(islamicIdentify).not.toContain('Network error: ${e.message}');
+    expect(islamicIdentify).not.toContain('Numista error: ${e.message}');
+    expect(islamicIdentify).not.toContain('Zeno search error for "${query}": ${e.message}');
+  });
+});
