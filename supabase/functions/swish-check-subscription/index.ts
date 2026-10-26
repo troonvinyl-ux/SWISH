@@ -66,18 +66,21 @@ serve(async (req) => {
     logStep("User authenticated", { userId: user.id });
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
-    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+    const customers = await stripe.customers.list({ email: user.email, limit: 100 });
+    // Email is a search hint, not an account identity. Only a customer explicitly
+    // linked to this authenticated Supabase user can grant subscription access.
+    const customer = customers.data.find((candidate) => candidate.metadata?.user_id === user.id);
 
-    if (customers.data.length === 0) {
-      logStep("No Stripe customer found — user not subscribed");
+    if (!customer) {
+      logStep("No Stripe customer linked to authenticated user — user not subscribed");
       return new Response(
         JSON.stringify({ subscribed: false, product_id: null, price_id: null, subscription_end: null, niche_entitlements: [] }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
       );
     }
 
-    const customerId = customers.data[0].id;
-    logStep("Stripe customer found", { customerId });
+    const customerId = customer.id;
+    logStep("Linked Stripe customer found", { customerId });
 
     const subscriptions = await stripe.subscriptions.list({
       customer: customerId,

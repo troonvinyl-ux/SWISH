@@ -265,6 +265,13 @@ describe('SWISH Stripe account binding', () => {
     expect(subscription).toContain('Skipping subscription linked to a different user');
   });
 
+  test('subscription lookup never grants access from an email-only Stripe customer match', () => {
+    expect(subscription).toContain('stripe.customers.list({ email: user.email, limit: 100 })');
+    expect(subscription).toContain('customers.data.find((candidate) => candidate.metadata?.user_id === user.id)');
+    expect(subscription).not.toContain('stripe.customers.list({ email: user.email, limit: 1 })');
+    expect(subscription).not.toContain('const customerId = customers.data[0].id');
+  });
+
   test('subscription check returns only canonical production niche entitlements', () => {
     expect(subscription).toContain('const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing", "surplus_flip"])');
     expect(subscription).toContain('niche_entitlements: entitlements');
