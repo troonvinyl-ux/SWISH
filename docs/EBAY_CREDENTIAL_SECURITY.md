@@ -1,36 +1,39 @@
 # eBay credential security deployment checklist
 
-SWISH's Edge Functions encrypt connector credentials in `marketplace_connectors.credential_ref` using AES-256-GCM. Encryption is only secure if the key is configured in the server runtime and every legacy connector row has been migrated.
+The shared credential helper now fails closed: normal eBay operations reject plaintext `marketplace_connectors.credential_ref` values. Legacy plaintext parsing is confined to the owner-authorised `swish-migrate-credentials` Edge Function path.
 
-## Required server configuration
+## Mandatory rollout order — do not skip
+
+**Do not deploy the fail-closed code until every existing connector credential has been migrated and verified.** Deploying it while plaintext rows remain will intentionally make those connections unavailable until they are migrated. Do not merge/deploy this change as a substitute for the data migration.
 
 1. Generate a fresh random 32-byte key in a trusted local environment, for example with `openssl rand -base64 32`.
-2. Add it to the **server/Edge Function secret store** used by the deployed SWISH backend as `SWISH_CREDENTIAL_KEY`.
-3. Do not place the key in app configuration, client-side environment variables, source control, logs, or an API response. Do not send it to the mobile/web client.
-4. Deploy the updated `credentialCrypto.ts`, `swish-migrate-credentials`, OAuth, order, finance, messages, sync, listing, browse, and image-download functions together so all credential consumers use the same key.
+2. Add it to the server/Edge Function secret store as `SWISH_CREDENTIAL_KEY`. Never place it in client configuration, source control, logs, or API responses.
+3. Deploy/configure the current migration-capable backend with the key before migrating data.
+4. For every tenant with marketplace connections, run **Credential Encryption Migration** as that tenant's owner/admin. Migrate one tenant at a time.
+5. Confirm each migration response reports `failed: 0`. Independently verify all non-empty connector credential references are encrypted (the `enc:v1:` prefix); do not log or export credential values.
+6. Repeat for every tenant. Do not infer global completion from a single tenant's successful response.
+7. Only then deploy the fail-closed credential utility and all functions that read or write credentials together.
+8. After deployment, test OAuth reconnect, token refresh, listing updates, order sync, messages, finance sync, image download, and dispatch in the approved environment.
 
-## UK/EU seller-finance digital signatures
+If any row cannot be decrypted or migrated, stop the rollout for that tenant, reconnect the affected eBay account if required, and rerun verification. Never paste tokens or secrets into support messages.
 
-eBay requires digital signatures for all Finances API calls made for UK/EU-domiciled sellers. SWISH's Finances Edge Function now signs its GET requests using the eBay-generated Ed25519 keypair. To enable live available-funds and transaction data:
+## Required server-side secrets
 
-1. Use eBay's Key Management API to create a signing key for the same eBay application keyset.
-2. Store the returned private key as the server-only secret `EBAY_SIGNATURE_PRIVATE_KEY` (PKCS#8 PEM).
-3. Store the matching `publicKeyJwe` value as the server-only secret `EBAY_SIGNATURE_KEY_JWE`.
-4. Keep both values out of client configuration, source control, logs, and API responses.
-5. Deploy the shared `ebayDigitalSignature.ts` helper and the updated `swish-ebay-finances` function, then test a real funds-summary call with the connected UK seller account.
+- `SWISH_CREDENTIAL_KEY`: base64- or hex-encoded random 32-byte key used by the credential utility.
+- `EBAY_SIGNATURE_PRIVATE_KEY`: eBay-generated PKCS#8 PEM private key for UK/EU seller Finances API signing.
+- `EBAY_SIGNATURE_KEY_JWE`: matching eBay `publicKeyJwe` value.
 
-Without these two server secrets, the function intentionally fails rather than making unsigned Finances API calls that eBay will reject.
+Keep all of these server-side only. The Finances API signing secrets must be created in eBay Key Management for the same application keyset and tested using a connected UK seller account. Without them, finance requests intentionally fail rather than making unsigned calls.
 
-## Migrate existing credentials
+## Security and release gates
 
-1. Sign in as the owner/admin of the relevant SWISH tenant.
-2. Open Settings and run **Credential Encryption Migration** for that tenant.
-3. Confirm the result reports `failed: 0` and that every connector row is either migrated or already encrypted.
-4. Reconnect eBay if any credential cannot be decrypted. Never paste tokens or secrets into support messages.
-5. Test OAuth reconnect, token refresh, listing updates, order sync, messages, finance sync, and dispatch before treating the migration as complete.
+- Credential encryption/decryption runs only in Edge Functions.
+- Client queries must use safe connector columns and must never select `credential_ref`.
+- The migration function is tenant-scoped and requires an authenticated owner/admin.
+- Normal credential reads must reject plaintext; only the explicit migration helper may parse legacy JSON.
+- Test OAuth, token refresh, listing updates, order sync, messages, finance sync, image download, and dispatch after rollout.
+- A successful build or mocked test does not prove server secrets are configured, all production rows are encrypted, or live eBay calls work.
 
-The migration endpoint intentionally requires a single tenant ID and does not permit a tenant admin to migrate other tenants' credentials.
+## Outstanding production verification
 
-## Release gate
-
-The source currently retains a legacy plaintext-read fallback to avoid abruptly breaking an unmigrated existing connection. That fallback must only be removed after the deployed migration has completed successfully for all existing connector rows and the deployed backend has been verified. A successful web build alone does not prove that the server secret exists or that stored rows are encrypted.
+Source changes cannot prove that the deployed secret exists or that every production connector row is encrypted. Record the migration counts and test outcomes for every tenant through the approved admin workflow. If the owner cannot verify all rows and server secrets, report credential security as blocked rather than complete.

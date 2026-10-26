@@ -159,20 +159,26 @@ Deno.serve(async (req: Request) => {
       }
 
       // Persist the encrypted value
-      const { error: updateErr } = await adminClient
+      const { data: updatedRow, error: updateErr } = await adminClient
         .from('marketplace_connectors')
         .update({
           credential_ref: encrypted,
           updated_at: new Date().toISOString(),
         })
         .eq('id', row.id)
-        .eq('tenant_id', row.tenant_id); // belt-and-braces tenant guard
+        .eq('tenant_id', row.tenant_id) // belt-and-braces tenant guard
+        .select('id')
+        .maybeSingle();
 
-      if (updateErr) {
+      if (updateErr || !updatedRow) {
         failed++;
-        const msg = `Row ${row.id} (${row.marketplace_id}): update failed`;
+        const msg = `Row ${row.id} (${row.marketplace_id}): update failed or matched no row`;
         errors.push(msg);
-        console.error('[swish-migrate-credentials] Row update failed:', { rowId: row.id, marketplace: row.marketplace_id, code: updateErr.code });
+        console.error('[swish-migrate-credentials] Row update failed:', {
+          rowId: row.id,
+          marketplace: row.marketplace_id,
+          code: updateErr?.code ?? 'NO_ROW_UPDATED',
+        });
       } else {
         migrated++;
         // Log only structural metadata — never the credential content
