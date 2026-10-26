@@ -69,6 +69,8 @@ describe('SWISH eBay Finances input and refresh safety', () => {
 
   test('validates request-object, route, and date-window inputs before calling the eBay API', () => {
     expect(source).toContain('Request body must be a JSON object.');
+    expect(source).toContain(".select('credential_ref, status, access_token_expires_at')");
+    expect(source).toContain('conn.access_token_expires_at');
     expect(source).toContain("new Set(['sync_transactions', 'get_payouts', 'get_funds_summary', 'get_summary'])");
     expect(source).toContain('daysBack < 1 || daysBack > 365');
     expect(source).toContain('Unsupported finances route.');
