@@ -65,21 +65,6 @@ export default function ListingPreflightScreen() {
     setChecks(prev => prev.map(c => c.id === id ? { ...c, ...update } : c));
   }, []);
 
-  // Re-run preflight when we return to this screen (e.g. after editor save)
-  const hasRun = useRef(false);
-  useFocusEffect(
-    useCallback(() => {
-      if (hasRun.current) {
-        // Reset and rescan every time screen gains focus
-        setChecks(prev => prev.map(c => ({ ...c, status: 'pending' as const })));
-        setSubmitResult(null);
-        setSubmitStep(null);
-        runPreflight();
-      }
-      hasRun.current = true;
-    }, [runPreflight]),
-  );
-
   const runPreflight = useCallback(async () => {
     if (!listingId || !tenant) return;
     setScanning(true);
@@ -274,6 +259,21 @@ export default function ListingPreflightScreen() {
   useEffect(() => { runPreflight(); }, [runPreflight]);
 
   // ── Category picker logic ─────────────────────────────────────────────────
+
+  // Re-run preflight when we return to this screen (e.g. after editor save)
+  const hasRun = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (hasRun.current) {
+        // Reset and rescan every time screen gains focus
+        setChecks(prev => prev.map(c => ({ ...c, status: 'pending' as const })));
+        setSubmitResult(null);
+        setSubmitStep(null);
+        runPreflight();
+      }
+      hasRun.current = true;
+    }, [runPreflight]),
+  );
 
   const loadCatBrowse = useCallback(async (parentId: string) => {
     if (!tenant?.id) return;
