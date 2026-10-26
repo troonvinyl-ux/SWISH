@@ -62,3 +62,30 @@ describe('Server-only API secret boundary', () => {
     expect(finances).toContain('...hdrs, ...signatureHeaders');
   });
 });
+
+describe('SWISH eBay Finances input and refresh safety', () => {
+  const functionPath = path.join(projectRoot, 'supabase/functions/swish-ebay-finances/index.ts');
+  const source = fs.readFileSync(functionPath, 'utf8');
+
+  test('validates route and date-window inputs before calling the eBay API', () => {
+    expect(source).toContain("new Set(['sync_transactions', 'get_payouts', 'get_funds_summary', 'get_summary'])");
+    expect(source).toContain('daysBack < 1 || daysBack > 365');
+    expect(source).toContain('Unsupported finances route.');
+  });
+
+  test('does not silently ignore a token refresh failure and then use the stale token', () => {
+    expect(source).toContain('eBay token refresh failed. Please retry.');
+    expect(source).toContain('eBay authorisation is no longer valid. Reconnect eBay and retry.');
+    expect(source).not.toMatch(/catch\s*\{\s*\}/);
+  });
+
+  test('scopes order lookups and updates by both order ID and tenant ID', () => {
+    expect(source).toContain(".eq('id', swishOrderId).eq('tenant_id', tenantId).maybeSingle()");
+    expect(source).toContain(".eq('id', swishOrderId).eq('tenant_id', tenantId);");
+  });
+
+  test('does not return raw internal failures in the HTTP response', () => {
+    expect(source).toContain('Financial request failed. Please retry; contact support if the issue continues.');
+    expect(source).not.toContain("return jr({ error: err.message ?? 'Internal error' }, 500)");
+  });
+});
