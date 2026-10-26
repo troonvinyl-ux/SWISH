@@ -6,6 +6,7 @@ import { getSupabaseClient } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { Linking } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
+import Constants from 'expo-constants';
 import { isProductionNiche, ProductionNicheId } from '@/constants/niches';
 
 export const STRIPE_PRODUCT_ID = 'prod_VQ0JxUCL29SZPQ';
@@ -109,7 +110,7 @@ export async function startCheckout(nicheId = 'coins'): Promise<{
 }> {
   const { data, error } = await invokeEdgeFunction<{ url: string }>(
     'swish-create-checkout',
-    { nicheId },
+    { nicheId, appScheme: Constants.expoConfig?.extra?.swishAppScheme },
   );
 
   if (error || !data?.url) {
