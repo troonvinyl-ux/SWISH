@@ -628,6 +628,7 @@ export default function MasterInventoryScreen() {
           listing_status: l.status,
           listing_price: l.price,
           external_listing_id: l.externalListingId,
+          media: l.itemMedia,
         }));
     }
 
