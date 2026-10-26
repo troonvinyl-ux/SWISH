@@ -148,3 +148,35 @@ describe('Niche-scoped Stripe entitlement regression', () => {
     expect(subscriptionHook).toContain('isPremiumSubscriber(subscriptionStatus, subscriptionTier, activeNicheId)');
   });
 });
+
+
+describe('Checkout request and branded callback regression', () => {
+  const checkout = fs.readFileSync(
+    path.join(projectRoot, 'supabase/functions/swish-create-checkout/index.ts'),
+    'utf8',
+  );
+  const client = fs.readFileSync(
+    path.join(projectRoot, 'services/subscriptionService.ts'),
+    'utf8',
+  );
+
+  test('rejects unsupported methods and malformed non-empty JSON bodies', () => {
+    expect(checkout).toContain('req.method !== "POST"');
+    expect(checkout).toContain('JSON.parse(rawBody)');
+    expect(checkout).toContain('Invalid checkout request.');
+    expect(checkout).toContain('Request body must be a JSON object.');
+  });
+
+  test('only accepts canonical product-to-scheme mappings for branded redirects', () => {
+    expect(checkout).toContain('expectedSchemeByNiche');
+    expect(checkout).toContain('appScheme !== expectedSchemeByNiche[nicheId]');
+    expect(checkout).toContain('${callbackScheme}://subscription/success');
+    expect(checkout).toContain('${callbackScheme}://subscription/cancel');
+    expect(client).toContain('appScheme: Constants.expoConfig?.extra?.swishAppScheme');
+  });
+
+  test('does not return raw checkout provider errors to the client', () => {
+    expect(checkout).toContain('Unable to start checkout. Please retry or contact support.');
+    expect(checkout).not.toContain('JSON.stringify({ error: msg })');
+  });
+});
