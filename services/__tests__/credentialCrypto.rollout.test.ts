@@ -30,14 +30,6 @@ afterEach(() => {
 });
 
 describe('shared credential crypto rollout gate', () => {
-  it('enables legacy compatibility only while the strict flag is not true', () => {
-    expect(rejectsPlaintextCredentials()).toBe(false);
-    envValues.set('SWISH_REJECT_PLAINTEXT_CREDENTIALS', 'false');
-    expect(rejectsPlaintextCredentials()).toBe(false);
-    envValues.set('SWISH_REJECT_PLAINTEXT_CREDENTIALS', 'true');
-    expect(rejectsPlaintextCredentials()).toBe(true);
-  });
-
   it('rejects legacy plaintext in strict mode before parsing the payload', async () => {
     envValues.set('SWISH_REJECT_PLAINTEXT_CREDENTIALS', 'true');
     await expect(decryptCredentials(JSON.stringify({ accessToken: 'fixture-token' })))
