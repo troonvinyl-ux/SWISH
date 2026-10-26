@@ -221,6 +221,7 @@ export async function getStaleListings(
       title: row.title,
       description: row.description ?? '',
       price: Number(row.price ?? 0),
+      shippingCost: Number(row.shipping_cost ?? 0),
       floorPrice: Number(row.floor_price ?? 0),
       ceilingPrice: Number(row.ceiling_price ?? 0),
       status: row.status ?? 'draft',

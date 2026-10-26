@@ -104,13 +104,14 @@ export function isPremiumSubscriber(
 
 // ── Start Stripe Checkout ─────────────────────────────────────────────────────
 
-export async function startCheckout(nicheId = 'coins'): Promise<{
+export async function startCheckout(nicheId = 'coins', appScheme?: string): Promise<{
   opened: boolean;
   error: string | null;
 }> {
+  const resolvedScheme = appScheme ?? Constants.expoConfig?.extra?.swishAppScheme;
   const { data, error } = await invokeEdgeFunction<{ url: string }>(
     'swish-create-checkout',
-    { nicheId, appScheme: Constants.expoConfig?.extra?.swishAppScheme },
+    { nicheId, appScheme: resolvedScheme },
   );
 
   if (error || !data?.url) {

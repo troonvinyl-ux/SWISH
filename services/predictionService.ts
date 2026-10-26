@@ -215,6 +215,111 @@ export async function getPredictionAccuracyMetrics(
   };
 }
 
+export interface LearningInsight {
+  predictionType: PredictionType;
+  trend: 'improving' | 'stable' | 'degrading' | 'insufficient_data';
+  avgAccuracy: number;
+  sampleCount: number;
+  bias: 'accurate' | 'overestimating' | 'underestimating' | 'mixed' | 'insufficient';
+  recommendation: string;
+}
+
+export interface PredictionAccuracySummary {
+  totalPredictions: number;
+  resolvedPredictions: number;
+  avgAccuracy: number;
+}
+
+/** Aggregate actual stored outcomes for the audit dashboard; never synthesises prediction rows. */
+export async function getPredictionAccuracySummary(tenantId: string): Promise<PredictionAccuracySummary> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('predictions')
+    .select('resolved, accuracy_score')
+    .eq('tenant_id', tenantId)
+    .limit(1000);
+
+  if (error || !data) return { totalPredictions: 0, resolvedPredictions: 0, avgAccuracy: 0 };
+  const rows = data as Array<{ resolved: boolean; accuracy_score: number | null }>;
+  const resolved = rows.filter(row => row.resolved);
+  const scored = resolved.filter(row => row.accuracy_score !== null && row.accuracy_score !== undefined);
+  const avgAccuracy = scored.length
+    ? scored.reduce((sum, row) => sum + Number(row.accuracy_score), 0) / scored.length
+    : 0;
+  return {
+    totalPredictions: rows.length,
+    resolvedPredictions: resolved.length,
+    avgAccuracy: Math.round(avgAccuracy * 100) / 100,
+  };
+}
+
+/** Calculate trend/bias only from resolved predictions with recorded actual outcomes. */
+export async function computeLearningInsights(tenantId: string): Promise<LearningInsight[]> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('predictions')
+    .select('prediction_type, accuracy_score, predicted_value, actual_value, created_at')
+    .eq('tenant_id', tenantId)
+    .eq('resolved', true)
+    .not('accuracy_score', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(1000);
+
+  const types: PredictionType[] = [
+    'sale_probability_7d', 'sale_probability_30d', 'expected_sale_price',
+    'time_to_sale_days', 'expected_profit', 'price_reduction_probability',
+  ];
+  const rows = (error || !data ? [] : data) as Array<{
+    prediction_type: PredictionType;
+    accuracy_score: number | null;
+    predicted_value: number | null;
+    actual_value: number | null;
+    created_at: string;
+  }>;
+
+  return types.map(predictionType => {
+    const samples = rows.filter(row => row.prediction_type === predictionType);
+    const scores = samples.map(row => Number(row.accuracy_score ?? 0)).filter(Number.isFinite);
+    const avgAccuracy = scores.length ? scores.reduce((sum, value) => sum + value, 0) / scores.length : 0;
+    let trend: LearningInsight['trend'] = 'insufficient_data';
+    if (samples.length >= MIN_SALES_FOR_PREDICTION * 2) {
+      const midpoint = Math.floor(samples.length / 2);
+      const recent = scores.slice(0, midpoint);
+      const older = scores.slice(midpoint);
+      const mean = (values: number[]) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+      const delta = mean(recent) - mean(older);
+      trend = delta > 0.05 ? 'improving' : delta < -0.05 ? 'degrading' : 'stable';
+    }
+
+    const deltas = samples
+      .filter(row => row.predicted_value != null && row.actual_value != null && Number(row.predicted_value) !== 0)
+      .map(row => (Number(row.actual_value) - Number(row.predicted_value)) / Math.abs(Number(row.predicted_value)));
+    const meanDelta = deltas.length ? deltas.reduce((sum, value) => sum + value, 0) / deltas.length : null;
+    const bias: LearningInsight['bias'] = samples.length < MIN_SALES_FOR_PREDICTION
+      ? 'insufficient'
+      : meanDelta === null || Math.abs(meanDelta) <= 0.05
+        ? 'accurate'
+        : meanDelta > 0 ? 'underestimating' : 'overestimating';
+
+    const recommendation = samples.length < MIN_SALES_FOR_PREDICTION
+      ? `Collect at least ${MIN_SALES_FOR_PREDICTION} resolved real outcomes before drawing conclusions.`
+      : trend === 'degrading'
+        ? 'Accuracy has fallen in the more recent sample. Review the inputs and recent outcomes before relying on this prediction type.'
+        : trend === 'improving'
+          ? 'Recent outcomes are more accurate than earlier ones. Continue monitoring as new real outcomes are recorded.'
+          : 'Continue recording real outcomes and review this metric alongside the underlying sample size.';
+
+    return {
+      predictionType,
+      trend,
+      avgAccuracy: Math.round(avgAccuracy * 100) / 100,
+      sampleCount: samples.length,
+      bias,
+      recommendation,
+    };
+  });
+}
+
 // ── Generate evidence-based predictions for a tenant's inventory ──────────────
 // Computes predictions ONLY from real historical data — never fabricates.
 
