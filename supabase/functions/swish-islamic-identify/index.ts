@@ -465,7 +465,7 @@ async function searchZeno(
       available: true, query, candidates: scored.slice(0, 5),
       searchUrl, totalFound: rawCandidates.length,
     };
-  } catch (e: any) {
+  } catch {
     console.error('[swish-islamic-identify] Zeno search request failed.');
     return {
       available: false, query, candidates: [], searchUrl,
@@ -608,7 +608,7 @@ async function searchNumistaIslamicSilver(
     console.log(`[swish-islamic-identify] Numista multi-query search: ${queries.length} queries, ${candidateMap.size} unique types, supplied reference=${suppliedReferenceId ?? 'none'}, top score=${candidates[0]?.matchScore ?? 0}`);
 
     return { available: true, query, candidates: candidates.slice(0, 12), totalFound: candidateMap.size };
-  } catch (e: any) {
+  } catch {
     const scoredCandidates = [...candidateMap.values()].map(t => scoreNumistaIslamic(t, aiOutput, physicalData)).sort((a, b) => b.matchScore - a.matchScore);
     const directCandidate = suppliedReferenceId ? scoredCandidates.find(candidate => candidate.typeId === suppliedReferenceId) : undefined;
     const candidates = directCandidate ? [directCandidate, ...scoredCandidates.filter(candidate => candidate.typeId !== suppliedReferenceId)] : scoredCandidates;
@@ -1680,7 +1680,7 @@ Deno.serve(async (req: Request) => {
           warnings: result.warnings,
           updated_at: new Date().toISOString(),
         }).eq('id', itemId).eq('tenant_id', tenantId);
-      } catch (e: any) {
+      } catch {
         console.error('[swish-islamic-identify] Identification result could not be saved.');
       }
     }
@@ -1696,8 +1696,8 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({ identification: result }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
-  } catch (err: any) {
-    console.error('[swish-islamic-identify] Request failed:', err instanceof Error ? err.message : 'unknown error');
+  } catch {
+    console.error('[swish-islamic-identify] Request failed.');
     return new Response(
       JSON.stringify({ error: 'Unable to complete Islamic coin identification. Please retry or contact support.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
