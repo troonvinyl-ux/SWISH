@@ -111,17 +111,30 @@ serve(async (req) => {
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
-    // Reuse existing customer if they have one
-    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
-    let customerId: string | undefined;
-    if (customers.data.length > 0) {
-      customerId = customers.data[0].id;
-      console.log(`[create-checkout] Existing Stripe customer: ${customerId}`);
+    // Reuse only a Stripe customer linked to this authenticated account.
+    // If an older customer matches by email but has no user link, attach the
+    // verified account ID. Never reuse a customer explicitly linked elsewhere.
+    const customers = await stripe.customers.list({ email: user.email, limit: 100 });
+    let customer = customers.data.find(candidate => candidate.metadata?.user_id === user.id);
+    if (!customer) {
+      const unlinkedCustomer = customers.data.find(candidate => !candidate.metadata?.user_id);
+      if (unlinkedCustomer) {
+        customer = await stripe.customers.update(unlinkedCustomer.id, {
+          metadata: { ...unlinkedCustomer.metadata, user_id: user.id },
+        });
+      }
     }
+    if (!customer) {
+      customer = await stripe.customers.create({
+        email: user.email,
+        metadata: { user_id: user.id },
+      });
+    }
+    const customerId = customer.id;
+    console.log("[create-checkout] Linked Stripe customer selected", { customerId, userId: user.id });
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
-      customer_email: customerId ? undefined : user.email,
       line_items: [{ price: PRICE_ID, quantity: 1 }],
       mode: "subscription",
       success_url: `${callbackScheme}://subscription/success`,
