@@ -1,0 +1,35 @@
+name: Temporary SWISH lockfile regeneration
+
+on:
+  push:
+    branches:
+      - fix/production-readiness-typecheck
+    paths:
+      - '.github/workflows/lockfile-refresh.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  regenerate-lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Regenerate lockfile from package.json
+        run: pnpm install --lockfile-only --no-frozen-lockfile
+      - name: Upload regenerated lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: swish-regenerated-pnpm-lock
+          path: pnpm-lock.yaml
+          if-no-files-found: error
+          retention-days: 2
