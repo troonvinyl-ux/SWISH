@@ -120,3 +120,31 @@ describe('SWISH eBay finance scope refresh coordination', () => {
     expect(finance).toContain("reauth ? 400 : 503");
   });
 });
+
+
+describe('Niche-scoped Stripe entitlement regression', () => {
+  const subscriptionService = fs.readFileSync(
+    path.join(projectRoot, 'services/subscriptionService.ts'),
+    'utf8',
+  );
+  const subscriptionHook = fs.readFileSync(
+    path.join(projectRoot, 'hooks/useSubscription.ts'),
+    'utf8',
+  );
+
+  test('preserves only canonical server-reported niche entitlements', () => {
+    expect(subscriptionService).toContain('niche_entitlements?: unknown');
+    expect(subscriptionService).toContain('isProductionNiche(id)');
+    expect(subscriptionService).toContain('nicheEntitlements: ProductionNicheId[]');
+  });
+
+  test('does not grant a Stripe subscription premium access to every niche', () => {
+    expect(subscriptionService).toContain('return status.nicheEntitlements.includes(activeNicheId);');
+    expect(subscriptionService).not.toContain('return status.productId === STRIPE_PRODUCT_ID;');
+  });
+
+  test('evaluates Stripe premium access against the active niche', () => {
+    expect(subscriptionHook).toContain('activeNicheId');
+    expect(subscriptionHook).toContain('isPremiumSubscriber(subscriptionStatus, subscriptionTier, activeNicheId)');
+  });
+});
