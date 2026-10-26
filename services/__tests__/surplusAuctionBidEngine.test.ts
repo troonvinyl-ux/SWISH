@@ -42,4 +42,29 @@ describe('SurplusFlip maximum auction bid', () => {
     expect(result.timeBand).toBe('CLOSED');
     expect(result.secondsRemaining).toBe(0);
   });
+  
+  it('applies safety buffer, fixed costs and VAT on hammer when configured', () => {
+    const result = calculateSurplusMaximumBid({
+      ...base,
+      maximumAllInAcquisitionBudget: 1000,
+      currentBid: 100,
+      buyerPremiumRate: 0.1,
+      vatOnPremiumRate: 0.2,
+      vatOnHammerRate: 0.2,
+      fixedAuctionCosts: 20,
+      transportAndOtherCosts: 30,
+      safetyBufferRate: 0.05,
+      bidIncrement: 5,
+    });
+    expect(result.maximumBid % 5).toBe(0);
+    expect(result.assumptions.safetyBufferRate).toBe(0.05);
+    expect(result.assumptions.vatOnHammerRate).toBe(0.2);
+    expect(result.assumptions.fixedAuctionCosts).toBe(20);
+    expect(result.estimatedAllInCostAtMaximumBid).toBeLessThanOrEqual(950);
+  });
+
+  it('reports that live auction data is not automatically fetched', () => {
+    const result = calculateSurplusMaximumBid(base);
+    expect(result.assumptions.liveBidAutomaticallyFetched).toBe(false);
+  });
 });
