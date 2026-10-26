@@ -545,10 +545,22 @@ export async function saveCoinReferenceImages(
   const supabase = getSupabaseClient();
   const urls: Record<string, string> = {};
   const errors: string[] = [];
+  const referenceImages = images.filter(image => Boolean(image.enhancedUri));
+  if (referenceImages.length === 0) return { urls, errors };
 
-  for (const image of images) {
-    const source = image.enhancedUri;
-    if (!source) continue;
+  // Verify tenant ownership before uploading anything to storage.
+  const { data: item, error: readError } = await supabase
+    .from('items')
+    .select('attributes')
+    .eq('id', itemId)
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+  if (readError || !item) {
+    return { urls, errors: ['Inventory item could not be verified for rendered references.'] };
+  }
+
+  for (const image of referenceImages) {
+    const source = image.enhancedUri!;
 
     try {
       let bytes: Uint8Array;
@@ -597,18 +609,6 @@ export async function saveCoinReferenceImages(
   }
 
   if (Object.keys(urls).length > 0) {
-    const { data: item, error: readError } = await supabase
-      .from('items')
-      .select('attributes')
-      .eq('id', itemId)
-      .eq('tenant_id', tenantId)
-      .maybeSingle();
-
-    if (readError || !item) {
-      errors.push('Rendered references uploaded but could not be linked to this inventory item.');
-      return { urls: {}, errors };
-    }
-
     const attributes = item.attributes && typeof item.attributes === 'object' && !Array.isArray(item.attributes)
       ? item.attributes as Record<string, unknown>
       : {};
