@@ -21,6 +21,12 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+  if (req.method !== "POST" && req.method !== "GET") {
+    return new Response(JSON.stringify({ error: "Method not allowed." }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 405,
+    });
+  }
 
   const supabaseClient = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
@@ -35,29 +41,68 @@ serve(async (req) => {
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY not set");
 
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("Authorization header not provided");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Authentication required." }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+      });
+    }
 
-    const token = authHeader.replace("Bearer ", "");
+    const token = authHeader.slice("Bearer ".length).trim();
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Authentication required." }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+      });
+    }
     const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
     if (userError || !userData.user?.email) {
-      throw new Error("User not authenticated or email unavailable");
+      return new Response(JSON.stringify({ error: "User authentication could not be verified." }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+      });
     }
     const user = userData.user;
-    logStep("User authenticated", { userId: user.id, email: user.email });
+    logStep("User authenticated", { userId: user.id });
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
-    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+    const customers = await stripe.customers.list({ email: user.email, limit: 100 });
+    // Email is a search hint, not an account identity. Prefer an explicit user link.
+    let customer = customers.data.find((candidate) => candidate.metadata?.user_id === user.id);
 
-    if (customers.data.length === 0) {
-      logStep("No Stripe customer found — user not subscribed");
+    // Compatibility path for legacy paying customers: only auto-link a confirmed
+    // Supabase account when exactly one unlinked customer has a live SWISH Premium
+    // subscription not explicitly assigned to a different user. Ambiguous matches
+    // fail closed and require support rather than guessing ownership.
+    if (!customer && user.email_confirmed_at) {
+      const eligibleLegacyCustomers: typeof customers.data = [];
+      for (const candidate of customers.data.filter((item) => !item.metadata?.user_id)) {
+        const legacySubs = await stripe.subscriptions.list({ customer: candidate.id, status: "all", limit: 100 });
+        const hasEligibleSubscription = legacySubs.data.some((sub) =>
+          (sub.status === "active" || sub.status === "trialing") &&
+          (!sub.metadata?.user_id || sub.metadata.user_id === user.id) &&
+          (sub.items.data[0]?.price?.product as string | undefined) === "prod_VQ0JxUCL29SZPQ"
+        );
+        if (hasEligibleSubscription) eligibleLegacyCustomers.push(candidate);
+      }
+      if (eligibleLegacyCustomers.length === 1) {
+        customer = await stripe.customers.update(eligibleLegacyCustomers[0].id, {
+          metadata: { ...eligibleLegacyCustomers[0].metadata, user_id: user.id },
+        });
+        logStep("Linked one unambiguous legacy subscription customer", { customerId: customer.id });
+      }
+    }
+
+    if (!customer) {
+      logStep("No Stripe customer safely linked to authenticated user — user not subscribed");
       return new Response(
         JSON.stringify({ subscribed: false, product_id: null, price_id: null, subscription_end: null, niche_entitlements: [] }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
       );
     }
 
-    const customerId = customers.data[0].id;
-    logStep("Stripe customer found", { customerId });
+    const customerId = customer.id;
+    logStep("Linked Stripe customer found", { customerId });
 
     const subscriptions = await stripe.subscriptions.list({
       customer: customerId,
@@ -77,6 +122,13 @@ serve(async (req) => {
       // Stripe free-trial subscriptions are 'trialing', not 'active'. Treat
       // both as valid entitlements while Stripe confirms the subscription.
       if (sub.status !== "active" && sub.status !== "trialing") continue;
+      // Checkout records the authenticated Supabase user in verified Stripe metadata.
+      // Never let a customer match by email alone cross an explicitly linked account boundary.
+      const linkedUserId = sub.metadata?.user_id;
+      if (linkedUserId && linkedUserId !== user.id) {
+        logStep("Skipping subscription linked to a different user");
+        continue;
+      }
       const subProductId = sub.items.data[0]?.price?.product as string | undefined;
       if (subProductId !== "prod_VQ0JxUCL29SZPQ") continue;
 
@@ -105,10 +157,12 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
     );
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    logStep("Error", { message: msg });
+    // Retain operator diagnostics server-side without exposing Stripe/provider details.
+    logStep("Subscription check failed", {
+      message: error instanceof Error ? error.message : "unknown error",
+    });
     return new Response(
-      JSON.stringify({ error: msg }),
+      JSON.stringify({ error: "Subscription status could not be checked. Please retry." }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 },
     );
   }

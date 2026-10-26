@@ -6,6 +6,8 @@ import { getSupabaseClient } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { Linking } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
+import Constants from 'expo-constants';
+import { isProductionNiche, ProductionNicheId } from '@/constants/niches';
 
 export const STRIPE_PRODUCT_ID = 'prod_VQ0JxUCL29SZPQ';
 export const STRIPE_PRICE_ID   = 'price_1UPAIlI5Y99su2PXUrM192qL';
@@ -17,6 +19,8 @@ export interface SubscriptionStatus {
   productId: string | null;
   priceId: string | null;
   subscriptionEnd: string | null;
+  /** Server-computed set of niches covered by verified active Stripe subscriptions. */
+  nicheEntitlements: ProductionNicheId[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -55,6 +59,7 @@ export async function checkSubscription(): Promise<{
     product_id: string | null;
     price_id: string | null;
     subscription_end: string | null;
+    niche_entitlements?: unknown;
   }>('swish-check-subscription');
 
   if (error || !data) {
@@ -67,6 +72,13 @@ export async function checkSubscription(): Promise<{
       productId: data.product_id,
       priceId: data.price_id,
       subscriptionEnd: data.subscription_end,
+      // Treat the Edge Function response as untrusted input. Only canonical
+      // production niches may be represented as Stripe entitlements.
+      nicheEntitlements: Array.isArray(data.niche_entitlements)
+        ? data.niche_entitlements.filter(
+            (id): id is ProductionNicheId => typeof id === 'string' && isProductionNiche(id),
+          )
+        : [],
     },
     error: null,
   };
@@ -80,13 +92,14 @@ export const PREMIUM_TIERS = ['professional', 'business', 'enterprise', 'lifetim
 export function isPremiumSubscriber(
   status: SubscriptionStatus | null,
   subscriptionTier?: string | null,
+  activeNicheId?: string | null,
 ): boolean {
-  // Lifetime / enterprise tiers set directly on the tenant always grant premium
+  // Existing tenant-wide lifetime/business/enterprise tiers retain their
+  // established semantics. Stripe subscriptions are scoped to a single niche.
   if (subscriptionTier && PREMIUM_TIERS.includes(subscriptionTier)) return true;
-  // Otherwise fall back to active Stripe subscription
-  if (!status?.subscribed) return false;
-  if (!status.productId) return false;
-  return status.productId === STRIPE_PRODUCT_ID;
+  if (!status?.subscribed || status.productId !== STRIPE_PRODUCT_ID) return false;
+  if (!activeNicheId || !isProductionNiche(activeNicheId)) return false;
+  return status.nicheEntitlements.includes(activeNicheId);
 }
 
 // ── Start Stripe Checkout ─────────────────────────────────────────────────────
@@ -97,7 +110,7 @@ export async function startCheckout(nicheId = 'coins'): Promise<{
 }> {
   const { data, error } = await invokeEdgeFunction<{ url: string }>(
     'swish-create-checkout',
-    { nicheId },
+    { nicheId, appScheme: Constants.expoConfig?.extra?.swishAppScheme },
   );
 
   if (error || !data?.url) {

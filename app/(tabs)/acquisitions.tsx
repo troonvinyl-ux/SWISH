@@ -125,7 +125,7 @@ export default function AcquisitionsScreen() {
             <View style={styles.empty}>
               <MaterialIcons name="inventory-2" size={48} color={Colors.textTertiary} />
               <Text style={styles.emptyTitle}>No Acquisitions Yet</Text>
-              <Text style={styles.emptySubtitle}>Tap "New" to add your first bulk acquisition</Text>
+              <Text style={styles.emptySubtitle}>Tap &quot;New&quot; to add your first bulk acquisition</Text>
             </View>
           }
         />

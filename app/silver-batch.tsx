@@ -1023,7 +1023,7 @@ export default function SilverBatchScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={bs.metalTitle}>Metal: Silver — Fineness Unknown</Text>
                 <Text style={bs.metalNote}>
-                  The system assumes silver based on your declaration. Fineness will be recorded as "Unknown" unless independently established. Do not assume sterling, 90%, or any specific purity.
+                  The system assumes silver based on your declaration. Fineness will be recorded as &quot;Unknown&quot; unless independently established. Do not assume sterling, 90%, or any specific purity.
                 </Text>
               </View>
             </View>

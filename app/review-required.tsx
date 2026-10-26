@@ -448,7 +448,7 @@ export default function ReviewRequiredScreen() {
         <View style={styles.readyBanner}>
           <MaterialIcons name="sell" size={13} color={Colors.success} />
           <Text style={styles.readyBannerText}>
-            {stats.readyToList} item{stats.readyToList !== 1 ? 's' : ''} ready to list — tap "Create Listing" to proceed
+            {stats.readyToList} item{stats.readyToList !== 1 ? 's' : ''} ready to list — tap &quot;Create Listing&quot; to proceed
           </Text>
         </View>
       ) : null}

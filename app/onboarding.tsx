@@ -693,7 +693,7 @@ export default function OnboardingScreen() {
               <View style={s.infoCard}>
                 <MaterialIcons name="info-outline" size={14} color={Colors.info} />
                 <Text style={s.infoText}>
-                  That's all we need for now. Capital targets, risk settings, and automation can be configured later in Settings.
+                  That&apos;s all we need for now. Capital targets, risk settings, and automation can be configured later in Settings.
                 </Text>
               </View>
             </View>
@@ -893,7 +893,7 @@ export default function OnboardingScreen() {
               {/* Skip for now */}
               {ebayStatus !== 'connected' && ebayStatus !== 'polling' ? (
                 <Pressable onPress={handleFinish} style={s.skipBtn}>
-                  <Text style={s.skipBtnText}>Skip for now — I'll connect eBay later</Text>
+                  <Text style={s.skipBtnText}>Skip for now — I&apos;ll connect eBay later</Text>
                 </Pressable>
               ) : null}
             </View>

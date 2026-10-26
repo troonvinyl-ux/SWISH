@@ -672,7 +672,10 @@ function CaptureTab({
                 <Text style={[ct.quickThumbsTitle, { color: CF.islamic }]}>ISLAMIC IDENTIFICATIONS</Text>
                 <View style={{ gap: Spacing.xs }}>
                   {islamicBatchItems.map(item => (
-                    <IslamicBatchMiniCard key={item.id} item={item} onPress={() => onIslamicItemPress(item)} />
+                    <Pressable key={item.id} onPress={() => onIslamicItemPress(item)} style={{ padding: Spacing.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: CF.border, backgroundColor: CF.surfaceHigh }}>
+                      <Text style={{ color: CF.textPrimary, fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold }}>{item.result?.canonicalTitle ?? item.error ?? item.status}</Text>
+                      <Text style={{ color: CF.textSub, fontSize: Typography.size.xs }}>{item.status === 'complete' ? 'Ready to review' : item.status === 'error' ? 'Needs another attempt' : 'Processing'}</Text>
+                    </Pressable>
                   ))}
                 </View>
                 {selectedIslamicItem ? (
@@ -1105,7 +1108,7 @@ function IdentifyTab({ result, capturedImages, onSave, saving, savedItemId, uplo
           <MaterialIcons name="warning-amber" size={19} color={Colors.warning} />
           <View style={{ flex: 1, gap: 4 }}>
             <Text style={{ color: Colors.warning, fontSize: Typography.size.sm, fontWeight: Typography.weight.extrabold }}>Unconfirmed identification</Text>
-            <Text style={{ color: CF.textPrimary, fontSize: Typography.size.sm, lineHeight: 19 }}>The catalogue found no match and confidence is very low. Do not treat a ruler, period or denomination as confirmed. Add the coin's measured weight and diameter and review clearer photos before listing.</Text>
+            <Text style={{ color: CF.textPrimary, fontSize: Typography.size.sm, lineHeight: 19 }}>The catalogue found no match and confidence is very low. Do not treat a ruler, period or denomination as confirmed. Add the coin&apos;s measured weight and diameter and review clearer photos before listing.</Text>
           </View>
         </View>
       ) : null}
@@ -2210,28 +2213,20 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
           </View>
           {isPremium ? <View style={main.proBadge}><Text style={main.proBadgeText}>PRO</Text></View> : null}
         </Pressable>
-        {/* Specialist indicator in header */}
-        {activeTab === 'capture' && selectedSpecialist.id !== 'general' ? (
-          <View style={[main.specialistIndicator, { backgroundColor: selectedSpecialist.color + '20', borderColor: selectedSpecialist.color + '50' }]}>
-            <MaterialIcons name={selectedSpecialist.icon as any} size={11} color={selectedSpecialist.color} />
-            <Text style={[main.specialistIndicatorText, { color: selectedSpecialist.color }]}>{selectedSpecialist.label}</Text>
-          </View>
-        ) : (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.xs }}>
-            <Pressable
-              onPress={() => router.push('/deep-id-lab' as any)}
-              style={main.myCoinsBtn}
-              hitSlop={6}
-              accessibilityLabel="Open Deep ID and Re-ID Lab"
-              accessibilityRole="button"
-            >
-              <MaterialIcons name="science" size={17} color={CF.gold} />
-            </Pressable>
-            <Pressable onPress={() => router.push('/(tabs)/inventory' as any)} style={main.myCoinsBtn} hitSlop={6} accessibilityLabel="View my coin inventory" accessibilityRole="button">
-              <MaterialIcons name="inventory-2" size={16} color={CF.gold} />
-            </Pressable>
-          </View>
-        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.xs }}>
+          <Pressable
+            onPress={() => router.push('/deep-id-lab' as any)}
+            style={main.myCoinsBtn}
+            hitSlop={6}
+            accessibilityLabel="Open Deep ID and Re-ID Lab"
+            accessibilityRole="button"
+          >
+            <MaterialIcons name="science" size={17} color={CF.gold} />
+          </Pressable>
+          <Pressable onPress={() => router.push('/(tabs)/inventory' as any)} style={main.myCoinsBtn} hitSlop={6} accessibilityLabel="View my coin inventory" accessibilityRole="button">
+            <MaterialIcons name="inventory-2" size={16} color={CF.gold} />
+          </Pressable>
+        </View>
       </View>
 
       {/* ── Tab bar ── */}

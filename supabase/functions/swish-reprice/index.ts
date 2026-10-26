@@ -173,10 +173,9 @@ Respond ONLY with this JSON:
     });
 
     if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-      console.error('OnSpace AI error:', errText);
+      console.error('SWISH reprice AI provider request failed:', aiResponse.status);
       return new Response(
-        JSON.stringify({ error: `OnSpace AI: ${errText}` }),
+        JSON.stringify({ error: 'Repricing is temporarily unavailable. Please retry.' }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -202,7 +201,7 @@ Respond ONLY with this JSON:
         .trim();
       aiResult = JSON.parse(cleaned);
     } catch {
-      console.error('Failed to parse AI response:', rawContent);
+      console.error('SWISH reprice AI provider returned an invalid response.');
       // Fallback: suggest 10% reduction
       const fallbackPrice = Math.max(floorPrice, currentPrice * 0.9);
       aiResult = {
@@ -247,9 +246,9 @@ Respond ONLY with this JSON:
     );
 
   } catch (err) {
-    console.error('Unexpected error:', err);
+    console.error('SWISH reprice request failed unexpectedly.');
     return new Response(
-      JSON.stringify({ error: String(err) }),
+      JSON.stringify({ error: 'Unable to reprice this listing. Please retry.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

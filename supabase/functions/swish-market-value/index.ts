@@ -76,7 +76,7 @@ async function verifyTenantAccess(
     const { data: member } = await supabase.from('tenant_memberships').select('id').eq('tenant_id', tenantId).eq('user_id', user.id).maybeSingle();
     if (!member) return { ok: false, error: 'Access denied.' };
     return { ok: true };
-  } catch (e: any) { return { ok: false, error: `Auth error: ${e.message}` }; }
+  } catch { return { ok: false, error: 'Authentication could not be verified.' }; }
 }
 
 // Resolve item specialists to the four production product boundaries.
@@ -84,12 +84,11 @@ async function verifyTenantAccess(
 // do not gain access to an item's valuation context.
 function productForSpecialist(specialistId: string | null | undefined): string | null {
   const id = String(specialistId ?? '').trim().toLowerCase();
+  if (['surplus_flip', 'surplus_trader', 'catalog_flip', 'catalog_surplus'].includes(id)) return 'surplus_flip';
   if ([
     'coins', 'coins_uk', 'coins_world', 'coins_currency', 'islamic_silver',
     'banknotes', 'gold', 'silver', 'ancient_artefacts',
     'jewellery_precious_metals', 'curiosities_collectibles',
-    // Surplus Flip is a distinct product boundary; legacy and current IDs are aliases.
-    'surplus_trader', 'surplus_flip',
   ].includes(id) || id.includes('coin')) return 'coins';
   if (id === 'motocross' || id === 'mx' || id === 'flipper_mx') return 'motocross';
   if (id === 'bicycles' || id === 'cycling' || id === 'bike_flipper') return 'bicycles';
@@ -216,7 +215,7 @@ async function getAndRefreshConnectorCreds(
 
   let creds: any;
   try { creds = await decryptCredentials(conn.credential_ref); }
-  catch (e: any) { console.log(`[SWISH Market v7] Credential decrypt error: ${e.message}`); return null; }
+  catch { console.log('[SWISH Market v7] Credential decryption failed.'); return null; }
 
   if (!creds?.accessToken || !creds?.clientId) {
     console.log(`[SWISH Market v7] Missing accessToken or clientId`);
@@ -254,8 +253,8 @@ async function getAndRefreshConnectorCreds(
       } else {
         console.log(`[SWISH Market v7] Token refresh failed (${resp.status})`);
       }
-    } catch (e: any) {
-      console.log(`[SWISH Market v7] Token refresh exception: ${e.message}`);
+    } catch {
+      console.log('[SWISH Market v7] Token refresh failed unexpectedly.');
     }
   }
 
@@ -499,9 +498,9 @@ async function callTerapeak(
       dataSource: 'terapeak_product_research',
     };
 
-  } catch (e: any) {
-    console.log(`[SWISH Market v8] Terapeak exception: ${e.message}`);
-    return { ...noResult, error: `Terapeak exception: ${e.message}` };
+  } catch {
+    console.log('[SWISH Market v8] Terapeak request failed unexpectedly.');
+    return { ...noResult, error: 'Sold-data lookup is temporarily unavailable.' };
   }
 }
 
@@ -576,9 +575,9 @@ async function searchEbayBrowse(
     })).filter((i: any) => i.price > 0 && i.title);
     console.log(`[SWISH Market v8] Browse API: ${items.length} items (total ${data.total ?? items.length}) marketplace=${marketplaceLog}`);
     return { available: true, items, totalFound: Number(data.total ?? items.length), query };
-  } catch (e: any) {
-    console.log(`[SWISH Market v8] Browse exception: ${e.message}`);
-    return { ...noResult, error: e.message };
+  } catch {
+    console.log('[SWISH Market v8] Browse request failed unexpectedly.');
+    return { ...noResult, error: 'Active-listing lookup is temporarily unavailable.' };
   }
 }
 
@@ -629,8 +628,8 @@ async function searchEbaySoldListings(appToken: string | null, query: string, ma
       };
     }).filter((item: any) => item.title && item.price > 0);
     return { available: true, items, totalFound: Number(data.total ?? data.totalItems ?? items.length) };
-  } catch (e: any) {
-    return { ...empty, error: `Marketplace Insights: ${e?.message ?? 'request failed'}` };
+  } catch {
+    return { ...empty, error: 'Marketplace Insights sold-data lookup is unavailable.' };
   }
 }
 
@@ -677,7 +676,7 @@ async function runEbayVisualSearch(imageInput: string, appToken: string): Promis
     })).filter((i: any) => i.price > 0);
     console.log(`[SWISH Market v7] Visual search: ${items.length} items`);
     return { available: true, items, totalFound: Number(data.total ?? items.length) };
-  } catch (e: any) { return { ...noResult, error: e.message }; }
+  } catch { return { ...noResult, error: 'Visual search is temporarily unavailable.' }; }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -765,7 +764,7 @@ estimatedLow/Mid/High: typical eBay UK SOLD prices (not asking). 0 if unable to 
     };
     console.log(`[SWISH Market v8] Gemini: mid=£${result.estimatedMid} conf=${result.confidence}`);
     return result;
-  } catch (e: any) { return { ...noResult, error: `Gemini error: ${e.message}` }; }
+  } catch { return { ...noResult, error: 'AI market estimate is temporarily unavailable.' }; }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1356,7 +1355,7 @@ Deno.serve(async (req: Request) => {
         sale_prob_30d: valuation.saleProb30d, updated_at: new Date().toISOString(),
       }).eq('id', itemId).eq('tenant_id', tenantId);
       applied = true;
-    } catch (e: any) { console.log(`[SWISH Market v7] Auto-apply failed: ${e.message}`); }
+    } catch { console.log('[SWISH Market v7] Auto-apply failed.'); }
   }
 
   // ── Top comparables for audit trail ───────────────────────────────────────
@@ -1609,13 +1608,9 @@ Deno.serve(async (req: Request) => {
       warningFlags: valuation.valuationWarnings,
     },
   });
-  } catch (err: any) {
-    // Keep unexpected runtime failures observable to the client without leaking credentials.
-    const detail = String(err?.message ?? err ?? 'Unknown runtime error')
-      .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
-      .replace(/(access[_ -]?token|refresh[_ -]?token|client[_ -]?secret)\s*[:=]\s*[^\s,;]+/gi, '$1=[redacted]')
-      .slice(0, 300);
-    console.error('[SWISH Market v8] Unhandled valuation error:', detail);
-    return jsonResponse({ error: 'Market valuation failed', details: detail }, 500);
+  } catch {
+    // Do not expose runtime exception text, which may contain provider or request details.
+    console.error('[SWISH Market v8] Unhandled valuation error.');
+    return jsonResponse({ error: 'Market valuation failed. Please retry.' }, 500);
   }
 });

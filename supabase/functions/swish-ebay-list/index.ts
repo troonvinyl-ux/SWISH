@@ -265,7 +265,8 @@ async function getEbayCredentials(
 
   let creds: any;
   try { creds = await decryptCredentials(conn.credential_ref); } catch (e: any) {
-    return { error: `eBay credentials are corrupted: ${e.message}. Please re-connect eBay in Marketplaces.` };
+    console.error('[SWISH Security] eBay credential decryption failed for listing connector');
+    return { error: 'Unable to read eBay connection securely. Please reconnect eBay in Marketplaces.' };
   }
   if (!creds.accessToken) return { error: 'No eBay access token found. Please re-authorise eBay in Marketplaces.' };
 
@@ -277,7 +278,8 @@ async function getEbayCredentials(
       await supabase.from('marketplace_connectors').update({ credential_ref: updatedRef, access_token_expires_at: newExpiry, updated_at: new Date().toISOString() }).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay');
       creds = { ...creds, accessToken: newToken, expiresAt: newExpiry };
     } catch (e: any) {
-      return { error: `eBay token expired and refresh failed: ${e.message}. Please re-authorise eBay in Marketplaces.` };
+      console.error('[SWISH] eBay token refresh failed for listing connector');
+      return { error: 'eBay authorisation could not be refreshed. Please reconnect eBay in Marketplaces.' };
     }
   } else if (shouldRefresh && !creds.refreshToken) {
     return { error: 'eBay access token expired and no refresh token available. Please re-authorise eBay in Marketplaces.' };
@@ -2284,7 +2286,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
     console.error(`[SWISH] Unhandled error: ${e?.message ?? e}`);
     return new Response(
-      JSON.stringify({ success: false, error: e?.message ?? 'Internal server error' }),
+      JSON.stringify({ success: false, error: 'Unable to complete the eBay listing request. Please retry or contact support.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }

@@ -116,7 +116,7 @@ async function getValidAccessToken(
 
   let credentials: any;
   try { credentials = await decryptCredentials(connector.credential_ref); }
-  catch (e: any) { throw new Error(`eBay credentials malformed: ${e.message}`); }
+  catch { throw new Error('eBay credentials could not be read securely. Reconnect eBay and retry.'); }
   if (!credentials.clientId || !credentials.accessToken) throw new Error('eBay credentials incomplete');
 
   const expiresAt = credentials.expiresAt ?? connector.access_token_expires_at;
@@ -141,9 +141,9 @@ async function getValidAccessToken(
       credentials = { ...credentials, accessToken: newToken, expiresAt: newExpiry };
     } catch (e: any) {
       await supabase.from('marketplace_connectors').update({
-        status: 'requires_reauth', last_error: `Refresh failed: ${e.message}`, updated_at: new Date().toISOString(),
+        status: 'requires_reauth', last_error: 'eBay token refresh failed; reconnect eBay and retry.', updated_at: new Date().toISOString(),
       }).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay');
-      throw new Error(`REQUIRES_REAUTH: Token refresh failed: ${e.message}`);
+      throw new Error('REQUIRES_REAUTH: eBay token refresh failed. Reconnect eBay and retry.');
     }
   }
   return { accessToken: credentials.accessToken, clientId: credentials.clientId, credentials };
@@ -226,8 +226,8 @@ async function fetchAllEbayImages(
 
     console.log(`[v6] GetItem ebay=${ebayItemId} found=${urls.length} PictureURL elements`);
     return urls.slice(0, MAX_IMAGES);
-  } catch (e: any) {
-    console.log(`[v6] GetItem error for ebay=${ebayItemId}: ${e.message}`);
+  } catch {
+    console.log('[v6] GetItem request failed.');
     return [];
   }
 }
@@ -492,7 +492,7 @@ Deno.serve(async (req: Request) => {
   } catch (e: any) {
     const isReauth = e.message?.startsWith('REQUIRES_REAUTH:');
     return jsonResp({
-      error: isReauth ? 'eBay re-authorisation required.' : e.message,
+      error: isReauth ? 'eBay re-authorisation required.' : 'Unable to prepare eBay authorisation. Please reconnect and retry.',
       requiresReauth: isReauth,
       authFailed: true,
     }, 401);
@@ -583,9 +583,9 @@ Deno.serve(async (req: Request) => {
     let result: ProcessResult;
     try {
       result = await processItem(supabase, tenantId, item, accessToken, clientId);
-    } catch (e: any) {
-      console.log(`[v6] processItem exception item=${item.id}: ${e.message}`);
-      errors.push(`item=${item.id}: ${e.message}`);
+    } catch {
+      console.log('[v6] Image processing failed for an item.');
+      errors.push('An item image could not be processed.');
       itemsFailed++;
       continue;
     }

@@ -744,7 +744,7 @@ export default function ListingPreflightScreen() {
               ) : catSuggestions.length === 0 ? (
                 <View style={s.catCenterMsg}>
                   <MaterialIcons name="search-off" size={28} color={Colors.textTertiary} />
-                  <Text style={s.catCenterText}>No results for "{catSearch}"</Text>
+                  <Text style={s.catCenterText}>No results for &quot;{catSearch}&quot;</Text>
                   <Text style={s.catCenterSub}>Try a shorter keyword or browse below</Text>
                 </View>
               ) : (

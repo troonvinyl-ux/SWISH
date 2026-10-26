@@ -318,7 +318,7 @@ function EbayPoliciesCard({ tenantId }: { tenantId: string }) {
           <View style={{ flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: Spacing.sm, backgroundColor: Colors.dangerDim, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.danger + '40' }}>
             <MaterialIcons name="error" size={14} color={Colors.danger} style={{ marginTop: 1 }} />
             <Text style={{ flex: 1, fontSize: Typography.size.xs, color: Colors.danger, lineHeight: 16 }}>
-              {!selectedFulfillment ? 'Shipping policy not selected — eBay listings will fail without it.' : 'Return policy not selected — eBay listings will fail without it.'} Tap "Select" then "Save Policy Selections".
+              {!selectedFulfillment ? 'Shipping policy not selected — eBay listings will fail without it.' : 'Return policy not selected — eBay listings will fail without it.'} Tap &quot;Select&quot; then &quot;Save Policy Selections&quot;.
             </Text>
           </View>
         </View>

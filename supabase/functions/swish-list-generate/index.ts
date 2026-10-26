@@ -608,10 +608,9 @@ Return ONLY this exact JSON:
     });
 
     if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-      console.error('[swish-list-generate v2] OnSpace AI error:', errText);
+      console.error('[swish-list-generate v2] AI provider request failed:', aiResponse.status);
       return new Response(
-        JSON.stringify({ error: `OnSpace AI: ${errText}` }),
+        JSON.stringify({ error: 'Listing generation is temporarily unavailable. Please retry.' }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -628,7 +627,7 @@ Return ONLY this exact JSON:
         .trim();
       listing = JSON.parse(cleaned);
     } catch {
-      console.error('[swish-list-generate v2] Failed to parse AI response:', rawContent.slice(0, 400));
+      console.error('[swish-list-generate v2] AI provider returned an invalid listing response.');
       return new Response(
         JSON.stringify({ error: 'AI returned invalid JSON. Please retry.' }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -740,9 +739,9 @@ Return ONLY this exact JSON:
     );
 
   } catch (err) {
-    console.error('[swish-list-generate v2] Unexpected error:', err);
+    console.error('[swish-list-generate v2] Unexpected request failure.');
     return new Response(
-      JSON.stringify({ error: String(err) }),
+      JSON.stringify({ error: 'Unable to generate the listing. Please retry.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

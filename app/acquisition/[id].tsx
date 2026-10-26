@@ -887,7 +887,7 @@ export default function AcquisitionDetailScreen() {
               <MaterialIcons name="photo-camera" size={32} color={Colors.textTertiary} />
               <Text style={styles.emptyItemsTitle}>No items yet</Text>
               <Text style={styles.emptyItemsText}>
-                Tap "Add Items" to scan and identify items from this acquisition.
+                Tap &quot;Add Items&quot; to scan and identify items from this acquisition.
               </Text>
               <Pressable onPress={handleAddItems} style={styles.emptyAddBtn}>
                 <MaterialIcons name="add-a-photo" size={16} color={Colors.background} />

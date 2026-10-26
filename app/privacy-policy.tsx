@@ -137,14 +137,14 @@ export default function PrivacyPolicyScreen() {
         <Callout icon="ℹ️" type="info">
           <Text style={{ fontSize: Typography.size.sm, color: Colors.textSecondary, lineHeight: 20 }}>
             <Text style={{ color: Colors.textPrimary, fontWeight: Typography.weight.semibold }}>Plain-English Summary: </Text>
-            When you connect your eBay account, SWISH uses eBay's official OAuth 2.0 flow — you authorise access directly on eBay's website. SWISH never sees your eBay password. OAuth tokens are stored server-side only and never exposed to the app. We use your data only to provide the service.
+            When you connect your eBay account, SWISH uses eBay&apos;s official OAuth 2.0 flow — you authorise access directly on eBay&apos;s website. SWISH never sees your eBay password. OAuth tokens are stored server-side only and never exposed to the app. We use your data only to provide the service.
           </Text>
         </Callout>
 
         {/* 1. Who We Are */}
         <SectionHeader num="01" title="Who We Are" />
         <Text style={s.body}>
-          SWISH is an autonomous commerce operating system that enables resellers to manage acquisitions, identify and value items, generate marketplace listings, and track profits. This Policy explains how SWISH collects, uses, stores, and protects your data — including data obtained via eBay's OAuth 2.0 service.
+          SWISH is an autonomous commerce operating system that enables resellers to manage acquisitions, identify and value items, generate marketplace listings, and track profits. This Policy explains how SWISH collects, uses, stores, and protects your data — including data obtained via eBay&apos;s OAuth 2.0 service.
         </Text>
 
         {/* 2. Data We Collect */}
@@ -210,7 +210,7 @@ export default function PrivacyPolicyScreen() {
             style={{ color: Colors.primary }}
             onPress={() => Linking.openURL('https://signin.ebay.com/ws/eBayISAPI.dll?ThirdPartyAuthSuiteGrant')}
           >
-            eBay's Connected Applications page
+            eBay&apos;s Connected Applications page
           </Text>
           {' '}or by emailing{' '}
           <Text style={{ color: Colors.primary }} onPress={openMail}>{CONTACT_EMAIL}</Text>.
@@ -238,7 +238,7 @@ export default function PrivacyPolicyScreen() {
         {/* 5. Data Storage & Security */}
         <SectionHeader num="05" title="Data Storage &amp; Security" />
         <Text style={s.body}>
-          SWISH backend services are hosted on OnSpace Cloud infrastructure. All data is encrypted at rest (AES-256) and in transit (TLS 1.2+). Each account operates in a private tenant partition enforced by database-level Row Level Security policies — no user can access another user's data.
+          SWISH backend services are hosted on OnSpace Cloud infrastructure. All data is encrypted at rest (AES-256) and in transit (TLS 1.2+). Each account operates in a private tenant partition enforced by database-level Row Level Security policies — no user can access another user&apos;s data.
         </Text>
         <Bullet text="Passwords stored as bcrypt hashes (cost factor ≥12) — never in plain text" />
         <Bullet text="Session tokens short-lived and rotated on every authentication event" />
@@ -273,7 +273,7 @@ export default function PrivacyPolicyScreen() {
         <Text style={s.body}>
           To delete your account and all associated data, email{' '}
           <Text style={{ color: Colors.primary }} onPress={openMail}>{CONTACT_EMAIL}</Text>
-          {' '}with subject <Text style={{ color: Colors.textPrimary }}>"Account Deletion Request"</Text>. We will confirm deletion within 30 days.
+          {' '}with subject <Text style={{ color: Colors.textPrimary }}>&quot;Account Deletion Request&quot;</Text>. We will confirm deletion within 30 days.
         </Text>
 
         {/* 8. Third Parties */}
@@ -288,7 +288,7 @@ export default function PrivacyPolicyScreen() {
         </Text>
         <Callout icon="🛒" type="ebay">
           <Text style={{ fontSize: Typography.size.sm, color: Colors.textSecondary, lineHeight: 20 }}>
-            SWISH's use of the eBay API is governed by the{' '}
+            SWISH&apos;s use of the eBay API is governed by the{' '}
             <Text style={{ color: Colors.primary }} onPress={() => Linking.openURL('https://developer.ebay.com/join/api-license-agreement')}>eBay API License Agreement</Text>
             . eBay account data is used exclusively for the purposes described in this Policy.
           </Text>

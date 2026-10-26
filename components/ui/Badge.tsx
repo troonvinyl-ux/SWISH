@@ -31,6 +31,7 @@ export const Badge = memo(({ label, variant = 'neutral', size = 'sm' }: BadgePro
     </View>
   );
 });
+Badge.displayName = 'Badge';
 
 const styles = StyleSheet.create({
   badge: {

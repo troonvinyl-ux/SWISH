@@ -1,9 +1,9 @@
 // SWISH — swish-migrate-credentials Edge Function
 //
-// One-time admin operation: reads every marketplace_connectors row, checks
-// whether credential_ref is plaintext (unencrypted), and re-encrypts it with
-// AES-256-GCM via migrateToEncrypted().  The encrypted value is persisted back
-// to the row immediately so each row is only migrated once.
+// One-tenant-at-a-time admin operation: checks marketplace_connectors rows
+// belonging to the explicitly supplied tenant, then re-encrypts plaintext
+// credential_ref values with AES-256-GCM via migrateToEncrypted(). The encrypted
+// value is persisted immediately so each row is only migrated once.
 //
 // SECURITY INVARIANTS
 //   - Only callable by authenticated tenants whose membership is owner/admin.
@@ -11,8 +11,9 @@
 //   - Credential contents are NEVER logged — only structural metadata.
 //   - Runs server-side only.  No credential material leaves this function.
 //
-// REQUEST:  POST  { tenantId?: string }
-//   - tenantId filters to one tenant.  Omit to migrate all tenants (owner/admin only).
+// REQUEST:  POST  { tenantId: string }
+//   - tenantId is required. Only an owner/admin of that tenant may migrate its rows.
+//   - Cross-tenant migration is deliberately unsupported.
 //
 // RESPONSE: { migrated: number; alreadyEncrypted: number; failed: number; errors: string[] }
 
@@ -67,14 +68,26 @@ Deno.serve(async (req: Request) => {
   }
 
   // ── Parse body ─────────────────────────────────────────────────────────────
-  let body: { tenantId?: string } = {};
-  try { body = await req.json(); } catch { /* empty body is fine */ }
-  const { tenantId } = body;
+  let body: { tenantId?: unknown };
+  try {
+    const parsed: unknown = await req.json();
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return error('Request body must be a JSON object containing tenantId', 400);
+    }
+    body = parsed as { tenantId?: unknown };
+  } catch {
+    return error('A tenantId is required for credential migration.', 400);
+  }
+  const tenantId = typeof body.tenantId === 'string' ? body.tenantId.trim() : '';
+  if (!tenantId) {
+    // Never let a tenant owner trigger a service-role query spanning other tenants.
+    return error('A tenantId is required. Migrate one tenant at a time.', 400);
+  }
 
-  // ── Verify caller is owner/admin of the specified tenant (or all tenants) ──
-  // We use the service-role client for the actual data access, but we validate
-  // membership using the authed client so RLS applies.
-  if (tenantId) {
+  // ── Verify caller is owner/admin of the specified tenant ───────────────────
+  // We use the service-role client for data access, but validate membership
+  // using the caller's JWT so the caller cannot migrate another tenant.
+  {
     const { data: membership, error: mErr } = await authedClient
       .from('tenant_memberships')
       .select('role, is_owner')
@@ -92,23 +105,6 @@ Deno.serve(async (req: Request) => {
     if (!isPrivileged) {
       return error('Owner or admin role required', 403);
     }
-  } else {
-    // No tenantId — caller must be a superuser (has membership across many tenants).
-    // We simply confirm the caller has at least one owner/admin membership.
-    const { data: memberships, error: mErr } = await authedClient
-      .from('tenant_memberships')
-      .select('role, is_owner')
-      .eq('user_id', user.id)
-      .in('role', ['owner', 'admin']);
-
-    const hasPrivileged =
-      !mErr &&
-      memberships != null &&
-      memberships.some(m => m.is_owner === true || m.role === 'owner' || m.role === 'admin');
-
-    if (!hasPrivileged) {
-      return error('Owner or admin role required for cross-tenant migration', 403);
-    }
   }
 
   // ── Service-role client for credential access ──────────────────────────────
@@ -125,14 +121,12 @@ Deno.serve(async (req: Request) => {
     .not('credential_ref', 'is', null)
     .neq('credential_ref', '');
 
-  if (tenantId) {
-    query = query.eq('tenant_id', tenantId);
-  }
+  query = query.eq('tenant_id', tenantId);
 
   const { data: rows, error: fetchErr } = await query;
   if (fetchErr) {
-    console.error('[swish-migrate-credentials] DB fetch error:', fetchErr.message);
-    return error(`Database error: ${fetchErr.message}`, 500);
+    console.error('[swish-migrate-credentials] Database fetch failed:', fetchErr.message);
+    return error('Credential migration could not read connector records. Please retry or contact support.', 500);
   }
 
   if (!rows || rows.length === 0) {
@@ -176,9 +170,9 @@ Deno.serve(async (req: Request) => {
 
       if (updateErr) {
         failed++;
-        const msg = `Row ${row.id} (${row.marketplace_id}): update failed — ${updateErr.message}`;
+        const msg = `Row ${row.id} (${row.marketplace_id}): update failed`;
         errors.push(msg);
-        console.error('[swish-migrate-credentials]', msg);
+        console.error('[swish-migrate-credentials] Row update failed:', { rowId: row.id, marketplace: row.marketplace_id, code: updateErr.code });
       } else {
         migrated++;
         // Log only structural metadata — never the credential content
@@ -189,9 +183,9 @@ Deno.serve(async (req: Request) => {
       }
     } catch (e: any) {
       failed++;
-      const msg = `Row ${row.id} (${row.marketplace_id}): ${e?.message ?? 'Unknown error'}`;
+      const msg = `Row ${row.id} (${row.marketplace_id}): encryption failed`;
       errors.push(msg);
-      console.error('[swish-migrate-credentials]', msg);
+      console.error('[swish-migrate-credentials] Row encryption failed:', { rowId: row.id, marketplace: row.marketplace_id, reason: e instanceof Error ? e.message : 'unknown error' });
     }
   }
 

@@ -84,6 +84,7 @@ export const AcquisitionCard = memo(({ acquisition, onPress }: AcquisitionCardPr
     </Pressable>
   );
 });
+AcquisitionCard.displayName = 'AcquisitionCard';
 
 const styles = StyleSheet.create({
   card: {

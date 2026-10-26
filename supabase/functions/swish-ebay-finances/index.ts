@@ -4,7 +4,7 @@
 // POST body: { tenantId, route?, daysBack? }
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
+import { encryptCredentials, decryptCredentials, isEncrypted } from '../_shared/credentialCrypto.ts';
 import { ebayFinancesSignatureHeaders } from '../_shared/ebayDigitalSignature.ts';
 
 const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -30,41 +30,130 @@ async function checkManagedPayments(accessToken: string): Promise<{ status?: str
   }
 }
 
-async function getToken(supabase: ReturnType<typeof adminClient>, tenantId: string, refreshForFinances = false): Promise<{ accessToken: string } | { error: string }> {
-  const { data: conn } = await supabase.from('marketplace_connectors').select('credential_ref, status').eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle();
-  if (!conn?.credential_ref || conn.status !== 'connected') return { error: 'eBay not connected' };
-  let creds: any;
-  try { creds = await decryptCredentials(conn.credential_ref); } catch (e: any) { return { error: e.message }; }
-  if (!creds.accessToken) return { error: 'No access token' };
-  const shouldRefresh = creds.expiresAt ? Date.now() + 5 * 60_000 >= new Date(creds.expiresAt).getTime() : false;
-  // Other SWISH endpoints previously requested a restricted OAuth scope during refresh.
-  // Refresh once before Finance API calls (without a scope parameter) to restore all permissions already consented to.
-  if ((refreshForFinances || shouldRefresh) && creds.refreshToken) {
-    try {
-      const resp = await fetch(EBAY_TOKEN_URL, { method: 'POST', headers: { Authorization: `Basic ${btoa(`${creds.clientId}:${creds.clientSecret}`)}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: creds.refreshToken }).toString(), signal: AbortSignal.timeout(12000) });
-      const data = await resp.json();
-      if (data.access_token) {
-        creds = { ...creds, accessToken: data.access_token, expiresAt: new Date(Date.now() + (data.expires_in ?? 7200) * 1000).toISOString() };
-        const ref = await encryptCredentials(creds);
-        await supabase.from('marketplace_connectors').update({ credential_ref: ref, access_token_expires_at: creds.expiresAt, updated_at: new Date().toISOString() }).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay');
-      }
-    } catch {}
+async function getToken(
+  supabase: ReturnType<typeof adminClient>,
+  tenantId: string,
+  refreshForFinances = false,
+): Promise<{ accessToken: string } | { error: string; requiresReauth?: boolean }> {
+  const { data: conn, error: connectorError } = await supabase
+    .from('marketplace_connectors')
+    .select('credential_ref, status, access_token_expires_at')
+    .eq('tenant_id', tenantId)
+    .eq('marketplace_id', 'ebay')
+    .maybeSingle();
+
+  if (connectorError) return { error: 'Unable to read the eBay connector. Please retry.' };
+  if (!conn?.credential_ref || conn.status !== 'connected') return { error: 'eBay not connected', requiresReauth: true };
+
+  let creds: Record<string, unknown> & {
+    accessToken?: string;
+    refreshToken?: string;
+    clientId?: string;
+    clientSecret?: string;
+    expiresAt?: string;
+    financeScopeRefreshedAt?: string;
+  };
+  try {
+    creds = await decryptCredentials(conn.credential_ref) as typeof creds;
+  } catch {
+    return { error: 'Stored eBay credentials could not be decrypted. Reconnect eBay or contact support.', requiresReauth: true };
   }
+
+  if (!creds.accessToken) return { error: 'No eBay access token. Reconnect eBay.', requiresReauth: true };
+  const storedExpiry = creds.expiresAt ?? (conn.access_token_expires_at as string | null | undefined) ?? undefined;
+  const expiresAtMs = storedExpiry ? Date.parse(storedExpiry) : Number.NaN;
+  const needsRefresh = !Number.isFinite(expiresAtMs) || Date.now() + 5 * 60_000 >= expiresAtMs;
+
+  // swish-ebay-sync refreshes using a restricted scope set. Finance routes therefore
+  // need one no-scope refresh after that event, not on every request. The marker lives
+  // inside the already-encrypted credential payload and is cleared by the scoped refresher.
+  const financeRefreshAt = creds.financeScopeRefreshedAt ? Date.parse(creds.financeScopeRefreshedAt) : Number.NaN;
+  const needsFinanceScopeRefresh = refreshForFinances && (!isEncrypted(conn.credential_ref) || !Number.isFinite(financeRefreshAt));
+  const hasRefreshCredentials = Boolean(creds.refreshToken && creds.clientId && creds.clientSecret);
+  if (needsRefresh && !hasRefreshCredentials) {
+    return { error: 'eBay authorisation has expired or is incomplete. Reconnect eBay.', requiresReauth: true };
+  }
+  if (needsRefresh || (needsFinanceScopeRefresh && hasRefreshCredentials)) {
+
+    let refreshResponse: Response;
+    try {
+      refreshResponse = await fetch(EBAY_TOKEN_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${btoa(`${creds.clientId}:${creds.clientSecret}`)}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: creds.refreshToken,
+        }).toString(),
+        signal: AbortSignal.timeout(12000),
+      });
+    } catch {
+      return { error: 'Unable to reach eBay token service. Please retry.' };
+    }
+
+    let data: { access_token?: string; expires_in?: number };
+    try {
+      data = await refreshResponse.json();
+    } catch {
+      return { error: 'eBay token service returned an invalid response. Please retry or reconnect eBay.' };
+    }
+    if (!refreshResponse.ok || !data.access_token) {
+      if ([400, 401, 403].includes(refreshResponse.status)) {
+        return { error: 'eBay authorisation is no longer valid. Reconnect eBay and retry.', requiresReauth: true };
+      }
+      return { error: 'eBay token refresh failed. Please retry.' };
+    }
+
+    const expiresIn = Number(data.expires_in);
+    const nextExpiry = new Date(Date.now() + (Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn : 7200) * 1000).toISOString();
+    const nextCredentials = {
+      ...creds,
+      accessToken: data.access_token,
+      expiresAt: nextExpiry,
+      // This endpoint deliberately omits the OAuth scope parameter, preserving the consented scopes.
+      financeScopeRefreshedAt: new Date().toISOString(),
+    };
+    const encryptedRef = await encryptCredentials(nextCredentials);
+    const { error: updateError } = await supabase
+      .from('marketplace_connectors')
+      .update({ credential_ref: encryptedRef, access_token_expires_at: nextExpiry, updated_at: new Date().toISOString() })
+      .eq('tenant_id', tenantId)
+      .eq('marketplace_id', 'ebay');
+
+    if (updateError) return { error: 'eBay token refreshed but could not be saved securely. Please retry.' };
+    return { accessToken: data.access_token };
+  }
+
   return { accessToken: creds.accessToken };
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jr({ error: 'Method not allowed' }, 405);
-  let body: any;
+  let body: unknown;
   try { body = await req.json(); } catch { return jr({ error: 'Invalid JSON' }, 400); }
-  const { tenantId, route = 'sync_transactions', daysBack = 90 } = body;
-  if (!tenantId) return jr({ error: 'tenantId required' }, 400);
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return jr({ error: 'Request body must be a JSON object.' }, 400);
+  }
+  const { tenantId, route = 'sync_transactions', daysBack: requestedDaysBack = 90 } = body as Record<string, unknown>;
+  if (typeof tenantId !== 'string' || tenantId.trim().length === 0 || tenantId.length > 200) {
+    return jr({ error: 'A valid tenantId is required.' }, 400);
+  }
+  const allowedRoutes = new Set(['sync_transactions', 'get_payouts', 'get_funds_summary', 'get_summary']);
+  if (typeof route !== 'string' || !allowedRoutes.has(route)) {
+    return jr({ error: 'Unsupported finances route.' }, 400);
+  }
+  const daysBack = Number(requestedDaysBack);
+  if (!Number.isInteger(daysBack) || daysBack < 1 || daysBack > 365) {
+    return jr({ error: 'daysBack must be a whole number between 1 and 365.' }, 400);
+  }
 
   const supabase = adminClient();
   const authHeader = req.headers.get('Authorization');
-  if (!authHeader) return jr({ error: 'Authentication required.' }, 401);
-  const tok = authHeader.replace('Bearer ', '').trim();
+  if (!authHeader?.startsWith('Bearer ')) return jr({ error: 'Authentication required.' }, 401);
+  const tok = authHeader.slice('Bearer '.length).trim();
   if (!tok || tok === Deno.env.get('SUPABASE_ANON_KEY')) return jr({ error: 'Authentication required.' }, 401);
   try {
     const uc = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_ANON_KEY') ?? '', { global: { headers: { Authorization: authHeader } } });
@@ -72,10 +161,23 @@ Deno.serve(async (req: Request) => {
     if (uErr || !user) return jr({ error: 'Invalid token.' }, 401);
     const { data: m } = await supabase.from('tenant_memberships').select('id').eq('tenant_id', tenantId).eq('user_id', user.id).maybeSingle();
     if (!m) return jr({ error: 'Access denied.' }, 403);
-  } catch (e: any) { return jr({ error: e.message }, 401); }
+  } catch {
+    return jr({ error: 'Unable to verify authentication. Please sign in again.' }, 401);
+  }
 
-  const tr = await getToken(supabase, tenantId, ['sync_transactions', 'get_funds_summary', 'get_payouts'].includes(route));
-  if ('error' in tr) return jr({ error: tr.error, requiresReauth: true, financesApiAvailable: false }, 400);
+  const refreshForFinances = route === 'sync_transactions' || route === 'get_funds_summary' || route === 'get_payouts';
+  let tr: Awaited<ReturnType<typeof getToken>>;
+  try {
+    tr = await getToken(supabase, tenantId, refreshForFinances);
+  } catch {
+    // Encryption/secret configuration errors must not escape as raw runtime exceptions.
+    console.error('[SWISH Finances] Could not prepare a secure eBay token.');
+    return jr({ error: 'Unable to prepare eBay authorisation securely. Check server configuration or contact support.' }, 500);
+  }
+  if ('error' in tr) {
+    const reauth = tr.requiresReauth === true;
+    return jr({ error: tr.error, requiresReauth: reauth, financesApiAvailable: false }, reauth ? 400 : 503);
+  }
   const { accessToken } = tr;
   const hdrs = { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json', 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_GB' };
   const fromDate = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString();
@@ -128,6 +230,17 @@ Deno.serve(async (req: Request) => {
             const { data: ord } = await supabase.from('orders').select('id').eq('tenant_id', tenantId).eq('external_order_id', ebayOrderId).maybeSingle();
             swishOrderId = ord?.id ?? null;
           }
+          const { data: existingTx, error: existingTxError } = await supabase
+            .from('ebay_financials')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .eq('ebay_transaction_id', txId)
+            .maybeSingle();
+          if (existingTxError) {
+            errors.push(`TX ${txId}: unable to check existing transaction state.`);
+            continue;
+          }
+
           const { error: ue } = await supabase.from('ebay_financials').upsert({
             tenant_id: tenantId, ebay_transaction_id: txId, transaction_type: txType,
             order_id: swishOrderId, ebay_order_id: ebayOrderId, amount,
@@ -137,15 +250,24 @@ Deno.serve(async (req: Request) => {
             payout_id: tx.payoutId ?? null, payout_status: tx.payoutStatus ?? null,
             transaction_date: tx.transactionDate ?? new Date().toISOString(),
           }, { onConflict: 'ebay_transaction_id,tenant_id', ignoreDuplicates: false });
-          if (ue) { if (ue.code === '23505') updated++; else errors.push(`TX ${txId}: ${ue.message}`); } else inserted++;
+          if (ue) {
+            // A remaining constraint error means the write failed; do not apply downstream
+            // order fee side effects when the source transaction was not persisted.
+            errors.push(`TX ${txId}: transaction could not be persisted (database constraint).`);
+            continue;
+          } else if (existingTx) {
+            updated++;
+          } else {
+            inserted++;
+          }
 
           // Update actual fees on orders with real eBay data
           if ((txType === 'FINAL_VALUE_FEE' || txType === 'FINAL_VALUE_FEE_FIXED_PER_ORDER') && swishOrderId && amount < 0) {
             const actualFee = Math.abs(amount);
-            const { data: ord } = await supabase.from('orders').select('sale_price, shipping_cost').eq('id', swishOrderId).maybeSingle();
+            const { data: ord } = await supabase.from('orders').select('sale_price, shipping_cost').eq('id', swishOrderId).eq('tenant_id', tenantId).maybeSingle();
             if (ord) {
               const netRev = Math.round((Number(ord.sale_price) - actualFee - Number(ord.shipping_cost)) * 100) / 100;
-              await supabase.from('orders').update({ marketplace_fee: actualFee, net_revenue: netRev, notes: 'fee_note:ACTUAL_EBAY', updated_at: new Date().toISOString() }).eq('id', swishOrderId);
+              await supabase.from('orders').update({ marketplace_fee: actualFee, net_revenue: netRev, notes: 'fee_note:ACTUAL_EBAY', updated_at: new Date().toISOString() }).eq('id', swishOrderId).eq('tenant_id', tenantId);
               if (ebayOrderId) await supabase.from('sales').update({ marketplace_fee: actualFee, net_revenue: netRev }).eq('tenant_id', tenantId).eq('external_order_id', ebayOrderId);
             }
           }
@@ -173,7 +295,7 @@ Deno.serve(async (req: Request) => {
               : 'SWISH could not verify Managed Payments status. Re-authorise eBay in SWISH and check the Production keyset scopes.';
           return jr({ success: false, error: `Seller funds summary API HTTP ${resp.status}. ${diagnosis}`, financesApiAvailable: false, managedPaymentsStatus: payments.status ?? null, diagnostic: payments.error ?? null }, 400);
         }
-        return jr({ success: false, error: `Seller funds summary API ${resp.status}: ${t.slice(0, 200)}`, financesApiAvailable: false }, 400);
+        return jr({ success: false, error: `Seller funds summary API returned HTTP ${resp.status}.`, financesApiAvailable: false }, 400);
       }
       const data = await resp.json();
       return jr({ success: true, fundsSummary: data, financesApiAvailable: true });
@@ -184,7 +306,7 @@ Deno.serve(async (req: Request) => {
       url.searchParams.set('filter', `lastAttemptedPayoutDate:[${fromDate}..]`); url.searchParams.set('limit', '100');
       const signatureHeaders = await ebayFinancesSignatureHeaders(url, 'GET');
       const resp = await fetch(url.toString(), { headers: { ...hdrs, ...signatureHeaders }, signal: AbortSignal.timeout(15000) });
-      if (!resp.ok) { const t = await resp.text(); return jr({ success: false, error: `Payouts API ${resp.status}: ${t.slice(0, 200)}`, financesApiAvailable: false }, 400); }
+      if (!resp.ok) return jr({ success: false, error: `Payouts API returned HTTP ${resp.status}.`, financesApiAvailable: false }, 400);
       const data = await resp.json();
       return jr({ success: true, payouts: data.payouts ?? [], financesApiAvailable: true });
     }
@@ -207,7 +329,8 @@ Deno.serve(async (req: Request) => {
 
     return jr({ error: `Unknown route: ${route}` }, 400);
   } catch (err: any) {
-    console.error(`[SWISH Finances] Error:`, err.message);
-    return jr({ error: err.message ?? 'Internal error' }, 500);
+    // Log the server-side failure for operators without returning internal details.
+    console.error('[SWISH Finances] Request failed:', err instanceof Error ? err.message : 'unknown error');
+    return jr({ error: 'Financial request failed. Please retry; contact support if the issue continues.' }, 500);
   }
 });
