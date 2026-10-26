@@ -40,13 +40,13 @@ function AppRouter() {
   // businessConfig == null means first-time user who hasn't completed onboarding
   // onboardingComplete false also triggers onboarding
   if (businessConfig === null || businessConfig?.onboardingComplete === false) {
-    return <Redirect href="/onboarding" />;
+    return <Redirect href={"/onboarding" as any} />;
   }
 
   // Fail closed: an unset/unknown niche must never silently open Coins.
   // Ask the user to select a product until a registered niche is available.
   const entryRoute = nicheToEntryRoute(activeNicheId);
-  if (!entryRoute) return <Redirect href="/niche-select" />;
+  if (!entryRoute) return <Redirect href={"/niche-select" as any} />;
 
   // Route to the correct niche-specific entry point.
   return <Redirect href={entryRoute as any} />;
