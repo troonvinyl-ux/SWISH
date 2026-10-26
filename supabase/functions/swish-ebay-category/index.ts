@@ -123,8 +123,8 @@ async function verifyAccess(
       .eq('tenant_id', tenantId).eq('user_id', user.id).maybeSingle();
     if (!m) return { ok: false, error: 'Access denied.', status: 403 };
     return { ok: true };
-  } catch (e: any) {
-    return { ok: false, error: `Auth error: ${e.message}`, status: 401 };
+  } catch {
+    return { ok: false, error: 'Authentication could not be verified.', status: 401 };
   }
 }
 
