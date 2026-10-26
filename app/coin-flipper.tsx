@@ -672,7 +672,10 @@ function CaptureTab({
                 <Text style={[ct.quickThumbsTitle, { color: CF.islamic }]}>ISLAMIC IDENTIFICATIONS</Text>
                 <View style={{ gap: Spacing.xs }}>
                   {islamicBatchItems.map(item => (
-                    <IslamicBatchMiniCard key={item.id} item={item} onPress={() => onIslamicItemPress(item)} />
+                    <Pressable key={item.id} onPress={() => onIslamicItemPress(item)} style={{ padding: Spacing.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: CF.border, backgroundColor: CF.surfaceHigh }}>
+                      <Text style={{ color: CF.textPrimary, fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold }}>{item.result?.canonicalTitle ?? item.error ?? item.status}</Text>
+                      <Text style={{ color: CF.textSub, fontSize: Typography.size.xs }}>{item.status === 'complete' ? 'Ready to review' : item.status === 'error' ? 'Needs another attempt' : 'Processing'}</Text>
+                    </Pressable>
                   ))}
                 </View>
                 {selectedIslamicItem ? (
