@@ -254,6 +254,7 @@ export interface MarketplaceConnector {
   lastSyncAt?: string;
   lastError?: string;
   connectedAt?: string;
+  accessTokenExpiresAt?: string;
   updatedAt: string;
 }
 
@@ -277,6 +278,7 @@ function mapConnector(row: any): MarketplaceConnector {
     lastSyncAt: row.last_sync_at ?? undefined,
     lastError: row.last_error ?? undefined,
     connectedAt: row.connected_at ?? undefined,
+    accessTokenExpiresAt: row.access_token_expires_at ?? undefined,
     updatedAt: row.updated_at,
   };
 }
