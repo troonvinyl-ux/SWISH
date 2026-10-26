@@ -433,6 +433,27 @@ describe('AI Edge Function error response safety', () => {
 });
 
 
+
+describe('SWISH rendered coin reference separation', () => {
+  const identificationService = fs.readFileSync(
+    path.join(projectRoot, 'services/aiIdentificationService.ts'),
+    'utf8',
+  );
+
+  test('rendered references are stored in attributes and not canonical listing media', () => {
+    const start = identificationService.indexOf('export async function saveCoinReferenceImages(');
+    const end = identificationService.indexOf('export async function saveIdentifiedItem(', start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const implementation = identificationService.slice(start, end);
+    expect(implementation).toContain('attributes: { ...attributes, _coin_reference_images: { ...existing, ...urls } }');
+    expect(implementation).toContain(".eq('tenant_id', tenantId)");
+    expect(implementation).toContain('/references/');
+    expect(implementation).not.toContain('media:');
+    expect(implementation).not.toContain("from('ebay'");
+  });
+});
+
 describe('SWISH market valuation error sanitization', () => {
   const marketValue = fs.readFileSync(
     path.join(projectRoot, 'supabase/functions/swish-market-value/index.ts'),
