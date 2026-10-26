@@ -1356,9 +1356,9 @@ Deno.serve(async (req: Request) => {
 
     let aiResp = await requestIdentification(false);
     if (!aiResp.ok) {
-      const errText = await aiResp.text();
+      console.error('[swish-islamic-identify] AI request failed:', aiResp.status);
       return new Response(
-        JSON.stringify({ error: `OnSpace AI error: ${errText}` }),
+        JSON.stringify({ error: 'The identification service is temporarily unavailable. Please retry.' }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
@@ -1371,9 +1371,9 @@ Deno.serve(async (req: Request) => {
       console.warn('[swish-islamic-identify] AI output truncated; retrying with compact JSON');
       aiResp = await requestIdentification(true);
       if (!aiResp.ok) {
-        const errText = await aiResp.text();
+        console.error('[swish-islamic-identify] Compact AI retry failed:', aiResp.status);
         return new Response(
-          JSON.stringify({ error: `OnSpace AI retry error: ${errText}` }),
+          JSON.stringify({ error: 'The identification service is temporarily unavailable. Please retry.' }),
           { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
       }
@@ -1697,9 +1697,9 @@ Deno.serve(async (req: Request) => {
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (err: any) {
-    console.error('[swish-islamic-identify] Error:', err);
+    console.error('[swish-islamic-identify] Request failed:', err instanceof Error ? err.message : 'unknown error');
     return new Response(
-      JSON.stringify({ error: err.message ?? 'Internal error' }),
+      JSON.stringify({ error: 'Unable to complete Islamic coin identification. Please retry or contact support.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }

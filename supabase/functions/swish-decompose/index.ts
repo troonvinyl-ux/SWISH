@@ -190,16 +190,16 @@ Recommend the strategy that MAXIMISES net profit per labour hour, not just gross
 
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
-      console.error('OnSpace AI decompose error:', errText);
+      console.error('OnSpace AI decompose request failed:', aiResponse.status);
       return new Response(
-        JSON.stringify({ error: `OnSpace AI: ${errText}` }),
+        JSON.stringify({ error: 'The decomposition service is temporarily unavailable. Please retry.' }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     const aiData = await aiResponse.json();
     const rawContent = aiData.choices?.[0]?.message?.content ?? '';
-    console.log('Decomposition raw response:', rawContent.slice(0, 800));
+    console.log('Decomposition response received.');
 
     let decomposition: any = null;
     try {
@@ -209,9 +209,9 @@ Recommend the strategy that MAXIMISES net profit per labour hour, not just gross
         .trim();
       decomposition = JSON.parse(cleaned);
     } catch (parseErr) {
-      console.error('JSON parse error:', parseErr, 'Raw:', rawContent);
+      console.error('Decomposition response could not be parsed as JSON.');
       return new Response(
-        JSON.stringify({ error: 'AI returned invalid JSON', raw: rawContent }),
+        JSON.stringify({ error: 'The decomposition service returned an invalid response. Please retry.' }),
         { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -252,9 +252,9 @@ Recommend the strategy that MAXIMISES net profit per labour hour, not just gross
     );
 
   } catch (err: any) {
-    console.error('swish-decompose error:', err);
+    console.error('swish-decompose request failed:', err instanceof Error ? err.message : 'unknown error');
     return new Response(
-      JSON.stringify({ error: err.message ?? 'Internal error' }),
+      JSON.stringify({ error: 'Unable to complete decomposition. Please retry or contact support.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

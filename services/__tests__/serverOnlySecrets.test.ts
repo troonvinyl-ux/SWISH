@@ -409,3 +409,25 @@ describe('eBay connector error response safety', () => {
     expect(fulfilment).not.toContain("return jsonResponse({ error: err.message ?? 'Internal error' }, 500)");
   });
 });
+
+
+describe('AI Edge Function error response safety', () => {
+  const decompose = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-decompose/index.ts'), 'utf8');
+  const islamicIdentify = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-islamic-identify/index.ts'), 'utf8');
+
+  test('decomposition does not return provider error bodies or raw model output', () => {
+    expect(decompose).toContain('The decomposition service is temporarily unavailable.');
+    expect(decompose).toContain('The decomposition service returned an invalid response.');
+    expect(decompose).not.toContain('JSON.stringify({ error: `OnSpace AI: ${errText}` })');
+    expect(decompose).not.toContain("JSON.stringify({ error: 'AI returned invalid JSON', raw: rawContent })");
+    expect(decompose).not.toContain("JSON.stringify({ error: err.message ?? 'Internal error' })");
+  });
+
+  test('Islamic identification does not return provider error bodies or raw exceptions', () => {
+    expect(islamicIdentify).toContain('The identification service is temporarily unavailable.');
+    expect(islamicIdentify).toContain('Unable to complete Islamic coin identification.');
+    expect(islamicIdentify).not.toContain('OnSpace AI error: ${errText}');
+    expect(islamicIdentify).not.toContain('OnSpace AI retry error: ${errText}');
+    expect(islamicIdentify).not.toContain("JSON.stringify({ error: err.message ?? 'Internal error' })");
+  });
+});
