@@ -8,6 +8,7 @@
 // eBay-enriched data without a separate query per card.
 
 import { useState, useEffect, useCallback } from 'react';
+import { AppState } from 'react-native';
 import { useApp } from './useApp';
 import { getSupabaseClient } from '@/template';
 import {
@@ -59,6 +60,7 @@ export function useInventory(filter: ItemFilter = {}) {
   const inventoryReloadSignal = appCtx.inventoryReloadSignal;
   const [items, setItems] = useState<any[]>([]); // raw rows with optional listing_* fields
   const [loading, setLoading] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [statusGroups, setStatusGroups] = useState<Record<string, number>>({});
 
   const filterKey = JSON.stringify(filter);
@@ -66,48 +68,71 @@ export function useInventory(filter: ItemFilter = {}) {
   const load = useCallback(async () => {
     if (!tenant) return;
     setLoading(true);
+    setSyncError(null);
+    try {
+      // Apply active-inventory-first default
+      const effectiveFilter: ItemFilter = { ...filter };
+      if (!effectiveFilter.lifecycleGroup && !effectiveFilter.statuses && !effectiveFilter.status && !effectiveFilter.reviewRequired) {
+        effectiveFilter.lifecycleGroup = 'active';
+      }
 
-    // Apply active-inventory-first default
-    const effectiveFilter: ItemFilter = { ...filter };
-    if (!effectiveFilter.lifecycleGroup && !effectiveFilter.statuses && !effectiveFilter.status && !effectiveFilter.reviewRequired) {
-      effectiveFilter.lifecycleGroup = 'active';
+      const [itemsResult, counts] = await Promise.all([
+        listItems(tenant.id, effectiveFilter),
+        // Counts remain niche-scoped; never mix other subscribers' niches.
+        getItemStatusCounts(tenant.id, effectiveFilter.specialistIds ?? (filter.specialistIds ?? undefined)),
+      ]);
+
+      if (itemsResult.error) throw new Error(itemsResult.error);
+      setStatusGroups(counts);
+
+      // Enrich live items from the canonical listings table.
+      const liveItems = itemsResult.items.filter(i => ITEM_LIFECYCLE.LIVE_STATUSES.includes(i.status));
+      const liveIds = liveItems.map(i => i.id);
+      const enrichment = liveIds.length > 0 ? await fetchListingEnrichment(tenant.id, liveIds) : new Map();
+
+      setItems(itemsResult.items.map(item => {
+        const listing = enrichment.get(item.id);
+        if (!listing) return item;
+        return {
+          ...item,
+          listing_price: listing.price,
+          listing_watchers: listing.watchers,
+          listing_views: listing.views,
+          listing_ebay_id: listing.externalId,
+        };
+      }));
+    } catch (error: any) {
+      const message = error?.message ?? 'Inventory sync failed';
+      setSyncError(message);
+      console.warn('[SWISH] Inventory sync failed:', message);
+    } finally {
+      setLoading(false);
     }
-
-    const [itemsResult, counts] = await Promise.all([
-      listItems(tenant.id, effectiveFilter),
-      // NICHE-ISOLATION: always pass specialistIds so counts are niche-scoped,
-      // never tenant-wide. Without this, live/draft/sold counts include ALL niches.
-      getItemStatusCounts(tenant.id, effectiveFilter.specialistIds ?? (filter.specialistIds ?? undefined)),
-    ]);
-
-    setStatusGroups(counts);
-
-    // For Live items, fetch listing enrichment (price, watchers, views)
-    const liveItems = itemsResult.items.filter(i => ITEM_LIFECYCLE.LIVE_STATUSES.includes(i.status));
-    const liveIds = liveItems.map(i => i.id);
-    const enrichment = liveIds.length > 0 ? await fetchListingEnrichment(tenant.id, liveIds) : new Map();
-
-    // Merge listing data into item rows as extra fields
-    const enrichedItems = itemsResult.items.map(item => {
-      const listing = enrichment.get(item.id);
-      if (!listing) return item;
-      return {
-        ...item,
-        listing_price: listing.price,
-        listing_watchers: listing.watchers,
-        listing_views: listing.views,
-        listing_ebay_id: listing.externalId,
-      };
-    });
-
-    setItems(enrichedItems);
-    setLoading(false);
   }, [tenant?.id, filterKey]);
+
+  // Cross-screen/device sync: refresh when the app returns to foreground or
+  // the canonical items/listings tables change. Realtime is a fast path; focus
+  // refresh keeps the inventory correct when realtime is unavailable.
+  useEffect(() => {
+    if (!tenant?.id) return;
+    const supabase = getSupabaseClient();
+    const channel = supabase.channel(`swish-inventory-sync-${tenant.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'items', filter: `tenant_id=eq.${tenant.id}` }, () => { void load(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'listings', filter: `tenant_id=eq.${tenant.id}` }, () => { void load(); })
+      .subscribe();
+    const appState = AppState.addEventListener('change', state => {
+      if (state === 'active') void load();
+    });
+    return () => {
+      appState.remove();
+      void supabase.removeChannel(channel);
+    };
+  }, [tenant?.id, load]);
 
   // Also reload when AppContext signals a global inventory refresh (e.g. after Settings sync)
   useEffect(() => {
-    if (inventoryReloadSignal > 0) load();
-  }, [inventoryReloadSignal]);
+    if (inventoryReloadSignal > 0) void load();
+  }, [inventoryReloadSignal, load]);
 
   useEffect(() => {
     load();
@@ -126,5 +151,5 @@ export function useInventory(filter: ItemFilter = {}) {
   };
   stats.activeTotal = stats.draftCount + stats.liveCount;
 
-  return { items, loading, totalValue, reviewCount, statusGroups, stats, reload: load };
+  return { items, loading, syncError, totalValue, reviewCount, statusGroups, stats, reload: load };
 }
