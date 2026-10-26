@@ -242,7 +242,7 @@ function MXConditionGrader({
         })}
       </View>
       <Text style={mxcg.note}>
-        MX grades differ from coin grades — select the grade that best describes this bike's commercial condition.
+        MX grades differ from coin grades — select the grade that best describes this bike&apos;s commercial condition.
       </Text>
     </View>
   );
@@ -1144,7 +1144,7 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
             </>
           ) : step === 'feedback' && result ? (
             <>
-              <View style={reid.feedbackHeader}><MaterialIcons name="school" size={18} color={Colors.accent} /><View style={{ flex: 1 }}><Text style={reid.feedbackHeaderTitle}>Help the AI learn</Text><Text style={reid.feedbackHeaderSub} numberOfLines={2}>AI said: "{result.canonicalTitle.slice(0, 60)}"</Text></View></View>
+              <View style={reid.feedbackHeader}><MaterialIcons name="school" size={18} color={Colors.accent} /><View style={{ flex: 1 }}><Text style={reid.feedbackHeaderTitle}>Help the AI learn</Text><Text style={reid.feedbackHeaderSub} numberOfLines={2}>AI said: &quot;{result.canonicalTitle.slice(0, 60)}&quot;</Text></View></View>
               <Text style={reid.feedbackFormLabel}>WHAT WAS WRONG?</Text>
               <View style={reid.errorCategoryGrid}>{ERROR_CATEGORY_OPTIONS.map(opt => (<Pressable key={opt.value} onPress={() => setFeedbackCategory(opt.value)} style={[reid.errorCatChip, feedbackCategory === opt.value && reid.errorCatChipActive]}><Text style={[reid.errorCatText, feedbackCategory === opt.value && reid.errorCatTextActive]}>{opt.label}</Text></Pressable>))}</View>
               <Text style={[reid.feedbackFormLabel, { marginTop: Spacing.md }]}>CORRECT ANSWER (OPTIONAL)</Text>
