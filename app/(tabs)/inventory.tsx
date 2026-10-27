@@ -151,7 +151,7 @@ function getNicheTheme(activeNicheId: string | null | undefined): NicheTheme {
       uniqueBanner: { icon: 'upload-file', title: 'Import Job-lot Manifest', sub: 'CSV → photo match → stock', route: '/surplus-flip' },
     };
   }
-  if (id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers' || id === 'trainers') {
+  if (id === 'clothing' || id === 'fashion' || id === 'threads_flip' || id === 'threads-flip' || id === 'trainers_sneakers' || id === 'trainers') {
     return {
       accent: '#E91E8C', accentDim: '#250014', icon: 'checkroom',
       label: 'Fashion Inventory', itemLabel: 'Item', itemsLabel: 'Items',
