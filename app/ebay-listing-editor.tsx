@@ -1761,11 +1761,11 @@ export default function EbayListingEditorScreen() {
   // ── Save locally ────────────────────────────────────────────────────────────
 
   const handleSaveLocal = useCallback(async () => {
-    if (!data || !tenant) return;
+    if (!data || !tenant) return false;
     setSaving(true);
     const supabase = getSupabaseClient();
 
-    const { error } = await supabase
+    const { data: savedListing, error } = await supabase
       .from('listings')
       .update({
         title: data.title.slice(0, 80),
@@ -1779,11 +1779,17 @@ export default function EbayListingEditorScreen() {
         updated_at: new Date().toISOString(),
       })
       .eq('id', data.listingId)
-      .eq('tenant_id', tenant.id);
+      .eq('tenant_id', tenant.id)
+      .select('id')
+      .maybeSingle();
 
     setSaving(false);
 
-    if (error) { showAlert('Save Failed', error.message); return; }
+    if (error) { showAlert('Save Failed', error.message); return false; }
+    if (!savedListing?.id) {
+      showAlert('Save Failed', 'SWISH did not confirm that the listing was saved. Check your access and try again.');
+      return false;
+    }
 
     const { data: currentItem, error: currentItemError } = await supabase
       .from('items')
@@ -1791,10 +1797,13 @@ export default function EbayListingEditorScreen() {
       .eq('id', data.itemId)
       .eq('tenant_id', tenant.id)
       .maybeSingle();
-    if (currentItemError) { showAlert('Save Failed', currentItemError.message); return; }
+    if (currentItemError) { showAlert('Save Failed', currentItemError.message); return false; }
     const currentAttributes = currentItem?.attributes ?? {};
 
-    const { error: saveItemError } = await supabase
+    const specificsToSave = data.itemSpecifics
+      .filter(s => s.name.trim() && s.value.trim())
+      .map(s => ({ name: s.name.trim(), value: s.value.trim() }));
+    const { data: savedItem, error: saveItemError } = await supabase
       .from('items')
       .update({
         condition: data.condition,
@@ -1804,20 +1813,25 @@ export default function EbayListingEditorScreen() {
         inventory_id: data.sku.trim() || null,
         attributes: {
           ...currentAttributes,
-          ebay_item_specifics: data.itemSpecifics
-            .filter(s => s.name.trim() && s.value.trim())
-            .map(s => ({ name: s.name.trim(), value: s.value.trim() })),
+          ebay_item_specifics: specificsToSave,
         },
         updated_at: new Date().toISOString(),
       })
       .eq('id', data.itemId)
-      .eq('tenant_id', tenant.id);
-    if (saveItemError) { showAlert('Save Failed', saveItemError.message); return; }
+      .eq('tenant_id', tenant.id)
+      .select('id')
+      .maybeSingle();
+    if (saveItemError) { showAlert('Save Failed', saveItemError.message); return false; }
+    if (!savedItem?.id) {
+      showAlert('Save Failed', 'SWISH did not confirm that the item specifics were saved. Check your access and try again.');
+      return false;
+    }
 
     setHasChanges(false);
     originalRef.current = JSON.parse(JSON.stringify(data));
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 2500);
+    return true;
   }, [data, tenant, showAlert]);
 
   // ── SKU-only revision: do not send listing photos or other listing fields ───────
@@ -1919,7 +1933,8 @@ export default function EbayListingEditorScreen() {
         {
           text: 'Revise Listing',
           onPress: async () => {
-            await handleSaveLocal();
+            const savedLocally = await handleSaveLocal();
+            if (!savedLocally) return;
             setRevising(true);
             const supabase = getSupabaseClient();
             try {

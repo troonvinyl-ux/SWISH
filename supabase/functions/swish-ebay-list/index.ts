@@ -1932,6 +1932,10 @@ async function handleRequest(req: Request): Promise<Response> {
     // The client passes the UI-selected category, but if the client media is empty
     // or the category was already saved to the DB, prefer the DB value.
     let resolvedCategoryId = bodyCategoryId || '';
+    let resolvedItemSpecifics: Array<{ name: string; value: string }> = Array.isArray(itemSpecifics)
+      ? itemSpecifics.filter((s: any) => s && typeof s.name === 'string' && typeof s.value === 'string' && s.name.trim() && s.value.trim())
+          .map((s: any) => ({ name: s.name.trim().slice(0, 65), value: s.value.trim().slice(0, 65) }))
+      : [];
     let resolvedMediaUrls: string[] = ((rawMediaUrls as string[]) || []).filter(
       (u: string) => typeof u === 'string' && u.startsWith('https://')
     );
@@ -1949,6 +1953,19 @@ async function handleRequest(req: Request): Promise<Response> {
         if (!resolvedCategoryId && lRow?.category_id) {
           resolvedCategoryId = lRow.category_id;
           console.log(`[SWISH revise] Category resolved from DB: categoryId=${resolvedCategoryId}`);
+        }
+
+        // Merge saved item specifics as a fallback. Explicit values from this editor
+        // take precedence; saved values fill gaps if an older client omits them.
+        const dbAttrs: Record<string, any> = (lRow as any)?.items?.attributes ?? {};
+        const dbSpecifics = Array.isArray(dbAttrs.ebay_item_specifics) ? dbAttrs.ebay_item_specifics : [];
+        const specificNames = new Set(resolvedItemSpecifics.map(s => s.name.toLocaleLowerCase()));
+        for (const saved of dbSpecifics) {
+          const name = String(saved?.name ?? '').trim();
+          const value = String(saved?.value ?? '').trim();
+          if (!name || !value || specificNames.has(name.toLocaleLowerCase())) continue;
+          resolvedItemSpecifics.push({ name: name.slice(0, 65), value: value.slice(0, 65) });
+          specificNames.add(name.toLocaleLowerCase());
         }
 
         // Preserve the saved description when the client omitted it or sent an empty string.
@@ -2002,9 +2019,9 @@ async function handleRequest(req: Request): Promise<Response> {
     const conditionId = mapConditionId(condition, '');
     let reviseXml: string;
     if (listingType === 'Chinese') {
-      reviseXml = buildReviseAuctionXML({ token: creds.accessToken, externalItemId: externalListingId, title, description, categoryId: resolvedCategoryId || 'REVISE_PRESERVE', conditionId, itemSpecifics, mediaUrls: resolvedMediaUrls, sellerProfilesXml, sku: String(sku ?? '') });
+      reviseXml = buildReviseAuctionXML({ token: creds.accessToken, externalItemId: externalListingId, title, description, categoryId: resolvedCategoryId || 'REVISE_PRESERVE', conditionId, itemSpecifics: resolvedItemSpecifics, mediaUrls: resolvedMediaUrls, sellerProfilesXml, sku: String(sku ?? '') });
     } else {
-      reviseXml = buildReviseBuyItNowXML({ token: creds.accessToken, externalItemId: externalListingId, title, description, categoryId: resolvedCategoryId || 'REVISE_PRESERVE', conditionId, price: Number(price), quantity: Number(quantity), itemSpecifics, mediaUrls: resolvedMediaUrls, sellerProfilesXml, sku: String(sku ?? '') });
+      reviseXml = buildReviseBuyItNowXML({ token: creds.accessToken, externalItemId: externalListingId, title, description, categoryId: resolvedCategoryId || 'REVISE_PRESERVE', conditionId, price: Number(price), quantity: Number(quantity), itemSpecifics: resolvedItemSpecifics, mediaUrls: resolvedMediaUrls, sellerProfilesXml, sku: String(sku ?? '') });
     }
     const { xml: revResp, ok: revOk } = await callEbayTradingApi(reviseXml, listingType === 'Chinese' ? 'ReviseItem' : 'ReviseFixedPriceItem', creds.clientId);
     if (!revOk) {
