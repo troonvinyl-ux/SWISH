@@ -1634,6 +1634,36 @@ export default function EbayListingEditorScreen() {
       _numistaSuggestedCat: numistaSuggestedCat ?? undefined,
     };
 
+    // Populate required specifics for the already-selected category on open,
+    // not only when the user changes category. Existing valid values are kept.
+    if (editorData.categoryId && tenant?.id) {
+      try {
+        const { data: aspectData, error: aspectError } = await supabase.functions.invoke('swish-ebay-list', {
+          body: { route: 'get_category_aspects', tenantId: tenant.id, categoryId: editorData.categoryId },
+        });
+        if (!aspectError && aspectData?.success && Array.isArray(aspectData.aspects)) {
+          const requiredNames = aspectData.aspects
+            .filter((aspect: any) => aspect?.aspectConstraint?.aspectRequired === true || aspect?.aspectConstraint?.aspectUsage === 'REQUIRED')
+            .map((aspect: any) => String(aspect.aspectName ?? '').trim())
+            .filter(Boolean);
+          const existingNames = new Set(editorData.itemSpecifics.map(s => s.name.trim().toLocaleLowerCase()));
+          const missing = requiredNames
+            .filter((name: string) => !existingNames.has(name.toLocaleLowerCase()))
+            .slice(0, Math.max(0, 25 - editorData.itemSpecifics.length))
+            .map((name: string, index: number) => ({
+              id: `required-${Date.now()}-${index}`,
+              name,
+              value: '',
+            }));
+          editorData.itemSpecifics = [...editorData.itemSpecifics, ...missing];
+        } else {
+          console.warn('[SWISH Listing Editor] Could not load eBay category aspects:', aspectData?.error ?? aspectError?.message);
+        }
+      } catch (e: any) {
+        console.warn('[SWISH Listing Editor] Category aspect lookup failed:', e?.message ?? e);
+      }
+    }
+
     setData(editorData);
     originalRef.current = JSON.parse(JSON.stringify(editorData));
     setHasChanges(false);
