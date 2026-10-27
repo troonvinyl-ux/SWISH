@@ -1681,7 +1681,40 @@ export default function EbayListingEditorScreen() {
         .eq('id', data.listingId)
         .eq('tenant_id', tenant.id);
     }
-  }, [data?.itemId, data?.listingId, tenant, update]);
+
+    // Ask eBay for the current aspects of the selected leaf category. Add
+    // missing required aspect names to the editor so the user can supply
+    // accurate values instead of discovering omissions after submission.
+    try {
+      const { data: aspectData, error: aspectError } = await supabase.functions.invoke('swish-ebay-list', {
+        body: { route: 'get_category_aspects', tenantId: tenant.id, categoryId: id },
+      });
+      if (!aspectError && aspectData?.success && Array.isArray(aspectData.aspects)) {
+        const requiredNames = aspectData.aspects
+          .filter((aspect: any) => aspect?.aspectConstraint?.aspectRequired === true || aspect?.aspectConstraint?.aspectUsage === 'REQUIRED')
+          .map((aspect: any) => String(aspect.aspectName ?? '').trim())
+          .filter(Boolean);
+        setData(prev => {
+          if (!prev) return prev;
+          const existingNames = new Set(prev.itemSpecifics.map(s => s.name.trim().toLocaleLowerCase()));
+          const missing = requiredNames
+            .filter((name: string) => !existingNames.has(name.toLocaleLowerCase()))
+            .slice(0, Math.max(0, 25 - prev.itemSpecifics.length))
+            .map((name: string, index: number) => ({
+              id: `required-${Date.now()}-${index}`,
+              name,
+              value: '',
+            }));
+          if (missing.length) setHasChanges(true);
+          return missing.length ? { ...prev, itemSpecifics: [...prev.itemSpecifics, ...missing] } : prev;
+        });
+      } else {
+        showAlert('Category Requirements Unavailable', aspectData?.error ?? aspectError?.message ?? 'Could not retrieve required item specifics from eBay. Submission will re-check these requirements.');
+      }
+    } catch (e: any) {
+      showAlert('Category Requirements Unavailable', e?.message ?? 'Could not retrieve required item specifics from eBay. Submission will re-check these requirements.');
+    }
+  }, [data?.itemId, data?.listingId, tenant, update, showAlert]);
 
   // ── Save locally ────────────────────────────────────────────────────────────
 
