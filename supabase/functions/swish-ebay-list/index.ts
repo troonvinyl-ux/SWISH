@@ -2204,7 +2204,6 @@ async function handleRequest(req: Request): Promise<Response> {
   // This keeps every niche on the same source of truth and prevents a green
   // client preflight from submitting a listing with missing required aspects.
   let categoryAspectResult = await getEbayCategoryAspects(creds.accessToken, resolvedCategoryId);
-  let aspectSource: 'live' | 'recent_cache' = 'live';
 
   // If eBay denies Taxonomy access (e.g. OAuth/app permissions), use only a
   // recently synchronised category-aspect cache from SWISH's existing table.
@@ -2230,7 +2229,6 @@ async function handleRequest(req: Request): Promise<Response> {
         },
       })).filter((aspect: any) => aspect.aspectName);
       categoryAspectResult = { aspects: cachedAspects };
-      aspectSource = 'recent_cache';
       console.warn(`[swish-ebay-list] Using recent cached eBay aspects for category ${resolvedCategoryId} after live lookup failed.`);
     } else {
       return jsonResponse({
