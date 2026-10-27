@@ -669,3 +669,24 @@ describe('eBay OAuth custom credential privilege boundary', () => {
     expect(subscriberSource).not.toContain('supabase, true');
   });
 });
+
+
+describe('Tenant-scoped eBay sync writes', () => {
+  test('permanent image downloads only update items belonging to the requested tenant', () => {
+    const source = fs.readFileSync(
+      path.join(projectRoot, 'supabase/functions/swish-image-download/index.ts'),
+      'utf8',
+    );
+    expect(source).toContain(".update(updates).eq('id', item.id).eq('tenant_id', tenantId)");
+  });
+
+  test('eBay sync updates listing and inventory rows with tenant guards', () => {
+    const source = fs.readFileSync(
+      path.join(projectRoot, 'supabase/functions/swish-ebay-sync/index.ts'),
+      'utf8',
+    );
+    expect(source).toContain(".eq('item_id', existingItem.id)");
+    expect(source).toContain(".eq('tenant_id', tenantId)");
+    expect(source).toContain(".eq('id', existingItem.id).eq('tenant_id', tenantId)");
+  });
+});
