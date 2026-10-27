@@ -669,3 +669,30 @@ describe('eBay OAuth custom credential privilege boundary', () => {
     expect(subscriberSource).not.toContain('supabase, true');
   });
 });
+
+
+describe('eBay credential refresh persistence guards', () => {
+  const refreshPaths = [
+    'supabase/functions/swish-ebay-sync/index.ts',
+    'supabase/functions/swish-ebay-orders/index.ts',
+    'supabase/functions/swish-ebay-messages/index.ts',
+    'supabase/functions/swish-ebay-list/index.ts',
+    'supabase/functions/swish-ebay-post-order/index.ts',
+  ];
+
+  test.each(refreshPaths)('%s fails closed when a refreshed credential cannot be persisted', (relativePath) => {
+    const source = fs.readFileSync(path.join(projectRoot, relativePath), 'utf8');
+    expect(source).toContain('Refreshed eBay credentials could not be persisted securely.');
+    expect(source).toContain(".select('id').maybeSingle()");
+    expect(source).toMatch(/persistError\s*\|\|\s*!persistedConnector/);
+  });
+
+  test('message refresh errors do not log raw exception text', () => {
+    const source = fs.readFileSync(
+      path.join(projectRoot, 'supabase/functions/swish-ebay-messages/index.ts'),
+      'utf8',
+    );
+    expect(source).toContain('never log raw exception text');
+    expect(source).not.toContain('Token refresh failed for messages: ${e.message}');
+  });
+});
