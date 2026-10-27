@@ -20,6 +20,7 @@ import { useApp } from '@/hooks/useApp';
 import { useAlert } from '@/template';
 import { NICHES } from '@/constants/niches';
 import { resolveProductionNiche } from '@/services/nicheRouting';
+import { classifyListing } from '@/services/nicheCategoryService';
 import {
   EbayImportCandidate,
   getExistingEbayItemIds,
@@ -846,6 +847,14 @@ export default function EbayImportScreen() {
 
               if (!importSpecialistId) {
                 errors.push(`${candidate.title.slice(0, 30)}: No active production niche is selected; item was not imported.`);
+                skipped++;
+                continue;
+              }
+              // Classify from eBay's category/title evidence before assigning a niche.
+              // Ambiguous and other-niche listings are left for explicit review.
+              const classification = classifyListing(candidate.categoryId, candidate.categoryName, candidate.title, candidate.description);
+              if (classification.niche !== productionNiche) {
+                errors.push(`${candidate.title.slice(0, 30)}: classified as ${classification.niche}; not imported into ${productionNiche}.`);
                 skipped++;
                 continue;
               }
