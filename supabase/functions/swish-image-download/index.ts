@@ -637,7 +637,7 @@ Deno.serve(async (req: Request) => {
       titlesFixed++;
     }
 
-    const { error: updateErr } = await supabase.from('items').update(updates).eq('id', item.id);
+    const { error: updateErr } = await supabase.from('items').update(updates).eq('id', item.id).eq('tenant_id', tenantId);
     if (updateErr) errors.push(`DB update item=${item.id}: ${updateErr.message}`);
 
     // Small delay to avoid hammering eBay/Storage APIs
