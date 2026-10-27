@@ -109,7 +109,7 @@ async function getValidToken(supabase: ReturnType<typeof adminClient>, tenantId:
       const { data: persistedConnector, error: persistError } = await supabase.from('marketplace_connectors').update({
         credential_ref: updatedRef, access_token_expires_at: newExp,
         status: 'connected', last_error: null, updated_at: new Date().toISOString(),
-      }).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').select('id').maybeSingle();
+      }).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').eq('credential_ref', conn.credential_ref).select('id').maybeSingle();
       if (persistError || !persistedConnector) {
         // Never continue with a refreshed token that was not securely persisted.
         throw new Error('Refreshed token could not be persisted securely');
