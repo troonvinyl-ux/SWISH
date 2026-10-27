@@ -92,7 +92,7 @@ function productForSpecialist(specialistId: string | null | undefined): string |
   ].includes(id) || id.includes('coin')) return 'coins';
   if (id === 'motocross' || id === 'mx' || id === 'flipper_mx') return 'motocross';
   if (id === 'bicycles' || id === 'cycling' || id === 'bike_flipper') return 'bicycles';
-  if (id === 'clothing' || id === 'trainers_sneakers' || id === 'trainers') return 'clothing';
+  if (['clothing', 'clothing_specialist', 'threads_flip', 'threads-flip', 'trainers_sneakers', 'trainers'].includes(id)) return 'clothing';
   return null;
 }
 
