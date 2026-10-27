@@ -663,7 +663,7 @@ Deno.serve(async (req: Request) => {
 
   console.log(`[EbaySync] eBay listings fetched: ${allEbayListings.length}`);
   if (allEbayListings.length === 0) {
-    return json({ success: true, processed: 0, updated: 0, imagesFetched: 0, titlesFixed: 0, failed: 0, totalEbayListings: 0, orphansFixed: 0, message: 'No eBay listings found.' });
+    return json({ success: true, processed: 0, matchedListings: 0, updated: 0, imagesFetched: 0, titlesFixed: 0, failed: 0, totalEbayListings: 0, unmatchedEbayListings: 0, orphansFixed: 0, message: 'No eBay listings found.' });
   }
 
   // ── Step 2: Enrich descriptions via GetItems batch ────────────────────────
@@ -695,7 +695,14 @@ Deno.serve(async (req: Request) => {
   });
 
   if (toProcess.length === 0) {
-    return json({ success: true, processed: 0, updated: 0, imagesFetched: 0, titlesFixed: 0, failed: 0, totalEbayListings: allEbayListings.length, orphansFixed: 0, message: 'No matching SWISH items. Run eBay Import first.' });
+    return json({
+      success: true, processed: 0, matchedListings: 0, updated: 0,
+      imagesFetched: 0, titlesFixed: 0, failed: 0,
+      totalEbayListings: allEbayListings.length,
+      unmatchedEbayListings: allEbayListings.length,
+      orphansFixed: 0,
+      message: 'Sync only updates listings already imported into SWISH. Import these eBay listings first.',
+    });
   }
 
   // ── Step 4: Load all SWISH items (paginated, no .in() to avoid 414) ───────
@@ -767,7 +774,15 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  const result = { success: true, processed: toProcess.length, totalEbayListings: allEbayListings.length, updated, imagesFetched, titlesFixed, failed, orphansFixed, failedEbayIds: failedItems.slice(0, 20) };
+  const result = {
+    success: true,
+    processed: toProcess.length,
+    matchedListings: toProcess.length,
+    totalEbayListings: allEbayListings.length,
+    unmatchedEbayListings: Math.max(0, allEbayListings.length - toProcess.length),
+    updated, imagesFetched, titlesFixed, failed, orphansFixed,
+    failedEbayIds: failedItems.slice(0, 20),
+  };
   console.log(`[EbaySync] Done: ${JSON.stringify(result)}`);
   return json(result);
 });

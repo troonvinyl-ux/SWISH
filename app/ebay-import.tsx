@@ -18,6 +18,8 @@ import { getSupabaseClient } from '@/template';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { useAlert } from '@/template';
+import { NICHES } from '@/constants/niches';
+import { resolveProductionNiche } from '@/services/nicheRouting';
 import {
   EbayImportCandidate,
   getExistingEbayItemIds,
@@ -599,8 +601,10 @@ const row = StyleSheet.create({
 export default function EbayImportScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant } = useApp();
+  const { tenant, activeNicheId } = useApp();
   const { showAlert } = useAlert();
+  const productionNiche = resolveProductionNiche(activeNicheId);
+  const importSpecialistId = productionNiche ? NICHES[productionNiche].defaultSpecialist : null;
 
   const [candidates, setCandidates] = useState<ImportItem[]>([]);
   const [acquisitions, setAcquisitions] = useState<{ id: string; title: string }[]>([]);
@@ -840,7 +844,12 @@ export default function EbayImportScreen() {
               setImportProgress({ current: i + 1, total: selected.length });
               const candidate = selected[i];
 
-              const { itemId, inventoryId, error } = await importEbayCandidate(tenant.id, candidate);
+              if (!importSpecialistId) {
+                errors.push(`${candidate.title.slice(0, 30)}: No active production niche is selected; item was not imported.`);
+                skipped++;
+                continue;
+              }
+              const { itemId, inventoryId, error } = await importEbayCandidate(tenant.id, candidate, importSpecialistId);
               if (error) {
                 errors.push(`${candidate.title.slice(0, 30)}: ${error}`);
                 skipped++;
@@ -874,20 +883,20 @@ export default function EbayImportScreen() {
             if (errors.length === 0) {
               showAlert(
                 'Import Complete',
-                `${imported} item${imported === 1 ? '' : 's'} imported with KC Inventory IDs. Gallery images are being fetched automatically.`,
+                `${imported} item${imported === 1 ? '' : 's'} imported with KC Inventory IDs. Use “Import eBay Images” to download gallery images when needed.`,
                 [{ text: 'Go to Inventory', onPress: () => router.navigate('/(tabs)/inventory' as any) }],
               );
             } else {
               showAlert(
                 'Import Finished',
-                `${imported} imported, ${skipped} failed.${imported > 0 ? ' Gallery images are being fetched automatically.' : ''}\n\nErrors:\n${errors.slice(0, 5).join('\n')}`,
+                `${imported} imported, ${skipped} failed.${imported > 0 ? ' Use “Import eBay Images” to download gallery images when needed.' : ''}\n\nErrors:\n${errors.slice(0, 5).join('\n')}`,
               );
             }
           },
         },
       ],
     );
-  }, [tenant, candidates, showAlert, router]);
+  }, [tenant, candidates, showAlert, router, importSpecialistId]);
 
   // ── Stats ──────────────────────────────────────────────────────────────────
 
