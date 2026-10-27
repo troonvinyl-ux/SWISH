@@ -584,7 +584,7 @@ Deno.serve(async (req: Request) => {
 
     let creds: { accessToken: string; clientId: string; credentials: any };
     try { creds = await getCredentials(tenantId); } catch (e: any) {
-      if (logId) await supabase.from('ebay_sync_log').update({ status: 'failed', error_message: e.message, completed_at: new Date().toISOString() }).eq('id', logId);
+      if (logId) await supabase.from('ebay_sync_log').update({ status: 'failed', error_message: e.message, completed_at: new Date().toISOString() }).eq('id', logId).eq('tenant_id', tenantId);
       return jsonResponse({ error: e.message }, 400);
     }
 
@@ -650,7 +650,7 @@ Deno.serve(async (req: Request) => {
         errors: allErrors.slice(0, 20),
         completed_at: new Date().toISOString(),
         metadata: { daysBack, mode, ffApiUsed, tradingApiUsed },
-      }).eq('id', logId);
+      }).eq('id', logId).eq('tenant_id', tenantId);
     }
 
     return jsonResponse({
