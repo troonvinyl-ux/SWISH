@@ -155,7 +155,7 @@ function getNicheTheme(activeNicheId: string | null | undefined): NicheTheme {
     return {
       accent: '#E91E8C', accentDim: '#250014', icon: 'checkroom',
       label: 'Fashion Inventory', itemLabel: 'Item', itemsLabel: 'Items',
-      specialistIds: ['clothing', 'trainers_sneakers'],
+      specialistIds: ['clothing', 'trainers_sneakers', 'clothing_specialist'], // legacy rows remain visible; new saves canonicalise to 'clothing'
       subFilters: [
         { label: 'All Items', value: 'all', search: '' },
         { label: 'Vintage', value: 'vintage', search: 'vintage' },
