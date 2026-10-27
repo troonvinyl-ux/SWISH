@@ -2021,7 +2021,7 @@ async function handleRequest(req: Request): Promise<Response> {
     if (listingType === 'Chinese') {
       reviseXml = buildReviseAuctionXML({ token: creds.accessToken, externalItemId: externalListingId, title, description, categoryId: resolvedCategoryId || 'REVISE_PRESERVE', conditionId, itemSpecifics: resolvedItemSpecifics, mediaUrls: resolvedMediaUrls, sellerProfilesXml, sku: String(sku ?? '') });
     } else {
-      reviseXml = buildReviseBuyItNowXML({ token: creds.accessToken, externalItemId: externalListingId, title, description, categoryId: resolvedCategoryId || 'REVISE_PRESERVE', conditionId, price: Number(price), quantity: Number(quantity), itemSpecifics, mediaUrls: resolvedMediaUrls, sellerProfilesXml, sku: String(sku ?? '') });
+      reviseXml = buildReviseBuyItNowXML({ token: creds.accessToken, externalItemId: externalListingId, title, description, categoryId: resolvedCategoryId || 'REVISE_PRESERVE', conditionId, price: Number(price), quantity: Number(quantity), itemSpecifics: resolvedItemSpecifics, mediaUrls: resolvedMediaUrls, sellerProfilesXml, sku: String(sku ?? '') });
     }
     const { xml: revResp, ok: revOk } = await callEbayTradingApi(reviseXml, listingType === 'Chinese' ? 'ReviseItem' : 'ReviseFixedPriceItem', creds.clientId);
     if (!revOk) {
