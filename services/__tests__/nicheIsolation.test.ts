@@ -770,3 +770,16 @@ describe('Rogue specialist ID isolation', () => {
     },
   );
 });
+
+
+describe('Shared eBay multi-niche listing classification', () => {
+  test('classification separates coin, bicycle, and clothing listings', () => {
+    expect(classifyListing('4726', 'Coins:British Coins', 'British coin').niche).toBe('coins');
+    expect(classifyListing('2904', 'Bicycles', 'Road bicycle').niche).toBe('bicycles');
+    expect(classifyListing('1059', 'Clothing', 'Vintage jacket').niche).toBe('clothing');
+  });
+
+  test('ambiguous eBay listing remains unclassified', () => {
+    expect(classifyListing('', '', 'Miscellaneous item').niche).toBe('unclassified');
+  });
+});
