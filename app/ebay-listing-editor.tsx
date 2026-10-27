@@ -1498,6 +1498,18 @@ export default function EbayListingEditorScreen() {
       attrSpecifics.push({ id: `attr_${specIdx++}`, name: displayName, value: truncVal });
     }
 
+    // Explicit eBay item specifics are stored separately so category-required
+    // names and user-entered values survive save/reopen without being inferred
+    // from unrelated niche attributes.
+    const savedEbaySpecifics = Array.isArray(attrs['ebay_item_specifics']) ? attrs['ebay_item_specifics'] : [];
+    for (const saved of savedEbaySpecifics) {
+      const name = String(saved?.name ?? '').trim();
+      const value = String(saved?.value ?? '').trim();
+      if (!name || !value || seenCanonical.has(name.toLocaleLowerCase())) continue;
+      seenCanonical.set(name.toLocaleLowerCase(), true);
+      attrSpecifics.push({ id: String(saved.id ?? `ebay_saved_${specIdx++}`), name, value });
+    }
+
     // ── Merge in explicit item fields (only if not already present) ─────────────
     const coinFields: Array<[string, string | undefined]> = [
       ['Country/Region of Manufacture', item?.country_of_origin],
