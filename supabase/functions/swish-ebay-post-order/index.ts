@@ -103,7 +103,7 @@ async function getAccessToken(
       const updatedRef = await encryptCredentials(creds);
       const { data: persistedConnector, error: persistError } = await supabase.from('marketplace_connectors').update({
         credential_ref: updatedRef, access_token_expires_at: newExpiry, updated_at: new Date().toISOString(),
-      }).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').select('id').maybeSingle();
+      }).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').eq('credential_ref', conn.credential_ref).select('id').maybeSingle();
       if (persistError || !persistedConnector) {
         throw new Error('Refreshed eBay credentials could not be persisted securely.');
       }
