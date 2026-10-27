@@ -30,7 +30,7 @@
 //   get_category_children   — browse cached/live EBAY_GB category branches
 //   get_category_suggestions— search only live/cached eBay leaf categories
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
 const corsHeaders = {
