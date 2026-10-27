@@ -179,6 +179,7 @@ export async function getExistingEbayItemIds(
 export async function importEbayCandidate(
   tenantId: string,
   candidate: EbayImportCandidate,
+  nicheSpecialistId?: string,
 ): Promise<{ itemId: string | null; inventoryId: string | null; error: string | null }> {
   const supabase = getSupabaseClient();
 
@@ -272,7 +273,9 @@ export async function importEbayCandidate(
     if (combined.includes('banknote') || combined.includes('bank note') || combined.includes('paper money')) return 'banknotes';
     return 'curiosities_collectibles';
   }
-  const derivedSpecialistId = deriveSpecialistId();
+  // The active production niche takes precedence over title heuristics. Heuristics
+  // are retained only for legacy callers that do not supply a niche specialist.
+  const derivedSpecialistId = nicheSpecialistId || deriveSpecialistId();
 
   // Create the inventory item with all available eBay data
   const { data: itemData, error: itemErr } = await supabase
