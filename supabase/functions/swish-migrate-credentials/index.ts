@@ -21,7 +21,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { isEncrypted, migrateToEncrypted } from '../_shared/credentialCrypto.ts';
 
-const SUPABASE_URL             = Deno.env.get('SUPABASE_URL') ?? '';
+const SUPABASE_URL              = Deno.env.get('SUPABASE_URL') ?? '';
+const SUPABASE_ANON_KEY         = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -56,9 +57,15 @@ Deno.serve(async (req: Request) => {
   }
   const token = authHeader.replace('Bearer ', '').trim();
 
-  // Create an authed client (respects RLS for membership check)
-  const authedClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  // Use the public anon key for caller-scoped authentication and membership
+  // reads so tenant_memberships queries run under the caller's JWT/RLS policies.
+  // Never use the service-role key for this authorization decision.
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
+    return error('Credential migration is not configured on the server.', 500);
+  }
+  const authedClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false, autoRefreshToken: false },
   });
 
   // Resolve the calling user
@@ -85,8 +92,8 @@ Deno.serve(async (req: Request) => {
   }
 
   // ── Verify caller is owner/admin of the specified tenant ───────────────────
-  // We use the service-role client for data access, but validate membership
-  // using the caller's JWT so the caller cannot migrate another tenant.
+  // Membership is checked with the anon-key client carrying the caller JWT,
+  // so RLS applies. The service-role client is created only after this check.
   {
     const { data: membership, error: mErr } = await authedClient
       .from('tenant_memberships')
