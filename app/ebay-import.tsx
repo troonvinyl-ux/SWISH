@@ -896,7 +896,7 @@ export default function EbayImportScreen() {
         },
       ],
     );
-  }, [tenant, candidates, showAlert, router]);
+  }, [tenant, candidates, showAlert, router, importSpecialistId]);
 
   // ── Stats ──────────────────────────────────────────────────────────────────
 
