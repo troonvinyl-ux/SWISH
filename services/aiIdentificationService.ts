@@ -667,9 +667,16 @@ export async function saveIdentifiedItem(
     return text && !/^(not established|not supplied|unknown|n\/a|—|-)$/i.test(text) ? text : undefined;
   };
 
+  // Canonicalise legacy/model-generated specialist aliases before persistence.
+  // Threads Flip's canonical niche ID is 'clothing'; older records may still use
+  // 'clothing_specialist' and are handled as a read-only compatibility alias.
+  const canonicalSpecialistId = (result.specialistId as string) === 'clothing_specialist'
+    ? 'clothing'
+    : result.specialistId;
+
   return createItem(tenantId, {
     canonicalTitle: result.canonicalTitle,
-    specialistId: result.specialistId,
+    specialistId: canonicalSpecialistId as SpecialistId,
     // Catalogue values are proposed metadata; measured fields only use values
     // explicitly supplied/measured by the user, never Numista standard specs.
     catalogueNumber: usableText(catalogue.reference ?? result.numistaN ?? result.coinFields?.catalogueHint),
