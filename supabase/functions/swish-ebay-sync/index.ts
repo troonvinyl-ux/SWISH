@@ -117,6 +117,11 @@ async function getValidToken(supabase: ReturnType<typeof adminClient>, tenantId:
       creds = updatedCredentials;
       console.log('[EbaySync] Token refreshed successfully');
     } catch (e: any) {
+      // A compare-and-swap miss means another request may have refreshed the token.
+      // Do not mark the connector requires_reauth or overwrite that newer state.
+      if (e instanceof Error && e.message === 'Refreshed token could not be persisted securely') {
+        throw new Error('RETRY: eBay credentials changed during refresh. Please retry.');
+      }
       await supabase.from('marketplace_connectors').update({ status: 'requires_reauth', last_error: 'Token refresh failed', updated_at: new Date().toISOString() })
         .eq('tenant_id', tenantId).eq('marketplace_id', 'ebay');
       throw new Error(`REQUIRES_REAUTH: Token refresh failed: ${e.message}`);
