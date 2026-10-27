@@ -1785,7 +1785,16 @@ export default function EbayListingEditorScreen() {
 
     if (error) { showAlert('Save Failed', error.message); return; }
 
-    await supabase
+    const { data: currentItem, error: currentItemError } = await supabase
+      .from('items')
+      .select('attributes')
+      .eq('id', data.itemId)
+      .eq('tenant_id', tenant.id)
+      .maybeSingle();
+    if (currentItemError) { showAlert('Save Failed', currentItemError.message); return; }
+    const currentAttributes = currentItem?.attributes ?? {};
+
+    const { error: saveItemError } = await supabase
       .from('items')
       .update({
         condition: data.condition,
@@ -1793,10 +1802,17 @@ export default function EbayListingEditorScreen() {
         quantity: parseInt(data.quantity) || 1,
         sku: data.sku.trim() || null,
         inventory_id: data.sku.trim() || null,
+        attributes: {
+          ...currentAttributes,
+          ebay_item_specifics: data.itemSpecifics
+            .filter(s => s.name.trim() && s.value.trim())
+            .map(s => ({ name: s.name.trim(), value: s.value.trim() })),
+        },
         updated_at: new Date().toISOString(),
       })
       .eq('id', data.itemId)
       .eq('tenant_id', tenant.id);
+    if (saveItemError) { showAlert('Save Failed', saveItemError.message); return; }
 
     setHasChanges(false);
     originalRef.current = JSON.parse(JSON.stringify(data));
