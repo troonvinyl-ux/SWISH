@@ -1509,7 +1509,8 @@ export default function EbayListingEditorScreen() {
       ['Metal', item?.material],  // 'Material' DB field → 'Metal' display name
       ['Manufacturer', item?.manufacturer],
     ];
-    for (const [name, val] of coinFields) {
+    const isCoinSpecialist = ['coins', 'coins_uk', 'coins_world', 'coins_currency', 'islamic_silver', 'banknotes', 'gold', 'silver', 'ancient_artefacts'].includes(String(item?.specialist_id ?? ''));
+    for (const [name, val] of (isCoinSpecialist ? coinFields : [])) {
       if (val && !seenCanonical.has(name)) {
         seenCanonical.set(name, true);
         attrSpecifics.push({ id: `coin_${name}`, name, value: String(val).slice(0, 65) });
