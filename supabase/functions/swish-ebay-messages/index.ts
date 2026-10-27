@@ -9,7 +9,7 @@
 //
 // Security: JWT + tenant membership verified before any eBay operation.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
 const corsHeaders = {
