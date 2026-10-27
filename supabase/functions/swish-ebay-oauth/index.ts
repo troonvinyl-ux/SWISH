@@ -23,7 +23,7 @@
 //   - All access token / refresh token values stored AES-256-GCM encrypted
 //   - state nonce is single-use with 15-minute expiry
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
 const corsHeaders = {

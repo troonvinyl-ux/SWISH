@@ -44,7 +44,7 @@
 // distinguished as verified sold evidence. Browse/Gemini remain accurately
 // labelled as asking prices / AI inference.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { decryptCredentials, encryptCredentials } from '../_shared/credentialCrypto.ts';
 

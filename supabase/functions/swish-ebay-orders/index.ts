@@ -12,7 +12,7 @@
 // POST body:
 //   { tenantId: string, daysBack?: number (default 30), mode?: 'fulfillment_api' | 'trading_api' | 'both' }
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
 const corsHeaders = {

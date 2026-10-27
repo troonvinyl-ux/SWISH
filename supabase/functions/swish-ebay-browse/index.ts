@@ -3,7 +3,7 @@
 // Route 2 (my_active_listings): Fetches all active seller listings for import.
 // Uses eBay OAuth user token for seller operations; App token for public browse.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
 const corsHeaders = {
