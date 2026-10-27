@@ -10,13 +10,13 @@ export const Colors = {
   surfaceHighlight: '#22242C',
 
   // Brand
-  primary: '#4F8EF7',
-  primaryDim: '#1A2E4A',
+  primary: '#FFE600',
+  primaryDim: '#302B00',
   primaryText: '#FFFFFF',
 
   // Accent
-  accent: '#7C5CFC',
-  accentDim: '#1E1540',
+  accent: '#FFE600',
+  accentDim: '#302B00',
 
   // Semantic
   success: '#22C55E',
@@ -138,7 +138,7 @@ export const Shadow = {
     elevation: 8,
   },
   glow: {
-    shadowColor: '#4F8EF7',
+    shadowColor: '#FFE600',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.4,
     shadowRadius: 12,
