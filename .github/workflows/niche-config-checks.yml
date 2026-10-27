@@ -1,5 +1,8 @@
 name: SWISH niche routing and branded config
 
+on:
+  workflow_dispatch:
+
 concurrency:
   group: swish-niche-checks-${{ github.ref }}
   cancel-in-progress: true
