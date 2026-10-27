@@ -275,7 +275,12 @@ async function getEbayCredentials(
     try {
       const { accessToken: newToken, expiresAt: newExpiry } = await refreshAccessToken(creds.clientId, creds.clientSecret, creds.refreshToken);
       const updatedRef = await encryptCredentials({ ...creds, accessToken: newToken, expiresAt: newExpiry });
-      await supabase.from('marketplace_connectors').update({ credential_ref: updatedRef, access_token_expires_at: newExpiry, updated_at: new Date().toISOString() }).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay');
+      const { data: persistedConnector, error: persistError } = await supabase.from('marketplace_connectors')
+        .update({ credential_ref: updatedRef, access_token_expires_at: newExpiry, updated_at: new Date().toISOString() })
+        .eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').select('id').maybeSingle();
+      if (persistError || !persistedConnector) {
+        throw new Error('Refreshed eBay credentials could not be persisted securely.');
+      }
       creds = { ...creds, accessToken: newToken, expiresAt: newExpiry };
     } catch (e: any) {
       console.error('[SWISH] eBay token refresh failed for listing connector');
