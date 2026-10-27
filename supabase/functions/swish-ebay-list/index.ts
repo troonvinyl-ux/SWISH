@@ -2203,12 +2203,43 @@ async function handleRequest(req: Request): Promise<Response> {
   // Fetch the current eBay category requirements at the server boundary.
   // This keeps every niche on the same source of truth and prevents a green
   // client preflight from submitting a listing with missing required aspects.
-  const categoryAspectResult = await getEbayCategoryAspects(creds.accessToken, resolvedCategoryId);
+  let categoryAspectResult = await getEbayCategoryAspects(creds.accessToken, resolvedCategoryId);
+  let aspectSource: 'live' | 'recent_cache' = 'live';
+
+  // If eBay denies Taxonomy access (e.g. OAuth/app permissions), use only a
+  // recently synchronised category-aspect cache from SWISH's existing table.
+  // Never treat a failed live request as an empty list of required aspects.
   if (categoryAspectResult.error) {
-    return jsonResponse({
-      error: `SWISH could not verify the current required item specifics for eBay category ${resolvedCategoryId}. No listing was submitted. Please retry shortly. Details: ${categoryAspectResult.error}`,
-      code: 'CATEGORY_ASPECTS_UNAVAILABLE',
-    }, 503);
+    const { data: cachedAspectRow, error: cacheError } = await supabase
+      .from('ebay_category_aspects')
+      .select('aspects, synced_at')
+      .eq('marketplace_id', 'EBAY_GB')
+      .eq('category_id', resolvedCategoryId)
+      .order('synced_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const syncedAt = cachedAspectRow?.synced_at ? new Date(cachedAspectRow.synced_at).getTime() : 0;
+    const cacheIsRecent = syncedAt > 0 && Date.now() - syncedAt <= 30 * 24 * 60 * 60 * 1000;
+    if (!cacheError && cacheIsRecent && Array.isArray(cachedAspectRow?.aspects)) {
+      const cachedAspects = cachedAspectRow.aspects.map((aspect: any) => ({
+        aspectName: String(aspect.aspectName ?? aspect.name ?? '').trim(),
+        aspectConstraint: {
+          aspectRequired: aspect.aspectConstraint?.aspectRequired === true || aspect.required === true,
+          aspectUsage: aspect.aspectConstraint?.aspectUsage ?? aspect.usage ?? (aspect.required === true ? 'REQUIRED' : 'OPTIONAL'),
+        },
+      })).filter((aspect: any) => aspect.aspectName);
+      categoryAspectResult = { aspects: cachedAspects };
+      aspectSource = 'recent_cache';
+      console.warn(`[swish-ebay-list] Using recent cached eBay aspects for category ${resolvedCategoryId} after live lookup failed.`);
+    } else {
+      return jsonResponse({
+        error: `SWISH could not verify the current required item specifics for eBay category ${resolvedCategoryId}. No listing was submitted. The live eBay lookup failed and no cache synced within the last 30 days was available. Details: ${categoryAspectResult.error}`,
+        code: 'CATEGORY_ASPECTS_UNAVAILABLE',
+        categoryId: resolvedCategoryId,
+        cacheAvailable: !cacheError && Array.isArray(cachedAspectRow?.aspects),
+      }, 503);
+    }
   }
   const requiredAspects = categoryAspectResult.aspects
     .filter((aspect) => aspect.aspectConstraint?.aspectRequired === true || aspect.aspectConstraint?.aspectUsage === 'REQUIRED')
