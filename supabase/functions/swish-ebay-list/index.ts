@@ -2114,7 +2114,7 @@ async function handleRequest(req: Request): Promise<Response> {
   const specialistId: string = item?.specialist_id ?? '';
   const SPEC_BLOCKLIST = new Set([
     'batch_id', 'capture_ref', 'object_type', 'has_alteration', 'has_hole', 'has_countermark',
-    'alteration_notes', 'ebay_category_id', 'ebay_category_name',
+    'alteration_notes', 'ebay_category_id', 'ebay_category_name', 'ebay_item_specifics',
     'numista_type_id', 'numista_status', 'numista_candidate_id', 'numista_n', 'numista_url',
     'numista_match_score', 'numista_candidate_score',
     'inferred_issuer', 'inferred_ruler', 'inferred_period', 'inferred_country',
@@ -2176,6 +2176,12 @@ async function handleRequest(req: Request): Promise<Response> {
     // using the item title is a conservative fallback and avoids a guaranteed
     // missing-required-specific rejection.
     addSpec('Type', productType ?? title);
+  }
+
+  // Merge user-confirmed eBay specifics saved by the Listing Editor before
+  // generic inferred attributes, so explicit values win and survive publishing.
+  for (const saved of (Array.isArray(attrs['ebay_item_specifics']) ? attrs['ebay_item_specifics'] : [])) {
+    addSpec(String(saved?.name ?? '').trim(), String(saved?.value ?? '').trim());
   }
 
   // Default: extract from item attributes using existing logic
