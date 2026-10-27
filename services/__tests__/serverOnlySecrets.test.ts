@@ -684,7 +684,19 @@ describe('eBay credential refresh persistence guards', () => {
     const source = fs.readFileSync(path.join(projectRoot, relativePath), 'utf8');
     expect(source).toContain('Refreshed eBay credentials could not be persisted securely.');
     expect(source).toContain(".select('id').maybeSingle()");
+    expect(source).toContain(".eq('credential_ref', conn.credential_ref)");
     expect(source).toMatch(/persistError\s*\|\|\s*!persistedConnector/);
+  });
+
+
+  test('finance token refresh uses compare-and-swap and fails if the connector changed concurrently', () => {
+    const source = fs.readFileSync(
+      path.join(projectRoot, 'supabase/functions/swish-ebay-finances/index.ts'),
+      'utf8',
+    );
+    expect(source).toContain(".eq('credential_ref', conn.credential_ref)");
+    expect(source).toContain(".select('id')");
+    expect(source).toContain('if (updateError || !persistedConnector)');
   });
 
   test('message refresh errors do not log raw exception text', () => {
