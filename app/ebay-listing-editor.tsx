@@ -1761,7 +1761,7 @@ export default function EbayListingEditorScreen() {
   // ── Save locally ────────────────────────────────────────────────────────────
 
   const handleSaveLocal = useCallback(async () => {
-    if (!data || !tenant) return;
+    if (!data || !tenant) return false;
     setSaving(true);
     const supabase = getSupabaseClient();
 
@@ -1783,7 +1783,7 @@ export default function EbayListingEditorScreen() {
 
     setSaving(false);
 
-    if (error) { showAlert('Save Failed', error.message); return; }
+    if (error) { showAlert('Save Failed', error.message); return false; }
 
     const { data: currentItem, error: currentItemError } = await supabase
       .from('items')
@@ -1791,7 +1791,7 @@ export default function EbayListingEditorScreen() {
       .eq('id', data.itemId)
       .eq('tenant_id', tenant.id)
       .maybeSingle();
-    if (currentItemError) { showAlert('Save Failed', currentItemError.message); return; }
+    if (currentItemError) { showAlert('Save Failed', currentItemError.message); return false; }
     const currentAttributes = currentItem?.attributes ?? {};
 
     const { error: saveItemError } = await supabase
@@ -1812,12 +1812,13 @@ export default function EbayListingEditorScreen() {
       })
       .eq('id', data.itemId)
       .eq('tenant_id', tenant.id);
-    if (saveItemError) { showAlert('Save Failed', saveItemError.message); return; }
+    if (saveItemError) { showAlert('Save Failed', saveItemError.message); return false; }
 
     setHasChanges(false);
     originalRef.current = JSON.parse(JSON.stringify(data));
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 2500);
+    return true;
   }, [data, tenant, showAlert]);
 
   // ── SKU-only revision: do not send listing photos or other listing fields ───────
@@ -1919,7 +1920,8 @@ export default function EbayListingEditorScreen() {
         {
           text: 'Revise Listing',
           onPress: async () => {
-            await handleSaveLocal();
+            const savedLocally = await handleSaveLocal();
+            if (!savedLocally) return;
             setRevising(true);
             const supabase = getSupabaseClient();
             try {
