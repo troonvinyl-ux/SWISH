@@ -183,6 +183,26 @@ export async function importEbayCandidate(
 ): Promise<{ itemId: string | null; inventoryId: string | null; error: string | null }> {
   const supabase = getSupabaseClient();
 
+  if (!candidate.ebayItemId?.trim()) {
+    return { itemId: null, inventoryId: null, error: 'Missing eBay item ID.' };
+  }
+
+  // A shared seller account may import from different niches. Check for an
+  // existing external listing link before creating any inventory record.
+  const { data: existingLink, error: existingLinkErr } = await supabase
+    .from('listings')
+    .select('id, item_id')
+    .eq('tenant_id', tenantId)
+    .eq('marketplace_id', 'ebay')
+    .eq('external_listing_id', candidate.ebayItemId)
+    .maybeSingle();
+  if (existingLinkErr) {
+    return { itemId: null, inventoryId: null, error: 'Could not verify whether this eBay listing was already imported.' };
+  }
+  if (existingLink) {
+    return { itemId: existingLink.item_id ?? null, inventoryId: null, error: 'This eBay listing is already linked to SWISH inventory; it was not duplicated.' };
+  }
+
   // Ensure all photo URLs are HTTPS (eBay returns HTTP)
   const securePhotos = (candidate.photos ?? []).map(url =>
     url ? url.replace(/^http:\/\//i, 'https://') : url
@@ -258,24 +278,17 @@ export async function importEbayCandidate(
   const mint = findSpecific(['Mint', 'Mint Mark', 'Mint Location']);
   const catalogueNumber = candidate.catalogueNumber || findSpecific(['Certification Number', 'Reference Number', 'Catalogue Number', 'Cat. No.']);
 
-  // Derive specialist_id from item specifics or SKU patterns
-  // Default to curiosities_collectibles for generic imports
-  function deriveSpecialistId(): string {
-    const titleLower = candidate.title.toLowerCase();
-    const categoryLower = (candidate.categoryName ?? '').toLowerCase();
-    const specificsText = (candidate.itemSpecifics ?? []).map(s => `${s.name} ${s.value}`).join(' ').toLowerCase();
-    const combined = `${titleLower} ${categoryLower} ${specificsText}`;
-    if (combined.includes('motocross') || combined.includes('enduro') || combined.includes('dirt bike') || combined.includes('off-road') || combined.includes('pit bike') || categoryLower.includes('motorcycle')) return 'motocross';
-    if (combined.includes('shirt') || combined.includes('jacket') || combined.includes('dress') || combined.includes('jeans') || combined.includes('hoodie') || combined.includes('clothing') || combined.includes('trainer') || combined.includes('sneaker') || categoryLower.includes('clothing') || categoryLower.includes('fashion')) return 'clothing';
-    if (combined.includes('coin') || combined.includes('numismatic') || combined.includes('sovereign') || combined.includes('crown') || combined.includes('penny') || combined.includes('shilling') || categoryLower.includes('coin')) return 'coins';
-    if (combined.includes('stamp') || categoryLower.includes('stamp')) return 'stamps';
-    if (combined.includes('pokemon') || combined.includes('magic: the gathering') || combined.includes('yu-gi-oh') || categoryLower.includes('trading card')) return 'trading_cards';
-    if (combined.includes('banknote') || combined.includes('bank note') || combined.includes('paper money')) return 'banknotes';
-    return 'curiosities_collectibles';
+  // Shared-account imports require a canonical active-niche specialist ID.
+  // Do not silently derive or default an item to a different niche.
+  const allowedSpecialists = new Set([
+    'coins', 'coins_uk', 'coins_world', 'coins_currency', 'banknotes', 'gold',
+    'silver', 'islamic_silver', 'ancient_artefacts', 'motocross', 'bicycles',
+    'clothing', 'trainers_sneakers', 'surplus_trader', 'curiosities_collectibles',
+  ]);
+  if (!nicheSpecialistId || !allowedSpecialists.has(nicheSpecialistId)) {
+    return { itemId: null, inventoryId: null, error: 'A valid active niche must be selected before importing this listing.' };
   }
-  // The active production niche takes precedence over title heuristics. Heuristics
-  // are retained only for legacy callers that do not supply a niche specialist.
-  const derivedSpecialistId = nicheSpecialistId || deriveSpecialistId();
+  const derivedSpecialistId = nicheSpecialistId;
 
   // Create the inventory item with all available eBay data
   const { data: itemData, error: itemErr } = await supabase
