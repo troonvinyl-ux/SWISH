@@ -14,7 +14,7 @@
 // POST body:
 //   { tenantId: string, mode?: 'full' | 'data_only' | 'refresh_token_only', itemIds?: string[] }
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
 const corsHeaders = {
