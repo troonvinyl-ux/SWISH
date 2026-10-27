@@ -663,7 +663,7 @@ Deno.serve(async (req: Request) => {
 
   console.log(`[EbaySync] eBay listings fetched: ${allEbayListings.length}`);
   if (allEbayListings.length === 0) {
-    return json({ success: true, processed: 0, updated: 0, imagesFetched: 0, titlesFixed: 0, failed: 0, totalEbayListings: 0, orphansFixed: 0, message: 'No eBay listings found.' });
+    return json({ success: true, processed: 0, matchedListings: 0, updated: 0, imagesFetched: 0, titlesFixed: 0, failed: 0, totalEbayListings: 0, unmatchedEbayListings: 0, orphansFixed: 0, message: 'No eBay listings found.' });
   }
 
   // ── Step 2: Enrich descriptions via GetItems batch ────────────────────────
