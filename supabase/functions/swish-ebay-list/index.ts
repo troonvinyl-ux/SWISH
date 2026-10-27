@@ -2194,7 +2194,34 @@ async function handleRequest(req: Request): Promise<Response> {
   const sellerProfilesXml = buildSellerProfiles(fulfillmentId, returnId, paymentId);
   const quantity = Number(item?.quantity ?? 1) || 1;
 
-  const validationError = validatePayload({ title, price, categoryId: resolvedCategoryId, conditionId, fulfillmentPolicyId: fulfillmentId, returnPolicyId: returnId, mediaUrls, itemSpecifics });
+  // Fetch the current eBay category requirements at the server boundary.
+  // This keeps every niche on the same source of truth and prevents a green
+  // client preflight from submitting a listing with missing required aspects.
+  const categoryAspectResult = await getEbayCategoryAspects(creds.accessToken, resolvedCategoryId);
+  if (categoryAspectResult.error) {
+    return jsonResponse({
+      error: `SWISH could not verify the current required item specifics for eBay category ${resolvedCategoryId}. No listing was submitted. Please retry shortly. Details: ${categoryAspectResult.error}`,
+      code: 'CATEGORY_ASPECTS_UNAVAILABLE',
+    }, 503);
+  }
+  const requiredAspects = categoryAspectResult.aspects
+    .filter((aspect) => aspect.aspectConstraint?.aspectRequired === true || aspect.aspectConstraint?.aspectUsage === 'REQUIRED')
+    .map((aspect) => aspect.aspectName)
+    .filter(Boolean);
+  const providedNames = new Set(itemSpecifics
+    .filter((specific: any) => specific?.name && specific?.value && String(specific.value).trim())
+    .map((specific: any) => String(specific.name).trim().toLocaleLowerCase()));
+  const missingRequiredAspects = requiredAspects.filter((name) => !providedNames.has(name.trim().toLocaleLowerCase()));
+  if (missingRequiredAspects.length) {
+    return jsonResponse({
+      error: `eBay requires additional item information: ${missingRequiredAspects.join(', ')}. Open the Listing Editor, complete these item specifics, save, and submit again.`,
+      code: 'MISSING_REQUIRED_ITEM_SPECIFICS',
+      missingRequiredAspects,
+      categoryId: resolvedCategoryId,
+    }, 400);
+  }
+
+  const validationError = validatePayload({ title, price, categoryId: resolvedCategoryId, conditionId, fulfillmentPolicyId: fulfillmentId, returnPolicyId: returnId, mediaUrls, itemSpecifics, requiredAspects });
   if (validationError) return jsonResponse({ error: validationError }, 400);
 
   let requestXml: string;
