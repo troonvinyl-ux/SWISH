@@ -17,7 +17,7 @@
 //
 // RESPONSE: { migrated: number; alreadyEncrypted: number; failed: number; errors: string[] }
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { isEncrypted, migrateToEncrypted } from '../_shared/credentialCrypto.ts';
 
