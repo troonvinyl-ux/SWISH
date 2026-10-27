@@ -135,8 +135,13 @@ async function getEbayAccessToken(
         creds = { ...creds, accessToken: data.access_token, expiresAt: newExpiry };
       }
     } catch (e: any) {
-      console.log(`[SWISH] Token refresh failed for messages: ${e.message}`);
-      // Continue with existing token — it may still be valid
+      // A persistence failure must fail closed: never continue with a refreshed token
+      // that was not saved securely, and never log raw exception text.
+      if (e instanceof Error && e.message === 'Refreshed eBay credentials could not be persisted securely.') {
+        throw e;
+      }
+      console.warn('[SWISH] eBay token refresh failed for messages; reconnect or retry if the token has expired.');
+      // For transient refresh-service failures, the existing token may still be valid.
     }
   }
 
