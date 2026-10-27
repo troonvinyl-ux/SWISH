@@ -689,6 +689,15 @@ describe('eBay credential refresh persistence guards', () => {
   });
 
 
+  test('sync does not mark a connector for reauthorization after a concurrent refresh wins', () => {
+    const source = fs.readFileSync(
+      path.join(projectRoot, 'supabase/functions/swish-ebay-sync/index.ts'),
+      'utf8',
+    );
+    expect(source).toContain('RETRY: eBay credentials changed during refresh. Please retry.');
+    expect(source).toContain('Do not mark the connector requires_reauth or overwrite that newer state.');
+  });
+
   test('finance token refresh uses compare-and-swap and fails if the connector changed concurrently', () => {
     const source = fs.readFileSync(
       path.join(projectRoot, 'supabase/functions/swish-ebay-finances/index.ts'),
