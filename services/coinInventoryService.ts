@@ -284,7 +284,7 @@ export async function importEbayCandidate(
   // Do not accept the generic catch-all or legacy aliases here: those IDs can
   // make a listing appear under the wrong niche in inventory and eBay views.
   const allowedSpecialists = new Set([
-    'coins', 'motocross', 'bicycles', 'clothing', 'surplus_trader',
+    'coins', 'motocross', 'bicycles', 'clothing', 'pokemon_cards', 'antiques', 'fossils', 'beauty', 'tech', 'surplus_trader',
   ]);
   if (!nicheSpecialistId || !allowedSpecialists.has(nicheSpecialistId)) {
     return { itemId: null, inventoryId: null, error: 'A valid active niche must be selected before importing this listing.' };
