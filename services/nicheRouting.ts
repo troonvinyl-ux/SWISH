@@ -48,7 +48,19 @@ export function getProductionNicheSpecialistIds(
 ): string[] {
   const productionNiche = resolveProductionNiche(nicheId);
   if (!productionNiche) return [];
-  return [...NICHES[productionNiche].specialists];
+
+  // Canonical IDs are used for all new records. Keep only known, niche-local
+  // historical aliases visible so old inventory remains accessible without
+  // reopening an unfiltered query or accepting the obsolete clothing_specialist.
+  const legacyAliases: Partial<Record<ProductionNicheId, string[]>> = {
+    motocross: ['mx'],
+    bicycles: ['bikes', 'cycling'],
+    surplus_flip: ['surplus_flip'],
+  };
+  return [...new Set([
+    ...NICHES[productionNiche].specialists,
+    ...(legacyAliases[productionNiche] ?? []),
+  ])];
 }
 
 export function nicheToEntryRoute(nicheId: string | null | undefined): ProductEntryRoute | null {
