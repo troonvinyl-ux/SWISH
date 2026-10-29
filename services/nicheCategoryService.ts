@@ -188,7 +188,7 @@ const TITLE_NICHE_KEYWORDS: Array<{ patterns: RegExp[]; niche: NicheClassificati
   {
     patterns: [
       /\b(coin|denarius|dirham|tetradrachm|drachm|solidus|florin|shilling|penny|sovereign|groat|tanka|rupee|stater|obol|nummus|follis|sesterce|aureus|sestertius)\b/i,
-      /\b(ancient|roman|greek|byzantine|medieval|hammered|milled|decimal|victorian coin|george iii|edward vii|silver coin|gold coin|bronze coin)\b/i,
+      /\b(ancient coin|roman coin|greek coin|byzantine coin|medieval coin|hammered coin|milled coin|decimal coin|victorian coin|george iii coin|edward vii coin|silver coin|gold coin|bronze coin)\b/i,
       /\b(numismatic|spink|km #|kgm|ric\b|bmc\b|sng\b|n#|graded coin|pcgs|ngc)\b/i,
     ],
     niche: 'coins',
