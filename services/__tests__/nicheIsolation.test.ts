@@ -261,7 +261,9 @@ describe('Canonical native niche routing', () => {
     expect(getProductionNicheSpecialistIds('motocross')).toContain('mx');
     expect(getProductionNicheSpecialistIds('bicycles')).toContain('bikes');
     expect(getProductionNicheSpecialistIds('surplus_flip')).toContain('surplus_flip');
-    expect(getProductionNicheSpecialistIds('clothing')).not.toContain('clothing_specialist');
+    expect(getProductionNicheSpecialistIds('clothing')).toContain('clothing_specialist'); // read-only legacy rows
+    expect(getProductionNicheSpecialistIds('clothing')).toContain('clothing');
+    expect(resolveProductionNiche('threads')).toBe('clothing');
   });
 
   test('unknown and inactive niches receive no specialist access', () => {
