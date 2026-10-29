@@ -66,7 +66,7 @@ import {
   nicheIdForSpecialist,
   NicheId,
 } from '@/constants/niches';
-import { classifyListing, nicheToSpecialistId } from '@/services/nicheCategoryService';
+import { classifyListing, nicheToSpecialistId, isListingEligibleForNiche } from '@/services/nicheCategoryService';
 import { getProductionNicheSpecialistIds, resolveProductionNiche } from '@/services/nicheRouting';
 import {
   ITEM_LIFECYCLE,
@@ -302,6 +302,15 @@ describe('All registered niche specialist isolation', () => {
         expect(overlap).toEqual([]);
       }
     }
+  });
+
+  test('unclassified and missing-context imports fail closed', () => {
+    const unknown = classifyListing(null, null, 'Mystery item with no clear category');
+    expect(isListingEligibleForNiche(unknown, 'coins')).toBe(false);
+    expect(isListingEligibleForNiche(unknown, null)).toBe(false);
+    const fossil = classifyListing(null, null, 'Ammonite fossil specimen');
+    expect(isListingEligibleForNiche(fossil, 'fossils')).toBe(true);
+    expect(isListingEligibleForNiche(fossil, 'coins')).toBe(false);
   });
 
   test.each([
