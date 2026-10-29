@@ -409,19 +409,21 @@ export default function OnboardingScreen() {
       // cannot be classified from category/title evidence alone.
       type NicheClassification004 =
         | 'coins' | 'motocross' | 'bicycles' | 'clothing'
-        | 'trading_cards' | 'antiques' | 'unclassified';
+        | 'trading_cards' | 'antiques' | 'fossils' | 'beauty'
+        | 'tech' | 'surplus_flip' | 'unclassified';
 
       const NICHE_TO_CLASSIFICATION: Record<NicheId, NicheClassification004> = {
-        coins:        'coins',
-        motocross:    'motocross',
-        bicycles:     'bicycles',
-        clothing:     'clothing',
-        trading_cards:'trading_cards',
-        antiques:     'antiques',
-        fossils:      'unclassified',
-        beauty:       'unclassified',
-        general:      'unclassified',
-        surplus_flip: 'unclassified',
+        coins: 'coins',
+        motocross: 'motocross',
+        bicycles: 'bicycles',
+        clothing: 'clothing',
+        trading_cards: 'trading_cards',
+        antiques: 'antiques',
+        fossils: 'fossils',
+        beauty: 'beauty',
+        tech: 'tech',
+        surplus_flip: 'surplus_flip',
+        general: 'unclassified',
       };
 
       const subscriberNicheClassification: NicheClassification004 =
