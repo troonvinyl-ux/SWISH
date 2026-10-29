@@ -368,17 +368,11 @@ export function isListingEligibleForNiche(
   result: ClassificationResult,
   targetNiche: NicheClassification | null,
 ): boolean {
-  // No target niche specified → accept all (backwards-compatible fallback)
-  if (!targetNiche) return true;
+  // Fail closed when there is no valid niche context or the listing is
+  // unclassified. Ambiguous rows must be reviewed, never imported into a
+  // production niche merely because the user opened that niche's importer.
+  if (!targetNiche || targetNiche === 'unclassified') return false;
 
-  // Exact niche match → always eligible
-  if (result.niche === targetNiche) return true;
-
-  // Unclassified items: include them with confidence < category_name
-  // so that manually-created listings without a category aren't silently excluded.
-  // The user can review them in the inventory.
-  if (result.niche === 'unclassified' && result.confidence === 'none') return true;
-
-  // Classified as a DIFFERENT niche → not eligible
-  return false;
+  // Only a positive classification match is eligible for the selected niche.
+  return result.niche === targetNiche;
 }
