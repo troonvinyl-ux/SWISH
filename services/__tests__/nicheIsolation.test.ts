@@ -268,6 +268,52 @@ describe('Canonical native niche routing', () => {
   });
 });
 
+// ── 4a. All-niche canonical specialist isolation ──────────────────────────────
+
+describe('All registered niche specialist isolation', () => {
+  test.each([
+    ['coins', 'coins'],
+    ['motocross', 'motocross'],
+    ['bicycles', 'bicycles'],
+    ['clothing', 'clothing'],
+    ['trading_cards', 'pokemon_cards'],
+    ['antiques', 'antiques'],
+    ['fossils', 'fossils'],
+    ['beauty', 'beauty'],
+    ['tech', 'tech'],
+    ['surplus_flip', 'surplus_trader'],
+  ])('%s resolves and has its canonical default specialist', (niche, specialist) => {
+    expect(resolveProductionNiche(niche)).toBe(niche);
+    expect(NICHES[niche as NicheId].defaultSpecialist).toBe(specialist);
+    expect(getProductionNicheSpecialistIds(niche)).toContain(specialist);
+  });
+
+  test('production specialist allow-lists do not share catch-all IDs', () => {
+    const ids = PRODUCTION_NICHE_IDS.map(niche => ({
+      niche,
+      specialists: getProductionNicheSpecialistIds(niche),
+    }));
+    expect(ids.every(({ specialists }) => !specialists.includes('curiosities_collectibles'))).toBe(true);
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const overlap = ids[i].specialists.filter(id => ids[j].specialists.includes(id));
+        expect(overlap).toEqual([]);
+      }
+    }
+  });
+
+  test.each([
+    ['fossil', 'Ammonite fossil specimen', 'fossils', 'fossils'],
+    ['beauty', 'Sealed skincare serum', 'beauty', 'beauty'],
+    ['tech', 'Laptop graphics card', 'tech', 'tech'],
+    ['surplus', 'Wholesale job lot manifest', 'surplus_flip', 'surplus_trader'],
+  ])('classifies %s listing to its own specialist', (_label, title, expectedNiche, specialist) => {
+    const result = classifyListing(null, null, title);
+    expect(result.niche).toBe(expectedNiche);
+    expect(nicheToSpecialistId(result.niche)).toBe(specialist);
+  });
+});
+
 // ── 4b. Explicit empty filters fail closed ────────────────────────────────────
 
 describe('Empty niche filters fail closed', () => {
