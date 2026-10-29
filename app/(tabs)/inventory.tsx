@@ -568,7 +568,7 @@ export default function MasterInventoryScreen() {
       // Also load listings (niche-scoped) to know which items are already listed
       loadListings();
     }
-  }, [activeTab]);
+  }, [activeTab, loadListings, loadSold]);
 
   // Update stock count
   useEffect(() => {
