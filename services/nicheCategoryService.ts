@@ -143,7 +143,7 @@ const CATEGORY_ID_TO_NICHE: Record<string, NicheClassification> = {
 
 const CATEGORY_NAME_NICHE_KEYWORDS: Array<{ keywords: string[]; niche: NicheClassification }> = [
   {
-    keywords: ['coin', 'numismatic', 'banknote', 'currency', 'medal', 'token', 'exonumia', 'bullion', 'hammered', 'ancient', 'roman coin', 'greek coin', 'british coin', 'world coin'],
+    keywords: ['coin', 'numismatic', 'banknote', 'currency', 'medal', 'token', 'exonumia', 'bullion', 'hammered', 'roman coin', 'greek coin', 'british coin', 'world coin'],
     niche: 'coins',
   },
   {
