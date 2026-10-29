@@ -246,6 +246,26 @@ const TITLE_NICHE_KEYWORDS: Array<{ patterns: RegExp[]; niche: NicheClassificati
     niche: 'trading_cards',
     confidence: 'high',
   },
+  {
+    patterns: [/\\b(fossil|ammonite|trilobite|shark tooth|petrified wood|dinosaur bone|mineral specimen)\\b/i],
+    niche: 'fossils',
+    confidence: 'high',
+  },
+  {
+    patterns: [/\\b(skincare|makeup|cosmetic|perfume|fragrance|lipstick|foundation|serum|beauty product)\\b/i],
+    niche: 'beauty',
+    confidence: 'high',
+  },
+  {
+    patterns: [/\\b(laptop|desktop computer|graphics card|processor|motherboard|monitor|tablet|smartphone|electronics)\\b/i],
+    niche: 'tech',
+    confidence: 'high',
+  },
+  {
+    patterns: [/\\b(job lot|joblot|surplus|pallet|clearance lot|wholesale lot|liquidation|manifest)\\b/i],
+    niche: 'surplus_flip',
+    confidence: 'medium',
+  },
 ];
 
 // ── MAIN CLASSIFICATION FUNCTION ─────────────────────────────────────────────
