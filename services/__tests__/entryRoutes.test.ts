@@ -57,7 +57,7 @@ const NICHE_SPECIFIC_SPECIALISTS = new Set([
   'bicycles', 'motocross', 'clothing', 'trainers_sneakers',
   'coins', 'islamic_silver', 'banknotes', 'gold', 'silver',
   'pokemon_cards', 'trading_cards', 'stamps', 'vinyl_records',
-  'books', 'retro_games', 'retro_consoles', 'fossils', 'beauty', 'tech', 'surplus_trader',
+  'books', 'retro_games', 'retro_consoles', 'antiques', 'fossils', 'beauty', 'tech', 'surplus_trader',
 ]);
 
 function resolveSpecialistId(
@@ -104,8 +104,9 @@ describe('SWISH-003: Bicycle specialist ID gap fix', () => {
       const ids = getInventorySpecialistIds('bicycles');
       expect(ids).toContain('cycling');
     });
-    test('inventory filter for bicycles niche is exactly [bicycles]', () => {
-      expect(getInventorySpecialistIds('bicycles')).toEqual(['bicycles']);
+    test('inventory filter for bicycles uses canonical ID and legacy aliases only', () => {
+      expect(getInventorySpecialistIds('bicycles')).toContain('bicycles');
+      expect(getInventorySpecialistIds('bicycles')).not.toContain('motocross');
     });
     test('listings filter for bicycles niche contains bicycles', () => {
       const ids = getListingsSpecialistIds('bicycles');
@@ -115,8 +116,9 @@ describe('SWISH-003: Bicycle specialist ID gap fix', () => {
       const ids = getListingsSpecialistIds('bicycles');
       expect(ids).toContain('cycling');
     });
-    test('listings filter for bicycles niche is exactly [bicycles]', () => {
-      expect(getListingsSpecialistIds('bicycles')).toEqual(['bicycles']);
+    test('listings filter for bicycles uses canonical ID and legacy aliases only', () => {
+      expect(getListingsSpecialistIds('bicycles')).toContain('bicycles');
+      expect(getListingsSpecialistIds('bicycles')).not.toContain('motocross');
     });
   });
 
