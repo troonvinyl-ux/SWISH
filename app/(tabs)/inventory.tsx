@@ -38,6 +38,7 @@ import BulkReValueSheet from '@/components/feature/BulkReValueSheet';
 import BulkReIdentifyModal from '@/components/feature/BulkReIdentifyModal';
 import { useBusinessConfig } from '@/hooks/useBusiness';
 import { NICHES } from '@/constants/niches';
+import { getProductionNicheSpecialistIds, resolveProductionNiche } from '@/services/nicheRouting';
 
 // ── Tab definition ────────────────────────────────────────────────────────────
 type MasterTab = 'stock' | 'draft' | 'live' | 'sold';
@@ -66,13 +67,13 @@ interface NicheTheme {
 }
 
 function getNicheTheme(activeNicheId: string | null | undefined): NicheTheme {
-  const id = (activeNicheId ?? '').toLowerCase();
+  const id = resolveProductionNiche(activeNicheId) ?? (activeNicheId ?? '').trim().toLowerCase();
 
   if (id.includes('coin') || id === 'gold' || id === 'silver' || id === 'banknotes' || id === 'islamic_silver') {
     return {
       accent: '#F5C842', accentDim: '#2A2000', icon: 'toll',
       label: 'Coin Inventory', itemLabel: 'Coin', itemsLabel: 'Coins',
-      specialistIds: ['coins', 'coins_uk', 'coins_world', 'islamic_silver', 'banknotes', 'gold', 'silver', 'ancient_artefacts'],
+      specialistIds: getProductionNicheSpecialistIds('coins'),
       subFilters: [
         { label: 'All Types', value: 'all', search: '' },
         { label: 'Silver', value: 'silver', search: 'silver' },
@@ -95,7 +96,7 @@ function getNicheTheme(activeNicheId: string | null | undefined): NicheTheme {
     return {
       accent: '#FF5500', accentDim: '#2A0A00', icon: 'two-wheeler',
       label: 'MX Inventory', itemLabel: 'Bike', itemsLabel: 'MX Bikes',
-      specialistIds: ['motocross', 'mx'],
+      specialistIds: getProductionNicheSpecialistIds('motocross'),
       subFilters: [
         { label: 'All MX', value: 'all', search: '' },
         { label: 'Running', value: 'running', search: 'rideable' },
@@ -116,7 +117,7 @@ function getNicheTheme(activeNicheId: string | null | undefined): NicheTheme {
     return {
       accent: '#6ED020', accentDim: '#0A2000', icon: 'pedal-bike',
       label: 'Bike Inventory', itemLabel: 'Bike', itemsLabel: 'Bikes',
-      specialistIds: ['bicycles', 'bikes'],
+      specialistIds: getProductionNicheSpecialistIds('bicycles'),
       subFilters: [
         { label: 'All Bikes', value: 'all', search: '' },
         { label: 'Mountain', value: 'mtb', search: 'mountain' },
@@ -136,7 +137,7 @@ function getNicheTheme(activeNicheId: string | null | undefined): NicheTheme {
     return {
       accent: '#14B8A6', accentDim: '#062A28', icon: 'inventory-2',
       label: 'Surplus Inventory', itemLabel: 'Product', itemsLabel: 'Products',
-      specialistIds: ['surplus_trader', 'surplus_flip'],
+      specialistIds: getProductionNicheSpecialistIds('surplus_flip'),
       subFilters: [
         { label: 'All Products', value: 'all', search: '' },
         { label: 'Manifest Stock', value: 'manifest', search: 'supplier_manifest' },
@@ -155,7 +156,7 @@ function getNicheTheme(activeNicheId: string | null | undefined): NicheTheme {
     return {
       accent: '#E91E8C', accentDim: '#250014', icon: 'checkroom',
       label: 'Fashion Inventory', itemLabel: 'Item', itemsLabel: 'Items',
-      specialistIds: ['clothing', 'trainers_sneakers', 'clothing_specialist'], // legacy rows remain visible; new saves canonicalise to 'clothing'
+      specialistIds: getProductionNicheSpecialistIds('clothing'), // canonical specialist IDs plus supported legacy aliases
       subFilters: [
         { label: 'All Items', value: 'all', search: '' },
         { label: 'Vintage', value: 'vintage', search: 'vintage' },
@@ -504,7 +505,8 @@ export default function MasterInventoryScreen() {
     if (search.trim()) parts.push(search.trim());
     if (nicheSubSearch) parts.push(nicheSubSearch);
     if (parts.length > 0) f.search = parts[0];
-    if (theme.specialistIds.length > 0) f.specialistIds = theme.specialistIds;
+    // Explicit empty specialist lists must fail closed; never query all niches.
+    f.specialistIds = theme.specialistIds;
     return f;
   }, [search, nicheSubSearch, theme.specialistIds]);
 
@@ -525,7 +527,7 @@ export default function MasterInventoryScreen() {
     const { listings: all } = await getAllListings(
       tenant.id,
       statusFilter,
-      theme.specialistIds.length > 0 ? theme.specialistIds : undefined,
+      theme.specialistIds,
     );
     setListings(all);
 
