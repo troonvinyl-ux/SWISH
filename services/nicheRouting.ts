@@ -37,7 +37,7 @@ export function resolveProductionNiche(
 
   if (
     id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers' ||
-    id === 'trainers' || id === 'threads_flip' || id === 'clothing_specialist'
+    id === 'trainers' || id === 'threads' || id === 'threads-flip' || id === 'threads_flip' || id === 'clothing_specialist'
   ) return 'clothing';
 
   if (id === 'trading_cards' || id === 'pokemon_cards' || id === 'cards' || id === 'card_flipper') return 'trading_cards';
@@ -62,11 +62,13 @@ export function getProductionNicheSpecialistIds(
 
   // Canonical IDs are used for all new records. Keep only known, niche-local
   // historical aliases visible so old inventory remains accessible without
-  // reopening an unfiltered query or accepting the obsolete clothing_specialist.
+  // reopening an unfiltered query. `clothing_specialist` is read-only compatibility
+  // for records created before canonical writes were corrected; new records use `clothing`.
   const legacyAliases: Partial<Record<ProductionNicheId, string[]>> = {
     coins: ['coins_uk', 'coins_world', 'coins_currency', 'numismatic'],
     motocross: ['mx'],
     bicycles: ['bikes', 'cycling'],
+    clothing: ['clothing_specialist', 'threads', 'threads_flip'],
     trading_cards: ['cards'],
     surplus_flip: ['surplus_flip'],
     tech: ['retro_games', 'retro_consoles'],
