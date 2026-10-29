@@ -192,8 +192,8 @@ describe('curiosities_collectibles niche contamination guard', () => {
 // ── 3. Production niche gate ─────────────────────────────────────────────────
 
 describe('Production niche gate', () => {
-  test('PRODUCTION_NICHE_IDS contains five niches including Surplus Flip', () => {
-    expect(PRODUCTION_NICHE_IDS).toHaveLength(5);
+  test('PRODUCTION_NICHE_IDS contains all ten SWISH niches including Surplus Flip', () => {
+    expect(PRODUCTION_NICHE_IDS).toHaveLength(10);
     expect(PRODUCTION_NICHE_IDS).toContain('surplus_flip');
   });
 
@@ -205,16 +205,18 @@ describe('Production niche gate', () => {
     expect(PRODUCTION_NICHE_IDS).toContain('surplus_flip');
   });
 
-  test('trading_cards is not a production niche', () => {
-    expect(isProductionNiche('trading_cards')).toBe(false);
+  test('trading_cards is a production niche', () => {
+    expect(isProductionNiche('trading_cards')).toBe(true);
   });
 
-  test('antiques is not a production niche', () => {
-    expect(isProductionNiche('antiques')).toBe(false);
+  test('antiques is a production niche', () => {
+    expect(isProductionNiche('antiques')).toBe(true);
   });
 
-  test('fossils is not a production niche', () => {
-    expect(isProductionNiche('fossils')).toBe(false);
+  test('fossils, beauty and tech are production niches', () => {
+    expect(isProductionNiche('fossils')).toBe(true);
+    expect(isProductionNiche('beauty')).toBe(true);
+    expect(isProductionNiche('tech')).toBe(true);
   });
 
   test('unknown niche ID returns false from isProductionNiche', () => {
@@ -263,7 +265,7 @@ describe('Canonical native niche routing', () => {
   });
 
   test('unknown and inactive niches receive no specialist access', () => {
-    expect(getProductionNicheSpecialistIds('tech')).toEqual([]);
+    expect(getProductionNicheSpecialistIds('tech')).toContain('tech');
     expect(getProductionNicheSpecialistIds('made_up_niche')).toEqual([]);
   });
 });
@@ -357,11 +359,10 @@ describe('nicheIdForSpecialist routing', () => {
     expect(nicheIdForSpecialist('islamic_silver')).toBe('coins');
   });
 
-  test('curiosities_collectibles routes to coins niche (legacy catch-all)', () => {
-    // curiosities_collectibles is in the coins specialist list as a legacy catch-all
-    // for unclassified eBay imports. Intentional for coins niche only.
-    const result = nicheIdForSpecialist('curiosities_collectibles');
-    expect(result === 'coins' || result === null).toBe(true);
+  test('curiosities_collectibles remains a non-production catch-all', () => {
+    // Legacy generic rows must not be assigned to any production niche.
+    expect(nicheIdForSpecialist('curiosities_collectibles')).toBe('general');
+    expect(PRODUCTION_NICHE_IDS.every(id => !getNicheSpecialistIds(id).includes('curiosities_collectibles'))).toBe(true);
   });
 
   test('unknown specialist ID returns null', () => {
@@ -729,7 +730,7 @@ describe('Cross-niche contamination simulation', () => {
     expect(visibleIds).toContain('2'); // islamic_silver
     expect(visibleIds).toContain('8'); // banknotes
     expect(visibleIds).toContain('9'); // ancient_artefacts
-    expect(visibleIds).toContain('7'); // curiosities_collectibles (intentional in coins)
+    expect(visibleIds).not.toContain('7'); // generic catch-all is intentionally hidden from production niches
     expect(visibleIds).not.toContain('3'); // motocross
     expect(visibleIds).not.toContain('4'); // bicycles
     expect(visibleIds).not.toContain('5'); // clothing
