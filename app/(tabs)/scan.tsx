@@ -20,7 +20,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 
 // ── Map active niche to its product ──────────────────────────────────────────
 
-type NicheProduct = 'coins' | 'mx' | 'bikes' | 'clothing' | 'surplus' | 'general';
+type NicheProduct = 'coins' | 'mx' | 'bikes' | 'clothing' | 'cards' | 'antiques' | 'fossils' | 'beauty' | 'tech' | 'surplus' | 'general';
 
 function getNicheProduct(nicheId: string | null | undefined): NicheProduct {
   const id = (nicheId ?? '').toLowerCase();
@@ -28,7 +28,12 @@ function getNicheProduct(nicheId: string | null | undefined): NicheProduct {
   if (id === 'motocross' || id === 'mx') return 'mx';
   if (id === 'bicycles' || id === 'cycling' || id === 'bikes') return 'bikes';
   if (id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers' || id === 'trainers') return 'clothing';
-  if (id === 'surplus_flip' || id === 'catalog_flip' || id === 'catalog_surplus') return 'surplus';
+  if (id === 'surplus_flip' || id === 'catalog_flip' || id === 'catalog_surplus' || id === 'surplus_trader') return 'surplus';
+  if (id === 'trading_cards' || id === 'pokemon_cards' || id === 'cards' || id === 'card_flipper') return 'cards';
+  if (id === 'antiques' || id === 'antique_flipper') return 'antiques';
+  if (id === 'fossils' || id === 'fossil_flipper') return 'fossils';
+  if (id === 'beauty' || id === 'beauty_flipper') return 'beauty';
+  if (id === 'tech' || id === 'technology' || id === 'tech_flipper' || id === 'retro_games' || id === 'retro_consoles') return 'tech';
   return 'general';
 }
 
@@ -175,6 +180,91 @@ const NICHE_CAPTURE: Record<NicheProduct, NicheCaptureConfig> = {
       'Lot-level margin and cash-recovery analysis',
     ],
   },
+  cards: {
+    title: 'Card Flipper',
+    subtitle: 'AI Trading Card Identification',
+    tagline: 'IDENTIFY • GRADE • VALUE • FLIP',
+    icon: 'style',
+    color: '#FACC15',
+    bgColor: '#0B0A05',
+    dimColor: '#2A2200',
+    route: '/create-listing',
+    captureOptions: [
+      { icon: 'photo-camera', label: 'Card Front', desc: 'Full card face, straight-on' },
+      { icon: 'photo-camera', label: 'Card Back', desc: 'Show back and centering' },
+      { icon: 'photo-camera', label: 'Corners', desc: 'Close-up of all four corners' },
+      { icon: 'photo-camera', label: 'Surface', desc: 'Foil, scratches and wear' },
+    ],
+    aiCapabilities: ['Card and set identification', 'Rarity and edition extraction', 'Condition and grading guidance', 'Market value and listing preparation'],
+  },
+  antiques: {
+    title: 'Antique Flipper',
+    subtitle: 'AI Antique Identification',
+    tagline: 'MAKER • PERIOD • CONDITION • VALUE',
+    icon: 'museum',
+    color: '#D97706',
+    bgColor: '#100A05',
+    dimColor: '#2A1605',
+    route: '/create-listing',
+    captureOptions: [
+      { icon: 'photo-camera', label: 'Main View', desc: 'Full item from the front' },
+      { icon: 'photo-camera', label: 'Maker Marks', desc: 'Hallmarks, stamps and signatures' },
+      { icon: 'photo-camera', label: 'Reverse', desc: 'Underside and construction' },
+      { icon: 'photo-camera', label: 'Condition', desc: 'Damage, repairs and wear' },
+    ],
+    aiCapabilities: ['Object and maker identification', 'Period and material clues', 'Condition and restoration assessment', 'Evidence-based resale valuation'],
+  },
+  fossils: {
+    title: 'Fossil Flipper',
+    subtitle: 'AI Fossil & Mineral Identification',
+    tagline: 'SPECIES • PERIOD • PROVENANCE • VALUE',
+    icon: 'yard',
+    color: '#8B5CF6',
+    bgColor: '#0B0712',
+    dimColor: '#211238',
+    route: '/create-listing',
+    captureOptions: [
+      { icon: 'photo-camera', label: 'Specimen', desc: 'Full specimen with clear focus' },
+      { icon: 'photo-camera', label: 'Detail', desc: 'Distinctive features and texture' },
+      { icon: 'photo-camera', label: 'Scale', desc: 'Include a size reference' },
+      { icon: 'photo-camera', label: 'Locality', desc: 'Record provenance when known' },
+    ],
+    aiCapabilities: ['Fossil or mineral classification', 'Species and geological-period clues', 'Condition and completeness assessment', 'Provenance-aware valuation'],
+  },
+  beauty: {
+    title: 'Beauty Flipper',
+    subtitle: 'AI Beauty Product Identification',
+    tagline: 'BRAND • BATCH • CONDITION • VALUE',
+    icon: 'spa',
+    color: '#F472B6',
+    bgColor: '#10070D',
+    dimColor: '#2A1020',
+    route: '/create-listing',
+    captureOptions: [
+      { icon: 'photo-camera', label: 'Product Front', desc: 'Brand and product name' },
+      { icon: 'photo-camera', label: 'Back Label', desc: 'Ingredients and barcode' },
+      { icon: 'photo-camera', label: 'Batch / Expiry', desc: 'Batch code and expiry date' },
+      { icon: 'photo-camera', label: 'Seal', desc: 'Show whether packaging is unopened' },
+    ],
+    aiCapabilities: ['Brand and product identification', 'Packaging and authenticity clues', 'Expiry and condition checks', 'Resale listing preparation'],
+  },
+  tech: {
+    title: 'Tech Flipper',
+    subtitle: 'AI Technology Identification',
+    tagline: 'MODEL • SPECS • CONDITION • VALUE',
+    icon: 'devices',
+    color: '#06B6D4',
+    bgColor: '#050D10',
+    dimColor: '#0B2630',
+    route: '/create-listing',
+    captureOptions: [
+      { icon: 'photo-camera', label: 'Device', desc: 'Full product view' },
+      { icon: 'photo-camera', label: 'Model Label', desc: 'Model and specification label' },
+      { icon: 'photo-camera', label: 'Accessories', desc: 'Cables, chargers and included parts' },
+      { icon: 'photo-camera', label: 'Condition', desc: 'Damage and tested status' },
+    ],
+    aiCapabilities: ['Brand and model identification', 'Specification extraction', 'Condition and completeness assessment', 'Resale value and listing preparation'],
+  },
   general: {
     title: 'SWISH Scanner',
     subtitle: 'AI Item Identification',
@@ -183,7 +273,7 @@ const NICHE_CAPTURE: Record<NicheProduct, NicheCaptureConfig> = {
     color: Colors.primary,
     bgColor: Colors.background,
     dimColor: Colors.primaryDim,
-    route: '/coin-flipper',
+    route: '/create-listing',
     captureOptions: [
       { icon: 'photo-camera', label: 'Photo', desc: 'Photograph the item' },
       { icon: 'image', label: 'Gallery', desc: 'From photo library' },
