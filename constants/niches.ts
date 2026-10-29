@@ -20,6 +20,7 @@ export type NicheId =
   | 'fossils'
   | 'clothing'
   | 'beauty'
+  | 'tech'
   | 'general'
   | 'surplus_flip';
 
@@ -75,7 +76,7 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     icon: 'toll',
     color: '#F5C842',
     accentColor: '#D4A017',
-    specialists: ['coins', 'islamic_silver', 'banknotes', 'gold', 'silver', 'jewellery_precious_metals', 'ancient_artefacts', 'curiosities_collectibles'],
+    specialists: ['coins', 'islamic_silver', 'banknotes', 'gold', 'silver', 'jewellery_precious_metals', 'ancient_artefacts'],
     defaultSpecialist: 'coins',
     terms: {
       item: 'Coin',
@@ -116,7 +117,7 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     icon: 'style',
     color: '#FACC15',
     accentColor: '#EAB308',
-    specialists: ['pokemon_cards', 'trading_cards', 'curiosities_collectibles'],
+    specialists: ['pokemon_cards', 'trading_cards'],
     defaultSpecialist: 'pokemon_cards',
     terms: {
       item: 'Card',
@@ -156,7 +157,7 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     icon: 'museum',
     color: '#D97706',
     accentColor: '#B45309',
-    specialists: ['antiques', 'ancient_artefacts', 'gold', 'silver', 'jewellery_precious_metals', 'books', 'curiosities_collectibles'],
+    specialists: ['antiques', 'books'],
     defaultSpecialist: 'antiques',
     terms: {
       item: 'Antique',
@@ -284,8 +285,8 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     icon: 'yard',
     color: '#8B5CF6',
     accentColor: '#7C3AED',
-    specialists: ['ancient_artefacts', 'curiosities_collectibles'],
-    defaultSpecialist: 'curiosities_collectibles',
+    specialists: ['fossils'],
+    defaultSpecialist: 'fossils',
     terms: {
       item: 'Fossil',
       items: 'Fossils',
@@ -369,8 +370,8 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     icon: 'spa',
     color: '#F472B6',
     accentColor: '#E11D48',
-    specialists: ['curiosities_collectibles'],
-    defaultSpecialist: 'curiosities_collectibles',
+    specialists: ['beauty'],
+    defaultSpecialist: 'beauty',
     terms: {
       item: 'Product',
       items: 'Products',
@@ -395,6 +396,45 @@ export const NICHES: Record<NicheId, NicheConfig> = {
       'Close-up of expiry/best before date',
       'Photograph seal/packaging condition',
       'Any authenticity markers (holograms, QR codes)',
+    ],
+    hasMeasurements: false,
+    version: '1.0.0',
+  },
+
+  tech: {
+    id: 'tech',
+    name: 'SWISH Tech',
+    shortName: 'Tech',
+    tagline: 'Identify, value and flip technology',
+    description: 'AI-powered identification and valuation for consumer electronics, computing equipment, devices, and accessories.',
+    icon: 'devices',
+    color: '#06B6D4',
+    accentColor: '#0891B2',
+    specialists: ['tech', 'retro_games', 'retro_consoles'],
+    defaultSpecialist: 'tech',
+    terms: {
+      item: 'Device',
+      items: 'Devices',
+      itemPlural: 'devices',
+      scan: 'Identify Device',
+      identify: 'Identify',
+      condition: 'Condition',
+      catalogue: 'Model',
+    },
+    quickActions: [
+      { icon: 'qr-code-scanner', label: 'Identify Device', route: '/(tabs)/scan' },
+      { icon: 'storefront', label: 'eBay Hub', route: '/ebay-hub' },
+      { icon: 'receipt-long', label: 'Orders', route: '/orders' },
+      { icon: 'inventory-2', label: 'Stock', route: '/(tabs)/inventory' },
+    ],
+    keyAttributes: ['brand', 'model', 'specifications', 'condition', 'tested', 'accessories'],
+    acquisitionSources: ['eBay', 'Clearance', 'Auctions', 'Trade-ins', 'Refurbishers'],
+    marketplaces: ['eBay', 'Facebook Marketplace'],
+    captureInstructions: [
+      'Photograph the full device',
+      'Capture model and serial labels where safe',
+      'Show included accessories',
+      'Document damage and tested status',
     ],
     hasMeasurements: false,
     version: '1.0.0',
@@ -534,6 +574,11 @@ export const PRODUCTION_NICHE_IDS: readonly NicheId[] = [
   'motocross',
   'bicycles',
   'clothing',
+  'trading_cards',
+  'antiques',
+  'fossils',
+  'beauty',
+  'tech',
   'surplus_flip',
 ] as const;
 
