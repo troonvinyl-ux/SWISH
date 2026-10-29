@@ -15,7 +15,7 @@ import { nicheToEntryRoute, resolveProductionNiche } from '@/services/nicheRouti
 
 type NicheId =
   | 'coins' | 'trading_cards' | 'antiques' | 'bicycles' | 'motocross'
-  | 'fossils' | 'clothing' | 'beauty' | 'general';
+  | 'fossils' | 'clothing' | 'beauty' | 'tech' | 'surplus_flip' | 'general';
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
@@ -23,7 +23,7 @@ type NicheId =
 // Inline the nicheToSpecialistId function (mirrors services/nicheCategoryService.ts)
 type NicheClassification003 =
   | 'coins' | 'motocross' | 'bicycles' | 'clothing'
-  | 'trading_cards' | 'antiques' | 'unclassified';
+  | 'trading_cards' | 'antiques' | 'fossils' | 'beauty' | 'tech' | 'surplus_flip' | 'unclassified';
 
 function nicheToSpecialistId(niche: NicheClassification003): string {
   switch (niche) {
@@ -32,39 +32,32 @@ function nicheToSpecialistId(niche: NicheClassification003): string {
     case 'bicycles':      return 'bicycles';
     case 'clothing':      return 'clothing';
     case 'trading_cards': return 'pokemon_cards';
-    case 'antiques':      return 'curiosities_collectibles';
+    case 'antiques':      return 'antiques';
+    case 'fossils':       return 'fossils';
+    case 'beauty':        return 'beauty';
+    case 'tech':          return 'tech';
+    case 'surplus_flip':  return 'surplus_trader';
     default:              return 'curiosities_collectibles';
   }
 }
 
 // Inline inventory filter logic (mirrors getNicheTheme in app/(tabs)/inventory.tsx)
 function getInventorySpecialistIds(activeNicheId: string): string[] {
-  const id = activeNicheId.toLowerCase();
-  if (id.includes('coin') || id === 'gold' || id === 'silver' || id === 'banknotes' || id === 'islamic_silver') {
-    return ['coins', 'coins_uk', 'coins_world', 'islamic_silver', 'banknotes', 'gold', 'silver', 'ancient_artefacts'];
-  }
-  if (id === 'motocross' || id === 'mx') return ['motocross'];
-  if (id === 'bicycles' || id === 'cycling' || id === 'bikes') return ['bicycles'];
-  if (id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers' || id === 'trainers') return ['clothing', 'trainers_sneakers'];
-  return [];
+  return getProductionNicheSpecialistIds(activeNicheId);
 }
 
 // Inline listings niche filter (mirrors nicheSpecialistIds in app/(tabs)/listings.tsx)
 function getListingsSpecialistIds(activeNicheId: string): string[] {
-  const id = activeNicheId.toLowerCase();
-  if (id === 'motocross' || id === 'mx') return ['motocross'];
-  if (id === 'bicycles' || id === 'cycling' || id === 'bikes') return ['bicycles'];
-  if (id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers' || id === 'trainers') return ['clothing', 'trainers_sneakers'];
-  return ['coins', 'coins_uk', 'coins_world', 'islamic_silver', 'banknotes', 'gold', 'silver', 'ancient_artefacts'];
+  return getProductionNicheSpecialistIds(activeNicheId);
 }
 
 // Inline niche-context guard (mirrors aiIdentificationService.ts)
-const GENERIC_SPECIALISTS = new Set(['curiosities_collectibles', 'antiques']);
+const GENERIC_SPECIALISTS = new Set(['curiosities_collectibles']);
 const NICHE_SPECIFIC_SPECIALISTS = new Set([
   'bicycles', 'motocross', 'clothing', 'trainers_sneakers',
   'coins', 'islamic_silver', 'banknotes', 'gold', 'silver',
   'pokemon_cards', 'trading_cards', 'stamps', 'vinyl_records',
-  'books', 'retro_games', 'retro_consoles',
+  'books', 'retro_games', 'retro_consoles', 'fossils', 'beauty', 'tech', 'surplus_trader',
 ]);
 
 function resolveSpecialistId(
@@ -107,9 +100,9 @@ describe('SWISH-003: Bicycle specialist ID gap fix', () => {
       const ids = getInventorySpecialistIds('bicycles');
       expect(ids).toContain('bicycles');
     });
-    test('inventory filter for bicycles niche does NOT contain cycling (invalid ID removed)', () => {
+    test('inventory filter retains the supported cycling legacy alias', () => {
       const ids = getInventorySpecialistIds('bicycles');
-      expect(ids).not.toContain('cycling');
+      expect(ids).toContain('cycling');
     });
     test('inventory filter for bicycles niche is exactly [bicycles]', () => {
       expect(getInventorySpecialistIds('bicycles')).toEqual(['bicycles']);
@@ -118,9 +111,9 @@ describe('SWISH-003: Bicycle specialist ID gap fix', () => {
       const ids = getListingsSpecialistIds('bicycles');
       expect(ids).toContain('bicycles');
     });
-    test('listings filter for bicycles niche does NOT contain cycling (invalid ID removed)', () => {
+    test('listings filter retains the supported cycling legacy alias', () => {
       const ids = getListingsSpecialistIds('bicycles');
-      expect(ids).not.toContain('cycling');
+      expect(ids).toContain('cycling');
     });
     test('listings filter for bicycles niche is exactly [bicycles]', () => {
       expect(getListingsSpecialistIds('bicycles')).toEqual(['bicycles']);
@@ -165,8 +158,8 @@ describe('SWISH-003: Bicycle specialist ID gap fix', () => {
     test('bicycle caller + AI returns undefined → keeps bicycles', () => {
       expect(resolveSpecialistId('bicycles', undefined)).toBe('bicycles');
     });
-    test('bicycle caller + AI returns antiques → keeps bicycles (antiques is generic)', () => {
-      expect(resolveSpecialistId('bicycles', 'antiques')).toBe('bicycles');
+    test('bicycle caller + AI returns canonical antiques specialist → accepts specialist result', () => {
+      expect(resolveSpecialistId('bicycles', 'antiques')).toBe('antiques');
     });
     test('bicycle caller + AI returns motocross → accepts motocross (niche-specific override OK)', () => {
       // AI determined it is actually an MX bike not a bicycle
@@ -197,8 +190,8 @@ describe('SWISH-003: Bicycle specialist ID gap fix', () => {
       const coinFilter = getInventorySpecialistIds('coins');
       expect(coinFilter).not.toContain('bicycles');
     });
-    test('nicheToSpecialistId(antiques) still returns curiosities_collectibles', () => {
-      expect(nicheToSpecialistId('antiques')).toBe('curiosities_collectibles');
+    test('nicheToSpecialistId(antiques) returns the canonical antiques specialist', () => {
+      expect(nicheToSpecialistId('antiques')).toBe('antiques');
     });
   });
 });
@@ -209,11 +202,11 @@ describe('SWISH-003: Bicycle specialist ID gap fix', () => {
 
 type NicheId004 =
   | 'coins' | 'motocross' | 'bicycles' | 'clothing'
-  | 'trading_cards' | 'antiques' | 'fossils' | 'beauty' | 'general';
+  | 'trading_cards' | 'antiques' | 'fossils' | 'beauty' | 'tech' | 'surplus_flip' | 'general';
 
 type NicheClassification004 =
   | 'coins' | 'motocross' | 'bicycles' | 'clothing'
-  | 'trading_cards' | 'antiques' | 'unclassified';
+  | 'trading_cards' | 'antiques' | 'fossils' | 'beauty' | 'tech' | 'surplus_flip' | 'unclassified';
 
 const CATEGORY_ID_TO_NICHE_004: Record<string, NicheClassification004> = {
   '4726': 'coins', '40714': 'coins', '18594': 'coins', '4157': 'coins',
@@ -233,8 +226,10 @@ const NICHE_TO_CLASSIFICATION_004: Record<NicheId004, NicheClassification004> = 
   clothing: 'clothing',
   trading_cards: 'trading_cards',
   antiques: 'antiques',
-  fossils: 'unclassified',
-  beauty: 'unclassified',
+  fossils: 'fossils',
+  beauty: 'beauty',
+  tech: 'tech',
+  surplus_flip: 'surplus_flip',
   general: 'unclassified',
 };
 
@@ -245,7 +240,11 @@ function nicheToSpecialistId004(niche: NicheClassification004): string {
     case 'bicycles': return 'bicycles';
     case 'clothing': return 'clothing';
     case 'trading_cards': return 'pokemon_cards';
-    case 'antiques': return 'curiosities_collectibles';
+    case 'antiques': return 'antiques';
+    case 'fossils': return 'fossils';
+    case 'beauty': return 'beauty';
+    case 'tech': return 'tech';
+    case 'surplus_flip': return 'surplus_trader';
     default: return 'curiosities_collectibles';
   }
 }
