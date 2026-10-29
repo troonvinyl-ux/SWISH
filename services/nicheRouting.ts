@@ -26,7 +26,7 @@ export function resolveProductionNiche(
   if (
     id === 'coins' || id === 'coins_uk' || id === 'coins_world' ||
     id === 'coins_currency' || id === 'banknotes' || id === 'gold' ||
-    id === 'silver' || id === 'islamic_silver' || id === 'ancient_artefacts' ||
+    id === 'silver' || id === 'islamic_silver' || id === 'ancient_artefacts' || id === 'jewellery_precious_metals' ||
     id === 'curiosities_collectibles' || id.includes('coin') || id === 'numismatic'
   ) return 'coins';
 
