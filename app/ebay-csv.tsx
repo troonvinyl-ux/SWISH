@@ -1174,16 +1174,22 @@ export default function EbayCsvScreen() {
   // We read from AppContext to apply the correct niche filter automatically
   const { activeNicheId } = useApp();
   // Map niche IDs to NicheClassification for the filter
-  const NICHE_ID_TO_CLASSIFICATION: Record<string, NicheClassification | null> = {
+  const NICHE_ID_TO_CLASSIFICATION: Record<string, NicheClassification> = {
     coins: 'coins',
     motocross: 'motocross',
     bicycles: 'bicycles',
     clothing: 'clothing',
     trading_cards: 'trading_cards',
     antiques: 'antiques',
-    general: null, // null = import all niches
+    fossils: 'fossils',
+    beauty: 'beauty',
+    tech: 'tech',
+    surplus_flip: 'surplus_flip',
   };
-  const targetNiche: NicheClassification | null = NICHE_ID_TO_CLASSIFICATION[activeNicheId] ?? null;
+  // Never let an unknown/general context disable filtering and import every niche.
+  // Unclassified rows can remain generic for manual review, but never enter another
+  // production niche's inventory.
+  const targetNiche: NicheClassification = NICHE_ID_TO_CLASSIFICATION[activeNicheId] ?? 'unclassified';
 
   const [stage, setStage] = useState<ImportStage>('idle');
   const [parsedCsv, setParsedCsv] = useState<ParsedCsv | null>(null);
