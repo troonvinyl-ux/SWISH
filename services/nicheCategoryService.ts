@@ -123,26 +123,6 @@ const CATEGORY_ID_TO_NICHE: Record<string, NicheClassification> = {
   '261330': 'trading_cards', // Pokémon Card Lots
   '246':    'trading_cards', // Sports Trading Cards
 
-  // ── FOSSILS ────────────────────────────────────────────────────────────────
-  '1105': 'fossils', // Fossils
-  '13849': 'fossils', // Minerals and Crystals
-
-  // ── BEAUTY ─────────────────────────────────────────────────────────────────
-  '11863': 'beauty', // Health and Beauty
-  '31786': 'beauty', // Makeup
-  '11854': 'beauty', // Skin Care
-  '11838': 'beauty', // Fragrances
-
-  // ── TECHNOLOGY ─────────────────────────────────────────────────────────────
-  '58058': 'tech', // Laptops and Netbooks
-  '175672': 'tech', // Tablets and eBook Readers
-  '179': 'tech', // Computer Components
-  '293': 'tech', // Electronics
-  '14948': 'tech', // Mobile Phones
-
-  // ── SURPLUS LOTS ───────────────────────────────────────────────────────────
-  // Category IDs are deliberately not broadly assigned; lot title/classification is safer.
-
   // ── ANTIQUES & COLLECTIBLES ────────────────────────────────────────────────
   '20081':  'antiques', // Antiques (parent)
   '20091':  'antiques', // Antique Furniture
