@@ -5,6 +5,11 @@ export type ProductEntryRoute =
   | '/entry/motocross'
   | '/entry/bicycles'
   | '/entry/clothing'
+  | '/entry/cards'
+  | '/entry/antiques'
+  | '/entry/fossils'
+  | '/entry/beauty'
+  | '/entry/tech'
   | '/entry/surplus-flip';
 
 /**
@@ -32,8 +37,14 @@ export function resolveProductionNiche(
 
   if (
     id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers' ||
-    id === 'trainers' || id === 'threads_flip'
+    id === 'trainers' || id === 'threads_flip' || id === 'clothing_specialist'
   ) return 'clothing';
+
+  if (id === 'trading_cards' || id === 'pokemon_cards' || id === 'cards' || id === 'card_flipper') return 'trading_cards';
+  if (id === 'antiques' || id === 'antique_flipper' || id === 'books') return 'antiques';
+  if (id === 'fossils' || id === 'fossil_flipper') return 'fossils';
+  if (id === 'beauty' || id === 'beauty_flipper') return 'beauty';
+  if (id === 'tech' || id === 'technology' || id === 'tech_flipper' || id === 'retro_games' || id === 'retro_consoles') return 'tech';
 
   return null;
 }
@@ -56,6 +67,7 @@ export function getProductionNicheSpecialistIds(
     motocross: ['mx'],
     bicycles: ['bikes', 'cycling'],
     surplus_flip: ['surplus_flip'],
+    tech: ['retro_games', 'retro_consoles'],
   };
   return [...new Set([
     ...NICHES[productionNiche].specialists,
@@ -71,6 +83,11 @@ export function nicheToEntryRoute(nicheId: string | null | undefined): ProductEn
     case 'motocross': return '/entry/motocross';
     case 'bicycles': return '/entry/bicycles';
     case 'clothing': return '/entry/clothing';
+    case 'trading_cards': return '/entry/cards';
+    case 'antiques': return '/entry/antiques';
+    case 'fossils': return '/entry/fossils';
+    case 'beauty': return '/entry/beauty';
+    case 'tech': return '/entry/tech';
     case 'surplus_flip': return '/entry/surplus-flip';
   }
   return null;
