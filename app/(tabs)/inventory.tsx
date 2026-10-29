@@ -172,6 +172,29 @@ function getNicheTheme(activeNicheId: string | null | undefined): NicheTheme {
       scanRoute: '/threads-flip',
     };
   }
+  // Registered non-primary niches use their canonical config rather than an
+  // empty filter. Unknown niche IDs still fail closed below.
+  const resolvedNiche = resolveProductionNiche(activeNicheId);
+  if (resolvedNiche) {
+    const config = NICHES[resolvedNiche];
+    return {
+      accent: config.color,
+      accentDim: config.accentColor + '30',
+      icon: config.icon,
+      label: `${config.shortName} Inventory`,
+      itemLabel: config.terms.item,
+      itemsLabel: config.terms.items,
+      specialistIds: getProductionNicheSpecialistIds(resolvedNiche),
+      subFilters: [{ label: `All ${config.terms.items}`, value: 'all', search: '' }],
+      metaKeys: config.keyAttributes.slice(0, 3).map((key, index) => ({
+        key,
+        label: '',
+        icon: '',
+        color: config.color,
+      })),
+      scanRoute: '/(tabs)/scan',
+    };
+  }
   return {
     accent: Colors.primary, accentDim: Colors.primaryDim, icon: 'inventory',
     label: 'Inventory', itemLabel: 'Item', itemsLabel: 'Items',
