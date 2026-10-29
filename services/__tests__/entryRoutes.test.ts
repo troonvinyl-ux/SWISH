@@ -11,7 +11,7 @@
 // Run with: npx jest services/__tests__/entryRoutes.test.ts
 // (No native modules required — pure TypeScript logic tests.)
 
-import { nicheToEntryRoute, resolveProductionNiche } from '@/services/nicheRouting';
+import { nicheToEntryRoute, resolveProductionNiche, getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 
 type NicheId =
   | 'coins' | 'trading_cards' | 'antiques' | 'bicycles' | 'motocross'
