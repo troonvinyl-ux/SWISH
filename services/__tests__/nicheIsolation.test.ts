@@ -67,6 +67,7 @@ import {
   NicheId,
 } from '@/constants/niches';
 import { classifyListing, nicheToSpecialistId } from '@/services/nicheCategoryService';
+import { getProductionNicheSpecialistIds, resolveProductionNiche } from '@/services/nicheRouting';
 import {
   ITEM_LIFECYCLE,
   ACTIVE_INVENTORY_STATUSES,
@@ -239,6 +240,31 @@ describe('getNicheSpecialistIds fail-closed', () => {
       const ids = getNicheSpecialistIds(nicheId);
       expect(ids.length).toBeGreaterThanOrEqual(1);
     }
+  });
+});
+
+// ── 4a. Canonical niche routing and legacy aliases ────────────────────────────
+
+describe('Canonical native niche routing', () => {
+  test.each([
+    ['mx', 'motocross'],
+    ['bikes', 'bicycles'],
+    ['threads_flip', 'clothing'],
+    ['surplus_trader', 'surplus_flip'],
+  ])('%s resolves to %s', (input, expected) => {
+    expect(resolveProductionNiche(input)).toBe(expected);
+  });
+
+  test('legacy aliases remain scoped to their own niche', () => {
+    expect(getProductionNicheSpecialistIds('motocross')).toContain('mx');
+    expect(getProductionNicheSpecialistIds('bicycles')).toContain('bikes');
+    expect(getProductionNicheSpecialistIds('surplus_flip')).toContain('surplus_flip');
+    expect(getProductionNicheSpecialistIds('clothing')).not.toContain('clothing_specialist');
+  });
+
+  test('unknown and inactive niches receive no specialist access', () => {
+    expect(getProductionNicheSpecialistIds('tech')).toEqual([]);
+    expect(getProductionNicheSpecialistIds('made_up_niche')).toEqual([]);
   });
 });
 
