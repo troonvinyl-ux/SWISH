@@ -321,6 +321,7 @@ export async function getAllListings(
   statusFilter?: string,
   specialistIds?: string[],
 ): Promise<{ listings: ListingWithItem[]; error: string | null }> {
+  if (specialistIds && specialistIds.length === 0) return { listings: [], error: null };
   const supabase = getSupabaseClient();
 
   let query = supabase
@@ -387,6 +388,7 @@ export async function getLiveListingCount(
   tenantId: string,
   specialistIds?: string[],
 ): Promise<number> {
+  if (specialistIds && specialistIds.length === 0) return 0;
   const supabase = getSupabaseClient();
   // If no specialist filter, count all active listings for the tenant
   if (!specialistIds || specialistIds.length === 0) {
