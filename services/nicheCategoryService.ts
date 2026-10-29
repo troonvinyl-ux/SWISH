@@ -21,6 +21,10 @@ export type NicheClassification =
   | 'clothing'      // Threads Flip — garments, footwear, accessories
   | 'trading_cards' // Cards niche
   | 'antiques'      // Antiques niche
+  | 'fossils'       // Fossils niche
+  | 'beauty'        // Beauty niche
+  | 'tech'          // Technology niche
+  | 'surplus_flip'  // Surplus lots and manifests
   | 'unclassified'; // Ambiguous — do not assign to any niche
 
 // ── eBay UK Category ID → Niche mapping ──────────────────────────────────────
@@ -119,6 +123,26 @@ const CATEGORY_ID_TO_NICHE: Record<string, NicheClassification> = {
   '261330': 'trading_cards', // Pokémon Card Lots
   '246':    'trading_cards', // Sports Trading Cards
 
+  // ── FOSSILS ────────────────────────────────────────────────────────────────
+  '1105': 'fossils', // Fossils
+  '13849': 'fossils', // Minerals and Crystals
+
+  // ── BEAUTY ─────────────────────────────────────────────────────────────────
+  '11863': 'beauty', // Health and Beauty
+  '31786': 'beauty', // Makeup
+  '11854': 'beauty', // Skin Care
+  '11838': 'beauty', // Fragrances
+
+  // ── TECHNOLOGY ─────────────────────────────────────────────────────────────
+  '58058': 'tech', // Laptops and Netbooks
+  '175672': 'tech', // Tablets and eBook Readers
+  '179': 'tech', // Computer Components
+  '293': 'tech', // Electronics
+  '14948': 'tech', // Mobile Phones
+
+  // ── SURPLUS LOTS ───────────────────────────────────────────────────────────
+  // Category IDs are deliberately not broadly assigned; lot title/classification is safer.
+
   // ── ANTIQUES & COLLECTIBLES ────────────────────────────────────────────────
   '20081':  'antiques', // Antiques (parent)
   '20091':  'antiques', // Antique Furniture
@@ -157,6 +181,18 @@ const CATEGORY_NAME_NICHE_KEYWORDS: Array<{ keywords: string[]; niche: NicheClas
   {
     keywords: ['pokémon', 'pokemon', 'magic gathering', 'trading card', 'sports card', 'ccg', 'tcg', 'yu-gi-oh'],
     niche: 'trading_cards',
+  },
+  {
+    keywords: ['fossil', 'ammonite', 'trilobite', 'mineral specimen', 'petrified'],
+    niche: 'fossils',
+  },
+  {
+    keywords: ['skincare', 'skin care', 'makeup', 'cosmetic', 'perfume', 'fragrance', 'beauty product', 'lipstick', 'foundation', 'serum'],
+    niche: 'beauty',
+  },
+  {
+    keywords: ['laptop', 'computer', 'tablet', 'smartphone', 'graphics card', 'processor', 'monitor', 'electronics', 'computer components'],
+    niche: 'tech',
   },
   {
     keywords: ['antique', 'vintage watch', 'wristwatch', 'pocket watch', 'fine jewellery', 'militaria', 'ceramics', 'pottery', 'antiquarian book'],
@@ -309,6 +345,10 @@ export function nicheToSpecialistId(niche: NicheClassification): string {
     case 'clothing':      return 'clothing';
     case 'trading_cards': return 'pokemon_cards';
     case 'antiques':      return 'antiques';
+    case 'fossils':       return 'fossils';
+    case 'beauty':        return 'beauty';
+    case 'tech':          return 'tech';
+    case 'surplus_flip':  return 'surplus_trader';
     default:              return 'curiosities_collectibles';
   }
 }
