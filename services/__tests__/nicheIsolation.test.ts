@@ -74,6 +74,8 @@ import {
   getLifecycleGroup,
   deleteItem,
   updateItem,
+  listItems,
+  getItemStatusCounts,
 } from '@/services/itemService';
 // Keep the placeholder-icon helper testable in the Node-only service suite without loading React Native UI modules.
 jest.mock('@/components/ui/ItemImage', () => ({
@@ -237,6 +239,18 @@ describe('getNicheSpecialistIds fail-closed', () => {
       const ids = getNicheSpecialistIds(nicheId);
       expect(ids.length).toBeGreaterThanOrEqual(1);
     }
+  });
+});
+
+// ── 4b. Explicit empty filters fail closed ────────────────────────────────────
+
+describe('Empty niche filters fail closed', () => {
+  test('listItems returns no rows for an explicitly empty specialist list', async () => {
+    await expect(listItems('tenant-1', { specialistIds: [] })).resolves.toEqual({ items: [], error: null });
+  });
+
+  test('getItemStatusCounts returns no counts for an explicitly empty specialist list', async () => {
+    await expect(getItemStatusCounts('tenant-1', [])).resolves.toEqual({});
   });
 });
 
