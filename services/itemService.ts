@@ -184,6 +184,7 @@ export async function listItems(
   tenantId: string,
   filter: ItemFilter = {}
 ): Promise<{ items: Item[]; error: string | null }> {
+  if (filter.specialistIds && filter.specialistIds.length === 0) return { items: [], error: null };
   const supabase = getSupabaseClient();
   let query = supabase
     .from('items')
@@ -235,6 +236,7 @@ export async function getItemStatusCounts(
   tenantId: string,
   specialistIds?: string[]
 ): Promise<Record<string, number>> {
+  if (specialistIds && specialistIds.length === 0) return {};
   const supabase = getSupabaseClient();
   let query = supabase
     .from('items')
