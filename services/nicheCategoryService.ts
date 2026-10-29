@@ -308,7 +308,7 @@ export function nicheToSpecialistId(niche: NicheClassification): string {
     case 'bicycles':      return 'bicycles';
     case 'clothing':      return 'clothing';
     case 'trading_cards': return 'pokemon_cards';
-    case 'antiques':      return 'curiosities_collectibles';
+    case 'antiques':      return 'antiques';
     default:              return 'curiosities_collectibles';
   }
 }
