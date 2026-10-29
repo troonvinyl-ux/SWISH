@@ -24,7 +24,10 @@ export type SpecialistId =
   | 'motocross'
   | 'bicycles'
   | 'curiosities_collectibles'
-  | 'surplus_trader';
+  | 'surplus_trader'
+  | 'fossils'
+  | 'beauty'
+  | 'tech';
 
 export interface CaptureRequirement {
   id: string;
@@ -764,6 +767,61 @@ export const SPECIALISTS: Record<SpecialistId, SpecialistConfig> = {
     riskFactors: ['reproduction', 'damage', 'incorrect_attribution'],
     typicalMarketplaces: ['ebay', 'etsy'],
     autoDetectKeywords: ['curiosity', 'curio', 'vintage', 'retro', 'collectible', 'toy', 'figurine', 'memorabilia'],
+    version: '1.0.0',
+  },
+
+  fossils: {
+    id: 'fossils', name: 'Fossils & Minerals', shortName: 'Fossils',
+    description: 'Identify and value fossils, minerals, and palaeontological specimens.',
+    icon: 'yard', iconFamily: 'MaterialIcons', color: '#8B5CF6', category: 'collectibles',
+    captureRequirements: [
+      { id: 'main', label: 'Main specimen', description: 'Clear full specimen photo', required: true },
+      { id: 'detail', label: 'Detail', description: 'Close-up of identifying features', required: false },
+      { id: 'scale', label: 'Scale', description: 'Include a scale reference', required: false },
+    ],
+    capabilities: { identify: true, classify: true, research: true, authenticate: true, assessCondition: true, value: true, predictDemand: true, recommendDisposition: true, generateListing: true, validateListing: true, detectRisk: true },
+    keyAttributes: ['species', 'period', 'formation', 'locality', 'size', 'condition'],
+    valuationInputs: ['species', 'rarity', 'period', 'locality', 'condition', 'provenance'],
+    riskFactors: ['misidentification', 'restoration', 'protected_species_or_site', 'uncertain_provenance'],
+    typicalMarketplaces: ['ebay', 'etsy'],
+    autoDetectKeywords: ['fossil', 'ammonite', 'trilobite', 'petrified', 'shark tooth', 'mineral specimen'],
+    version: '1.0.0',
+  },
+
+  beauty: {
+    id: 'beauty', name: 'Beauty Products', shortName: 'Beauty',
+    description: 'Identify and value beauty, skincare, cosmetics, and fragrance products.',
+    icon: 'spa', iconFamily: 'MaterialIcons', color: '#F472B6', category: 'physical_goods',
+    captureRequirements: [
+      { id: 'front', label: 'Product front', description: 'Brand and product name visible', required: true },
+      { id: 'back', label: 'Product details', description: 'Ingredients, barcode, and batch details', required: false },
+      { id: 'expiry', label: 'Expiry or batch', description: 'Expiry date or batch code where available', required: false },
+    ],
+    capabilities: { identify: true, classify: true, research: true, authenticate: true, assessCondition: true, value: true, predictDemand: true, recommendDisposition: true, generateListing: true, validateListing: true, detectRisk: true },
+    keyAttributes: ['brand', 'product_name', 'size', 'condition', 'batch_code', 'expiry_date', 'sealed'],
+    valuationInputs: ['brand', 'product_name', 'size', 'sealed', 'expiry_date', 'market_demand'],
+    riskFactors: ['expired_product', 'opened_or_used', 'counterfeit', 'restricted_ingredient', 'missing_batch_code'],
+    typicalMarketplaces: ['ebay'],
+    autoDetectKeywords: ['skincare', 'makeup', 'cosmetic', 'perfume', 'fragrance', 'beauty product', 'lipstick', 'foundation', 'serum'],
+    version: '1.0.0',
+  },
+
+  tech: {
+    id: 'tech', name: 'Technology & Electronics', shortName: 'Tech',
+    description: 'Identify and value consumer electronics, computing equipment, and accessories.',
+    icon: 'devices', iconFamily: 'MaterialIcons', color: '#06B6D4', category: 'physical_goods',
+    captureRequirements: [
+      { id: 'front', label: 'Main device', description: 'Full product view', required: true },
+      { id: 'model', label: 'Model label', description: 'Model, serial, or regulatory label', required: false },
+      { id: 'accessories', label: 'Accessories', description: 'Show included cables and accessories', required: false },
+      { id: 'condition', label: 'Condition', description: 'Capture damage and operational status', required: true },
+    ],
+    capabilities: { identify: true, classify: true, research: true, authenticate: true, assessCondition: true, value: true, predictDemand: true, recommendDisposition: true, generateListing: true, validateListing: true, detectRisk: true },
+    keyAttributes: ['brand', 'model', 'specifications', 'storage', 'condition', 'tested', 'accessories'],
+    valuationInputs: ['brand', 'model', 'specifications', 'condition', 'tested', 'sold_comparables'],
+    riskFactors: ['activation_lock', 'stolen_device', 'battery_damage', 'missing_parts', 'counterfeit'],
+    typicalMarketplaces: ['ebay'],
+    autoDetectKeywords: ['laptop', 'computer', 'tablet', 'smartphone', 'console', 'graphics card', 'processor', 'monitor', 'electronics'],
     version: '1.0.0',
   },
 
