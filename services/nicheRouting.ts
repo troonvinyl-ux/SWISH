@@ -64,8 +64,10 @@ export function getProductionNicheSpecialistIds(
   // historical aliases visible so old inventory remains accessible without
   // reopening an unfiltered query or accepting the obsolete clothing_specialist.
   const legacyAliases: Partial<Record<ProductionNicheId, string[]>> = {
+    coins: ['coins_uk', 'coins_world', 'coins_currency', 'numismatic'],
     motocross: ['mx'],
     bicycles: ['bikes', 'cycling'],
+    trading_cards: ['cards'],
     surplus_flip: ['surplus_flip'],
     tech: ['retro_games', 'retro_consoles'],
   };
