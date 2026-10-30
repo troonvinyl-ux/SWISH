@@ -15,19 +15,37 @@ export async function loadInventoryView(tenantId: string, nicheId: string) {
   return { items: inventory.items, listings: result.listings, error: inventory.error ?? result.error };
 }
 export function buildInventoryViews(items: Item[], listings: ListingWithItem[]): Record<InventoryTab, InventoryViewItem[]> {
-  const live = listings.filter(isLiveListing); const draft = listings.filter(isDraftListing);
-  const listedIds = new Set([...live, ...draft].map(listing => listing.itemId));
+  const live = listings.filter(isLiveListing);
+  const draft = listings.filter(isDraftListing);
+  // Terminal eBay/order evidence takes precedence over stale local "listed" status.
+  const soldListings = listings.filter(listing =>
+    ['sold', 'fulfilled', 'completed'].includes(String(listing.status ?? '').toLowerCase()) ||
+    Boolean(listing.itemSoldAt) ||
+    ['sold', 'fulfilled', 'completed'].includes(String(listing.itemStatus ?? '').toLowerCase()),
+  );
+  const listedIds = new Set([...live, ...draft, ...soldListings].map(listing => listing.itemId));
   const byId = new Map(items.map(item => [item.id, item]));
-  const view = (item: Partial<Item>, listing?: ListingWithItem): InventoryViewItem => ({ ...item,
-    id: item.id ?? listing!.itemId, canonical_title: item.canonicalTitle ?? listing?.itemTitle ?? '',
+  const view = (item: Partial<Item>, listing?: ListingWithItem): InventoryViewItem => ({
+    ...item,
+    id: item.id ?? listing!.itemId,
+    canonical_title: item.canonicalTitle ?? listing?.itemTitle ?? '',
     specialist_id: item.specialistId ?? listing?.itemSpecialistId ?? '',
-    attributes: item.attributes ?? {}, media: listing?.itemMedia?.length ? listing.itemMedia : item.media ?? [], listing,
+    attributes: item.attributes ?? {},
+    media: listing?.itemMedia?.length ? listing.itemMedia : item.media ?? [],
+    listing,
   });
+  const soldById = new Map<string, InventoryViewItem>();
+  for (const item of items.filter(candidate => ITEM_LIFECYCLE.SOLD_STATUSES.includes(candidate.status))) {
+    soldById.set(item.id, view(item));
+  }
+  for (const listing of soldListings) {
+    soldById.set(listing.itemId, view(byId.get(listing.itemId) ?? {}, listing));
+  }
   return {
     stock: items.filter(item => ACTIVE_INVENTORY_STATUSES.includes(item.status) && !listedIds.has(item.id)).map(item => view(item)),
     draft: draft.map(listing => view(byId.get(listing.itemId) ?? {}, listing)),
     live: live.map(listing => view(byId.get(listing.itemId) ?? {}, listing)),
-    sold: items.filter(item => ITEM_LIFECYCLE.SOLD_STATUSES.includes(item.status)).map(item => view(item)),
+    sold: [...soldById.values()],
   };
 }
 export async function syncInventoryOrders(tenantId: string, nicheId: string): Promise<{ imported: number; error: string | null }> {
