@@ -14,6 +14,40 @@ module.exports = ({ config }) => {
     extra: { ...(config.extra || {}), eas: { ...(config.extra?.eas || {}), projectId: easProjectId } },
   } : {};
   const baseConfig = Object.keys(otaConfig).length ? { ...config, ...otaConfig } : config;
+
+  // Standalone owner-only command centre build. The workflow stages its routes
+  // into src/app (Expo Router's supported precedence) so Metro never scans the
+  // main app route tree. Keep Router on its default root; custom roots are not
+  // consistently respected by every Expo CLI/Metro tool in this SDK.
+  if (process.env.SWISH_MASTER_DASHBOARD === '1') {
+    const plugins = (baseConfig.plugins || []).map(plugin => {
+      const name = Array.isArray(plugin) ? plugin[0] : plugin;
+      if (name !== 'expo-router') return plugin;
+      const options = Array.isArray(plugin) ? { ...(plugin[1] || {}) } : {};
+      delete options.root;
+      return Object.keys(options).length ? ['expo-router', options] : 'expo-router';
+    });
+    return {
+      ...baseConfig,
+      name: 'SWISH Master',
+      slug: 'swish-master-dashboard',
+      scheme: 'swishmaster',
+      orientation: 'default',
+      userInterfaceStyle: 'dark',
+      plugins,
+      android: { ...baseConfig.android, package: 'com.swish.masterdashboard' },
+      extra: {
+        ...(baseConfig.extra || {}),
+        swishMasterDashboard: true,
+        swishAppScheme: 'swishmaster',
+      },
+      updates: baseConfig.updates ? {
+        ...baseConfig.updates,
+        requestHeaders: { ...(baseConfig.updates.requestHeaders || {}), 'expo-channel-name': 'production-master-dashboard' },
+      } : baseConfig.updates,
+    };
+  }
+
   if (!niche) return baseConfig;
   // Prepare for every Expo consumer (prebuild, EAS, export, OTA), not just one workflow.
   const routeRoot = prepareNicheRoutes(selected);
