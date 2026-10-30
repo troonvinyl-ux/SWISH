@@ -325,6 +325,7 @@ export async function getOrCreateConnector(
     .select(SAFE_CONNECTOR_COLUMNS)
     .maybeSingle();
 
+  if (error) return { connector: null, error: error.message };
   // Fetch after upsert
   if (!data) {
     const { data: fetched, error: fetchErr } = await supabase
@@ -338,6 +339,11 @@ export async function getOrCreateConnector(
   }
 
   return { connector: mapConnector(data), error: null };
+}
+
+export async function disconnectMarketplace(tenantId: string, marketplaceId: MarketplaceId): Promise<{ error: string | null }> {
+  const { error } = await getSupabaseClient().rpc('swish_disconnect_marketplace', { p_tenant_id: tenantId, p_marketplace_id: marketplaceId });
+  return { error: error?.message ?? null };
 }
 
 // ── Marketplace Selection Intelligence ───────────────────────────────────────

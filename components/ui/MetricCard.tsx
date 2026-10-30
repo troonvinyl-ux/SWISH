@@ -53,7 +53,6 @@ export const MetricCard = memo(({
     </Pressable>
   );
 });
-MetricCard.displayName = 'MetricCard';
 
 const styles = StyleSheet.create({
   card: {

@@ -485,13 +485,9 @@ function EbayHubScreenContent() {
   interface HubSyncState {
     phase: 'idle' | 'running' | 'done' | 'error';
     current: number; total: number; updated: number; images: number;
-    titles: number; failed: number; totalEbayListings: number; unmatchedEbayListings: number;
-    errorMsg?: string; requiresReauth?: boolean;
+    titles: number; failed: number; errorMsg?: string; requiresReauth?: boolean;
   }
-  const EMPTY_SYNC: HubSyncState = {
-    phase: 'idle', current: 0, total: 0, updated: 0, images: 0, titles: 0, failed: 0,
-    totalEbayListings: 0, unmatchedEbayListings: 0,
-  };
+  const EMPTY_SYNC: HubSyncState = { phase: 'idle', current: 0, total: 0, updated: 0, images: 0, titles: 0, failed: 0 };
   const [hubSync, setHubSync] = useState<HubSyncState>(EMPTY_SYNC);
 
   // ── Image download to Storage state ───────────────────────────────────────
@@ -567,8 +563,6 @@ function EbayHubScreenContent() {
         current: data?.processed ?? 0, total: data?.processed ?? 0,
         updated: data?.updated ?? 0, images: data?.imagesFetched ?? 0,
         titles: data?.titlesFixed ?? 0, failed: data?.failed ?? 0,
-        totalEbayListings: data?.totalEbayListings ?? 0,
-        unmatchedEbayListings: data?.unmatchedEbayListings ?? 0,
         requiresReauth: data?.requiresReauth ?? false,
       });
       // Reset image download so the button appears fresh
@@ -728,14 +722,6 @@ function EbayHubScreenContent() {
                   <Text style={s.syncReauthText}>Re-authorise eBay required</Text>
                   <MaterialIcons name="chevron-right" size={12} color={Colors.danger} />
                 </Pressable>
-              ) : null}
-              {hubSync.totalEbayListings > 0 ? (
-                <Text style={s.syncPanelDesc}>
-                  Found {hubSync.totalEbayListings} eBay listings. Updated {hubSync.updated} already-imported SWISH records.
-                  {hubSync.unmatchedEbayListings > 0
-                    ? ` ${hubSync.unmatchedEbayListings} listing(s) are not linked to SWISH inventory yet; use eBay Import before syncing their details.`
-                    : ' All fetched eBay listings matched existing SWISH records.'}
-                </Text>
               ) : null}
               <View style={s.syncResultRow}>
                 {([

@@ -26,7 +26,7 @@
 //     dispatchPhotoUrl?: string // URL of dispatch proof photo (optional)
 //   }
 
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
 const corsHeaders = {
@@ -88,10 +88,7 @@ async function getAccessToken(
 
   let creds: any;
   try { creds = await decryptCredentials(conn.credential_ref); }
-  catch (e: any) {
-    console.error('[SWISH Security] eBay credential decryption failed for fulfilment connector');
-    return { error: 'Unable to read eBay connection securely. Please reconnect eBay.' };
-  }
+  catch (e: any) { return { error: `eBay credentials corrupted: ${e.message}. Re-connect eBay.` }; }
 
   if (!creds.accessToken) return { error: 'No eBay access token. Re-authorise eBay in Marketplaces.' };
 
@@ -105,8 +102,7 @@ async function getAccessToken(
         credential_ref: updatedRef, access_token_expires_at: newExpiry, updated_at: new Date().toISOString(),
       }).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay');
     } catch (e: any) {
-      console.error('[SWISH Dispatch] eBay token refresh failed');
-      return { error: 'eBay authorisation could not be refreshed. Please reconnect eBay.' };
+      return { error: `Token refresh failed: ${e.message}. Please re-authorise eBay.` };
     }
   }
 
@@ -431,8 +427,7 @@ async function handleGetShipping(
     const data = await resp.json();
     return jsonResponse({ success: true, fulfillments: data.fulfillments ?? [] });
   } catch (e: any) {
-    console.error('[SWISH Dispatch] eBay shipping lookup network request failed');
-    return jsonResponse({ error: 'Unable to reach eBay right now. Please retry.' }, 503);
+    return jsonResponse({ error: `Network error: ${e.message}` }, 503);
   }
 }
 
@@ -612,7 +607,7 @@ async function handleSyncReturns(
     return jsonResponse({ success: true, fetched, imported, updated, source: 'ebay_post_order', syncedAt: new Date().toISOString() });
   } catch (e: any) {
     console.error(`[SWISH Returns] Sync failed: ${e.message}`);
-    return jsonResponse({ success: false, error: 'Unable to sync eBay returns right now. Please retry.', fetched, imported, updated }, 503);
+    return jsonResponse({ success: false, error: `Could not sync eBay returns: ${e.message}`, fetched, imported, updated }, 503);
   }
 }
 
@@ -751,7 +746,7 @@ async function handleSyncCases(
     return jsonResponse({ success: true, fetched, imported, updated, source: 'ebay_post_order', syncedAt: new Date().toISOString() });
   } catch (e: any) {
     console.error(`[SWISH Cases] Sync failed: ${e.message}`);
-    return jsonResponse({ success: false, error: 'Unable to sync eBay cases right now. Please retry.', fetched, imported, updated }, 503);
+    return jsonResponse({ success: false, error: `Could not sync eBay cases: ${e.message}`, fetched, imported, updated }, 503);
   }
 }
 
@@ -784,8 +779,7 @@ Deno.serve(async (req: Request) => {
     const { data: member } = await supabase.from('tenant_memberships').select('id').eq('tenant_id', tenantId).eq('user_id', user.id).maybeSingle();
     if (!member) return jsonResponse({ error: 'Access denied.' }, 403);
   } catch (e: any) {
-    console.error('[SWISH Dispatch] Authentication verification failed');
-    return jsonResponse({ error: 'Authentication could not be verified. Please sign in again.' }, 401);
+    return jsonResponse({ error: `Auth error: ${e.message}` }, 401);
   }
 
   try {
@@ -809,6 +803,6 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: `Unknown route: ${route}` }, 400);
   } catch (err: any) {
     console.error(`[SWISH Dispatch] Unhandled error (route=${route}): ${err.message}`);
-    return jsonResponse({ error: 'Unable to complete the eBay fulfilment request. Please retry or contact support.' }, 500);
+    return jsonResponse({ error: err.message ?? 'Internal error' }, 500);
   }
 });

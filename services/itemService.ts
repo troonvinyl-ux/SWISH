@@ -184,7 +184,8 @@ export async function listItems(
   tenantId: string,
   filter: ItemFilter = {}
 ): Promise<{ items: Item[]; error: string | null }> {
-  if (filter.specialistIds && filter.specialistIds.length === 0) return { items: [], error: null };
+  if (filter.specialistIds?.length === 0) return { items: [], error: null };
+  if (!tenantId?.trim()) return { items: [], error: 'tenantId is required' };
   const supabase = getSupabaseClient();
   let query = supabase
     .from('items')
@@ -219,7 +220,8 @@ export async function listItems(
   if (filter.acquisitionId) query = query.eq('acquisition_id', filter.acquisitionId);
   if (filter.reviewRequired) query = query.eq('status', 'review_required');
   if (filter.search) {
-    const q = filter.search;
+    // PostgREST OR grammar is not a free-text input; remove its control characters.
+    const q = filter.search.replace(/[(),%_\\]/g, ' ').trim().slice(0, 120);
     // Search across title, catalogue number, folder, ruler, denomination, inventory ID
     query = query.or(
       `canonical_title.ilike.%${q}%,catalogue_number.ilike.%${q}%,folder_number.ilike.%${q}%,ruler.ilike.%${q}%,denomination.ilike.%${q}%,inventory_id.ilike.%${q}%,mint.ilike.%${q}%,country_of_origin.ilike.%${q}%`
@@ -236,7 +238,7 @@ export async function getItemStatusCounts(
   tenantId: string,
   specialistIds?: string[]
 ): Promise<Record<string, number>> {
-  if (specialistIds && specialistIds.length === 0) return {};
+  if (!tenantId?.trim() || specialistIds?.length === 0) return {};
   const supabase = getSupabaseClient();
   let query = supabase
     .from('items')
@@ -285,6 +287,13 @@ export async function createItem(
       expected_profit: input.expectedProfit ?? 0,
       sale_prob_30d: input.saleProb30d ?? 0,
       attributes: input.attributes ?? {},
+      catalogue_number: input.catalogueNumber ?? '',
+      ruler: input.ruler ?? '', denomination: input.denomination ?? '',
+      period: input.period ?? '', mint: input.mint ?? '',
+      material: input.material ?? '', manufacturer: input.manufacturer ?? '',
+      country_of_origin: input.countryOfOrigin ?? '', year_made: input.yearMade ?? '',
+      weight_grams: input.weightGrams ?? null, diameter_mm: input.diameterMm ?? null,
+      quantity: input.quantity ?? 1, sku: input.sku ?? '',
       media: input.media ?? [],
       warnings: input.warnings ?? [],
       tags: input.tags ?? [],
@@ -384,6 +393,7 @@ export async function markItemSold(
     .from('items')
     .select('status')
     .eq('id', itemId)
+    .eq('tenant_id', tenantId)
     .maybeSingle();
 
   const [itemUpdate, lifecycleEvent] = await Promise.all([
@@ -396,7 +406,7 @@ export async function markItemSold(
         marketplace: params.marketplace ?? 'ebay',
         updated_at: new Date().toISOString(),
       })
-      .eq('id', itemId),
+      .eq('id', itemId).eq('tenant_id', tenantId),
     supabase
       .from('item_lifecycle_events')
       .insert({
@@ -429,6 +439,7 @@ export async function archiveItem(
     .from('items')
     .select('status')
     .eq('id', itemId)
+    .eq('tenant_id', tenantId)
     .maybeSingle();
 
   await supabase
@@ -445,7 +456,7 @@ export async function archiveItem(
   const { error } = await supabase
     .from('items')
     .update({ status: 'held', updated_at: new Date().toISOString() })
-    .eq('id', itemId);
+    .eq('id', itemId).eq('tenant_id', tenantId);
 
   return { error: error?.message ?? null };
 }
@@ -466,6 +477,7 @@ export async function transitionItemStatus(
     .from('items')
     .select('status')
     .eq('id', itemId)
+    .eq('tenant_id', tenantId)
     .maybeSingle();
 
   await supabase
@@ -482,7 +494,7 @@ export async function transitionItemStatus(
   const { error } = await supabase
     .from('items')
     .update({ status: newStatus, updated_at: new Date().toISOString() })
-    .eq('id', itemId);
+    .eq('id', itemId).eq('tenant_id', tenantId);
 
   return { error: error?.message ?? null };
 }

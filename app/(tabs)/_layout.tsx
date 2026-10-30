@@ -13,11 +13,12 @@ import { getLiveListingCount } from '@/services/listingService';
 import { IS_TV } from '@/hooks/useTVNavigation';
 import { NICHES } from '@/constants/niches';
 import { SPECIALISTS } from '@/constants/specialists';
+import { getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 
 // Derive the home tab icon and label from the active niche
 function useNicheHomeTab() {
-  const { activeNicheId, fixedNicheId } = useApp();
-  const id = (fixedNicheId ?? activeNicheId ?? '').toLowerCase();
+  const { activeNicheId } = useApp();
+  const id = (activeNicheId ?? '').toLowerCase();
   if (id.includes('coin') || id === 'gold' || id === 'silver' || id === 'banknotes' || id === 'islamic_silver') {
     return { icon: 'toll' as const, label: 'Coins' };
   }
@@ -31,22 +32,19 @@ function useNicheHomeTab() {
 // ── Live listings count ───────────────────────────────────────────────────────
 
 function useLiveListingCount() {
-  const { tenant, activeNicheId, fixedNicheId } = useApp();
-  const effectiveNicheId = fixedNicheId ?? activeNicheId;
+  const { tenant, activeNicheId } = useApp();
   const [count, setCount] = useState(0);
 
   // Derive specialist IDs for the active niche so badge only shows niche-relevant listings
   const nicheSpecialistIds = (() => {
-    if (!effectiveNicheId) return [];
-    const niche = NICHES[effectiveNicheId as keyof typeof NICHES];
-    return niche?.specialists ?? [];
+    return getProductionNicheSpecialistIds(activeNicheId);
   })();
 
   const refresh = useCallback(async () => {
     if (!tenant?.id) return;
     const n = await getLiveListingCount(tenant.id, nicheSpecialistIds);
     setCount(n);
-  }, [tenant?.id, effectiveNicheId]);
+  }, [tenant?.id, activeNicheId]);
 
   useEffect(() => {
     refresh();

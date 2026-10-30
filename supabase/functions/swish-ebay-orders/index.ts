@@ -12,8 +12,9 @@
 // POST body:
 //   { tenantId: string, daysBack?: number (default 30), mode?: 'fulfillment_api' | 'trading_api' | 'both' }
 
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
+import registry from '../../../niche-modules.json' with { type: 'json' };
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -357,11 +358,15 @@ async function importFulfillmentOrders(
         }
       }
 
+      // Niche-scoped listing map: do not import unrelated or unmatched orders.
+      if (!matchedItemId || !matchedListingId) { skipped++; continue; }
+      // Multi-line orders cannot be attributed to one canonical item without allocation.
+      if ((order.lineItems ?? []).length !== 1) { errors.push(`Order ${orderId}: multi-line allocation requires review`); skipped++; continue; }
       // Map the current eBay state before deciding whether to insert or refresh.
       const ff = (order.orderFulfillmentStatus ?? order.fulfillmentStatus ?? '').toUpperCase();
       const fulfilmentStatus = ff === 'FULFILLED' ? 'dispatched' : 'awaiting_dispatch';
       const { data: existingRow } = await supabase.from('orders')
-        .select('id, fulfilment_status, tracking_number, carrier, dispatched_at')
+        .select('id, fulfilment_status, tracking_number, carrier, dispatched_at, marketplace_fee')
         .eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').eq('external_order_id', orderId)
         .maybeSingle();
 
@@ -374,7 +379,7 @@ async function importFulfillmentOrders(
             ? existingRow.fulfilment_status : fulfilmentStatus,
           sale_price: salePrice,
           shipping_cost: shippingCost,
-          net_revenue: netRevenue,
+          net_revenue: Math.round((salePrice - Number(existingRow.marketplace_fee ?? marketplaceFee) - shippingCost) * 100) / 100,
           updated_at: new Date().toISOString(),
         };
         if (fulfilmentStatus === 'dispatched' && !existingRow.dispatched_at) {
@@ -461,6 +466,8 @@ async function importTradingOrders(
         if (match) { matchedItemId = match.itemId; matchedListingId = match.listingId; salePrice = match.price || order.salePrice; break; }
       }
 
+      if (!matchedItemId || !matchedListingId) { skipped++; continue; }
+      if (order.ebayItemIds.length !== 1) { errors.push(`Order ${order.orderId}: multi-line allocation requires review`); skipped++; continue; }
       // ESTIMATE: never presented as exact fee
       const marketplaceFee = Math.round(salePrice * 0.128 * 100) / 100;
       const shippingCost = order.shippingCost;
@@ -470,7 +477,7 @@ async function importTradingOrders(
       // Do not infer completion from order age. Only tracking/explicit eBay state may advance it.
       const fulfilmentStatus = order.trackingNumber ? 'dispatched' : 'awaiting_dispatch';
       const { data: existingRow } = await supabase.from('orders')
-        .select('id, fulfilment_status, tracking_number, carrier, dispatched_at')
+        .select('id, fulfilment_status, tracking_number, carrier, dispatched_at, marketplace_fee')
         .eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').eq('external_order_id', order.orderId)
         .maybeSingle();
 
@@ -481,7 +488,7 @@ async function importTradingOrders(
           buyer_address: order.shippingAddress,
           sale_price: salePrice,
           shipping_cost: shippingCost,
-          net_revenue: netRevenue,
+          net_revenue: Math.round((salePrice - Number(existingRow.marketplace_fee ?? marketplaceFee) - shippingCost) * 100) / 100,
           fulfilment_status: existingRow.fulfilment_status === 'delivered' || existingRow.fulfilment_status === 'completed'
             ? existingRow.fulfilment_status
             : order.trackingNumber ? 'dispatched' : existingRow.fulfilment_status,
@@ -555,8 +562,16 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json();
-    const { tenantId, daysBack = 90, mode = 'both' } = body;
-    if (!tenantId) return jsonResponse({ error: 'tenantId is required' }, 400);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return jsonResponse({ error: 'Request body must be an object' }, 400);
+    const { tenantId, daysBack = 90, mode = 'both', nicheId, specialistIds } = body;
+    if (typeof tenantId !== 'string' || !/^[0-9a-f-]{36}$/i.test(tenantId)) return jsonResponse({ error: 'tenantId is required' }, 400);
+    if (!Number.isInteger(daysBack) || daysBack < 1 || daysBack > 365 || !['both','fulfillment_api','trading_api'].includes(mode)) return jsonResponse({ error: 'Invalid order sync parameters' }, 400);
+    const products = registry.products as Record<string, { specialists: string[]; legacySpecialists: string[] }>;
+    if (nicheId !== undefined && !products[nicheId]) return jsonResponse({ error: 'Unknown niche' }, 400);
+    const known = Object.values(products).flatMap(product => [...product.specialists, ...product.legacySpecialists]);
+    if (specialistIds !== undefined && (!Array.isArray(specialistIds) || specialistIds.some((id: unknown) => typeof id !== 'string' || !known.includes(id)))) return jsonResponse({ error: 'Invalid specialist scope' }, 400);
+    const scopeIds: string[] | undefined = nicheId ? [...products[nicheId].specialists, ...products[nicheId].legacySpecialists] : specialistIds;
+    if (nicheId && specialistIds?.some((id: string) => !scopeIds!.includes(id))) return jsonResponse({ error: 'Specialist does not belong to niche' }, 400);
 
     const supabase = adminClient();
 
@@ -572,9 +587,10 @@ Deno.serve(async (req: Request) => {
       const { data: member } = await supabase.from('tenant_memberships').select('id').eq('tenant_id', tenantId).eq('user_id', user.id).maybeSingle();
       if (!member) return jsonResponse({ error: 'Access denied.' }, 403);
     } catch (e: any) {
-      return jsonResponse({ error: `Auth error: ${e.message}` }, 401);
+      return jsonResponse({ error: 'Authentication could not be verified.' }, 401);
     }
 
+    if (scopeIds?.length === 0) return jsonResponse({ success: true, imported: 0, skipped: 0 });
     // Start sync log
     const { data: syncLog } = await supabase.from('ebay_sync_log').insert({
       tenant_id: tenantId, sync_type: 'orders', status: 'running',
@@ -584,16 +600,19 @@ Deno.serve(async (req: Request) => {
 
     let creds: { accessToken: string; clientId: string; credentials: any };
     try { creds = await getCredentials(tenantId); } catch (e: any) {
-      if (logId) await supabase.from('ebay_sync_log').update({ status: 'failed', error_message: e.message, completed_at: new Date().toISOString() }).eq('id', logId).eq('tenant_id', tenantId);
+      if (logId) await supabase.from('ebay_sync_log').update({ status: 'failed', error_message: e.message, completed_at: new Date().toISOString() }).eq('id', logId);
       return jsonResponse({ error: e.message }, 400);
     }
 
     // Load existing listings for matching
-    const { data: listingsData } = await supabase
+    let listingQuery = supabase
       .from('listings')
-      .select('id, item_id, external_listing_id, price, shipping_cost')
+      .select('id, item_id, external_listing_id, price, shipping_cost, items!inner(specialist_id)')
       .eq('tenant_id', tenantId).eq('marketplace_id', 'ebay')
       .not('external_listing_id', 'is', null);
+    if (scopeIds) listingQuery = listingQuery.in('items.specialist_id', scopeIds);
+    const { data: listingsData, error: listingError } = await listingQuery;
+    if (listingError) return jsonResponse({ error: 'Listing scope could not be verified' }, 503);
 
     const listingByEbayId = new Map<string, { listingId: string; itemId: string; price: number; shippingCost: number }>();
     for (const l of listingsData ?? []) {
@@ -614,7 +633,7 @@ Deno.serve(async (req: Request) => {
     // ── Try Fulfillment REST API first ──────────────────────────────────────
     if (mode === 'fulfillment_api' || mode === 'both') {
       const { orders: ffOrders, apiError } = await fetchFulfillmentOrders(creds.accessToken, daysBack);
-      if (!apiError && ffOrders.length > 0) {
+      if (!apiError) {
         ffApiUsed = true;
         const result = await importFulfillmentOrders(supabase, tenantId, ffOrders, listingByEbayId, existingOrderIds, logId);
         totalImported += result.imported;
@@ -650,11 +669,13 @@ Deno.serve(async (req: Request) => {
         errors: allErrors.slice(0, 20),
         completed_at: new Date().toISOString(),
         metadata: { daysBack, mode, ffApiUsed, tradingApiUsed },
-      }).eq('id', logId).eq('tenant_id', tenantId);
+      }).eq('id', logId);
     }
 
     return jsonResponse({
-      success: true, imported: totalImported, skipped: totalSkipped,
+      success: ffApiUsed || tradingApiUsed, imported: totalImported, skipped: totalSkipped,
+      partial: allErrors.length > 0,
+      error: !ffApiUsed && !tradingApiUsed ? 'Neither eBay orders API completed successfully' : undefined,
       total: totalImported + totalSkipped,
       matched: totalImported, // All imports are potentially matched
       errors: allErrors.slice(0, 10),
@@ -663,6 +684,6 @@ Deno.serve(async (req: Request) => {
     });
   } catch (err: any) {
     console.error('swish-ebay-orders unhandled error:', err.message);
-    return jsonResponse({ error: err.message ?? 'Internal error' }, 500);
+    return jsonResponse({ error: 'Unable to synchronize eBay orders. Please retry.' }, 500);
   }
 });

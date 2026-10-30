@@ -3,7 +3,7 @@
 // It never creates an offer and never calls publishOffer.
 // All credentials remain server-side and tenant membership is required.
 
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { decryptCredentials, encryptCredentials } from '../_shared/credentialCrypto.ts';
 
 const corsHeaders = {

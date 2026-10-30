@@ -377,6 +377,8 @@ Deno.serve(async (req) => {
       );
     }
 
+    const isCoin = ['coins','coins_uk','coins_world','coins_currency','islamic_silver','banknotes','gold','silver'].includes(item.specialist_id);
+    const isClothing = ['clothing','clothing_specialist','trainers_sneakers'].includes(item.specialist_id);
     // ── Detect specialist ────────────────────────────────────────────────────
     const specialistId: string = item.specialist_id ?? 'curiosities_collectibles';
     const isMXSpecialist = specialistId === 'motocross';
@@ -387,7 +389,7 @@ Deno.serve(async (req) => {
     const priceGateBlocked = !valuationConfidenceAllowsPrice(item.valuation_confidence ?? '');
     const safetyFlags = buildSafetyFlags(item, provisional, priceGateBlocked);
 
-    const objectType = item.attributes?.object_type ?? (isMXSpecialist ? 'motorcycle' : 'coin');
+    const objectType = item.attributes?.object_type ?? (isMXSpecialist ? 'motorcycle' : isCoin ? 'coin' : isClothing ? 'garment' : 'item');
     const identificationState = item.attributes?.identification_state ?? 'candidate';
     const hasHole = item.attributes?.has_hole === true;
     const hasAlteration = item.attributes?.has_alteration === true;
@@ -443,7 +445,7 @@ Deno.serve(async (req) => {
         if (v === null || v === undefined || Array.isArray(v)) continue;
         const strVal = String(v).trim();
         if (!strVal || strVal === 'false' || strVal === '0' || strVal === 'Unknown') continue;
-        const displayName = ATTR_CANONICAL[k] ?? ATTR_CANONICAL[kl] ??
+        const displayName = (isCoin ? ATTR_CANONICAL[k] ?? ATTR_CANONICAL[kl] : undefined) ??
           k.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
         if (seenAttrNames.has(displayName)) continue;
         seenAttrNames.add(displayName);
@@ -525,7 +527,7 @@ ITEM DATA:
 - Specialist: ${specialistId}${isMXSpecialist ? ' (MOTOCROSS — follow MX title formula below)' : ''}
 - Identification state: ${identificationState}
 - Identification confidence: ${identificationConf}%
-${isMXSpecialist ? '- Numista verification: N/A — motorcycle specialist' : `- Numista verification status: ${numistaStatus}`}
+${isCoin ? `- Numista verification status: ${numistaStatus}` : '- Numista verification: N/A for this specialist'}
 - Condition: ${item.condition ?? 'Not assessed'}${item.condition_grade ? ` · Grade: ${item.condition_grade}` : ''}
 - Condition notes: ${item.condition_notes ?? mxBrief?.conditionNotes ?? 'None'}
 - Valuation: £${item.valuation_low}–£${item.valuation_high} (mid: £${valuationMid}) · confidence: ${item.valuation_confidence ?? 'not set'}
@@ -608,7 +610,8 @@ Return ONLY this exact JSON:
     });
 
     if (!aiResponse.ok) {
-      console.error('[swish-list-generate v2] AI provider request failed:', aiResponse.status);
+      const errText = await aiResponse.text();
+      console.error('[swish-list-generate] AI provider request failed', aiResponse.status);
       return new Response(
         JSON.stringify({ error: 'Listing generation is temporarily unavailable. Please retry.' }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -627,13 +630,18 @@ Return ONLY this exact JSON:
         .trim();
       listing = JSON.parse(cleaned);
     } catch {
-      console.error('[swish-list-generate v2] AI provider returned an invalid listing response.');
+      console.error('[swish-list-generate] Invalid structured AI response');
       return new Response(
         JSON.stringify({ error: 'AI returned invalid JSON. Please retry.' }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    if (!listing || typeof listing !== 'object' || typeof listing.title !== 'string' ||
+        typeof listing.description !== 'string' || !listing.title.trim() ||
+        !['recommended_price','floor_price','ceiling_price'].every(key => typeof (listing as any)[key] === 'number' && Number.isFinite((listing as any)[key]))) {
+      return new Response(JSON.stringify({ error: 'The listing service returned an invalid structured result. Please retry.' }), { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     // ── SAFETY GATE: price lock ──────────────────────────────────────────────
     if (priceGateBlocked) {
       listing.recommended_price = 0;
@@ -739,7 +747,7 @@ Return ONLY this exact JSON:
     );
 
   } catch (err) {
-    console.error('[swish-list-generate v2] Unexpected request failure.');
+    console.error('[swish-list-generate v2] Unexpected error:', err);
     return new Response(
       JSON.stringify({ error: 'Unable to generate the listing. Please retry.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

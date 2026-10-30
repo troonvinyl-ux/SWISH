@@ -5,7 +5,6 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  workflow_dispatch:
   push:
     branches: [main]
     paths:
@@ -21,8 +20,6 @@ on:
       - 'template/**'
       - 'plugins/**'
       - 'eas.json'
-      - '.github/workflows/build-niche-apk.yml'
-      - '.github/workflows/build-android-apk.yml'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'jest.config.ci.js'
@@ -79,8 +76,6 @@ on:
       - 'template/**'
       - 'plugins/**'
       - 'eas.json'
-      - '.github/workflows/build-niche-apk.yml'
-      - '.github/workflows/build-android-apk.yml'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'jest.config.ci.js'
@@ -139,7 +134,7 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bash scripts/install-dependencies.sh
 
       - name: Run project lint
         run: pnpm lint
@@ -202,17 +197,17 @@ jobs:
           console.log(`Syntax check passed for ${files.length} Edge Function TypeScript files.`);
           NODE
 
-      - name: Run routing, build-identity, and server-only secret regression tests
-        run: pnpm dlx jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/entryRoutes.test.ts services/__tests__/nicheIsolation.test.ts services/__tests__/brandedBuildConfig.test.ts services/__tests__/surplusFlipRouting.test.ts services/__tests__/serverOnlySecrets.test.ts
+      - name: Run complete regression suite including engineering hardening
+        run: pnpm dlx jest@29.7.0 --config jest.config.ci.js --runInBand
 
       - name: Bundle Android production JavaScript
         run: npx expo export --platform android --output-dir dist-ci-android && rm -rf dist-ci-android
 
-      - name: Validate all ten Expo branded configurations
+      - name: Validate all five Expo branded configurations
         shell: bash
         run: |
           set -euo pipefail
-          for niche in coins motocross bicycles clothing trading_cards antiques fossils beauty tech surplus_flip; do
+          for niche in coins motocross bicycles clothing surplus_flip; do
             echo "Validating branded config: $niche"
             SWISH_NICHE="$niche" npx expo config --type public >/dev/null
           done

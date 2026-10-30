@@ -1,154 +1,31 @@
-name: Build SWISH Android APK (Fast)
-
+name: Build isolated SWISH niche APK
 on:
   push:
     branches: [main]
     paths:
-      - 'app/(tabs)/inventory.tsx'
-      - 'app/(tabs)/index.tsx'
-      - 'app/(tabs)/_layout.tsx'
-      - 'app/index.tsx'
-      - 'app/coin-flipper.tsx'
-      - 'services/listingService.ts'
-      - '.github/workflows/build-niche-apk.yml'
-      - 'scripts/prepare-niche-routes.js'
+      - 'app/**'
+      - 'services/**'
+      - 'hooks/**'
+      - 'contexts/**'
+      - 'components/**'
+      - 'constants/**'
+      - 'niche-modules.json'
       - 'app.config.js'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
+      - 'scripts/**'
+      - '.github/workflows/_niche-android.yml'
+      - '.github/workflows/build-niche-apk.yml'
   workflow_dispatch:
     inputs:
       niche:
-        description: Which branded SWISH app to build
+        description: Canonical branded application
         required: true
         type: choice
-        default: surplus_flip
-        options:
-          - surplus_flip
-          - coins
-          - motocross
-          - bicycles
-          - clothing
-          - trading_cards
-          - antiques
-          - fossils
-          - beauty
-          - tech
-
+        default: clothing
+        options: [coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech]
 permissions:
   contents: read
-
 jobs:
   build-apk:
-    name: Build ${{ inputs.niche || 'clothing' }} APK
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-
-      # Install pnpm before setup-node's pnpm cache detection runs.
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.15.9
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Restore Gradle cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties', 'pnpm-lock.yaml', 'app.json', 'app.config.js') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --prefer-offline
-
-      # This repository does not commit the generated android/ project.
-      - name: Prepare isolated niche route tree
-        env:
-          SWISH_NICHE: ${{ inputs.niche || 'clothing' }}
-        run: node scripts/prepare-niche-routes.js
-
-      # Generate it on every run so app.config.js applies the selected niche
-      # and native package identifier consistently.
-      - name: Generate Android project for selected niche
-        env:
-          SWISH_NICHE: ${{ inputs.niche || 'clothing' }}
-          EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
-        run: pnpm exec expo prebuild --platform android --clean
-
-      # Fail before compiling if Expo did not embed the requested product identity.
-      - name: Verify generated niche configuration
-        env:
-          NICHE: ${{ inputs.niche || 'clothing' }}
-          SWISH_NICHE: ${{ inputs.niche || 'clothing' }}
-        run: |
-          set -euo pipefail
-          pnpm exec expo config --type public --json > /tmp/swish-expo-config.json
-          node <<'NODE'
-          const fs = require('fs');
-          const cfg = JSON.parse(fs.readFileSync('/tmp/swish-expo-config.json', 'utf8'));
-          const expected = process.env.NICHE;
-          const actual = cfg.extra && cfg.extra.swishNicheId;
-          const packages = {
-            coins: 'com.swish.coinflipper', motocross: 'com.swish.flippermx',
-            bicycles: 'com.swish.bikeflipper', clothing: 'com.swish.threadsflip',
-            surplus_flip: 'com.swish.surplusflip', trading_cards: 'com.swish.cardflipper',
-            antiques: 'com.swish.antiqueflipper', fossils: 'com.swish.fossilflipper',
-            beauty: 'com.swish.beautyflipper', tech: 'com.swish.techflipper'
-          };
-          if (actual !== expected) throw new Error(`Niche mismatch: requested ${expected}, Expo embedded ${actual}`);
-          if (cfg.android?.package !== packages[expected]) throw new Error(`Android package mismatch for ${expected}: ${cfg.android?.package}`);
-          console.log(`Verified niche ${actual} and Android package ${cfg.android.package}`);
-          NODE
-
-      - name: Validate canonical niche module registry
-        env:
-          SWISH_NICHE: ${{ inputs.niche || 'clothing' }}
-          NICHE: ${{ inputs.niche || 'clothing' }}
-        run: node scripts/verify-niche-module.js
-
-      - name: Build release APK
-        working-directory: android
-        run: |
-          ./gradlew assembleRelease \
-            --console=plain \
-            -Dorg.gradle.workers.max=2 \
-            -Dkotlin.compiler.execution.strategy=in-process
-
-      - name: Verify and name APK
-        env:
-          NICHE: ${{ inputs.niche || 'clothing' }}
-        run: |
-          set -euo pipefail
-          APK="android/app/build/outputs/apk/release/app-release.apk"
-          test -s "$APK"
-          mkdir -p dist
-          cp "$APK" "dist/${NICHE}.apk"
-          sha256sum "dist/${NICHE}.apk" > "dist/${NICHE}.sha256"
-          ls -lh "dist/${NICHE}.apk" "dist/${NICHE}.sha256"
-
-      - name: Upload installable APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: swish-${{ inputs.niche || 'clothing' }}-apk
-          path: |
-            dist/${{ inputs.niche || 'clothing' }}.apk
-            dist/${{ inputs.niche || 'clothing' }}.sha256
-          if-no-files-found: error
-          retention-days: 14
+    uses: ./.github/workflows/_niche-android.yml
+    with:
+      niche: ${{ inputs.niche || 'clothing' }}

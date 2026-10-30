@@ -17,12 +17,11 @@
 //
 // RESPONSE: { migrated: number; alreadyEncrypted: number; failed: number; errors: string[] }
 
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { corsHeaders } from '../_shared/cors.ts';
-import { isEncrypted, migrateToEncrypted } from '../_shared/credentialCrypto.ts';
+import { isEncrypted, migrateToEncrypted, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
-const SUPABASE_URL              = Deno.env.get('SUPABASE_URL') ?? '';
-const SUPABASE_ANON_KEY         = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+const SUPABASE_URL             = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -57,15 +56,9 @@ Deno.serve(async (req: Request) => {
   }
   const token = authHeader.replace('Bearer ', '').trim();
 
-  // Use the public anon key for caller-scoped authentication and membership
-  // reads so tenant_memberships queries run under the caller's JWT/RLS policies.
-  // Never use the service-role key for this authorization decision.
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
-    return error('Credential migration is not configured on the server.', 500);
-  }
-  const authedClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  // Create an authed client (respects RLS for membership check)
+  const authedClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     global: { headers: { Authorization: `Bearer ${token}` } },
-    auth: { persistSession: false, autoRefreshToken: false },
   });
 
   // Resolve the calling user
@@ -92,8 +85,8 @@ Deno.serve(async (req: Request) => {
   }
 
   // ── Verify caller is owner/admin of the specified tenant ───────────────────
-  // Membership is checked with the anon-key client carrying the caller JWT,
-  // so RLS applies. The service-role client is created only after this check.
+  // We use the service-role client for data access, but validate membership
+  // using the caller's JWT so the caller cannot migrate another tenant.
   {
     const { data: membership, error: mErr } = await authedClient
       .from('tenant_memberships')
@@ -165,6 +158,10 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
+      // Verify the authenticated-encryption round trip before replacing legacy material.
+      const verified = await decryptCredentials(encrypted);
+      if (JSON.stringify(verified) !== JSON.stringify(JSON.parse(stored))) throw new Error('Encryption verification failed');
+
       // Persist the encrypted value
       const { data: updatedRow, error: updateErr } = await adminClient
         .from('marketplace_connectors')
@@ -174,6 +171,7 @@ Deno.serve(async (req: Request) => {
         })
         .eq('id', row.id)
         .eq('tenant_id', row.tenant_id) // belt-and-braces tenant guard
+        .eq('credential_ref', stored) // do not clobber a concurrent OAuth refresh/reconnect
         .select('id')
         .maybeSingle();
 

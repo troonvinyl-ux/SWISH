@@ -1,155 +1,74 @@
-// useInventory — real OnSpace Cloud data
-// Default behaviour: ACTIVE INVENTORY ONLY (Draft + Live)
-// Sold / Archived items are excluded from the default view.
-// Pass { lifecycleGroup: 'history' } to fetch historical records.
-//
-// For Live items, also fetches the associated eBay listing (price, watchers,
-// views) and merges it into the item rows so inventory cards can display
-// eBay-enriched data without a separate query per card.
-
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { AppState } from 'react-native';
 import { useApp } from './useApp';
-import { getSupabaseClient } from '@/template';
-import {
-  Item, ItemFilter, listItems, getItemStatusCounts,
-  ACTIVE_INVENTORY_STATUSES, ITEM_LIFECYCLE, HISTORY_STATUSES,
-} from '@/services/itemService';
+import { listItems, getItemStatusCounts, ITEM_LIFECYCLE, type ItemFilter } from '@/services/itemService';
+import { getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 
 export interface InventoryStats {
-  // Active counts
-  activeTotal: number;   // Draft + Live
-  draftCount: number;
-  liveCount: number;
-  // History counts
-  soldCount: number;
-  archivedCount: number;
-  // Total across all statuses
-  grandTotal: number;
+  activeTotal: number; draftCount: number; liveCount: number;
+  soldCount: number; archivedCount: number; grandTotal: number;
 }
+interface Snapshot { scope: string; items: any[]; counts: Record<string, number>; error: string | null; loading: boolean }
 
-/** Fetch eBay listing enrichment for a set of item IDs */
-async function fetchListingEnrichment(tenantId: string, itemIds: string[]): Promise<Map<string, { price: number; watchers: number; views: number; externalId: string }>> {
-  if (!itemIds.length) return new Map();
-  const supabase = getSupabaseClient();
-  const { data } = await supabase
-    .from('listings')
-    .select('item_id, price, watchers, views, external_listing_id')
-    .eq('tenant_id', tenantId)
-    .eq('marketplace_id', 'ebay')
-    .in('status', ['active'])
-    .in('item_id', itemIds);
-
-  const map = new Map<string, { price: number; watchers: number; views: number; externalId: string }>();
-  for (const row of data ?? []) {
-    if (row.item_id && !map.has(row.item_id)) {
-      map.set(row.item_id, {
-        price: Number(row.price ?? 0),
-        watchers: Number(row.watchers ?? 0),
-        views: Number(row.views ?? 0),
-        externalId: row.external_listing_id ?? '',
-      });
-    }
-  }
-  return map;
-}
-
+/** Polling is the supported OnSpace Cloud mechanism; no Realtime dependency. */
 export function useInventory(filter: ItemFilter = {}) {
-  const { tenant } = useApp();
-  const appCtx = useApp();
-  const inventoryReloadSignal = appCtx.inventoryReloadSignal;
-  const [items, setItems] = useState<any[]>([]); // raw rows with optional listing_* fields
-  const [loading, setLoading] = useState(false);
-  const [syncError, setSyncError] = useState<string | null>(null);
-  const [statusGroups, setStatusGroups] = useState<Record<string, number>>({});
-
+  const { tenant, activeNicheId, fixedNicheId, inventoryReloadSignal } = useApp();
+  const niche = fixedNicheId ?? activeNicheId;
   const filterKey = JSON.stringify(filter);
+  const scope = `${tenant?.id ?? ''}:${niche}:${filterKey}`;
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+  const requestId = useRef(0);
+  const inFlight = useRef<string | null>(null);
+  const [snapshot, setSnapshot] = useState<Snapshot>({ scope: '', items: [], counts: {}, error: null, loading: false });
 
   const load = useCallback(async () => {
-    if (!tenant) return;
-    setLoading(true);
-    setSyncError(null);
+    if (!tenant?.id || inFlight.current === scope) return;
+    const version = ++requestId.current;
+    inFlight.current = scope;
+    const allowList = getProductionNicheSpecialistIds(niche);
+    const requested = filter.specialistIds ?? (filter.specialistId ? [filter.specialistId] : allowList);
+    const effectiveFilter: ItemFilter = { ...filter, specialistId: undefined,
+      specialistIds: requested.filter(id => allowList.includes(id)) };
+    if (!effectiveFilter.lifecycleGroup && !effectiveFilter.statuses && !effectiveFilter.status && !effectiveFilter.reviewRequired) effectiveFilter.lifecycleGroup = 'active';
+    setSnapshot(prev => prev.scope === scope ? { ...prev, loading: true } : { scope, items: [], counts: {}, error: null, loading: true });
     try {
-      // Apply active-inventory-first default
-      const effectiveFilter: ItemFilter = { ...filter };
-      if (!effectiveFilter.lifecycleGroup && !effectiveFilter.statuses && !effectiveFilter.status && !effectiveFilter.reviewRequired) {
-        effectiveFilter.lifecycleGroup = 'active';
-      }
-
-      const [itemsResult, counts] = await Promise.all([
-        listItems(tenant.id, effectiveFilter),
-        // Counts remain niche-scoped; never mix other subscribers' niches.
-        getItemStatusCounts(tenant.id, effectiveFilter.specialistIds ?? (filter.specialistIds ?? undefined)),
+      const [result, counts] = await Promise.all([
+        listItems(tenant.id, effectiveFilter), getItemStatusCounts(tenant.id, effectiveFilter.specialistIds),
       ]);
-
-      if (itemsResult.error) throw new Error(itemsResult.error);
-      setStatusGroups(counts);
-
-      // Enrich live items from the canonical listings table.
-      const liveItems = itemsResult.items.filter(i => ITEM_LIFECYCLE.LIVE_STATUSES.includes(i.status));
-      const liveIds = liveItems.map(i => i.id);
-      const enrichment = liveIds.length > 0 ? await fetchListingEnrichment(tenant.id, liveIds) : new Map();
-
-      setItems(itemsResult.items.map(item => {
-        const listing = enrichment.get(item.id);
-        if (!listing) return item;
-        return {
-          ...item,
-          listing_price: listing.price,
-          listing_watchers: listing.watchers,
-          listing_views: listing.views,
-          listing_ebay_id: listing.externalId,
-        };
-      }));
+      if (scopeRef.current !== scope || requestId.current !== version) return;
+      if (result.error) throw new Error(result.error);
+      setSnapshot({ scope, items: result.items, counts, error: null, loading: false });
     } catch (error: any) {
-      const message = error?.message ?? 'Inventory sync failed';
-      setSyncError(message);
-      console.warn('[SWISH] Inventory sync failed:', message);
+      if (scopeRef.current === scope && requestId.current === version) {
+        setSnapshot(prev => ({ ...prev, scope, loading: false, error: error?.message ?? 'Inventory refresh failed' }));
+      }
     } finally {
-      setLoading(false);
+      if (inFlight.current === scope) inFlight.current = null;
     }
-  }, [tenant?.id, filterKey]);
-
-  // Cross-screen/device sync: refresh when the app returns to foreground or
-  // the canonical items/listings tables change. Realtime is a fast path; focus
-  // refresh keeps the inventory correct when realtime is unavailable.
-  useEffect(() => {
-    if (!tenant?.id) return;
-    const supabase = getSupabaseClient();
-    const channel = supabase.channel(`swish-inventory-sync-${tenant.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'items', filter: `tenant_id=eq.${tenant.id}` }, () => { void load(); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'listings', filter: `tenant_id=eq.${tenant.id}` }, () => { void load(); })
-      .subscribe();
-    const appState = AppState.addEventListener('change', state => {
-      if (state === 'active') void load();
-    });
-    return () => {
-      appState.remove();
-      void supabase.removeChannel(channel);
-    };
-  }, [tenant?.id, load]);
-
-  // Also reload when AppContext signals a global inventory refresh (e.g. after Settings sync)
-  useEffect(() => {
-    if (inventoryReloadSignal > 0) void load();
-  }, [inventoryReloadSignal, load]);
+  }, [tenant?.id, niche, filterKey, scope]);
 
   useEffect(() => {
-    load();
+    void load();
+    const timer = setInterval(() => { void load(); }, 30_000);
+    const foreground = AppState.addEventListener('change', state => { if (state === 'active') void load(); });
+    return () => { clearInterval(timer); foreground.remove(); requestId.current++; };
   }, [load]);
+  useEffect(() => { if (inventoryReloadSignal > 0) void load(); }, [inventoryReloadSignal, load]);
 
-  const totalValue = items.reduce((s: number, i: any) => s + (i.valuationMid > 0 ? i.valuationMid : i.expectedSellingPrice), 0);
-  const reviewCount = statusGroups['review_required'] ?? 0;
-
-  const stats: InventoryStats = {
-    draftCount: ITEM_LIFECYCLE.DRAFT_STATUSES.reduce((s, st) => s + (statusGroups[st] ?? 0), 0),
-    liveCount: ITEM_LIFECYCLE.LIVE_STATUSES.reduce((s, st) => s + (statusGroups[st] ?? 0), 0),
-    soldCount: ITEM_LIFECYCLE.SOLD_STATUSES.reduce((s, st) => s + (statusGroups[st] ?? 0), 0),
-    archivedCount: ITEM_LIFECYCLE.ARCHIVED_STATUSES.reduce((s, st) => s + (statusGroups[st] ?? 0), 0),
-    activeTotal: 0,
-    grandTotal: Object.values(statusGroups).reduce((s, v) => s + v, 0),
-  };
-  stats.activeTotal = stats.draftCount + stats.liveCount;
-
-  return { items, loading, syncError, totalValue, reviewCount, statusGroups, stats, reload: load };
+  // Never render a previous tenant/niche snapshot while a new request is pending.
+  const items = snapshot.scope === scope ? snapshot.items : [];
+  const statusGroups = snapshot.scope === scope ? snapshot.counts : {};
+  const stats = useMemo((): InventoryStats => {
+    const sum = (statuses: readonly string[]) => statuses.reduce((total, status) => total + (statusGroups[status] ?? 0), 0);
+    const draftCount = sum(ITEM_LIFECYCLE.DRAFT_STATUSES);
+    const liveCount = sum(ITEM_LIFECYCLE.LIVE_STATUSES);
+    return { draftCount, liveCount, activeTotal: draftCount + liveCount,
+      soldCount: sum(ITEM_LIFECYCLE.SOLD_STATUSES), archivedCount: sum(ITEM_LIFECYCLE.ARCHIVED_STATUSES),
+      grandTotal: Object.values(statusGroups).reduce((a, b) => a + b, 0) };
+  }, [statusGroups]);
+  const totalValue = useMemo(() => items.reduce((sum, item) => sum + (item.valuationMid > 0 ? item.valuationMid : item.expectedSellingPrice ?? 0), 0), [items]);
+  return { items, stats, statusGroups, totalValue, reviewCount: statusGroups.review_required ?? 0,
+    loading: Boolean(tenant?.id) && (snapshot.scope !== scope || snapshot.loading),
+    syncError: snapshot.scope === scope ? snapshot.error : null, reload: load };
 }

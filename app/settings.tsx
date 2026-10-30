@@ -318,7 +318,7 @@ function EbayPoliciesCard({ tenantId }: { tenantId: string }) {
           <View style={{ flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: Spacing.sm, backgroundColor: Colors.dangerDim, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.danger + '40' }}>
             <MaterialIcons name="error" size={14} color={Colors.danger} style={{ marginTop: 1 }} />
             <Text style={{ flex: 1, fontSize: Typography.size.xs, color: Colors.danger, lineHeight: 16 }}>
-              {!selectedFulfillment ? 'Shipping policy not selected — eBay listings will fail without it.' : 'Return policy not selected — eBay listings will fail without it.'} Tap &quot;Select&quot; then &quot;Save Policy Selections&quot;.
+              {!selectedFulfillment ? 'Shipping policy not selected — eBay listings will fail without it.' : 'Return policy not selected — eBay listings will fail without it.'} Tap "Select" then "Save Policy Selections".
             </Text>
           </View>
         </View>
@@ -3072,7 +3072,7 @@ const nichStyles = StyleSheet.create({
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, businessConfig, reloadBusinessConfig, triggerInventoryReload, activeNiche, activeNicheId, setActiveNiche, fixedNicheId, isMasterAdmin } = useApp();
+  const { tenant, businessConfig, reloadBusinessConfig, triggerInventoryReload, activeNiche, activeNicheId, setActiveNiche } = useApp();
   const { logout, user } = useAuth();
   const { showAlert } = useAlert();
 
@@ -3195,20 +3195,16 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ── Niche / Vertical ──────────────────────────────────────────── */}
-        {!fixedNicheId ? (
-          <>
-            <SectionHead title="Trading Vertical" />
-            <CardGroup>
-              <SettingRow
-                icon="storefront"
-                label="Switch Niche"
-                desc={`Currently: ${activeNiche?.name ?? 'SWISH'}`}
-                onPress={() => router.push('/niche-select' as any)}
-                color={activeNiche?.color ?? Colors.primary}
-              />
-            </CardGroup>
-          </>
-        ) : null}
+        <SectionHead title="Trading Vertical" />
+        <CardGroup>
+          <SettingRow
+            icon="storefront"
+            label="Switch Niche"
+            desc={`Currently: ${activeNiche?.name ?? 'SWISH'}`}
+            onPress={() => router.push('/niche-select' as any)}
+            color={activeNiche?.color ?? Colors.primary}
+          />
+        </CardGroup>
 
         {/* ── Niche Switcher — visible to lifetime / master admin only ── */}
         {(() => {

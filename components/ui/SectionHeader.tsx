@@ -30,7 +30,6 @@ export const SectionHeader = memo(({ title, subtitle, action, onAction, badge }:
     ) : null}
   </View>
 ));
-SectionHeader.displayName = 'SectionHeader';
 
 const styles = StyleSheet.create({
   row: {

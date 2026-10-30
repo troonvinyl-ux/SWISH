@@ -222,7 +222,6 @@ export const ItemCard = memo(({ item, onPress, onReprice, compact = false, showR
     </Pressable>
   );
 });
-ItemCard.displayName = 'ItemCard';
 
 const styles = StyleSheet.create({
   card: {

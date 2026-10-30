@@ -1029,7 +1029,7 @@ interface PayloadToValidate {
 function validatePayload(p: PayloadToValidate): string | null {
   if (!p.title || p.title.trim().length < 3) return 'eBay listing requires a title of at least 3 characters.';
   if (p.title.trim().length > 80) return 'eBay listing title cannot exceed 80 characters.';
-  if (p.price <= 0) return 'eBay listing requires a price greater than £0.00.';
+  if (!Number.isFinite(p.price) || p.price <= 0) return 'eBay listing requires a price greater than £0.00.';
   if (!p.categoryId || p.categoryId.trim() === '' || p.categoryId === '0') {
     return 'SWISH could not determine a valid eBay listing category. Please select a final eBay category from the category editor on the item detail screen.';
   }
@@ -1161,7 +1161,7 @@ function buildBuyItNowXML(params: {
   <RequesterCredentials><eBayAuthToken>${params.token}</eBayAuthToken></RequesterCredentials>
   <Item>
     <Title>${xmlEscape(params.title.slice(0, 80))}</Title>
-    <Description><![CDATA[${params.description}]]></Description>
+    <Description><![CDATA[${params.description.replace(/\]\]>/g, ']]]]><![CDATA[>')}]]></Description>
     <PrimaryCategory><CategoryID>${xmlEscape(params.categoryId)}</CategoryID></PrimaryCategory>
     <StartPrice currencyID="GBP">${params.price.toFixed(2)}</StartPrice>
     <Currency>GBP</Currency>
@@ -1199,7 +1199,7 @@ function buildAuctionXML(params: {
   <RequesterCredentials><eBayAuthToken>${params.token}</eBayAuthToken></RequesterCredentials>
   <Item>
     <Title>${xmlEscape(params.title.slice(0, 80))}</Title>
-    <Description><![CDATA[${params.description}]]></Description>
+    <Description><![CDATA[${params.description.replace(/\]\]>/g, ']]]]><![CDATA[>')}]]></Description>
     <PrimaryCategory><CategoryID>${xmlEscape(params.categoryId)}</CategoryID></PrimaryCategory>
     <StartPrice currencyID="GBP">${params.startPrice.toFixed(2)}</StartPrice>
     ${reservePriceXml}
@@ -1239,7 +1239,7 @@ function buildReviseBuyItNowXML(params: {
     <ItemID>${xmlEscape(params.externalItemId)}</ItemID>
     ${skuXml}
     <Title>${xmlEscape(params.title.slice(0, 80))}</Title>
-    <Description><![CDATA[${params.description}]]></Description>
+    <Description><![CDATA[${params.description.replace(/\]\]>/g, ']]]]><![CDATA[>')}]]></Description>
     ${categoryXml}
     <StartPrice currencyID="GBP">${params.price.toFixed(2)}</StartPrice>
     <Quantity>${Math.max(1, params.quantity)}</Quantity>
@@ -1273,7 +1273,7 @@ function buildReviseAuctionXML(params: {
     <ItemID>${xmlEscape(params.externalItemId)}</ItemID>
     ${skuXml}
     <Title>${xmlEscape(params.title.slice(0, 80))}</Title>
-    <Description><![CDATA[${params.description}]]></Description>
+    <Description><![CDATA[${params.description.replace(/\]\]>/g, ']]]]><![CDATA[>')}]]></Description>
     ${categoryXml}
     ${reservePriceXml}
     <ConditionID>${xmlEscape(params.conditionId)}</ConditionID>
@@ -1288,10 +1288,12 @@ function buildReviseAuctionXML(params: {
 
 async function handleRequest(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
 
   let body: any = {};
   try { body = await req.json(); } catch { return jsonResponse({ error: 'Invalid JSON body' }, 400); }
 
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return jsonResponse({ error: 'Request body must be an object' }, 400);
   const supabase = adminClient();
   const authHeader = req.headers.get('Authorization');
   const internalSecret = req.headers.get('x-swish-internal-secret');
@@ -1832,7 +1834,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
     const now = new Date().toISOString();
     const { error: saveError } = await supabase.from('items')
-      .update({ sku, inventory_id: sku, updated_at: now })
+      .update({ sku, updated_at: now })
       .eq('id', ownedItem.id)
       .eq('tenant_id', tenantId);
     if (saveError) {
@@ -1922,7 +1924,13 @@ async function handleRequest(req: Request): Promise<Response> {
       condition = '', conditionDescription = '', listingType = 'FixedPriceItem',
       quantity = 1, itemSpecifics = [], mediaUrls: rawMediaUrls = [], categoryId: bodyCategoryId = '', sku = '',
     } = body;
-    if (!externalListingId) return jsonResponse({ error: 'externalListingId required for revise' }, 400);
+    if (!listingId || !externalListingId) return jsonResponse({ error: 'Saved listingId and externalListingId required for revise' }, 400);
+    const { data: ownedListing, error: ownershipError } = await supabase.from('listings')
+      .select('id, item_id, external_listing_id, items!inner(tenant_id)')
+      .eq('id', listingId).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle();
+    if (ownershipError || !ownedListing || String(ownedListing.external_listing_id) !== String(externalListingId) ||
+        (ownedListing as any).items?.tenant_id !== tenantId) return jsonResponse({ error: 'Listing identity could not be authorized' }, 403);
+    if (typeof title !== 'string' || !title.trim() || !Number.isFinite(Number(price)) || Number(price) <= 0) return jsonResponse({ error: 'Valid title and price required' }, 400);
 
     // Never let an omitted/empty client description silently erase the live listing.
     // Use the saved listing description as the fallback; a non-empty editor value wins.
@@ -2046,7 +2054,7 @@ async function handleRequest(req: Request): Promise<Response> {
           .select('item_id').eq('id', listingId).eq('tenant_id', tenantId).maybeSingle();
         if (linkedListing?.item_id) {
           const { error: itemSkuError } = await supabase.from('items')
-            .update({ sku: cleanSku, inventory_id: cleanSku, updated_at: new Date().toISOString() })
+            .update({ sku: cleanSku, updated_at: new Date().toISOString() })
             .eq('id', linkedListing.item_id).eq('tenant_id', tenantId);
           if (itemSkuError) console.error('[SWISH revise] SKU local persistence failed:', itemSkuError.message);
         }
@@ -2069,7 +2077,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
   const { data: listingRow, error: listingErr } = await supabase
     .from('listings')
-    .select(`id, title, description, price, floor_price, shipping_cost, status, category_id,
+    .select(`id, title, description, price, floor_price, shipping_cost, status, category_id, external_listing_id, publish_claim_id,
       items(id, canonical_title, condition, condition_grade, condition_notes, status, quantity,
             media, attributes, weight_grams, diameter_mm, specialist_id)`)
     .eq('id', listingId)
@@ -2091,7 +2099,7 @@ async function handleRequest(req: Request): Promise<Response> {
   const attrCategoryId = item?.attributes?.ebay_category_id || item?.attributes?.['_ebay_category_id'] || '';
   const categoryId = bodyCategory || listingRow.category_id || attrCategoryId || '';
 
-  if (listingRow.status === 'active') {
+  if (listingRow.status === 'active' || listingRow.external_listing_id) {
     return jsonResponse({ error: 'This listing is already active on eBay. Use the revise route to update it.' }, 400);
   }
 
@@ -2159,6 +2167,10 @@ async function handleRequest(req: Request): Promise<Response> {
     itemSpecifics.push({ name: displayName, value: strVal });
   }
 
+  // Explicit seller values must precede inferred defaults; first name wins.
+  for (const saved of (Array.isArray(attrs.ebay_item_specifics) ? attrs.ebay_item_specifics : [])) {
+    addSpec(String(saved?.name ?? '').trim(), String(saved?.value ?? '').trim());
+  }
   // MX specifics — map internal attributes to eBay-appropriate field names
   if (specialistId === 'motocross') {
     addSpec('Brand', attrs['manufacturer'] ?? item?.manufacturer);
@@ -2192,7 +2204,7 @@ async function handleRequest(req: Request): Promise<Response> {
     // metadata has no explicit type. eBay's category validator is authoritative;
     // using the item title is a conservative fallback and avoids a guaranteed
     // missing-required-specific rejection.
-    addSpec('Type', productType ?? title);
+    if (productType) addSpec('Type', productType);
   }
 
   // Merge user-confirmed eBay specifics saved by the Listing Editor before
@@ -2206,7 +2218,7 @@ async function handleRequest(req: Request): Promise<Response> {
     const keyLower = k.toLowerCase().replace(/[^a-z0-9_]/g, '_');
     if (SPEC_BLOCKLIST.has(keyLower)) continue;
     if (k.startsWith('_')) continue;
-    if (v === null || v === undefined || String(v).trim() === '' || String(v) === 'false' || String(v) === '0') continue;
+    if (v === null || v === undefined || typeof v === 'object' || String(v).trim() === '' || String(v) === 'false' || String(v) === '0') continue;
     const name = k.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()).slice(0, 65);
     const value = String(v).trim().slice(0, 65);
     if (name && value && !seenNames.has(name.toLowerCase())) addSpec(name, value);
@@ -2273,6 +2285,7 @@ async function handleRequest(req: Request): Promise<Response> {
     }, 400);
   }
 
+  if (itemSpecifics.length > 25) return jsonResponse({ error: 'More than 25 item specifics are present. Review them before publishing; nothing was truncated or submitted.' }, 400);
   const validationError = validatePayload({ title, price, categoryId: resolvedCategoryId, conditionId, fulfillmentPolicyId: fulfillmentId, returnPolicyId: returnId, mediaUrls, itemSpecifics, requiredAspects });
   if (validationError) return jsonResponse({ error: validationError }, 400);
 
@@ -2288,32 +2301,42 @@ async function handleRequest(req: Request): Promise<Response> {
     callName = 'AddFixedPriceItem';
   }
 
+  const { data: claimId, error: claimError } = await supabase.rpc('swish_claim_listing_publish', { p_listing_id: listingId, p_tenant_id: tenantId });
+  if (claimError || !claimId) return jsonResponse({ success: false, code: 'PUBLISH_RECONCILIATION_REQUIRED', error: 'This listing is already being submitted or has an unconfirmed outcome. Sync eBay before retrying; do not create another draft.' }, 409);
+  // On network timeout the claim intentionally remains: eBay may have accepted the request.
   const { xml: responseXml, ok } = await callEbayTradingApi(requestXml, callName, creds.clientId);
   const errors = parseErrors(responseXml);
 
   if (!ok) {
-    console.error(`[SWISH] eBay ${callName} failed. Errors: ${errors.join('; ')}`);
+    await supabase.from('listings').update({ publish_claim_id: null, publish_claimed_at: null })
+      .eq('id', listingId).eq('tenant_id', tenantId).eq('publish_claim_id', claimId);
+    console.error(`[SWISH] eBay ${callName} rejected the request.`);
     return jsonResponse({ success: false, error: friendlyError(errors, `eBay rejected the listing`), errors }, 400);
   }
 
   const externalListingId = parseItemId(responseXml);
+  if (!externalListingId) return jsonResponse({ success: false, code: 'PUBLISH_RECONCILIATION_REQUIRED', error: 'eBay did not return a listing ID. The result must be reconciled before retrying.' }, 502);
   const publishedAt = new Date().toISOString();
 
   const warnings: string[] = [];
   try {
-    await supabase.from('listings').update({
+    const { error: listingSaveError } = await supabase.from('listings').update({
+      publish_claim_id: null,
+      publish_claimed_at: null,
       status: 'active',
       external_listing_id: externalListingId,
       published_at: publishedAt,
       updated_at: publishedAt,
-    }).eq('id', listingId);
+    }).eq('id', listingId).eq('tenant_id', tenantId).eq('publish_claim_id', claimId);
+    if (listingSaveError) throw new Error('Accepted listing could not be saved');
 
     if (item?.id) {
-      await supabase.from('items').update({
+      const { error: itemSaveError } = await supabase.from('items').update({
         status: 'listed',
         updated_at: publishedAt,
         marketplace: 'ebay',
-      }).eq('id', item.id);
+      }).eq('id', item.id).eq('tenant_id', tenantId);
+      if (itemSaveError) warnings.push('Listing accepted, but item status needs reconciliation.');
     }
 
     if (catResult.wasResolved && resolvedCategoryId) {
@@ -2358,7 +2381,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'eBay API is responding slowly (request took over 90 seconds). Please retry — your listing has NOT been submitted. If this persists, check your eBay connection in Marketplaces.',
+          error: 'eBay API is responding slowly (request took over 90 seconds). The final outcome is unconfirmed. Sync eBay before retrying; a pending publish claim prevents duplicate submissions. If this persists, check your eBay connection in Marketplaces.',
         }),
         { status: 504, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );

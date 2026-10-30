@@ -27,7 +27,7 @@
 //   get_sync_stats          — admin stats
 //   test                    — health check with live eBay round-trip
 
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -123,8 +123,8 @@ async function verifyAccess(
       .eq('tenant_id', tenantId).eq('user_id', user.id).maybeSingle();
     if (!m) return { ok: false, error: 'Access denied.', status: 403 };
     return { ok: true };
-  } catch {
-    return { ok: false, error: 'Authentication could not be verified.', status: 401 };
+  } catch (e: any) {
+    return { ok: false, error: `Auth error: ${e.message}`, status: 401 };
   }
 }
 

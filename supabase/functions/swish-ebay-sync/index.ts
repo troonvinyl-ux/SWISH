@@ -16,12 +16,10 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
+import registry from '../../../niche-modules.json' with { type: 'json' };
+import { corsHeaders } from '../_shared/cors.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+
 
 const EBAY_TOKEN_URL = 'https://api.ebay.com/identity/v1/oauth2/token';
 const TRADING_API = 'https://api.ebay.com/ws/api.dll';
@@ -73,11 +71,12 @@ async function refreshToken(clientId: string, clientSecret: string, rToken: stri
     body: new URLSearchParams({
       grant_type: 'refresh_token',
       refresh_token: rToken,
-      scope: 'https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.fulfillment https://api.ebay.com/oauth/api_scope/sell.account',
+      // Omit scope: preserve the full consented permissions, including finances.
     }).toString(),
+    signal: AbortSignal.timeout(12000),
   });
   const data = await resp.json();
-  if (!data.access_token) throw new Error(`Token refresh failed: ${data.error_description ?? data.error ?? 'unknown'}`);
+  if (!resp.ok || !data.access_token) throw new Error('eBay token refresh was not confirmed');
   return { accessToken: data.access_token, expiresAt: new Date(Date.now() + (data.expires_in ?? 7200) * 1000).toISOString() };
 }
 
@@ -95,21 +94,19 @@ async function getValidToken(supabase: ReturnType<typeof adminClient>, tenantId:
   if (!creds.accessToken) throw new Error('REQUIRES_REAUTH: No access token');
 
   const expiresAt = creds.expiresAt ?? conn.access_token_expires_at;
-  const expired = expiresAt ? Date.now() + 5 * 60_000 >= new Date(expiresAt).getTime() : false;
+  const expiryMs = Date.parse(expiresAt ?? '');
+  const expired = !Number.isFinite(expiryMs) || Date.now() + 5 * 60_000 >= expiryMs;
 
   if (expired && creds.refreshToken) {
     try {
       const { accessToken, expiresAt: newExp } = await refreshToken(creds.clientId, creds.clientSecret, creds.refreshToken);
-      // This refresh specifies a restricted OAuth scope set that excludes sell.finances.
-      // Clear the marker written by swish-ebay-finances so the next finance request can
-      // restore the full scope set with its existing no-scope refresh path.
-      const updatedCredentials = { ...creds, accessToken, expiresAt: newExp };
-      delete updatedCredentials.financeScopeRefreshedAt;
+      const updatedCredentials = { ...creds, accessToken, expiresAt: newExp, financeScopeRefreshedAt: new Date().toISOString() };
       const updatedRef = await encryptCredentials(updatedCredentials);
-      await supabase.from('marketplace_connectors').update({
+      const { error: tokenSaveError } = await supabase.from('marketplace_connectors').update({
         credential_ref: updatedRef, access_token_expires_at: newExp,
         status: 'connected', last_error: null, updated_at: new Date().toISOString(),
       }).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay');
+      if (tokenSaveError) throw new Error('Refreshed token could not be saved securely');
       creds = updatedCredentials;
       console.log('[EbaySync] Token refreshed successfully');
     } catch (e: any) {
@@ -308,6 +305,8 @@ async function fetchSellingPage(
 
   const xmlText = await res.text();
   if (isAuthError(xmlText)) throw new Error('REQUIRES_REAUTH: Token expired mid-sync');
+  const ack = extractTag(xmlText, 'Ack');
+  if (!res.ok || !['Success', 'Warning'].includes(ack)) throw new Error('eBay selling page could not be verified');
 
   const totalPages = parseInt(xmlText.match(/<TotalNumberOfPages>(\d+)<\/TotalNumberOfPages>/)?.[1] ?? '1');
   const ebayStatus: 'active' | 'sold' | 'ended' =
@@ -423,10 +422,8 @@ async function syncItemToSwish(
           existingTitle === 'Untitled' || existingTitle.startsWith('Title pending')) {
         itemUpdates.canonical_title = ebay.title;
         titleFixed = true;
-      } else if (existingTitle !== ebay.title) {
-        itemUpdates.canonical_title = ebay.title;
-        titleFixed = true;
       }
+      // Existing canonical identity is retained; marketplace title is stored separately.
     }
 
     // ── Description ─────────────────────────────────────────────────────────
@@ -538,12 +535,14 @@ async function syncItemToSwish(
     // Always override category_id from eBay — eBay is authoritative
     if (ebay.categoryId) listingUpdate.category_id = ebay.categoryId;
 
-    await supabase
+    const { error: listingErr } = await supabase
       .from('listings')
       .update(listingUpdate)
       .eq('item_id', existingItem.id)
       .eq('tenant_id', tenantId)
-      .eq('marketplace_id', 'ebay');
+      .eq('marketplace_id', 'ebay')
+      .eq('external_listing_id', ebay.ebayItemId);
+    if (listingErr) return { imageUrlsStored: 0, titleFixed: false, updated: false, error: 'Listing state could not be persisted' };
 
     // ── Update items record ──────────────────────────────────────────────────
     const cleanUpdates: Record<string, any> = {};
@@ -611,8 +610,17 @@ Deno.serve(async (req: Request) => {
   let body: any;
   try { body = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
 
-  const { tenantId, mode = 'full', itemIds } = body;
-  if (!tenantId) return json({ error: 'tenantId is required' }, 400);
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'Request body must be an object' }, 400);
+  const { tenantId, mode = 'full', itemIds, nicheId, specialistIds } = body;
+  if (typeof tenantId !== 'string' || !/^[0-9a-f-]{36}$/i.test(tenantId)) return json({ error: 'tenantId is required' }, 400);
+  if (!['full', 'data_only', 'refresh_token_only'].includes(mode)) return json({ error: 'Invalid sync mode' }, 400);
+  if (itemIds !== undefined && (!Array.isArray(itemIds) || itemIds.length > 500 || itemIds.some((id: unknown) => typeof id !== 'string'))) return json({ error: 'Invalid item IDs' }, 400);
+  const products = registry.products as Record<string, { specialists: string[]; legacySpecialists: string[] }>;
+  if (nicheId !== undefined && (typeof nicheId !== 'string' || !products[nicheId])) return json({ error: 'Invalid niche context' }, 400);
+  const knownSpecialists = Object.values(products).flatMap(product => [...product.specialists, ...product.legacySpecialists]);
+  if (specialistIds !== undefined && (!Array.isArray(specialistIds) || specialistIds.some((id: unknown) => typeof id !== 'string' || !knownSpecialists.includes(id)))) return json({ error: 'Invalid specialist context' }, 400);
+  const allowedSpecialists: string[] | undefined = nicheId ? [...products[nicheId].specialists, ...products[nicheId].legacySpecialists] : specialistIds;
+  if (nicheId && specialistIds?.some((id: string) => !allowedSpecialists!.includes(id))) return json({ error: 'Specialist does not belong to the selected niche' }, 400);
 
   const supabase = adminClient();
 
@@ -620,6 +628,8 @@ Deno.serve(async (req: Request) => {
   const authHeader = req.headers.get('Authorization');
   const secCheck = await verifyTenantAccess(supabase, authHeader, tenantId);
   if (!secCheck.ok) return json({ error: secCheck.error ?? 'Unauthorized' }, secCheck.status);
+
+  if (allowedSpecialists?.length === 0) return json({ success: true, processed: 0, updated: 0 });
 
   // ── Validate / refresh eBay token ─────────────────────────────────────────
   let token: string, clientId: string;
@@ -659,8 +669,8 @@ Deno.serve(async (req: Request) => {
         if (hasMore) await new Promise(r => setTimeout(r, 150));
       } catch (e: any) {
         if (e.message?.startsWith('REQUIRES_REAUTH:')) return json({ error: e.message, requiresReauth: true }, 401);
-        console.log(`[EbaySync] ${section.name} p${page} error: ${e.message}`);
-        hasMore = false;
+        console.error('[EbaySync] Selling page fetch failed; reconciliation cancelled before database writes');
+        return json({ success: false, error: 'eBay sync was incomplete. Existing listing statuses were preserved; retry sync.', partial: true }, 503);
       }
     }
   }
@@ -671,16 +681,24 @@ Deno.serve(async (req: Request) => {
   }
 
   // ── Step 2: Enrich descriptions via GetItems batch ────────────────────────
-  const enrichedListings = await enrichBatch(token, clientId, allEbayListings);
+  // Multi-quantity listings can appear in ActiveList and SoldList; live availability wins.
+  const byExternalId = new Map<string, EbayItemData>();
+  for (const listing of allEbayListings) {
+    const previous = byExternalId.get(listing.ebayItemId);
+    if (!previous || previous.ebayStatus !== 'active') byExternalId.set(listing.ebayItemId, listing);
+  }
+  const enrichedListings = await enrichBatch(token, clientId, [...byExternalId.values()]);
 
   // ── Step 3: Match eBay IDs to SWISH items ─────────────────────────────────
-  const { data: dbListings, error: dbListErr } = await supabase
+  let listingQuery = supabase
     .from('listings')
-    .select('item_id, external_listing_id')
+    .select('item_id, external_listing_id, items!inner(specialist_id)')
     .eq('tenant_id', tenantId)
     .eq('marketplace_id', 'ebay')
     .not('external_listing_id', 'is', null)
     .neq('external_listing_id', '');
+  if (allowedSpecialists) listingQuery = listingQuery.in('items.specialist_id', allowedSpecialists);
+  const { data: dbListings, error: dbListErr } = await listingQuery;
 
   if (dbListErr) return json({ error: `DB error: ${dbListErr.message}` }, 500);
 
@@ -759,6 +777,8 @@ Deno.serve(async (req: Request) => {
   }
 
   // ── Step 6: Fix orphaned listings (ended/sold on eBay but still active in SWISH) ─
+  // Absence in an eBay response is not proof of an ended/sold listing.
+  // Exact, explicit marketplace outcomes were already reconciled above.
   const ebayActiveIds = new Set(allEbayListings.filter(e => e.ebayStatus === 'active').map(e => e.ebayItemId));
   const { data: swishLiveListings } = await supabase
     .from('listings').select('id, item_id, external_listing_id')
@@ -767,7 +787,11 @@ Deno.serve(async (req: Request) => {
 
   let orphansFixed = 0;
   for (const l of swishLiveListings ?? []) {
-    if (l.external_listing_id && !ebayActiveIds.has(l.external_listing_id)) {
+    if (l.external_listing_id && !ebayActiveIds.has(l.external_listing_id) &&
+        ebayIdToItemId.has(String(l.external_listing_id)) &&
+        (!itemIds || itemIdsSet.has(l.item_id)) &&
+        byExternalId.get(String(l.external_listing_id))?.ebayStatus !== 'active' &&
+        byExternalId.has(String(l.external_listing_id))) {
       const ebayItem = allEbayListings.find(e => e.ebayItemId === l.external_listing_id);
       const newStatus = ebayItem?.ebayStatus === 'sold' ? 'sold' : 'ended';
       await supabase.from('listings').update({ status: newStatus, ended_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', l.id).eq('tenant_id', tenantId);

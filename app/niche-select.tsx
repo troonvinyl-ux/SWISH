@@ -123,7 +123,7 @@ export default function NicheSelectScreen() {
   };
 
   // Branded builds are single-product apps, not a multi-niche switcher.
-  if (fixedNicheId) {
+  if (fixedNicheId && !isMasterAdmin) {
     const route = nicheToEntryRoute(fixedNicheId);
     if (route) return <Redirect href={route as any} />;
   }

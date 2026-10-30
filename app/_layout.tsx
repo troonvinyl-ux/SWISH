@@ -3,6 +3,7 @@ import { Stack, useRouter, usePathname } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AlertProvider, AuthProvider } from '@/template';
 import { AppProvider } from '@/contexts/AppContext';
+import { NicheRouteBoundary } from '@/components/layout/NicheRouteBoundary';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useCallback } from 'react';
 import { Platform, BackHandler } from 'react-native';
@@ -79,6 +80,7 @@ export default function RootLayout() {
         <AuthProvider>
           <AppProvider>
             <TVBackHandlerProvider>
+              <NicheRouteBoundary>
               <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="index" />
                 <Stack.Screen name="(tabs)" />
@@ -133,16 +135,11 @@ export default function RootLayout() {
                 <Stack.Screen name="entry/motocross" />
                 <Stack.Screen name="entry/bicycles" />
                 <Stack.Screen name="entry/clothing" />
-                <Stack.Screen name="entry/cards" />
-                <Stack.Screen name="entry/antiques" />
-                <Stack.Screen name="entry/fossils" />
-                <Stack.Screen name="entry/beauty" />
-                <Stack.Screen name="entry/tech" />
-                <Stack.Screen name="entry/surplus-flip" />
                 <Stack.Screen name="buy-decision" />
                 <Stack.Screen name="research" />
                 <Stack.Screen name="deep-id-lab" />
               </Stack>
+              </NicheRouteBoundary>
             </TVBackHandlerProvider>
           </AppProvider>
         </AuthProvider>

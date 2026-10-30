@@ -55,7 +55,6 @@ export const ConfidenceBar = memo(({ value, tier, showLabel = true, compact = fa
     </View>
   );
 });
-ConfidenceBar.displayName = 'ConfidenceBar';
 
 interface EvidenceBadgeProps {
   source: EvidenceSource;
@@ -79,7 +78,6 @@ export const EvidenceBadge = memo(({ source }: EvidenceBadgeProps) => {
     </View>
   );
 });
-EvidenceBadge.displayName = 'EvidenceBadge';
 
 const styles = StyleSheet.create({
   container: {

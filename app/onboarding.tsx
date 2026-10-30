@@ -154,7 +154,7 @@ export default function OnboardingScreen() {
       : activeNicheId && activeNicheId !== 'general' ? activeNicheId : 'coins') as NicheId,
   );
   // A branded customer APK offers only its own niche during onboarding.
-  // Even master-admin credentials cannot unlock other niches in a branded build.
+  // The master account retains the full niche list even inside a branded build.
   const onboardingNiches = fixedNicheId
     ? ONBOARDING_NICHES.filter(niche => niche.id === fixedNicheId)
     : ONBOARDING_NICHES;

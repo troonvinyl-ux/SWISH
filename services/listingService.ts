@@ -4,6 +4,7 @@
 import { getSupabaseClient } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { getBusinessConfig } from '@/services/businessConfigService';
+import { isLiveListing } from '@/services/listingLifecycle';
 
 export interface GeneratedListing {
   title: string;
@@ -310,7 +311,7 @@ export async function endListing(
 
 export interface ListingWithItem extends SavedListing {
   itemTitle: string;
-  itemStatus?: string;
+  itemStatus: string;
   itemSpecialistId: string;
   itemAcquiredCost: number;
   itemMedia: string[];
@@ -344,7 +345,7 @@ export async function getAllListings(
   const { data, error } = await query;
   if (error) return { listings: [], error: error.message };
 
-  const listings: ListingWithItem[] = (data ?? []).map(row => ({
+  const listings: ListingWithItem[] = (data ?? []).map((row: any) => ({
     ...mapListing(row),
     itemTitle: row.items?.canonical_title ?? 'Unknown Item',
     itemSpecialistId: row.items?.specialist_id ?? '',
@@ -391,6 +392,9 @@ export async function getLiveListingCount(
   specialistIds?: string[],
 ): Promise<number> {
   if (specialistIds && specialistIds.length === 0) return 0;
+  const { listings, error } = await getAllListings(tenantId, undefined, specialistIds);
+  return error ? 0 : listings.filter(isLiveListing).length;
+  /* Legacy counter retained only as historical reference; shared lifecycle above is authoritative.
   const supabase = getSupabaseClient();
   // If no specialist filter, count all active listings for the tenant
   if (!specialistIds || specialistIds.length === 0) {
@@ -409,6 +413,7 @@ export async function getLiveListingCount(
     .eq('status', 'active')
     .in('items.specialist_id', specialistIds);
   return error ? 0 : (data?.length ?? 0);
+  */
 }
 
 // ── One-step verify + publish ──────────────────────────────────────────────────
@@ -653,7 +658,7 @@ export async function submitListingToMarketplace(
         if (t) {
           // Handle raw HTML 504 gateway responses — never show HTML to the user
           if (t.trim().startsWith('<') || t.includes('504') || t.includes('Gateway')) {
-            msg = 'eBay API is responding slowly (gateway timeout). Please retry in a few seconds — your listing has NOT been submitted.';
+            msg = 'eBay API is responding slowly (gateway timeout). Please retry in a few seconds — the final outcome is not yet confirmed. Sync eBay before retrying to avoid duplicates.';
           } else {
             try {
               const parsed = JSON.parse(t);
@@ -663,7 +668,7 @@ export async function submitListingToMarketplace(
             }
           }
         } else if (statusCode === 504) {
-          msg = 'eBay API is responding slowly (gateway timeout). Please retry in a few seconds — your listing has NOT been submitted.';
+          msg = 'eBay API is responding slowly (gateway timeout). Please retry in a few seconds — the final outcome is not yet confirmed. Sync eBay before retrying to avoid duplicates.';
         }
       } catch {}
     }

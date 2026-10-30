@@ -216,8 +216,7 @@ function ReviewItemCard({ item, onPress }: { item: Item; onPress: (id: string) =
   const ready = isReadyToList(item);
   const idConf = item.identificationConfidence ?? 0;
   const confColor = idConf >= 0.50 ? Colors.warning : idConf >= 0.30 ? Colors.danger : Colors.danger;
-  const referenceThumb = item.attributes?.swish_coin_reference_url as string | undefined;
-  const hasPhoto = !!referenceThumb || (item.media ?? []).length > 0;
+  const hasPhoto = (item.media ?? []).length > 0;
   const objectType = item.attributes?.object_type as string | undefined;
 
   const objectTypeBadge = objectType ? (
@@ -239,7 +238,7 @@ function ReviewItemCard({ item, onPress }: { item: Item; onPress: (id: string) =
       <View style={styles.cardThumb}>
         {hasPhoto ? (
           <Image
-            source={{ uri: referenceThumb ?? item.media[0] }}
+            source={{ uri: item.media[0] }}
             style={styles.thumbImg}
             contentFit="cover"
             transition={150}
@@ -448,7 +447,7 @@ export default function ReviewRequiredScreen() {
         <View style={styles.readyBanner}>
           <MaterialIcons name="sell" size={13} color={Colors.success} />
           <Text style={styles.readyBannerText}>
-            {stats.readyToList} item{stats.readyToList !== 1 ? 's' : ''} ready to list — tap &quot;Create Listing&quot; to proceed
+            {stats.readyToList} item{stats.readyToList !== 1 ? 's' : ''} ready to list — tap "Create Listing" to proceed
           </Text>
         </View>
       ) : null}

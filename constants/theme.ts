@@ -55,6 +55,7 @@ export const Colors = {
   statusVerified: '#7C5CFC',
 
   // Transparent overlays
+  overlay: 'rgba(9,9,14,0.8)',
   overlay20: 'rgba(9,9,14,0.2)',
   overlay50: 'rgba(9,9,14,0.5)',
   overlay80: 'rgba(9,9,14,0.8)',

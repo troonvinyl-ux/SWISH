@@ -50,8 +50,7 @@
           "backgroundColor": "#09090E"
         }
       ],
-      "expo-web-browser",
-      "expo-updates"
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

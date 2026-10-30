@@ -62,7 +62,6 @@ export const InsightCard = memo(({ insight, onAction, compact = false }: Insight
     </View>
   );
 });
-InsightCard.displayName = 'InsightCard';
 
 const styles = StyleSheet.create({
   card: {

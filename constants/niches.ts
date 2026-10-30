@@ -10,6 +10,16 @@
 // integration, valuation engine, and AI system power every niche.
 
 import { SpecialistId } from './specialists';
+import moduleRegistry from '../niche-modules.json';
+
+export interface NicheModule {
+  id: string; name: string; slug: string; scheme: string;
+  androidPackage: string; iosBundleIdentifier: string;
+  entry: string; home: string | null; aliases: string[];
+  specialists: string[]; legacySpecialists: string[];
+  defaultSpecialist: string; dedicatedRoutes: string[];
+}
+export const NICHE_MODULES = moduleRegistry.products as Record<Exclude<NicheId, 'general'>, NicheModule>;
 
 export type NicheId =
   | 'coins'
@@ -76,7 +86,7 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     icon: 'toll',
     color: '#F5C842',
     accentColor: '#D4A017',
-    specialists: ['coins', 'islamic_silver', 'banknotes', 'gold', 'silver', 'jewellery_precious_metals', 'ancient_artefacts'],
+    specialists: NICHE_MODULES.coins.specialists as SpecialistId[],
     defaultSpecialist: 'coins',
     terms: {
       item: 'Coin',
@@ -117,7 +127,7 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     icon: 'style',
     color: '#FACC15',
     accentColor: '#EAB308',
-    specialists: ['pokemon_cards', 'trading_cards'],
+    specialists: NICHE_MODULES.trading_cards.specialists as SpecialistId[],
     defaultSpecialist: 'pokemon_cards',
     terms: {
       item: 'Card',
@@ -157,7 +167,7 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     icon: 'museum',
     color: '#D97706',
     accentColor: '#B45309',
-    specialists: ['antiques', 'books'],
+    specialists: NICHE_MODULES.antiques.specialists as SpecialistId[],
     defaultSpecialist: 'antiques',
     terms: {
       item: 'Antique',
@@ -285,7 +295,7 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     icon: 'yard',
     color: '#8B5CF6',
     accentColor: '#7C3AED',
-    specialists: ['fossils'],
+    specialists: NICHE_MODULES.fossils.specialists as SpecialistId[],
     defaultSpecialist: 'fossils',
     terms: {
       item: 'Fossil',
@@ -370,7 +380,7 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     icon: 'spa',
     color: '#F472B6',
     accentColor: '#E11D48',
-    specialists: ['beauty'],
+    specialists: NICHE_MODULES.beauty.specialists as SpecialistId[],
     defaultSpecialist: 'beauty',
     terms: {
       item: 'Product',
@@ -402,42 +412,22 @@ export const NICHES: Record<NicheId, NicheConfig> = {
   },
 
   tech: {
-    id: 'tech',
-    name: 'SWISH Tech',
-    shortName: 'Tech',
+    id: 'tech', name: 'Tech Flipper', shortName: 'Tech',
     tagline: 'Identify, value and flip technology',
-    description: 'AI-powered identification and valuation for consumer electronics, computing equipment, devices, and accessories.',
-    icon: 'devices',
-    color: '#06B6D4',
-    accentColor: '#0891B2',
-    specialists: ['tech', 'retro_games', 'retro_consoles'],
-    defaultSpecialist: 'tech',
-    terms: {
-      item: 'Device',
-      items: 'Devices',
-      itemPlural: 'devices',
-      scan: 'Identify Device',
-      identify: 'Identify',
-      condition: 'Condition',
-      catalogue: 'Model',
-    },
+    description: 'Consumer electronics, model specifications, condition and resale inventory.',
+    icon: 'devices', color: '#06B6D4', accentColor: '#0891B2',
+    specialists: NICHE_MODULES.tech.specialists as SpecialistId[], defaultSpecialist: 'tech',
+    terms: { item: 'Device', items: 'Devices', itemPlural: 'devices', scan: 'Identify Device', identify: 'Identify', condition: 'Condition', catalogue: 'Model' },
     quickActions: [
       { icon: 'qr-code-scanner', label: 'Identify Device', route: '/(tabs)/scan' },
-      { icon: 'storefront', label: 'eBay Hub', route: '/ebay-hub' },
-      { icon: 'receipt-long', label: 'Orders', route: '/orders' },
       { icon: 'inventory-2', label: 'Stock', route: '/(tabs)/inventory' },
+      { icon: 'storefront', label: 'eBay Hub', route: '/ebay-hub' },
     ],
-    keyAttributes: ['brand', 'model', 'specifications', 'condition', 'tested', 'accessories'],
-    acquisitionSources: ['eBay', 'Clearance', 'Auctions', 'Trade-ins', 'Refurbishers'],
-    marketplaces: ['eBay', 'Facebook Marketplace'],
-    captureInstructions: [
-      'Photograph the full device',
-      'Capture model and serial labels where safe',
-      'Show included accessories',
-      'Document damage and tested status',
-    ],
-    hasMeasurements: false,
-    version: '1.0.0',
+    keyAttributes: ['brand', 'model', 'specifications', 'condition', 'tested'],
+    acquisitionSources: ['Clearance stock', 'Auctions', 'Local listings'],
+    marketplaces: ['eBay'],
+    captureInstructions: ['Photograph the device and model label', 'Show included accessories', 'Record tested condition and any locks or damage'],
+    hasMeasurements: false, version: '1.0.0',
   },
 
   general: {
@@ -569,24 +559,16 @@ export function nicheIdForSpecialist(specialistId: string): NicheId | null {
 // Historical inventory records belonging to inactive niches are preserved as-is
 // but are hidden from the active niche views.
 
-export const PRODUCTION_NICHE_IDS: readonly NicheId[] = [
-  'coins',
-  'motocross',
-  'bicycles',
-  'clothing',
-  'trading_cards',
-  'antiques',
-  'fossils',
-  'beauty',
-  'tech',
-  'surplus_flip',
+export const PRODUCTION_NICHE_IDS = [
+  'coins', 'motocross', 'bicycles', 'clothing', 'surplus_flip',
+  'trading_cards', 'antiques', 'fossils', 'beauty', 'tech',
 ] as const;
 
 export type ProductionNicheId = typeof PRODUCTION_NICHE_IDS[number];
 
 /** Returns true only if the niche is one of the active production niches. */
 export function isProductionNiche(nicheId: NicheId | string | null | undefined): nicheId is ProductionNicheId {
-  return PRODUCTION_NICHE_IDS.includes(nicheId as NicheId);
+  return PRODUCTION_NICHE_IDS.includes(nicheId as ProductionNicheId);
 }
 
 /** List of active production NicheConfig objects. */

@@ -280,11 +280,10 @@ export async function importEbayCandidate(
 
   // Shared-account imports require a canonical active-niche specialist ID.
   // Do not silently derive or default an item to a different niche.
-  // Imports must use the canonical default specialist for one active niche.
-  // Do not accept the generic catch-all or legacy aliases here: those IDs can
-  // make a listing appear under the wrong niche in inventory and eBay views.
   const allowedSpecialists = new Set([
-    'coins', 'motocross', 'bicycles', 'clothing', 'pokemon_cards', 'antiques', 'fossils', 'beauty', 'tech', 'surplus_trader',
+    'coins', 'coins_uk', 'coins_world', 'coins_currency', 'banknotes', 'gold',
+    'silver', 'islamic_silver', 'ancient_artefacts', 'motocross', 'bicycles',
+    'clothing', 'trainers_sneakers', 'surplus_trader', 'curiosities_collectibles',
   ]);
   if (!nicheSpecialistId || !allowedSpecialists.has(nicheSpecialistId)) {
     return { itemId: null, inventoryId: null, error: 'A valid active niche must be selected before importing this listing.' };

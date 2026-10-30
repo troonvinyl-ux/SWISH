@@ -1,150 +1,33 @@
-// app.config.js — SWISH dynamic Expo configuration.
-//
-// Metro duplicate-package handling is configured in metro.config.js. Do not
-// delete .pnpm stubs here: Metro resolves through those package links.
-//
-// When SWISH_NICHE is set by a branded EAS profile, give that build its own
-// app identity and embed the fixed product ID for runtime routing. If unset,
-// preserve the existing OnSpace/legacy configuration unchanged.
-
-const NICHE_BUILDS = {
-  coins: {
-    id: "coins",
-    name: "Coin Flipper",
-    slug: "swish-coin-flipper",
-    scheme: "coinflipper",
-    androidPackage: "com.swish.coinflipper",
-    iosBundleIdentifier: "com.swish.coinflipper",
-  },
-  motocross: {
-    id: "motocross",
-    name: "Flipper MX",
-    slug: "swish-flipper-mx",
-    scheme: "flippermx",
-    androidPackage: "com.swish.flippermx",
-    iosBundleIdentifier: "com.swish.flippermx",
-  },
-  bicycles: {
-    id: "bicycles",
-    name: "Bike Flipper",
-    slug: "swish-bike-flipper",
-    scheme: "bikeflipper",
-    androidPackage: "com.swish.bikeflipper",
-    iosBundleIdentifier: "com.swish.bikeflipper",
-  },
-  surplus_flip: {
-    id: "surplus_flip",
-    name: "Surplus Flip",
-    slug: "swish-surplus-flip",
-    scheme: "surplusflip",
-    androidPackage: "com.swish.surplusflip",
-    iosBundleIdentifier: "com.swish.surplusflip",
-  },
-  clothing: {
-    id: "clothing",
-    name: "Threads Flip",
-    slug: "swish-threads-flip",
-    scheme: "threadsflip",
-    androidPackage: "com.swish.threadsflip",
-    iosBundleIdentifier: "com.swish.threadsflip",
-  },
-  trading_cards: {
-    id: "trading_cards",
-    name: "Card Flipper",
-    slug: "swish-card-flipper",
-    scheme: "cardflipper",
-    androidPackage: "com.swish.cardflipper",
-    iosBundleIdentifier: "com.swish.cardflipper",
-  },
-  antiques: {
-    id: "antiques",
-    name: "Antique Flipper",
-    slug: "swish-antique-flipper",
-    scheme: "antiqueflipper",
-    androidPackage: "com.swish.antiqueflipper",
-    iosBundleIdentifier: "com.swish.antiqueflipper",
-  },
-  fossils: {
-    id: "fossils",
-    name: "Fossil Flipper",
-    slug: "swish-fossil-flipper",
-    scheme: "fossilflipper",
-    androidPackage: "com.swish.fossilflipper",
-    iosBundleIdentifier: "com.swish.fossilflipper",
-  },
-  beauty: {
-    id: "beauty",
-    name: "Beauty Flipper",
-    slug: "swish-beauty-flipper",
-    scheme: "beautyflipper",
-    androidPackage: "com.swish.beautyflipper",
-    iosBundleIdentifier: "com.swish.beautyflipper",
-  },
-  tech: {
-    id: "tech",
-    name: "Tech Flipper",
-    slug: "swish-tech-flipper",
-    scheme: "techflipper",
-    androidPackage: "com.swish.techflipper",
-    iosBundleIdentifier: "com.swish.techflipper",
-  },
-};
+// One registry drives native identities, runtime aliases and route packaging.
+const { products: NICHE_BUILDS } = require('./niche-modules.json');
+const { prepareNicheRoutes } = require('./scripts/prepare-niche-routes');
 
 module.exports = ({ config }) => {
   const selected = process.env.SWISH_NICHE;
   const niche = selected ? NICHE_BUILDS[selected] : null;
-  if (selected && !niche) {
-    throw new Error(
-      `Unsupported SWISH_NICHE "${selected}". Choose coins, motocross, bicycles, clothing, trading_cards, antiques, fossils, beauty, tech, or surplus_flip.`,
-    );
-  }
-
+  if (selected && !niche) throw new Error(`Unsupported SWISH_NICHE "${selected}".`);
   const easProjectId = process.env.EXPO_PROJECT_ID || process.env.EAS_PROJECT_ID || config.extra?.eas?.projectId;
-  const otaConfig = easProjectId
-    ? {
-        runtimeVersion: { policy: "appVersion" },
-        updates: {
-          url: `https://u.expo.dev/${easProjectId}`,
-          checkAutomatically: "ON_LOAD",
-          fallbackToCacheTimeout: 0,
-          requestHeaders: { "expo-channel-name": `production-${selected || "default"}` },
-        },
-        extra: {
-          ...(config.extra || {}),
-          eas: { ...(config.extra?.eas || {}), projectId: easProjectId },
-        },
-      }
-    : {};
-
+  const otaConfig = easProjectId ? {
+    runtimeVersion: niche ? `${config.version || '1.0.0'}-${selected}-isolated-v1` : { policy: 'appVersion' },
+    updates: { ...config.updates, url: `https://u.expo.dev/${easProjectId}`, checkAutomatically: 'ON_LOAD', fallbackToCacheTimeout: 0,
+      requestHeaders: { 'expo-channel-name': `production-${selected || 'default'}` } },
+    extra: { ...(config.extra || {}), eas: { ...(config.extra?.eas || {}), projectId: easProjectId } },
+  } : {};
   const baseConfig = Object.keys(otaConfig).length ? { ...config, ...otaConfig } : config;
   if (!niche) return baseConfig;
-
-  const routerPlugin = ["expo-router", { root: `./.swish-build/${niche.id}/app` }];
-  const configuredPlugins = (config.plugins || []).filter((plugin) =>
-    !(plugin === "expo-router" || (Array.isArray(plugin) && plugin[0] === "expo-router"))
-  );
-
+  // Prepare for every Expo consumer (prebuild, EAS, export, OTA), not just one workflow.
+  const routeRoot = prepareNicheRoutes(selected);
+  const plugins = (config.plugins || []).map(plugin => {
+    const name = Array.isArray(plugin) ? plugin[0] : plugin;
+    return name === 'expo-router' ? ['expo-router', { ...(Array.isArray(plugin) ? plugin[1] : {}), root: routeRoot }] : plugin;
+  });
+  if (!plugins.some(plugin => (Array.isArray(plugin) ? plugin[0] : plugin) === 'expo-router')) plugins.push(['expo-router', { root: routeRoot }]);
   return {
-    ...baseConfig,
-    plugins: [...configuredPlugins, routerPlugin],
-    name: niche.name,
-    // EAS Update requires the slug to match the single linked Expo project.
-    // Keep niche-specific slugs for native builds, but use the linked project slug
-    // when publishing OTA updates to separate niche channels.
-    slug: process.env.SWISH_OTA_PUBLISH === "1" ? "swish" : niche.slug,
+    ...baseConfig, plugins, name: niche.name,
+    slug: process.env.SWISH_OTA_PUBLISH === '1' ? 'swish' : niche.slug,
     scheme: niche.scheme,
-    ios: {
-      ...config.ios,
-      bundleIdentifier: niche.iosBundleIdentifier,
-    },
-    android: {
-      ...config.android,
-      package: niche.androidPackage,
-    },
-    extra: {
-      ...(otaConfig.extra || config.extra || {}),
-      swishNicheId: niche.id,
-      swishAppScheme: niche.scheme,
-    },
+    ios: { ...config.ios, bundleIdentifier: niche.iosBundleIdentifier },
+    android: { ...config.android, package: niche.androidPackage },
+    extra: { ...(otaConfig.extra || config.extra || {}), swishNicheId: niche.id, swishAppScheme: niche.scheme },
   };
 };
