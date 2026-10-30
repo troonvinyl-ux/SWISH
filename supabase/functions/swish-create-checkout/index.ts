@@ -69,7 +69,7 @@ serve(async (req) => {
     // Checkout metadata must use a recognised production niche so the same
     // entitlement can be read consistently by swish-check-subscription.
     if (nicheId === "surplus_trader") nicheId = "surplus_flip";
-    const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing", "surplus_flip"]);
+    const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing", "surplus_flip", "trading_cards", "antiques", "fossils", "beauty", "tech"]);
     if (!allowedNiches.has(nicheId)) {
       return new Response(JSON.stringify({ error: "Unknown SWISH subscription niche." }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -84,7 +84,8 @@ serve(async (req) => {
 
     const expectedSchemeByNiche: Record<string, string> = {
       coins: "coinflipper", motocross: "flippermx", bicycles: "bikeflipper",
-      clothing: "threadsflip", surplus_flip: "surplusflip",
+      clothing: "threadsflip", surplus_flip: "surplusflip", trading_cards: "cardflipper",
+      antiques: "antiqueflipper", fossils: "fossilflipper", beauty: "beautyflipper", tech: "techflipper",
     };
     const expectedScheme = expectedSchemeByNiche[nicheId];
     const requestedScheme = typeof body.appScheme === "string" ? body.appScheme : undefined;
