@@ -422,12 +422,12 @@ async function handleGetShipping(
     );
     if (!resp.ok) {
       const errText = await resp.text().catch(() => '');
-      return jsonResponse({ error: `eBay API ${resp.status}: ${errText.slice(0, 200)}` }, resp.status >= 500 ? 503 : 400);
+      return jsonResponse({ error: 'The eBay request failed. Please retry.' }, resp.status >= 500 ? 503 : 400);
     }
     const data = await resp.json();
     return jsonResponse({ success: true, fulfillments: data.fulfillments ?? [] });
   } catch (e: any) {
-    return jsonResponse({ error: `Network error: ${e.message}` }, 503);
+    return jsonResponse({ error: 'Unable to reach eBay. Please retry.' }, 503);
   }
 }
 
@@ -606,8 +606,8 @@ async function handleSyncReturns(
     console.log(`[SWISH Returns] tenant=${tenantId} fetched=${fetched} imported=${imported} updated=${updated}`);
     return jsonResponse({ success: true, fetched, imported, updated, source: 'ebay_post_order', syncedAt: new Date().toISOString() });
   } catch (e: any) {
-    console.error(`[SWISH Returns] Sync failed: ${e.message}`);
-    return jsonResponse({ success: false, error: `Could not sync eBay returns: ${e.message}`, fetched, imported, updated }, 503);
+    console.error('[SWISH Returns] Sync failed.');
+    return jsonResponse({ success: false, error: 'Could not sync eBay returns. Please retry.', fetched, imported, updated }, 503);
   }
 }
 
@@ -745,8 +745,8 @@ async function handleSyncCases(
     console.log(`[SWISH Cases] tenant=${tenantId} fetched=${fetched} imported=${imported} updated=${updated}`);
     return jsonResponse({ success: true, fetched, imported, updated, source: 'ebay_post_order', syncedAt: new Date().toISOString() });
   } catch (e: any) {
-    console.error(`[SWISH Cases] Sync failed: ${e.message}`);
-    return jsonResponse({ success: false, error: `Could not sync eBay cases: ${e.message}`, fetched, imported, updated }, 503);
+    console.error('[SWISH Cases] Sync failed.');
+    return jsonResponse({ success: false, error: 'Could not sync eBay cases. Please retry.', fetched, imported, updated }, 503);
   }
 }
 
@@ -779,7 +779,7 @@ Deno.serve(async (req: Request) => {
     const { data: member } = await supabase.from('tenant_memberships').select('id').eq('tenant_id', tenantId).eq('user_id', user.id).maybeSingle();
     if (!member) return jsonResponse({ error: 'Access denied.' }, 403);
   } catch (e: any) {
-    return jsonResponse({ error: `Auth error: ${e.message}` }, 401);
+    return jsonResponse({ error: 'Authentication verification failed.' }, 401);
   }
 
   try {
@@ -802,7 +802,7 @@ Deno.serve(async (req: Request) => {
 
     return jsonResponse({ error: `Unknown route: ${route}` }, 400);
   } catch (err: any) {
-    console.error(`[SWISH Dispatch] Unhandled error (route=${route}): ${err.message}`);
+    console.error(`[SWISH Dispatch] Unhandled error (route=${route}).`);
     return jsonResponse({ error: 'Unable to complete the eBay fulfilment request. Please retry or contact support.' }, 500);
   }
 });
