@@ -15,7 +15,7 @@ CREATE INDEX IF NOT EXISTS sales_tenant_niche_sold_at_idx
 UPDATE public.sales AS s
 SET
   specialist_id = COALESCE(s.specialist_id, i.specialist_id),
-  category_id = COALESCE(s.category_id, l.category_id::text),
+  category_id = COALESCE(s.category_id, (SELECT l.category_id::text FROM public.listings AS l WHERE l.id = s.listing_id AND l.tenant_id = s.tenant_id)),
   niche_id = COALESCE(
     s.niche_id,
     CASE
@@ -36,9 +36,6 @@ SET
     END
   )
 FROM public.items AS i
-LEFT JOIN public.listings AS l
-  ON l.id = s.listing_id
- AND l.tenant_id = s.tenant_id
 WHERE i.id = s.item_id
   AND i.tenant_id = s.tenant_id
   AND (s.specialist_id IS NULL OR s.category_id IS NULL OR s.niche_id IS NULL);
