@@ -21,6 +21,11 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+  if (req.method !== "POST" && req.method !== "GET") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 405,
+    });
+  }
 
   const supabaseClient = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
@@ -35,9 +40,15 @@ serve(async (req) => {
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY not set");
 
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("Authorization header not provided");
-
-    const token = authHeader.replace("Bearer ", "");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "User authentication could not be verified." }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 401,
+      });
+    }
+    const token = authHeader.slice("Bearer ".length).trim();
+    if (!token) return new Response(JSON.stringify({ error: "User authentication could not be verified." }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 401,
+    });
     const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
     if (userError || !userData.user?.email) {
       throw new Error("User not authenticated or email unavailable");
@@ -46,9 +57,9 @@ serve(async (req) => {
     logStep("User authenticated", { userId: user.id, email: user.email });
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
-    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
-
-    if (customers.data.length === 0) {
+    const customers = await stripe.customers.list({ email: user.email, limit: 100 });
+    const customer = customers.data.find((candidate) => candidate.metadata?.user_id === user.id);
+    if (!customer) {
       logStep("No Stripe customer found — user not subscribed");
       return new Response(
         JSON.stringify({ subscribed: false, product_id: null, price_id: null, subscription_end: null, niche_entitlements: [] }),
@@ -56,7 +67,7 @@ serve(async (req) => {
       );
     }
 
-    const customerId = customers.data[0].id;
+    const customerId = customer.id;
     logStep("Stripe customer found", { customerId });
 
     const subscriptions = await stripe.subscriptions.list({
@@ -71,7 +82,7 @@ serve(async (req) => {
     let productId: string | null = null;
     let subscriptionEnd: string | null = null;
     let priceId: string | null = null;
-    const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing"]);
+    const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing", "surplus_flip"]);
 
     for (const sub of subscriptions.data) {
       const subProductId = sub.items.data[0]?.price?.product as string | undefined;
@@ -101,10 +112,9 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
     );
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    logStep("Error", { message: msg });
+    logStep("Subscription check failed.");
     return new Response(
-      JSON.stringify({ error: msg }),
+      JSON.stringify({ error: "Subscription status could not be checked. Please retry." }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 },
     );
   }
