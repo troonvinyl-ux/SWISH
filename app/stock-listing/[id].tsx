@@ -2020,18 +2020,38 @@ export default function StockListingScreen() {
 
   const saveField = useCallback(async (field: string) => {
     if (!item) return;
+    if (!tenant?.id) {
+      showAlert('Save Failed', 'Your account is not ready. Please sign in again before saving changes.');
+      return;
+    }
     setSaving(true);
-    const numericFields = ['expectedSellingPrice', 'valuationLow', 'valuationMid', 'valuationHigh', 'acquiredCost', 'weightGrams', 'diameterMm', 'quantity'];
-    const value = numericFields.includes(field) ? (parseFloat(editValue) || 0) : editValue;
-    const updates: Partial<Item> = { [field]: value };
-    if (field === 'expectedSellingPrice') { const price = parseFloat(editValue) || 0; updates.expectedNet = price * 0.8725; updates.expectedProfit = price * 0.8725 - (item.acquiredCost ?? 0); }
-    if (field === 'acquiredCost') { const cost = parseFloat(editValue) || 0; updates.expectedProfit = item.expectedNet - cost; }
-    const { error } = await updateItem(item.id, updates, tenant?.id);
-    setSaving(false);
-    if (error) { showAlert('Save Failed', error); return; }
-    setItem(prev => prev ? { ...prev, ...updates } : prev);
-    setEditing(null); setEditValue('');
-  }, [item, editValue, showAlert]);
+    try {
+      const numericFields = ['expectedSellingPrice', 'valuationLow', 'valuationMid', 'valuationHigh', 'acquiredCost', 'weightGrams', 'diameterMm', 'quantity'];
+      const value = numericFields.includes(field) ? (parseFloat(editValue) || 0) : editValue;
+      const updates: Partial<Item> = { [field]: value };
+      if (field === 'expectedSellingPrice') {
+        const price = parseFloat(editValue) || 0;
+        updates.expectedNet = price * 0.8725;
+        updates.expectedProfit = price * 0.8725 - (item.acquiredCost ?? 0);
+      }
+      if (field === 'acquiredCost') {
+        const cost = parseFloat(editValue) || 0;
+        updates.expectedProfit = item.expectedNet - cost;
+      }
+      const { error } = await updateItem(item.id, updates, tenant.id);
+      if (error) {
+        showAlert('Save Failed', error);
+        return;
+      }
+      setItem(prev => prev ? { ...prev, ...updates } : prev);
+      setEditing(null);
+      setEditValue('');
+    } catch (error: any) {
+      showAlert('Save Failed', error?.message ?? 'The change could not be saved. Check your connection and try again.');
+    } finally {
+      setSaving(false);
+    }
+  }, [item, editValue, tenant?.id, showAlert]);
 
   const handleGenerateListing = useCallback(async () => {
     if (!item || !tenant) return;
