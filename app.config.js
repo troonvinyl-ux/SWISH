@@ -14,6 +14,41 @@ module.exports = ({ config }) => {
     extra: { ...(config.extra || {}), eas: { ...(config.extra?.eas || {}), projectId: easProjectId } },
   } : {};
   const baseConfig = Object.keys(otaConfig).length ? { ...config, ...otaConfig } : config;
+
+  // Standalone owner-only command centre build. This is a separate Android
+  // application identity and a separate Expo Router root; it cannot open a
+  // subscriber niche shell from its navigation tree.
+  if (process.env.SWISH_MASTER_DASHBOARD === '1') {
+    const plugins = (baseConfig.plugins || []).map(plugin => {
+      const name = Array.isArray(plugin) ? plugin[0] : plugin;
+      return name === 'expo-router'
+        ? ['expo-router', { ...(Array.isArray(plugin) ? plugin[1] : {}), root: 'app/master-dashboard' }]
+        : plugin;
+    });
+    if (!plugins.some(plugin => (Array.isArray(plugin) ? plugin[0] : plugin) === 'expo-router')) {
+      plugins.push(['expo-router', { root: 'app/master-dashboard' }]);
+    }
+    return {
+      ...baseConfig,
+      name: 'SWISH Master',
+      slug: 'swish-master-dashboard',
+      scheme: 'swishmaster',
+      orientation: 'default',
+      userInterfaceStyle: 'dark',
+      plugins,
+      android: { ...baseConfig.android, package: 'com.swish.masterdashboard' },
+      extra: {
+        ...(baseConfig.extra || {}),
+        swishMasterDashboard: true,
+        swishAppScheme: 'swishmaster',
+      },
+      updates: baseConfig.updates ? {
+        ...baseConfig.updates,
+        requestHeaders: { ...(baseConfig.updates.requestHeaders || {}), 'expo-channel-name': 'production-master-dashboard' },
+      } : baseConfig.updates,
+    };
+  }
+
   if (!niche) return baseConfig;
   // Prepare for every Expo consumer (prebuild, EAS, export, OTA), not just one workflow.
   const routeRoot = prepareNicheRoutes(selected);
