@@ -73,6 +73,30 @@ jobs:
           EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
         run: pnpm exec expo prebuild --platform android --clean
 
+      # Fail before compiling if Expo did not embed the requested product identity.
+      - name: Verify generated niche configuration
+        env:
+          NICHE: ${{ inputs.niche }}
+        run: |
+          set -euo pipefail
+          pnpm exec expo config --type public --json > /tmp/swish-expo-config.json
+          node <<'NODE'
+          const fs = require('fs');
+          const cfg = JSON.parse(fs.readFileSync('/tmp/swish-expo-config.json', 'utf8'));
+          const expected = process.env.NICHE;
+          const actual = cfg.extra && cfg.extra.swishNicheId;
+          const packages = {
+            coins: 'com.swish.coinflipper', motocross: 'com.swish.flippermx',
+            bicycles: 'com.swish.bikeflipper', clothing: 'com.swish.threadsflip',
+            surplus_flip: 'com.swish.surplusflip', trading_cards: 'com.swish.cardflipper',
+            antiques: 'com.swish.antiqueflipper', fossils: 'com.swish.fossilflipper',
+            beauty: 'com.swish.beautyflipper', tech: 'com.swish.techflipper'
+          };
+          if (actual !== expected) throw new Error(`Niche mismatch: requested ${expected}, Expo embedded ${actual}`);
+          if (cfg.android?.package !== packages[expected]) throw new Error(`Android package mismatch for ${expected}: ${cfg.android?.package}`);
+          console.log(`Verified niche ${actual} and Android package ${cfg.android.package}`);
+          NODE
+
       - name: Build release APK
         working-directory: android
         run: |
