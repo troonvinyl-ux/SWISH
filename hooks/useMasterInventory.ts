@@ -44,6 +44,7 @@ export function useMasterInventory() {
   useEffect(() => { if (inventoryReloadSignal > 0) void reload(); }, [inventoryReloadSignal, reload]);
   const views = useMemo(() => snapshot.scope === scope ? buildInventoryViews(snapshot.items, snapshot.listings) : { stock: [], draft: [], live: [], sold: [] }, [snapshot, scope]);
   const refresh = useCallback(async () => { setRefreshing(true); try { await reload(); } finally { setRefreshing(false); } }, [reload]);
+  const counts = useMemo(() => ({ stock: views.stock.length, draft: views.draft.length, live: views.live.length, sold: views.sold.length }), [views]);
   const submit = useCallback(async (item: InventoryViewItem) => {
     if (!tenant || !item.listing || submitStep) return;
     const actionScope = scope; setSubmitTitle(item.canonical_title); setSubmitStep('verifying');
@@ -76,6 +77,6 @@ export function useMasterInventory() {
       await reload();
     } finally { setSyncing(false); }
   }, [tenant?.id, nicheId, scope, syncing, showAlert, reload]);
-  return { nicheId, views, activeTab, setActiveTab, reload, refresh, refreshing, submit, end, syncSold, syncing, submitStep, submitTitle,
+  return { nicheId, views, counts, activeTab, setActiveTab, reload, refresh, refreshing, submit, end, syncSold, syncing, submitStep, submitTitle,
     error: snapshot.scope === scope ? snapshot.error : null, loading: snapshot.scope !== scope || loading };
 }
