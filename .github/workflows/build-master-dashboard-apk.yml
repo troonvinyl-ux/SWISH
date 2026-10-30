@@ -1,0 +1,99 @@
+name: Build SWISH Master Dashboard APK
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/master-dashboard/**'
+      - 'app.config.js'
+      - 'scripts/install-dependencies.sh'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/build-master-dashboard-apk.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-master-dashboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SWISH_MASTER_DASHBOARD: '1'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install dependencies
+        run: bash scripts/install-dependencies.sh
+
+      - name: TypeScript validation
+        run: npx tsc --noEmit
+
+      - name: Regression tests
+        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand
+
+      - name: Verify isolated master app identity and route root
+        run: |
+          npx expo config --type public --json > /tmp/master-expo-config.json
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const config = JSON.parse(fs.readFileSync('/tmp/master-expo-config.json', 'utf8'));
+          const router = (config.plugins || []).find(p => Array.isArray(p) && p[0] === 'expo-router');
+          if (config.name !== 'SWISH Master') throw new Error('Unexpected app name: ' + config.name);
+          if (config.android?.package !== 'com.swish.masterdashboard') throw new Error('Unexpected Android package: ' + config.android?.package);
+          if (config.extra?.swishMasterDashboard !== true) throw new Error('Master dashboard identity flag missing');
+          if (router?.[1]?.root !== 'app/master-dashboard') throw new Error('Expo Router is not isolated to app/master-dashboard');
+          console.log('Master dashboard identity and isolated route root verified.');
+          NODE
+
+      - name: Generate Android project
+        run: npx expo prebuild --platform android --clean
+
+      - name: Compile APK
+        working-directory: android
+        run: ./gradlew assembleRelease --console=plain -Dorg.gradle.workers.max=2 -Dkotlin.compiler.execution.strategy=in-process
+
+      - name: Verify APK and package identity
+        run: |
+          set -euo pipefail
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          test -s "$APK"
+          unzip -l "$APK" | grep -q 'classes.dex'
+          AAPT="$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -name aapt -type f 2>/dev/null | sort -V | tail -n 1 || true)"
+          if [ -n "$AAPT" ]; then
+            "$AAPT" dump badging "$APK" | grep -F "package: name='com.swish.masterdashboard'"
+          else
+            echo "aapt unavailable; Expo config identity was validated before build."
+          fi
+          mkdir -p dist
+          cp "$APK" dist/swish-master-dashboard.apk
+          sha256sum dist/swish-master-dashboard.apk > dist/swish-master-dashboard.sha256
+          file dist/swish-master-dashboard.apk
+
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: swish-master-dashboard-apk
+          path: |
+            dist/swish-master-dashboard.apk
+            dist/swish-master-dashboard.sha256
+          if-no-files-found: error
+          retention-days: 14
