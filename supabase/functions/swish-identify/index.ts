@@ -13,6 +13,8 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
+import { canonicalSpecialist, specialistNiche, profileForSpecialist } from '../_shared/specialistRegistry.ts';
+import { normalizeSpecialistAnalysis, specialistOutputInstructions, recordValue, textList } from '../../../shared/specialistIntelligence.ts';
 
 const NUMISTA_API = 'https://api.numista.com/api/v3';
 
@@ -42,7 +44,9 @@ function isCoinLikeSpecialist(sid: string): boolean {
 
 // Resolve the paid product from the requested specialist, never from a client-supplied
 // nicheId. Generic/unknown specialists do not inherit another niche's subscription.
-function nicheForSpecialist(sid: string): 'coins' | 'motocross' | 'bicycles' | 'clothing' | 'surplus_flip' | null {
+function nicheForSpecialist(sid: string): string | null {
+  const registeredNiche = specialistNiche(sid);
+  if (registeredNiche) return registeredNiche;
   if (isCoinLikeSpecialist(sid)) return 'coins';
   if (sid === 'motocross') return 'motocross';
   if (sid === 'bicycles') return 'bicycles';
@@ -1577,6 +1581,7 @@ async function runCoinResearch(id: any, known: Record<string, any>, numista: Num
 // ── Main handler ───────────────────────────────────────────────────────────────
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method !== 'POST') return new Response(JSON.stringify({ error: 'Method not allowed.' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   try {
     const apiKey = Deno.env.get('ONSPACE_AI_API_KEY');
@@ -1593,15 +1598,24 @@ Deno.serve(async (req: Request) => {
     if (userError || !user) return new Response(JSON.stringify({ error: 'Invalid or expired authentication token.' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
     const body = await req.json();
-    const { images, imageLabels, existingImageUrls, specialistId, acquisitionContext, knownAttributes, tenantId: bodyTenantId, outputMode } = body;
+    const { images, imageLabels, existingImageUrls, specialistId, acquisitionContext, knownAttributes, tenantId: bodyTenantId, outputMode, captureMode = 'item' } = body;
+    const invalidInput = (error: string) => new Response(JSON.stringify({ error }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    if (specialistId != null && typeof specialistId !== 'string') return invalidInput('Invalid specialist selection.');
+    const selectedSpecialist = canonicalSpecialist(specialistId ?? 'curiosities_collectibles');
+    if (!selectedSpecialist) return invalidInput('Unregistered specialist selection.');
+    const profile = profileForSpecialist(selectedSpecialist);
+    if (typeof captureMode !== 'string' || (profile && !profile.modes.some(mode => mode.id === captureMode))) return invalidInput('Capture mode is not supported by this specialist.');
+    const newImages = Array.isArray(images) ? images : [];
+    const storedImages = Array.isArray(existingImageUrls) ? existingImageUrls : [];
+    if (!newImages.length && !storedImages.length) return invalidInput('At least one image is required.');
+    if (newImages.length + storedImages.length > 8 || newImages.some(image => typeof image !== 'string' || !image.trim() || image.length > 7_000_000) || storedImages.some(url => typeof url !== 'string' || !url.startsWith('https://') || url.length > 2048)) return invalidInput('Supply at most eight valid photos within the request size limit.');
+    if (JSON.stringify(body).length > 9_000_000) return invalidInput('Photos exceed the request size limit. Use fewer or smaller images.');
+    if (knownAttributes != null && (typeof knownAttributes !== 'object' || Array.isArray(knownAttributes) || JSON.stringify(knownAttributes).length > 30_000)) return invalidInput('Invalid or oversized known attributes.');
     if (typeof bodyTenantId !== 'string' || !bodyTenantId.trim() || bodyTenantId.length > 200) {
       return new Response(JSON.stringify({ error: 'A valid tenantId is required.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
-    if (typeof bodyTenantId !== 'string' || !bodyTenantId.trim() || bodyTenantId.length > 200) {
-      return new Response(JSON.stringify({ error: 'A valid tenant ID is required.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
     const tenantId = bodyTenantId.trim();
-    const specialist = specialistId ?? 'curiosities_collectibles';
+    const specialist = selectedSpecialist;
     const requestedNiche = nicheForSpecialist(specialist);
 
     const adminClient = createClient(
@@ -1668,10 +1682,11 @@ Deno.serve(async (req: Request) => {
     const hasExistingUrls = Array.isArray(existingImageUrls) && existingImageUrls.length > 0;
     if (!hasNewImages && !hasExistingUrls) return new Response(JSON.stringify({ error: 'At least one image is required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-    const specialistSystemPrompt = SPECIALIST_SYSTEM_PROMPTS[specialist] ?? SPECIALIST_SYSTEM_PROMPTS['curiosities_collectibles'];
-    const fullSystemPrompt = specialistSystemPrompt + MASTER_EVIDENCE_RULES;
+    const specialistSystemPrompt = SPECIALIST_SYSTEM_PROMPTS[specialist] ?? (profile ? `You are SWISH's ${profile.nicheId} identification specialist. ${profile.recognition}` : SPECIALIST_SYSTEM_PROMPTS['curiosities_collectibles']);
+    const fullSystemPrompt = specialistSystemPrompt + MASTER_EVIDENCE_RULES + (profile ? '\n' + specialistOutputInstructions(profile) : '');
     const coinMode = isCoinLikeSpecialist(specialist);
-    const vehicleMode = isVehicleSpecialist(specialist);
+    const vehicleMode = isVehicleSpecialist(specialist) && captureMode !== 'part';
+    const identificationSchema = profile && !coinMode ? `Return ONLY a JSON object with canonicalTitle, specialistId, objectType (a relevant category from the specialist taxonomy), identificationState (observation_only|candidate), confidence (0..1), confidenceReason, identificationSource (detected|inferred), condition, conditionNotes, attributesConfirmed, attributesInferred, attributes, candidateIdentification { primaryCandidate, alternativeCandidates, whyCandidateSelected, whyUncertain }, evidenceSupporting, evidenceContradictory, missingInformation, warnings, suggestedDisposition, dispositionDecision. Include specialistAnalysis as specified above. Prices MUST be zero and saleProb30d MUST be null. Do not emit coinFields or medalFields for non-numismatic objects.` : OUTPUT_SCHEMA;
     const clothingMode = isClothingSpecialist(specialist);
 
     const listingCopyMode = outputMode === 'listing_copy' && clothingMode;
@@ -1706,7 +1721,7 @@ The caller will use only the requested output (title or description). Do not inv
     const userContent: any[] = [{
       type: 'text',
       text: [
-        `Specialist domain: ${specialist}`,
+        `Specialist domain: ${specialist}; capture mode: ${captureMode}. This selection is authoritative; do not change the specialistId.`, 
         acquisitionContext ? `Acquisition context: ${acquisitionContext}` : '',
         knownAttrsContext,
         learningContext,
@@ -1716,7 +1731,7 @@ The caller will use only the requested output (title or description). Do not inv
         'Follow the specialist identification pipeline. Use "Not established" for any field without visible evidence.',
         knownAttrsContext ? 'REFINEMENT MODE: Reassess the candidate from the images from scratch. Explicitly compare each supplied measurement and catalogue claim with visible inscriptions/design and catalogue data. Do not simply repeat the previous identification or confidence. New data must change the result only when it actually supports or contradicts a candidate. Put each independently checked match in evidenceSupporting and each mismatch in evidenceContradictory; identify any unverified user claim as unverified.' : '',
         '',
-        OUTPUT_SCHEMA,
+        identificationSchema,
         supplementalSchema,
       ].filter(Boolean).join('\n'),
     }];
@@ -1746,11 +1761,12 @@ The caller will use only the requested output (title or description). Do not inv
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: coinMode || vehicleMode || clothingMode ? 'google/gemini-2.5-flash' : 'google/gemini-3-flash-preview',
         messages: [{ role: 'system', content: fullSystemPrompt }, { role: 'user', content: userContent }],
         temperature: 0.05,
-        max_tokens: 3000,
+        max_tokens: profile ? 4500 : 3000,
       }),
+      signal: AbortSignal.timeout(45_000),
     });
 
     if (!aiResponse.ok) {
@@ -1761,8 +1777,7 @@ The caller will use only the requested output (title or description). Do not inv
         try {
           await adminClient.from('ai_usage').update({
             count: Math.max(0, currentUsage),
-            updated_at: new Date().toISOString(),
-          }).eq('tenant_id', tenantId).eq('user_id', user.id).eq('feature', FEATURE_KEY).eq('month_key', monthKey);
+          }).eq('tenant_id', tenantId).eq('user_id', user.id).eq('feature', FEATURE_KEY).eq('month_key', monthKey).eq('count', currentUsage + 1);
         } catch {}
       }
       return new Response(JSON.stringify({ error: 'Identification request failed. Please retry.' }), { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -1805,6 +1820,13 @@ The caller will use only the requested output (title or description). Do not inv
       return new Response(JSON.stringify({ error: 'AI returned invalid JSON. Please retry identification.', details: 'The model response could not be parsed as a JSON object.' }), { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
+    if (typeof identification.canonicalTitle !== 'string' || !identification.canonicalTitle.trim() || typeof identification.confidence !== 'number' || !Number.isFinite(identification.confidence)) {
+      return new Response(JSON.stringify({ error: 'Identification returned an incomplete structured result. Please retry.' }), { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    identification.specialistId = specialist;
+    identification.confidence = Math.max(0, Math.min(1, identification.confidence));
+    for (const key of ['evidenceSupporting','evidenceContradictory','missingInformation','warnings']) identification[key] = textList(identification[key],20);
+    for (const key of ['attributes','attributesConfirmed','attributesInferred']) identification[key] = recordValue(identification[key]);
     const objectType: ObjectType = identification.objectType ?? (vehicleMode ? 'motorcycle' : clothingMode ? 'garment' : 'unknown');
     const isConfirmedCoin = objectType === 'coin';
 
@@ -1998,6 +2020,25 @@ The caller will use only the requested output (title or description). Do not inv
         }
       } catch (reviewError) {
         console.warn('[swish-identify] Second-pass review failed; retaining guarded first pass:', reviewError);
+      }
+    }
+
+    // Shared analysis is model assessment, not independent source verification.
+    constrained.specialistId = specialist;
+    if (profile) {
+      const analysis = normalizeSpecialistAnalysis(constrained.specialistAnalysis, profile, Number(constrained.confidence));
+      constrained.specialistAnalysis = analysis;
+      constrained.attributes = recordValue(constrained.attributes);
+      constrained.attributes._specialist_analysis = analysis;
+      for (const [key,entry] of Object.entries(analysis.fields)) {
+        if (entry.basis !== 'inferred' && !constrained.attributes[key]) constrained.attributes[key] = entry.value;
+      }
+      if (analysis.quality.status === 'retake') {
+        constrained.confidence = Math.min(0.25, constrained.confidence);
+        constrained.identificationState = 'observation_only';
+        constrained.confidenceTier = 'very_low';
+        analysis.confidence.identification = constrained.confidence;
+        constrained.attributes.identification_state = 'observation_only';
       }
     }
 

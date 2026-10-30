@@ -99,9 +99,7 @@ jobs:
             });
             for (const d of result.diagnostics ?? []) {
               if (d.category === ts.DiagnosticCategory.Error) {
-                const source = fs.readFileSync(file, 'utf8');
-                const pos = d.start == null ? null : ts.getLineAndCharacterOfPosition(ts.createSourceFile(file, source, ts.ScriptTarget.ES2022, true), d.start);
-                failures.push(file + (pos ? `:${pos.line + 1}:${pos.character + 1}` : '') + ': ' + ts.flattenDiagnosticMessageText(d.messageText, '\\n'));
+                failures.push(file + ': ' + ts.flattenDiagnosticMessageText(d.messageText, '\n'));
               }
             }
           }

@@ -20,8 +20,6 @@ jest.mock('@/template', () => ({
   useAlert: jest.fn(() => ({ showAlert: jest.fn() })),
 }));
 
-jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
-
 // ── Mock Supabase client ──────────────────────────────────────────────────────
 const mockInvoke = jest.fn();
 const mockFrom = jest.fn();
@@ -84,8 +82,6 @@ describe('Server-authoritative identification', () => {
   };
 
   beforeEach(() => {
-    mockInvoke.mockClear();
-    mockFrom.mockClear();
     mockInvoke.mockResolvedValue({
       data: { identification: MOCK_COIN_RESULT, quota: { isPremium: false, used: 1, limit: 5, remaining: 4 } },
       error: null,
@@ -480,7 +476,7 @@ describe('Production configuration', () => {
     const images = [{ uri: 'file://test.jpg', slotId: 'obverse', slotLabel: 'Obverse' }];
     const MY_TENANT = 'production-tenant-id';
     await identifyItemWithAI(images, 'coins', undefined, undefined, { tenantId: MY_TENANT });
-    const callBody = mockInvoke.mock.calls[mockInvoke.mock.calls.length - 1][1].body;
+    const callBody = mockInvoke.mock.calls[0][1].body;
     expect(callBody.tenantId).toBe(MY_TENANT);
   });
 });

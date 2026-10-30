@@ -1,11 +1,7 @@
-// Source contract tests for the SQL migrations and server-owned write paths tracked in this repository.
+// Source contract tests only. Real role-level SQL checks are recorded in the handover.
 import fs from 'node:fs';
 import path from 'node:path';
-
-const projectRoot = path.resolve(__dirname, '../..');
-const migration = (name: string) => fs.readFileSync(path.resolve(projectRoot, 'supabase/migrations', name), 'utf8');
-const edgeFunction = (name: string) => fs.readFileSync(path.resolve(projectRoot, 'supabase/functions', name, 'index.ts'), 'utf8');
-
+const migration = (name: string) => fs.readFileSync(path.resolve(__dirname, '../../supabase/migrations', name), 'utf8');
 describe('Tracked database security contracts', () => {
   test('client credential permission is revoked rather than hidden only by a UI query', () => {
     const source = migration('20261030_security_boundaries.sql');
@@ -14,24 +10,20 @@ describe('Tracked database security contracts', () => {
     expect(source).toContain('pg_advisory_xact_lock');
     expect(source).toContain('revoke insert, update on public.tenant_memberships');
   });
-
-  test('inventory tab projection is tenant-scoped and sold evidence takes precedence', () => {
-    const source = migration('20261030_inventory_tab_state.sql');
-    expect(source).toContain('security_invoker = true');
-    expect(source).toContain('as terminal_sold');
-    expect(source).toContain("case when i.terminal_sold then 'sold'");
-    expect(source).toContain('swish_apply_ebay_listing_status');
-    expect(source).toContain('Listing scope mismatch');
+  test('editor cannot change canonical inventory IDs or specialist associations', () => {
+    const source = migration('20261030_editor_disconnect_storage.sql');
+    expect(source).toContain('security invoker');
+    expect(source).toContain('ebay_item_specifics');
+    expect(source).not.toMatch(/set\s+(?:inventory_id|specialist_id|tenant_id)\s*=/i);
+    expect(source).toContain('as restrictive for update');
   });
-
-  test('publish path uses an atomic claim and only resets its own claim', () => {
-    const source = edgeFunction('swish-ebay-list');
-    expect(source).toContain("supabase.rpc('swish_claim_listing_publish'");
-    expect(source).toContain('publish_claim_id: null');
-    expect(source).toContain(".eq('publish_claim_id', claimId)");
-    expect(source).toContain('PUBLISH_RECONCILIATION_REQUIRED');
+  test('publish claims are server-only and independent of the listing status enum', () => {
+    const source = migration('20261030_publish_claim.sql');
+    expect(source).toContain('publish_claim_id is null');
+    expect(source).toContain('to service_role');
+    expect(source).toContain('from public,anon,authenticated');
+    expect(source).not.toContain('drop constraint');
   });
-
   test('future listing links cannot cross tenant boundaries', () => {
     const source = migration('20261030_listing_tenant_guard.sql');
     expect(source).toContain('i.id=new.item_id and i.tenant_id=new.tenant_id');

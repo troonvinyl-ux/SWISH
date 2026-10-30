@@ -98,8 +98,7 @@ async function getEbayAccessToken(
 
   let creds: any;
   try { creds = await decryptCredentials(conn.credential_ref); } catch (e: any) {
-    console.error('[SWISH] eBay credential decryption failed.');
-    return { error: 'Unable to read eBay connection securely. Please reconnect eBay in Marketplaces.' };
+    return { error: `eBay credentials are corrupted: ${e.message}. Please re-connect eBay in Marketplaces.` };
   }
   if (!creds.accessToken) {
     return { error: 'No eBay access token found. Please re-authorise eBay in Marketplaces.' };
@@ -193,13 +192,13 @@ async function handleSyncMessages(
     });
     responseXml = await resp.text();
   } catch (e: any) {
-    return jsonResponse({ error: 'Unable to reach eBay messages service. Please retry.' }, 503);
+    return jsonResponse({ error: `Network error reaching eBay: ${e.message}` }, 503);
   }
 
   const ack = parseAck(responseXml);
   if (ack === 'Failure') {
     const errMsg = responseXml.match(/<LongMessage>([\s\S]*?)<\/LongMessage>/)?.[1] ?? 'eBay API error';
-    return jsonResponse({ error: 'The eBay messages request failed. Please retry.' }, 400);
+    return jsonResponse({ error: errMsg }, 400);
   }
 
   const msgMatches = Array.from(responseXml.matchAll(/<MessageSummary>([\s\S]*?)<\/MessageSummary>/g));
@@ -305,7 +304,7 @@ async function handleSendReply(
         console.log(`[SWISH] eBay send reply failed for message ${messageId}: ${errMsg}`);
       }
     } catch (e: any) {
-      console.log('[SWISH] eBay send reply network error.');
+      console.log(`[SWISH] eBay send reply network error: ${e.message}`);
     }
   }
 

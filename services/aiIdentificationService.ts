@@ -14,9 +14,12 @@ import { SpecialistId } from '@/constants/specialists';
 import { EvidenceSource, ConfidenceTier, DispositionDecision } from '@/constants/config';
 import { createItem, Item } from '@/services/itemService';
 import { resolveProductionNiche, getProductionNicheSpecialistIds } from '@/services/nicheRouting';
+import { getSpecialistProfile, normalizeSpecialistAnalysis, recordValue, textList, type SpecialistAnalysis } from '@/shared/specialistIntelligence';
 
 export interface CapturedImage {
   uri: string;
+  width?: number;
+  height?: number;
   base64?: string;
   slotId: string;
   slotLabel: string;
@@ -75,6 +78,7 @@ export interface QuotaExceededError {
 }
 
 export interface AIIdentificationResult {
+  specialistAnalysis?: SpecialistAnalysis;
   canonicalTitle: string;
   specialistId: SpecialistId;
   objectType?: string;               // v4: coin|medal|token|jeton|commemorative_piece|banknote|jewellery|replica_reproduction|unknown
@@ -180,6 +184,10 @@ export async function requestMediaPermissions(): Promise<{ granted: boolean; err
 
 // Launch camera to capture one photo
 export async function captureFromCamera(): Promise<CapturedImage | null> {
+  if (Platform.OS !== 'web') {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) throw new Error('Camera permission is required. Enable it in device settings or upload a photo.');
+  }
   const result = await ImagePicker.launchCameraAsync({
     mediaTypes: ImagePicker.MediaTypeOptions.Images,
     quality: 0.85,
@@ -193,6 +201,7 @@ export async function captureFromCamera(): Promise<CapturedImage | null> {
   const asset = result.assets[0];
   return {
     uri: asset.uri,
+    width: asset.width, height: asset.height,
     slotId: 'camera_capture',
     slotLabel: 'Camera Capture',
   };
@@ -200,6 +209,10 @@ export async function captureFromCamera(): Promise<CapturedImage | null> {
 
 // Launch photo library picker
 export async function pickFromLibrary(slotId: string, slotLabel: string): Promise<CapturedImage | null> {
+  if (Platform.OS !== 'web') {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) throw new Error('Photo library permission is required. Enable it in device settings or use the camera.');
+  }
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ImagePicker.MediaTypeOptions.Images,
     quality: 0.85,
@@ -213,6 +226,7 @@ export async function pickFromLibrary(slotId: string, slotLabel: string): Promis
   const asset = result.assets[0];
   return {
     uri: asset.uri,
+    width: asset.width, height: asset.height,
     slotId,
     slotLabel,
   };
@@ -300,6 +314,7 @@ export async function identifyItemWithAI(
   options?: {
     tenantId?: string;
     existingImageUrls?: string[];  // use stored URLs instead of re-uploading
+    captureMode?: string;
   }
 ): Promise<{ result: AIIdentificationResult | null; error: string | null; quotaExceeded?: QuotaExceededError }> {
   try {
@@ -320,6 +335,7 @@ export async function identifyItemWithAI(
         acquisitionContext,
         knownAttributes,
         tenantId: options?.tenantId,
+        captureMode: options?.captureMode,
       },
     });
 
@@ -369,7 +385,7 @@ export async function identifyItemWithAI(
       return { result: null, error: 'AI returned no identification data' };
     }
 
-    const id = data.identification;
+    const id = recordValue(data.identification);
     const numistaV = data.numistaVerification ?? null;
 
     // ── Niche-context guard ────────────────────────────────────────────────
@@ -383,7 +399,7 @@ export async function identifyItemWithAI(
       'bicycles', 'motocross', 'clothing', 'trainers_sneakers',
       'coins', 'islamic_silver', 'banknotes', 'gold', 'silver',
       'pokemon_cards', 'trading_cards', 'stamps', 'vinyl_records',
-      'books', 'retro_games', 'retro_consoles',
+      'books', 'retro_games', 'retro_consoles', 'fossils', 'beauty', 'tech', 'surplus_trader',
     ]);
     const aiSpecialist = id.specialistId as SpecialistId | undefined;
     const resolvedSpecialistId: SpecialistId =
@@ -400,8 +416,11 @@ export async function identifyItemWithAI(
       return { result: null, error: 'Identification returned an invalid structured result. Please retry.' };
     }
 
+    const profile = requestedNiche ? getSpecialistProfile(requestedNiche) : null;
+    const specialistAnalysis = profile ? normalizeSpecialistAnalysis(id.specialistAnalysis, profile, Number(id.confidence)) : undefined;
     const result: AIIdentificationResult = {
-      canonicalTitle: id.canonicalTitle ?? 'Unknown Item',
+      specialistAnalysis,
+      canonicalTitle: id.canonicalTitle.trim(),
       specialistId: resolvedSpecialistId,
       // v4 fields
       objectType: id.objectType ?? undefined,
@@ -427,13 +446,13 @@ export async function identifyItemWithAI(
       valuationConfidence: 'unknown' as ConfidenceTier,
       valuationNote: id.valuationNote ?? 'Use Re-Value to get evidence-based market pricing',
       saleProb30d: id.saleProb30d ?? null,
-      evidenceSupporting: Array.isArray(id.evidenceSupporting) ? id.evidenceSupporting : [],
-      evidenceContradictory: Array.isArray(id.evidenceContradictory) ? id.evidenceContradictory : [],
-      missingInformation: Array.isArray(id.missingInformation) ? id.missingInformation : [],
-      attributesConfirmed: id.attributesConfirmed ?? {},
-      attributesInferred: id.attributesInferred ?? {},
-      attributes: id.attributes ?? {},
-      warnings: Array.isArray(id.warnings) ? id.warnings : [],
+      evidenceSupporting: textList(id.evidenceSupporting,20),
+      evidenceContradictory: textList(id.evidenceContradictory,20),
+      missingInformation: textList(id.missingInformation,20),
+      attributesConfirmed: recordValue(id.attributesConfirmed),
+      attributesInferred: recordValue(id.attributesInferred),
+      attributes: { ...recordValue(id.attributes), ...(specialistAnalysis ? { _specialist_analysis: specialistAnalysis } : {}) },
+      warnings: textList(id.warnings,20),
       suggestedDisposition: id.suggestedDisposition ?? '',
       dispositionDecision: (id.dispositionDecision ?? 'sell_individual') as DispositionDecision,
       // v3/v4: Numista
@@ -535,14 +554,15 @@ export async function updateItemMedia(
   permanentUrls: string[]
 ): Promise<void> {
   const supabase = getSupabaseClient();
-  await supabase
+  const { error, count } = await supabase
     .from('items')
     .update({
       media: permanentUrls,
       updated_at: new Date().toISOString(),
-    })
+    }, { count: 'exact' })
     .eq('id', itemId)
     .eq('tenant_id', tenantId);
+  if (error || count === 0) throw new Error(error?.message ?? 'Photos could not be linked to this item. Retry the upload.');
 }
 
 // ── Persist an AI identification result as a real database Item ───────────────
@@ -683,6 +703,14 @@ export async function saveIdentifiedItem(
     ? 'clothing'
     : result.specialistId;
 
+  const niche = resolveProductionNiche(canonicalSpecialistId);
+  const profile = niche ? getSpecialistProfile(niche) : null;
+  const attrs = { ...result.attributes };
+  if (profile && result.specialistAnalysis) {
+    for (const [key,entry] of Object.entries(result.specialistAnalysis.fields)) {
+      if (entry.basis !== 'inferred' && !attrs[key]) attrs[key] = entry.value;
+    }
+  }
   return createItem(tenantId, {
     canonicalTitle: result.canonicalTitle,
     specialistId: canonicalSpecialistId as SpecialistId,
@@ -693,9 +721,10 @@ export async function saveIdentifiedItem(
     denomination: usableText(catalogue.denomination ?? result.coinFields?.denomination),
     period: usableText(catalogue.period ?? result.coinFields?.period),
     mint: usableText(catalogue.mint ?? result.coinFields?.mint),
-    material: usableText(catalogue.material ?? result.coinFields?.composition),
-    countryOfOrigin: usableText(catalogue.country ?? result.coinFields?.country),
-    yearMade: usableText(result.attributes?.user_supplied_year ?? yearRange ?? result.coinFields?.period),
+    material: usableText(catalogue.material ?? result.coinFields?.composition ?? attrs.material ?? attrs.composition),
+    manufacturer: usableText(attrs.manufacturer ?? attrs.brand ?? attrs.maker),
+    countryOfOrigin: usableText(catalogue.country ?? result.coinFields?.country ?? attrs.country_manufacture),
+    yearMade: usableText(result.attributes?.user_supplied_year ?? yearRange ?? result.coinFields?.period ?? attrs.year ?? attrs.year_range),
     weightGrams: Number.isFinite(measuredWeight) && measuredWeight > 0 ? measuredWeight : undefined,
     diameterMm: Number.isFinite(measuredDiameter) && measuredDiameter > 0 ? measuredDiameter : undefined,
     acquisitionId: options.acquisitionId,
@@ -719,7 +748,9 @@ export async function saveIdentifiedItem(
     expectedProfit: -acquiredCost,
     saleProb30d: 0,
     attributes: {
-      ...result.attributes,
+      ...attrs,
+      _identification_evidence: { supporting: result.evidenceSupporting, contradictory: result.evidenceContradictory, missing: result.missingInformation, candidates: result.candidateIdentification, recordedAt: new Date().toISOString(), source: 'ai_proposal' },
+      ...(result.specialistAnalysis ? { _specialist_analysis: result.specialistAnalysis } : {}),
       ...(resolveProductionNiche(canonicalSpecialistId) ? { niche_id: resolveProductionNiche(canonicalSpecialistId) } : {}),
       // Ensure objectType and identificationState are stored
       ...(result.objectType ? { object_type: result.objectType } : {}),

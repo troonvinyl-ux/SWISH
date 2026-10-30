@@ -19,12 +19,12 @@ import { resolveProductionNiche } from '@/services/nicheRouting';
 function useNicheHomeTab() {
   const { activeNicheId, fixedNicheId } = useApp();
   const id = resolveProductionNiche(fixedNicheId ?? activeNicheId) ?? '';
-  if (id === 'coins') {
+  if (id.includes('coin') || id === 'gold' || id === 'silver' || id === 'banknotes' || id === 'islamic_silver') {
     return { icon: 'toll' as const, label: 'Coins' };
   }
-  if (id === 'motocross') return { icon: 'two-wheeler' as const, label: 'MX' };
-  if (id === 'bicycles') return { icon: 'pedal-bike' as const, label: 'Bikes' };
-  if (id === 'clothing') return { icon: 'checkroom' as const, label: 'Fashion' };
+  if (id === 'motocross' || id === 'mx') return { icon: 'two-wheeler' as const, label: 'MX' };
+  if (id === 'bicycles' || id === 'cycling' || id === 'bikes') return { icon: 'pedal-bike' as const, label: 'Bikes' };
+  if (id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers' || id === 'trainers') return { icon: 'checkroom' as const, label: 'Fashion' };
   if (id === 'surplus_flip') return { icon: 'inventory-2' as const, label: 'Surplus' };
   const config = id ? NICHES[id] : null;
   return { icon: (config?.icon ?? 'dashboard') as React.ComponentProps<typeof MaterialIcons>['name'], label: config?.shortName ?? 'Home' };

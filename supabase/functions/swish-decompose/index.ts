@@ -189,17 +189,17 @@ Recommend the strategy that MAXIMISES net profit per labour hour, not just gross
     });
 
     if (!aiResponse.ok) {
-      await aiResponse.text();
-      console.error('swish-decompose provider request failed.');
+      const errText = await aiResponse.text();
+      console.error('OnSpace AI decompose error:', errText);
       return new Response(
-        JSON.stringify({ error: 'The decomposition service is temporarily unavailable.' }),
+        JSON.stringify({ error: `OnSpace AI: ${errText}` }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     const aiData = await aiResponse.json();
     const rawContent = aiData.choices?.[0]?.message?.content ?? '';
-    console.log('Decomposition response received.');
+    console.log('Decomposition raw response:', rawContent.slice(0, 800));
 
     let decomposition: any = null;
     try {
@@ -209,9 +209,9 @@ Recommend the strategy that MAXIMISES net profit per labour hour, not just gross
         .trim();
       decomposition = JSON.parse(cleaned);
     } catch (parseErr) {
-      console.error('swish-decompose returned invalid JSON.');
+      console.error('JSON parse error:', parseErr, 'Raw:', rawContent);
       return new Response(
-        JSON.stringify({ error: 'The decomposition service returned an invalid response.' }),
+        JSON.stringify({ error: 'AI returned invalid JSON', raw: rawContent }),
         { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -252,9 +252,9 @@ Recommend the strategy that MAXIMISES net profit per labour hour, not just gross
     );
 
   } catch (err: any) {
-    console.error('swish-decompose failed.');
+    console.error('swish-decompose error:', err);
     return new Response(
-      JSON.stringify({ error: 'The decomposition service is temporarily unavailable.' }),
+      JSON.stringify({ error: err.message ?? 'Internal error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

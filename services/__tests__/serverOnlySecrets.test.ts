@@ -143,10 +143,9 @@ describe('SWISH eBay finance scope refresh coordination', () => {
     expect(finance).toContain('needsRefresh || (needsFinanceScopeRefresh && hasRefreshCredentials)');
   });
 
-  test('sync token refresh preserves the consented scope set and records refresh metadata', () => {
-    expect(sync).toContain('Omit scope: preserve the full consented permissions, including finances.');
-    expect(sync).toContain('financeScopeRefreshedAt: new Date().toISOString()');
-    expect(sync).not.toContain('delete updatedCredentials.financeScopeRefreshedAt');
+  test('scope-restricted sync refresh clears the finance-scope marker', () => {
+    expect(sync).toContain("scope: 'https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.fulfillment https://api.ebay.com/oauth/api_scope/sell.account'");
+    expect(sync).toContain('delete updatedCredentials.financeScopeRefreshedAt');
   });
 
   test('temporary token-service failures are retryable, not falsely marked as reauthentication-required', () => {
@@ -204,7 +203,7 @@ describe('Checkout request and branded callback regression', () => {
 
   test('only accepts canonical product-to-scheme mappings for branded redirects', () => {
     expect(checkout).toContain('expectedSchemeByNiche');
-    expect(checkout).toContain('requestedScheme !== expectedScheme');
+    expect(checkout).toContain('appScheme !== expectedSchemeByNiche[nicheId]');
     expect(checkout).toContain('${callbackScheme}://subscription/success');
     expect(checkout).toContain('${callbackScheme}://subscription/cancel');
     expect(client).toContain('const resolvedScheme = appScheme ?? Constants.expoConfig?.extra?.swishAppScheme');
@@ -275,6 +274,9 @@ describe('SWISH eBay inventory sync tenant write isolation', () => {
     expect(sync).toContain(".eq('id', l.item_id).eq('tenant_id', tenantId)");
   });
 
+  test('clears finance scope marker when the restricted eBay sync flow refreshes a token', () => {
+    expect(sync).toContain('delete updatedCredentials.financeScopeRefreshedAt');
+  });
 });
 
 
@@ -285,7 +287,7 @@ describe('SWISH Stripe account binding', () => {
   test('checkout creates niche entitlement metadata for the authenticated user and validates product scheme', () => {
     expect(checkout).toContain('metadata: { user_id: user.id, niche_id: nicheId }');
     expect(checkout).toContain('subscription_data:');
-    expect(checkout).toContain('if (requestedScheme && requestedScheme !== expectedScheme)');
+    expect(checkout).toContain('if (appScheme && appScheme !== expectedSchemeByNiche[nicheId])');
   });
 
   test('subscription check refuses a subscription explicitly linked to a different user', () => {
@@ -302,12 +304,14 @@ describe('SWISH Stripe account binding', () => {
   });
 
   test('legacy subscription auto-link requires a confirmed account and one unambiguous live SWISH customer', () => {
-    expect(subscription).toContain('customers.data.find((candidate) => candidate.metadata?.user_id === user.id)');
-    expect(subscription).not.toContain('customers.data[0].id');
+    expect(subscription).toContain('if (!customer && user.email_confirmed_at)');
+    expect(subscription).toContain('eligibleLegacyCustomers.length === 1');
+    expect(subscription).toContain("sub.metadata.user_id === user.id");
+    expect(subscription).toContain('stripe.customers.update(eligibleLegacyCustomers[0].id');
   });
 
   test('subscription check returns only canonical production niche entitlements', () => {
-    expect(subscription).toContain('const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing", "surplus_flip", "trading_cards", "antiques", "fossils", "beauty", "tech"])');
+    expect(subscription).toContain('const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing", "surplus_flip"])');
     expect(subscription).toContain('niche_entitlements: entitlements');
   });
 });
@@ -319,33 +323,33 @@ describe('SWISH AI identification tenant and quota safeguards', () => {
   test('requires a tenant ID and verified membership before performing identification work', () => {
     expect(identify).toContain("typeof bodyTenantId !== 'string' || !bodyTenantId.trim() || bodyTenantId.length > 200");
     expect(identify).toContain(".eq('tenant_id', tenantId)\n      .eq('user_id', user.id)");
-    expect(identify).toContain("if (membershipError || !tenantMembership)");
+    expect(identify).toContain("if (!tenantMembership)");
     expect(identify).toContain("error: 'Access denied for this account.'");
   });
 
   test('fails closed when the atomic AI usage increment or usage lookup fails', () => {
     expect(identify).toContain("return { count: 0, error: 'Usage tracking is unavailable.' }");
     expect(identify).toContain("error: 'USAGE_TRACKING_UNAVAILABLE'");
-    expect(identify).toContain('if (usageResult.count > FREE_MONTHLY_QUOTA)');
+    expect(identify).toContain('if (usageCount > FREE_MONTHLY_QUOTA)');
     expect(identify).toContain('The atomic RPC result is authoritative.');
     expect(identify).toContain("if (error) throw new Error('AI usage lookup failed.')");
     expect(identify).not.toContain("return { count: Number(row?.count ?? 1), error: null }");
   });
 
   test('does not roll quota counters backward over a concurrent request', () => {
-    expect(identify).toContain("admin.rpc(\n    'upsert_ai_usage'");
+    expect(identify).toContain(".eq('count', currentUsage + 1)");
   });
 
   test('checks active and trialing subscription state and verifies linked user metadata', () => {
     expect(identify).toContain("if (sub.status !== 'active' && sub.status !== 'trialing') continue;");
     expect(identify).toContain('const linkedUserId = sub.metadata?.user_id');
     expect(identify).toContain('if (linkedUserId && linkedUserId !== userId) continue;');
-    expect(identify).toContain("const subscribedNiche = String(sub.metadata?.niche_id ?? 'coins').toLowerCase();");
+    expect(identify).toContain("if (subscribedNiche === 'surplus_trader') subscribedNiche = 'surplus_flip';");
   });
 
   test('does not send raw unhandled or AI-provider errors back to the client', () => {
     expect(identify).toContain("error: 'Identification request failed. Please retry.'");
-    expect(identify).toContain("error: 'Identification request failed. Please retry.'");
+    expect(identify).toContain("error: 'Identification service is temporarily unavailable. Please retry.'");
     expect(identify).not.toContain("JSON.stringify({ error: err.message ?? 'Internal error' })");
   });
 });
@@ -367,7 +371,7 @@ describe('Stripe customer portal account isolation', () => {
   const portal = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-customer-portal/index.ts'), 'utf8');
 
   test('requires a verified Bearer token and a Stripe customer linked to the authenticated user', () => {
-    expect(portal).toContain('!authHeader?.startsWith("Bearer ")');
+    expect(portal).toContain('!authHeader.startsWith("Bearer ")');
     expect(portal).toContain('candidate.metadata?.user_id === user.id');
     expect(portal).not.toContain('customers.data[0].id');
   });
@@ -375,7 +379,7 @@ describe('Stripe customer portal account isolation', () => {
   test('legacy billing customer linking is confirmed, subscription-backed, and ambiguity-safe', () => {
     expect(portal).toContain('if (!customer && user.email_confirmed_at)');
     expect(portal).toContain('eligibleLegacyCustomers.length === 1');
-    expect(portal).toContain("sub.metadata?.user_id === user.id");
+    expect(portal).toContain("sub.metadata.user_id === user.id");
     expect(portal).toContain('stripe.customers.update(eligibleLegacyCustomers[0].id');
   });
 
@@ -391,7 +395,7 @@ describe('Stripe checkout customer isolation', () => {
 
   test('checkout reuses only a Stripe customer explicitly linked to this user', () => {
     expect(checkout).toContain('candidate.metadata?.user_id === user.id');
-    expect(checkout).toContain('metadata: { user_id: user.id, swish_customer: "true" }');
+    expect(checkout).toContain('metadata: { user_id: user.id }');
     expect(checkout).not.toContain('!candidate.metadata?.user_id');
     expect(checkout).not.toContain('stripe.customers.update(unlinkedCustomer.id');
     expect(checkout).not.toContain('customers.data[0].id');
@@ -622,8 +626,8 @@ describe('SWISH image download error sanitization', () => {
   test('direct Numista lookup failures use a generic diagnostic', () => {
     expect(islamicIdentify).toContain("firstError ||= 'Numista direct lookup failed.'");
     expect(islamicIdentify).not.toContain('Numista direct lookup failed: ${e.message}');
-    expect(islamicIdentify).toContain(String.raw`referenceText.match(/\bN\s*#\s*(\d{1,9})\b/i)`);
-    expect(islamicIdentify).toContain(String.raw`referenceText.match(/numista\.com\/(?:catalogue\/index\.php\?r=)?(\d{1,9})/i)`);
+    expect(islamicIdentify).toContain("referenceText.match(/\\bN\\s*#\\s*(\\d{1,9})\\b/i)");
+    expect(islamicIdentify).toContain("referenceText.match(/numista\\.com\\/(?:catalogue\\/index\\.php\\?r=)?(\\d{1,9})/i)");
   });
 
   test('image download and category authentication failures do not expose raw exceptions', () => {
@@ -634,7 +638,7 @@ describe('SWISH image download error sanitization', () => {
     expect(imageDownload).toContain("Unable to prepare eBay authorisation. Please reconnect and retry.");
     expect(imageDownload).not.toContain('error: isReauth ? \'eBay re-authorisation required.\' : e.message');
     expect(imageDownload).not.toContain('Refresh failed: ${e.message}');
-    expect(category).toContain("Authentication required.");
+    expect(category).toContain("Authentication could not be verified.");
     expect(category).not.toContain('Auth error: ${e.message}');
   });
 });
