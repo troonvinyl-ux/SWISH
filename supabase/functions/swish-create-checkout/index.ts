@@ -18,6 +18,11 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 405,
+    });
+  }
 
   const supabaseClient = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
@@ -27,9 +32,15 @@ serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("Authorization header not provided");
-
-    const token = authHeader.replace("Bearer ", "");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Authentication required." }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 401,
+      });
+    }
+    const token = authHeader.slice("Bearer ".length).trim();
+    if (!token) return new Response(JSON.stringify({ error: "Authentication required." }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 401,
+    });
     const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
     if (userError || !userData.user?.email) {
       throw new Error("User not authenticated or email unavailable");
@@ -37,11 +48,24 @@ serve(async (req) => {
     const user = userData.user;
     console.log(`[create-checkout] User: ${user.id} — ${user.email}`);
 
-    let nicheId = "coins";
-    try {
-      const body = await req.json();
-      if (body?.nicheId) nicheId = String(body.nicheId).trim().toLowerCase();
-    } catch {}
+    let body: Record<string, unknown> = {};
+    const rawBody = await req.text();
+    if (rawBody.trim()) {
+      try {
+        const parsed: unknown = JSON.parse(rawBody);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          return new Response(JSON.stringify({ error: "Request body must be a JSON object." }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400,
+          });
+        }
+        body = parsed as Record<string, unknown>;
+      } catch {
+        return new Response(JSON.stringify({ error: "Invalid checkout request." }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400,
+        });
+      }
+    }
+    let nicheId = typeof body.nicheId === "string" ? body.nicheId.trim().toLowerCase() : "coins";
     // Checkout metadata must use a recognised production niche so the same
     // entitlement can be read consistently by swish-check-subscription.
     if (nicheId === "surplus_trader") nicheId = "surplus_flip";
@@ -58,21 +82,35 @@ serve(async (req) => {
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
-    // Reuse existing customer if they have one
-    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
-    let customerId: string | undefined;
-    if (customers.data.length > 0) {
-      customerId = customers.data[0].id;
-      console.log(`[create-checkout] Existing Stripe customer: ${customerId}`);
+    const expectedSchemeByNiche: Record<string, string> = {
+      coins: "coinflipper", motocross: "flippermx", bicycles: "bikeflipper",
+      clothing: "threadsflip", surplus_flip: "surplusflip",
+    };
+    const expectedScheme = expectedSchemeByNiche[nicheId];
+    const requestedScheme = typeof body.appScheme === "string" ? body.appScheme : undefined;
+    if (requestedScheme && requestedScheme !== expectedScheme) {
+      return new Response(JSON.stringify({ error: "Invalid app callback scheme for this subscription." }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400,
+      });
+    }
+    const callbackScheme = expectedScheme;
+
+    // Only reuse a Stripe customer explicitly bound to this authenticated user.
+    const customers = await stripe.customers.list({ email: user.email, limit: 100 });
+    let customerId = customers.data.find((candidate) => candidate.metadata?.user_id === user.id)?.id;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: user.email, metadata: { user_id: user.id, swish_customer: "true" },
+      });
+      customerId = customer.id;
     }
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
-      customer_email: customerId ? undefined : user.email,
       line_items: [{ price: PRICE_ID, quantity: 1 }],
       mode: "subscription",
-      success_url: "onspaceapp://subscription/success",
-      cancel_url: "onspaceapp://subscription/cancel",
+      success_url: `${callbackScheme}://subscription/success`,
+      cancel_url: `${callbackScheme}://subscription/cancel`,
       metadata: { user_id: user.id, niche_id: nicheId },
       subscription_data: {
         metadata: { user_id: user.id, niche_id: nicheId },
@@ -85,9 +123,8 @@ serve(async (req) => {
       status: 200,
     });
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error(`[create-checkout] Error: ${msg}`);
-    return new Response(JSON.stringify({ error: msg }), {
+    console.error("[create-checkout] Checkout request failed.");
+    return new Response(JSON.stringify({ error: "Unable to start checkout. Please retry or contact support." }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });
