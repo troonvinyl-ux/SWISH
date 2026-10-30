@@ -478,7 +478,7 @@ describe('Production configuration', () => {
     const images = [{ uri: 'file://test.jpg', slotId: 'obverse', slotLabel: 'Obverse' }];
     const MY_TENANT = 'production-tenant-id';
     await identifyItemWithAI(images, 'coins', undefined, undefined, { tenantId: MY_TENANT });
-    const callBody = mockInvoke.mock.calls[0][1].body;
+    const callBody = mockInvoke.mock.calls[mockInvoke.mock.calls.length - 1][1].body;
     expect(callBody.tenantId).toBe(MY_TENANT);
   });
 });
