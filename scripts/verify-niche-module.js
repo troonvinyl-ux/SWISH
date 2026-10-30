@@ -28,9 +28,9 @@ const nicheSource = fs.readFileSync(path.join(root, 'constants/niches.ts'), 'utf
 for (const [productId, product] of Object.entries(products)) {
   const start = nicheSource.indexOf(`  ${productId}: {`);
   if (start < 0) throw new Error(`Niche ${productId} is missing from constants/niches.ts`);
-  const next = nicheSource.indexOf('\\n  },', start);
+  const next = nicheSource.indexOf('\n  },', start);
   const block = nicheSource.slice(start, next < 0 ? start + 5000 : next);
-  const match = block.match(/specialists:\\s*\\[([^\\]]*)\\]/);
+  const match = block.match(/specialists:\s*\[([^\]]*)\]/);
   if (!match) throw new Error(`Cannot read canonical specialists for ${productId}`);
   const canonicalIds = match[1].split(',').map(value => value.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean).sort();
   const registeredIds = [...product.specialistIds].sort();
