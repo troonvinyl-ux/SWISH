@@ -22,6 +22,23 @@ if (!Object.prototype.hasOwnProperty.call(products, requested)) {
   process.exit(1);
 }
 
+// The registry must match the canonical specialist ownership in constants/niches.ts.
+// This prevents aliases and guessed IDs from silently becoming product ownership.
+const nicheSource = fs.readFileSync(path.join(root, 'constants/niches.ts'), 'utf8');
+for (const [productId, product] of Object.entries(products)) {
+  const start = nicheSource.indexOf(`  ${productId}: {`);
+  if (start < 0) throw new Error(`Niche ${productId} is missing from constants/niches.ts`);
+  const next = nicheSource.indexOf('\\n  },', start);
+  const block = nicheSource.slice(start, next < 0 ? start + 5000 : next);
+  const match = block.match(/specialists:\\s*\\[([^\\]]*)\\]/);
+  if (!match) throw new Error(`Cannot read canonical specialists for ${productId}`);
+  const canonicalIds = match[1].split(',').map(value => value.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean).sort();
+  const registeredIds = [...product.specialistIds].sort();
+  if (JSON.stringify(canonicalIds) !== JSON.stringify(registeredIds)) {
+    throw new Error(`Specialist registry mismatch for ${productId}: constants/niches.ts=[${canonicalIds.join(', ')}], niche-modules.json=[${registeredIds.join(', ')}]`);
+  }
+}
+
 const ownerBySpecialist = new Map();
 for (const [productId, product] of Object.entries(products)) {
   if (product.id !== productId) throw new Error(`Manifest key/id mismatch for ${productId}`);
