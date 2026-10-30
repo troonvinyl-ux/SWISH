@@ -1,6 +1,12 @@
 name: Build SWISH Master Dashboard APK
 
 on:
+  push:
+    branches: [feat/master-dashboard-apk]
+    paths:
+      - 'app/master-dashboard/**'
+      - 'app.config.js'
+      - '.github/workflows/build-master-dashboard-apk.yml'
   workflow_dispatch:
   pull_request:
     branches: [main]
