@@ -66,7 +66,7 @@ jobs:
           if (config.name !== 'SWISH Master') throw new Error('Unexpected app name: ' + config.name);
           if (config.android?.package !== 'com.swish.masterdashboard') throw new Error('Unexpected Android package: ' + config.android?.package);
           if (config.extra?.swishMasterDashboard !== true) throw new Error('Master dashboard identity flag missing');
-          if (router?.[1]?.root !== 'app/master-dashboard') throw new Error('Expo Router is not isolated to app/master-dashboard');
+          if (router?.[1]?.root !== './app/master-dashboard') throw new Error('Expo Router is not isolated to app/master-dashboard');
           console.log('Master dashboard identity and isolated route root verified.');
           NODE
 
