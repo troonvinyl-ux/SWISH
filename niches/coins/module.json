@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "coins",
+  "name": "Coin Flipper",
+  "specialistIds": [
+    "coins",
+    "coins_uk",
+    "coins_world",
+    "coins_currency",
+    "numismatic"
+  ],
+  "androidPackage": "com.swish.coinflipper",
+  "entryRoute": "/entry/coins",
+  "responsibilities": "Coin identification, numismatic attributes, coin valuation rules, coin-specific prompts and coin theme.",
+  "sharedCapabilities": [
+    "auth",
+    "tenant-and-subscription",
+    "inventory-persistence",
+    "ebay-oauth-listings-drafts-orders-sync",
+    "shared-ai-orchestration",
+    "learning-and-prediction",
+    "reusable-ui-primitives"
+  ],
+  "isolationStatus": "migration-started-not-yet-bundle-isolated"
+}
