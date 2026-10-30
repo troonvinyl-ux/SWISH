@@ -7,8 +7,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const registryPath = path.join(process.cwd(), 'niche-modules.json');
-const registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+const root = process.cwd();
+const registry = JSON.parse(fs.readFileSync(path.join(root, 'niche-modules.json'), 'utf8'));
 const requested = process.env.SWISH_NICHE || process.env.NICHE;
 
 if (!requested) {
@@ -37,13 +37,21 @@ for (const [productId, product] of Object.entries(products)) {
   }
 }
 
-const appConfigPath = path.join(process.cwd(), 'app.config.js');
-const appConfigText = fs.readFileSync(appConfigPath, 'utf8');
-const packageMatch = appConfigText.match(new RegExp('(?:' + requested.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')\\s*:\\s*\\{[\\s\\S]*?androidPackage:\\s*["\\']([^"\\']+)["\\']'));
+// Evaluate the real Expo dynamic config, rather than parsing source text with a
+// regular expression. This ensures the check follows the same config path used
+// by prebuild and catches future changes to app.config.js behaviour.
+process.env.SWISH_NICHE = requested;
+const appConfigFactory = require(path.join(root, 'app.config.js'));
+const expoConfig = appConfigFactory({
+  config: { name: 'SWISH', slug: 'swish', extra: {}, android: {}, ios: {} },
+});
 const expectedPackage = products[requested].package;
 if (!expectedPackage) throw new Error(`Missing package identifier in niche-modules.json for ${requested}`);
-if (!packageMatch || packageMatch[1] !== expectedPackage) {
-  throw new Error(`Package mismatch for ${requested}: manifest=${expectedPackage}, app.config.js=${packageMatch?.[1] || 'not found'}`);
+if (expoConfig.extra?.swishNicheId !== requested) {
+  throw new Error(`Niche mismatch: manifest=${requested}, Expo config=${expoConfig.extra?.swishNicheId || 'not set'}`);
+}
+if (expoConfig.android?.package !== expectedPackage) {
+  throw new Error(`Package mismatch for ${requested}: manifest=${expectedPackage}, Expo config=${expoConfig.android?.package || 'not set'}`);
 }
 
 console.log(`Niche registry valid: ${requested} -> ${expectedPackage}`);
