@@ -119,8 +119,14 @@ module.exports = ({ config }) => {
   const baseConfig = Object.keys(otaConfig).length ? { ...config, ...otaConfig } : config;
   if (!niche) return baseConfig;
 
+  const routerPlugin = ["expo-router", { root: `./.swish-build/${niche.id}/app` }];
+  const configuredPlugins = (config.plugins || []).filter((plugin) =>
+    !(plugin === "expo-router" || (Array.isArray(plugin) && plugin[0] === "expo-router"))
+  );
+
   return {
     ...baseConfig,
+    plugins: [...configuredPlugins, routerPlugin],
     name: niche.name,
     // EAS Update requires the slug to match the single linked Expo project.
     // Keep niche-specific slugs for native builds, but use the linked project slug
