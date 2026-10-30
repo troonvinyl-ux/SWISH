@@ -25,12 +25,16 @@ import { NICHE_MODULES } from '@/constants/niches';
 type NicheProduct = 'coins' | 'mx' | 'bikes' | 'clothing' | 'surplus' | 'general';
 
 function getNicheProduct(nicheId: string | null | undefined): NicheProduct {
-  const id = resolveProductionNiche(nicheId) ?? '';
-  if (id.includes('coin') || id === 'gold' || id === 'silver' || id === 'banknotes' || id === 'islamic_silver') return 'coins';
-  if (id === 'motocross' || id === 'mx') return 'mx';
-  if (id === 'bicycles' || id === 'cycling' || id === 'bikes') return 'bikes';
-  if (id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers' || id === 'trainers') return 'clothing';
-  if (id === 'surplus_flip' || id === 'catalog_flip' || id === 'catalog_surplus') return 'surplus';
+  // resolveProductionNiche returns canonical ProductionNicheId values only.
+  // Legacy aliases (for example "mx", "bikes", and "trainers") are handled
+  // inside the resolver and must not be compared against the canonical ID.
+  const id = resolveProductionNiche(nicheId);
+  if (!id) return 'general';
+  if (id === 'coins') return 'coins';
+  if (id === 'motocross') return 'mx';
+  if (id === 'bicycles') return 'bikes';
+  if (id === 'clothing') return 'clothing';
+  if (id === 'surplus_flip') return 'surplus';
   return 'general';
 }
 
