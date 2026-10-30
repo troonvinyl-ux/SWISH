@@ -65,6 +65,11 @@ jobs:
         run: pnpm install --frozen-lockfile --prefer-offline
 
       # This repository does not commit the generated android/ project.
+      - name: Prepare isolated niche route tree
+        env:
+          SWISH_NICHE: ${{ inputs.niche }}
+        run: node scripts/prepare-niche-routes.js
+
       # Generate it on every run so app.config.js applies the selected niche
       # and native package identifier consistently.
       - name: Generate Android project for selected niche
