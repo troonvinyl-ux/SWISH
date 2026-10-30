@@ -569,7 +569,7 @@ async function searchNumistaIslamicSilver(
           firstError ||= `Numista direct lookup for N#${suppliedReferenceId} returned HTTP ${directResp.status}`;
         }
       } catch (e: any) {
-        firstError ||= `Numista direct lookup failed: ${e.message}`;
+        firstError ||= 'Numista direct lookup failed.';
       }
     }
 
