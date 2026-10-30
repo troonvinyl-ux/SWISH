@@ -11,7 +11,7 @@ const C = { bg:'#080B10', panel:'#0D131B', line:'#20303D', text:'#E9F0F5', muted
 type ItemRow = { id:string; specialist_id:string|null; status:string|null; valuation_mid:number|null; expected_selling_price:number|null; acquired_cost:number|null; sold_price:number|null; sold_at:string|null };
 type ListingRow = { id:string; item_id:string|null; status:string|null; price:number|null; published_at:string|null; items?:{specialist_id?:string|null}|null };
 type SaleRow = { sale_price:number|null; net_revenue:number|null; profit:number|null; sold_at:string|null; items?:{specialist_id?:string|null}|null };
-type NicheMetric = { niche:NicheConfig; stock:number; active:number; drafts:number; unlisted:number; soldMonth:number; salesMonth:number; activeValue:number; potential:number };
+type NicheMetric = { niche:NicheConfig; stock:number; active:number; drafts:number; unlisted:number; soldMonth:number; salesMonth:number; salesAllTime:number; activeValue:number; potential:number };
 
 function money(v:number){ return new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP',maximumFractionDigits:0}).format(Number.isFinite(v)?v:0); }
 function compactMoney(v:number){ if(v>=1000000)return '£'+(v/1000000).toFixed(1)+'m'; if(v>=10000)return '£'+(v/1000).toFixed(1)+'k'; return money(v); }
@@ -19,7 +19,7 @@ function inMonth(date:string|null|undefined,start:number){ if(!date)return false
 
 function MasterDashboard(){
   const {user}=useAuth();
-  const {tenant,tenantLoading,tenantError,reloadTenant}=useApp();
+  const {tenant,tenantLoading,tenantError,reloadTenant,isMasterAdmin}=useApp();
   const insets=useSafeAreaInsets();
   const {width}=useWindowDimensions();
   const landscape=width>=720;
@@ -70,6 +70,7 @@ function MasterDashboard(){
     const potential=unlisted.reduce((sum,i)=>sum+Number(i.expected_selling_price??i.valuation_mid??0),0);
     return {niche,stock:ni.length,active:activeRows.length,drafts:draftRows.length,unlisted:unlisted.length,soldMonth:monthRows.length,
       salesMonth:monthRows.reduce((sum,s)=>sum+Number(s.sale_price??0),0),
+      salesAllTime:ns.reduce((sum,s)=>sum+Number(s.sale_price??0),0),
       activeValue:activeRows.reduce((sum,l)=>sum+Number(l.price??0),0),potential};
   }),[items,listings,sales,monthStart]);
 
@@ -78,6 +79,7 @@ function MasterDashboard(){
     active:nicheMetrics.reduce((s,n)=>s+n.active,0),
     drafts:nicheMetrics.reduce((s,n)=>s+n.drafts,0),
     salesMonth:nicheMetrics.reduce((s,n)=>s+n.salesMonth,0),
+    salesAllTime:nicheMetrics.reduce((s,n)=>s+n.salesAllTime,0),
     soldMonth:nicheMetrics.reduce((s,n)=>s+n.soldMonth,0),
     activeValue:nicheMetrics.reduce((s,n)=>s+n.activeValue,0),
     potential:nicheMetrics.reduce((s,n)=>s+n.potential,0)
@@ -96,7 +98,7 @@ function MasterDashboard(){
     return r.slice(0,6);
   },[dataIssue,nicheMetrics,connector]);
 
-  if(!isSwishMasterAdmin(user?.email))return <View style={[s.screen,s.center]}><MaterialIcons name="lock" size={32} color={C.red}/><Text style={s.accessTitle}>Master account only</Text><Text style={s.muted}>This private dashboard is restricted to the SWISH owner account.</Text></View>;
+  if(!isSwishMasterAdmin(user?.email)||!isMasterAdmin)return <View style={[s.screen,s.center]}><MaterialIcons name="lock" size={32} color={C.red}/><Text style={s.accessTitle}>Master account only</Text><Text style={s.muted}>This private dashboard is restricted to the SWISH owner account.</Text></View>;
 
   const nichePanel=<Panel title="01 / PORTFOLIO" subtitle="Niche performance at a glance" icon="grid-view">
     <View style={s.nicheGrid}>{nicheMetrics.map(m=><View key={m.niche.id} style={s.nicheCard}>
@@ -115,6 +117,7 @@ function MasterDashboard(){
   const moneyPanel=<Panel title="03 / CAPITAL & POTENTIAL" subtitle="Recorded results vs estimated pipeline" icon="show-chart">
     <View style={s.moneyHero}><Text style={s.moneyLabel}>RECORDED SALES · THIS MONTH</Text><Text style={s.moneyValue}>{money(totals.salesMonth)}</Text><Text style={s.moneySub}>{totals.soldMonth} sale records this month</Text></View>
     <View style={s.moneyGrid}>
+      <Metric label="ALL-TIME SALES" value={compactMoney(totals.salesAllTime)} tone={C.green} note="Recorded SWISH sales"/>
       <Metric label="LIVE ASKING VALUE" value={compactMoney(totals.activeValue)} tone={C.cyan} note="Not guaranteed revenue"/>
       <Metric label="UNLISTED POTENTIAL" value={compactMoney(totals.potential)} tone={C.amber} note="Valuation / asking estimate"/>
       <Metric label="DRAFT LISTINGS" value={totals.drafts.toLocaleString('en-GB')} tone={C.blue} note="Awaiting review"/>
