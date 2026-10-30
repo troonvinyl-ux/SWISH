@@ -6,6 +6,7 @@ on:
     paths:
       - 'app/(tabs)/inventory.tsx'
       - 'app/(tabs)/index.tsx'
+      - 'app/(tabs)/_layout.tsx'
       - 'app/index.tsx'
       - 'app/coin-flipper.tsx'
       - 'services/listingService.ts'
