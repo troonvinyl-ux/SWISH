@@ -1,5 +1,7 @@
 # Manifest experience refresh
 
+Historical UI-refresh record. Current primary pricing and bidding guidance are documented in `MANIFEST_BASE_MAXIMUM.md`: fixed base maximum, optional current bid, lower manual next-bid suggestion, and a separate extra-cost cautious guide. No budget is requested.
+
 ## Completed implementation
 - The shared lot workspace is now a three-step flow: Add your list → Tell us the bid → See your plan.
 - Product rows, grouping controls, selling costs, recovery assumptions and listing requirements are progressively disclosed rather than shown all at once.

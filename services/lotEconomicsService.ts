@@ -1,5 +1,7 @@
 import type { ManifestProduct } from './manifestParser';
-export const LOT_ENGINE_VERSION = 'manifest-lot-v2';
+import { LOT_RESALE_SHARE } from '@/constants/lotPricing';
+import { calculateLotBasePrice, type LotBasePrice } from './lotBasePriceService';
+export const LOT_ENGINE_VERSION = 'manifest-lot-v3';
 export interface LotLine extends ManifestProduct {
   include: boolean; price: number; conservativePrice: number; priceSource: 'rrp_assumption' | 'user_scenario';
   packSize: number; packPrice: number; inspected: boolean; safetyConfirmed: boolean;
@@ -19,12 +21,12 @@ export interface LotAssumptions {
 export const DEFAULT_LOT_ASSUMPTIONS: LotAssumptions = {
   currentBid: null, bidCount: null, minutesLeft: null, increment: 1, premiumRate: 0, vatRate: 0,
   inbound: 20, storage: 0, repair: 0, reserve: 10, feeRate: 0.15, fixedFee: 0.4,
-  sellerPostage: 3.5, buyerPostage: 0, packaging: 0.6, labourMinutes: 12, hourlyRate: 15,
+  sellerPostage: 0, buyerPostage: 0, packaging: 0.6, labourMinutes: 12, hourlyRate: 15,
   yieldRate: 0.65, conservativeYield: 0.45, sellThrough: 0.85, conservativeSellThrough: 0.6,
   bundleDiscount: 0.1, targetProfit: 0, targetRoi: 0.5, wholeLotPrice: 0, wholeLotConservative: 0,
 };
 export function toLotLines(rows: ManifestProduct[]): LotLine[] {
-  return rows.map(row => ({ ...row, include: row.quantity > 0 && row.currency === 'GBP', price: row.unitRrp * 0.5,
+  return rows.map(row => ({ ...row, include: row.quantity > 0 && row.currency === 'GBP', price: row.unitRrp * LOT_RESALE_SHARE,
     conservativePrice: row.unitRrp * 0.3, priceSource: 'rrp_assumption', packSize: 1, packPrice: 0,
     inspected: false, safetyConfirmed: false }));
 }
@@ -47,6 +49,7 @@ export interface LotScenario {
 export interface LotEvaluation {
   expected: LotScenario[]; conservative: LotScenario[]; best: LotScenario; recommendedMaxBid: number;
   decision: 'research' | 'opportunity' | 'caution' | 'swerve' | 'ended'; reasoning: string[]; errors: string[];
+  base: LotBasePrice;
   fixedLotCosts: number; labourCost: number; otherLotCosts: number; bidMultiplier: number;
   units: number; rrp: number; unpriced: number; excluded: number; engineVersion: string;
 }
@@ -115,7 +118,13 @@ export function evaluateManifestLot(lines: LotLine[], a: LotAssumptions): LotEva
     else if (best.profit <= 0 || a.currentBid + a.increment > recommendedMaxBid) decision = 'caution';
     else if (unpriced === 0 && recommendedMaxBid > 0 && (eligible.length > 0 || best.strategy === 'whole')) decision = 'opportunity';
   }
+  const base = calculateLotBasePrice({
+    manifestRrp: lines.filter(row => row.currency === 'GBP' && row.quantity > 0).reduce((sum, row) => sum + row.unitRrp * row.quantity, 0),
+    eligibleRrp: eligible.reduce((sum, row) => sum + row.unitRrp * row.quantity, 0),
+    inbound: a.inbound, currentBid: a.currentBid, premiumRate: a.premiumRate, vatRate: a.vatRate,
+  });
   const reasoning = [
+    'Base maximum: eligible manifest RRP × 40% ÷ 2.25, less inbound delivery. Auction buyer charges reduce the hammer bid separately. Buyer-paid outgoing postage is excluded. This is a price rule, not verified resale profit.',
     `Maximum hammer bid uses the conservative ${best.strategy} exit, after all entered costs and the chosen profit cushion. No personal budget is used.`,
     'Profitability is resale proceeds minus purchase, selling costs, delivery, losses and valued labour. A suggested bid limit is not the same as a break-even price.',
     'Bid count and time remaining describe competition/urgency, not intrinsic value; they never raise the cap. No bids are placed.',
@@ -125,7 +134,7 @@ export function evaluateManifestLot(lines: LotLine[], a: LotAssumptions): LotEva
   if (a.currentBid === null) reasoning.push('Enter the current hammer bid to assess this live opportunity.');
   if (excluded) reasoning.push(`${excluded} units excluded from individual/group revenue; inspection labour and full lot purchase costs remain. Whole-lot scenarios require your own compliant lot valuation.`);
   if (a.minutesLeft !== null && a.minutesLeft > 0 && a.minutesLeft < 15) reasoning.push('Little inspection/research time remains. Do not skip checks or chase a bid.');
-  return { expected, conservative, best, recommendedMaxBid, decision, reasoning, errors,
+  return { expected, conservative, best, base, recommendedMaxBid, decision, reasoning, errors,
     fixedLotCosts, labourCost, otherLotCosts, bidMultiplier,
     units, rrp: lines.reduce((sum, row) => sum + row.totalRrp, 0), unpriced, excluded, engineVersion: LOT_ENGINE_VERSION };
 }

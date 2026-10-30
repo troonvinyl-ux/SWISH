@@ -21,14 +21,14 @@ export const LOT_COST_GROUPS: Array<{ title: string; hint: string; fields: LotCo
     { key:'vatRate',label:'Auction tax you cannot reclaim (%)',percent:true }, { key:'storage',label:'Storage costs (£)' },
     { key:'repair',label:'Testing & repairs (£)' }, { key:'reserve',label:'Set aside for returns & losses (£)' },
   ] },
-  { title: 'Selling & posting', hint: 'These are editable estimates, not an eBay fee quote. Add any insurance or extra taxes to your costs.', fields: [
+  { title: 'Selling & posting', hint: 'Extra costs for the cautious guide, separate from the base maximum. Buyer-paid postage is kept out of the base rule; only add postage here if it actually costs you money.', fields: [
     { key:'feeRate',label:'Selling fees (%)',percent:true }, { key:'fixedFee',label:'Extra fee per order (£)' },
-    { key:'sellerPostage',label:'Your postage per order (£)' }, { key:'buyerPostage',label:'Postage the buyer pays (£)' },
+    { key:'sellerPostage',label:'Postage you pay per order (£)' }, { key:'buyerPostage',label:'Postage the buyer pays (£)' },
     { key:'packaging',label:'Packaging per order (£)' }, { key:'labourMinutes',label:'Minutes of work per product' },
     { key:'hourlyRate',label:'What your time is worth (£/hour)' },
   ] },
-  { title: 'Extra room for profit', hint: 'Optional preferences for the suggested bid. They do not change the pallet’s profit figures. A 50% cushion means aiming for £1 profit per £2 of buying costs and valued time.', fields: [
-    { key:'targetRoi',label:'Profit cushion for the suggested bid (%)',percent:true },
+  { title: 'Extra cautious buying guide', hint: 'Optional settings for the extra-cost guide only. Your base maximum always uses 40% of retail value and the 2.25× buying rule, regardless of these settings.', fields: [
+    { key:'targetRoi',label:'Extra-cost guide profit cushion (%)',percent:true },
     { key:'targetProfit',label:'Optional minimum profit (£)' },
   ] },
   { title: 'Allow for the unexpected', hint: 'Choose how much might be usable and sell in your planned selling period. These are your estimates, not measured demand.', fields: [

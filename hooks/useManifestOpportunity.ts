@@ -1,6 +1,7 @@
 import { useContext, useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import type { ManifestPhase } from '@/constants/manifestExperience';
-import { friendlyManifestError, bestManifestProducts, presentLotVerdict } from '@/services/manifestExperienceService';
+import { friendlyManifestError, bestManifestProducts, presentLotVerdict, presentBaseLotVerdict } from '@/services/manifestExperienceService';
+import { suggestLotBid } from '@/services/lotBiddingService';
 import { ManifestOpportunityContext, emptyManifestSession } from '@/contexts/ManifestOpportunityContext';
 import { useApp } from './useApp';
 import { resolveProductionNiche } from '@/services/nicheRouting';
@@ -71,13 +72,18 @@ export function useManifestOpportunity() {
   });
   const rankedProducts = useMemo(() => bestManifestProducts(draft.lines), [draft.lines]);
   const verdict = useMemo(() => presentLotVerdict(evaluation), [evaluation]);
+  const baseVerdict = useMemo(() => presentBaseLotVerdict(evaluation.base), [evaluation.base]);
+  const biddingAdvice = useMemo(() => suggestLotBid({ ceiling: evaluation.base.maximumHammerBid,
+    currentBid: draft.assumptions.currentBid, increment: draft.assumptions.increment,
+    bidCount: draft.assumptions.bidCount, minutesLeft: draft.assumptions.minutesLeft,
+    blocked: evaluation.base.status === 'invalid' || evaluation.errors.length > 0,
+  }), [evaluation, draft.assumptions]);
   const revealResult = () => {
     if (lock.current || !draft.lines.length) return;
-    if (draft.assumptions.currentBid === null) { setError('Enter the current bid in pounds.'); return; }
     if (evaluation.errors.length) { setError(evaluation.errors[0]); return; }
     setError(null); setStep(3);
   };
-  return { draft, busy, error: error ? friendlyManifestError(error) : null, notice, nicheId, evaluation, verdict, rankedProducts,
+  return { draft, busy, error: error ? friendlyManifestError(error) : null, notice, nicheId, evaluation, verdict, baseVerdict, biddingAdvice, rankedProducts,
     phase, step, setStep, revealResult, plans, pick, paste, example, updateLine, updateAssumption,
     findCategories, chooseCategory, suggestions: suggestions?.scope === scope ? suggestions : null, save,
     reset: () => { if (lock.current) return; setDraft(emptyManifestSession()); setError(null); setNotice(''); setSuggestions(null); setStep(1); },

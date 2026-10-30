@@ -1,5 +1,7 @@
 # Budget-independent pallet assessment
 
+This document records the earlier v2 extra-cost guide. The current primary ceiling uses the fixed 40%-of-RRP / 2.25× rule, minus inbound delivery, described in `MANIFEST_BASE_MAXIMUM.md`. The cautious guide below remains separate and no longer replaces the base maximum. New seller-postage expense defaults to zero for buyer-paid outgoing postage.
+
 ## What changed
 - Removed the personal spending limit and mandatory-looking profit goal from the shared three-step lot journey.
 - The economic engine no longer uses a budget in validation, profit, ROI, break-even, suggested bid limits or verdicts. Old session budget values remain compatible but have no effect, even if blank, zero or invalid.
