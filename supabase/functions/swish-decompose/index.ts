@@ -189,17 +189,17 @@ Recommend the strategy that MAXIMISES net profit per labour hour, not just gross
     });
 
     if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-      console.error('OnSpace AI decompose error:', errText);
+      await aiResponse.text();
+      console.error('swish-decompose provider request failed.');
       return new Response(
-        JSON.stringify({ error: `OnSpace AI: ${errText}` }),
+        JSON.stringify({ error: 'The decomposition service is temporarily unavailable.' }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     const aiData = await aiResponse.json();
     const rawContent = aiData.choices?.[0]?.message?.content ?? '';
-    console.log('Decomposition raw response:', rawContent.slice(0, 800));
+    console.log('Decomposition response received.');
 
     let decomposition: any = null;
     try {
