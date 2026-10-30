@@ -4,10 +4,12 @@
   "name": "Coin Flipper",
   "specialistIds": [
     "coins",
-    "coins_uk",
-    "coins_world",
-    "coins_currency",
-    "numismatic"
+    "islamic_silver",
+    "banknotes",
+    "gold",
+    "silver",
+    "jewellery_precious_metals",
+    "ancient_artefacts"
   ],
   "androidPackage": "com.swish.coinflipper",
   "entryRoute": "/entry/coins",
