@@ -1476,12 +1476,8 @@ async function incrementUsage(
     { p_tenant_id: tenantId, p_user_id: userId, p_feature: FEATURE_KEY, p_month_key: monthKey },
   );
   if (error) {
-    const { data: row } = await admin
-      .from('ai_usage')
-      .select('count')
-      .eq('tenant_id', tenantId).eq('user_id', userId).eq('feature', FEATURE_KEY).eq('month_key', monthKey)
-      .maybeSingle();
-    return { count: Number(row?.count ?? 1), error: null };
+    console.error('[swish-identify] Atomic usage increment failed.');
+    return { count: 0, error: 'Usage tracking is unavailable.' };
   }
   return { count: Number(data ?? 1), error: null };
 }
@@ -1492,11 +1488,12 @@ async function getUsage(
   userId: string,
   monthKey: string,
 ): Promise<number> {
-  const { data } = await admin
+  const { data, error } = await admin
     .from('ai_usage')
     .select('count')
     .eq('tenant_id', tenantId).eq('user_id', userId).eq('feature', FEATURE_KEY).eq('month_key', monthKey)
     .maybeSingle();
+  if (error) throw new Error('AI usage lookup failed.');
   return Number(data?.count ?? 0);
 }
 
@@ -1598,6 +1595,10 @@ Deno.serve(async (req: Request) => {
     if (typeof bodyTenantId !== 'string' || !bodyTenantId.trim() || bodyTenantId.length > 200) {
       return new Response(JSON.stringify({ error: 'A valid tenantId is required.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
+    if (typeof bodyTenantId !== 'string' || !bodyTenantId.trim() || bodyTenantId.length > 200) {
+      return new Response(JSON.stringify({ error: 'A valid tenant ID is required.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const tenantId = bodyTenantId.trim();
     const specialist = specialistId ?? 'curiosities_collectibles';
     const requestedNiche = nicheForSpecialist(specialist);
 
@@ -1607,7 +1608,15 @@ Deno.serve(async (req: Request) => {
     );
 
     const monthKey = currentMonthKey();
-    const tenantId = bodyTenantId ?? '';
+    const { data: tenantMembership, error: membershipError } = await adminClient
+      .from('tenant_memberships')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (membershipError || !tenantMembership) {
+      return new Response(JSON.stringify({ error: 'Access denied for this account.' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
     // ── AUTHORITATIVE PREMIUM CHECK ────────────────────────────────────────────
     // Read current usage in parallel with premium determination
@@ -1643,8 +1652,13 @@ Deno.serve(async (req: Request) => {
 
     // Increment BEFORE expensive AI call to prevent concurrent quota bypass
     if (tenantId && !isPremium) {
-      const { error: usageErr } = await incrementUsage(adminClient, tenantId, user.id, monthKey);
-      if (usageErr) console.error('[swish-identify] Usage tracking error (non-blocking):', usageErr);
+      const usageResult = await incrementUsage(adminClient, tenantId, user.id, monthKey);
+      if (usageResult.error) {
+        return new Response(JSON.stringify({ error: 'USAGE_TRACKING_UNAVAILABLE', message: 'AI usage tracking is temporarily unavailable. Please retry.' }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      if (usageResult.count > FREE_MONTHLY_QUOTA) {
+        return new Response(JSON.stringify({ error: 'FREE_QUOTA_EXCEEDED', message: `You have used all ${FREE_MONTHLY_QUOTA} free AI identifications for this month. Upgrade to SWISH Premium for unlimited identifications.`, quotaUsed: usageResult.count, quotaLimit: FREE_MONTHLY_QUOTA, upgradeRequired: true }), { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
     }
     // ── END ENTITLEMENT CHECK ──────────────────────────────────────────────────
 
