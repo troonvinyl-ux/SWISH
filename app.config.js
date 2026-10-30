@@ -22,11 +22,11 @@ module.exports = ({ config }) => {
     const plugins = (baseConfig.plugins || []).map(plugin => {
       const name = Array.isArray(plugin) ? plugin[0] : plugin;
       return name === 'expo-router'
-        ? ['expo-router', { ...(Array.isArray(plugin) ? plugin[1] : {}), root: 'app/master-dashboard' }]
+        ? ['expo-router', { ...(Array.isArray(plugin) ? plugin[1] : {}), root: './app/master-dashboard' }]
         : plugin;
     });
     if (!plugins.some(plugin => (Array.isArray(plugin) ? plugin[0] : plugin) === 'expo-router')) {
-      plugins.push(['expo-router', { root: 'app/master-dashboard' }]);
+      plugins.push(['expo-router', { root: './app/master-dashboard' }]);
     }
     return {
       ...baseConfig,
