@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - 'app/(tabs)/inventory.tsx'
+      - 'app/(tabs)/index.tsx'
+      - 'app/index.tsx'
+      - 'app/coin-flipper.tsx'
       - 'services/listingService.ts'
       - '.github/workflows/build-niche-apk.yml'
       - 'scripts/prepare-niche-routes.js'
