@@ -16,6 +16,11 @@ const BUILDS = {
   bicycles: ['Bike Flipper', 'swish-bike-flipper', 'bikeflipper', 'com.swish.bikeflipper'],
   clothing: ['Threads Flip', 'swish-threads-flip', 'threadsflip', 'com.swish.threadsflip'],
   surplus_flip: ['Surplus Flip', 'swish-surplus-flip', 'surplusflip', 'com.swish.surplusflip'],
+  trading_cards: ['Card Flipper', 'swish-card-flipper', 'cardflipper', 'com.swish.cardflipper'],
+  antiques: ['Antique Flipper', 'swish-antique-flipper', 'antiqueflipper', 'com.swish.antiqueflipper'],
+  fossils: ['Fossil Flipper', 'swish-fossil-flipper', 'fossilflipper', 'com.swish.fossilflipper'],
+  beauty: ['Beauty Flipper', 'swish-beauty-flipper', 'beautyflipper', 'com.swish.beautyflipper'],
+  tech: ['Tech Flipper', 'swish-tech-flipper', 'techflipper', 'com.swish.techflipper'],
 };
 
 describe('Branded Expo build configuration', () => {
@@ -48,7 +53,7 @@ describe('Branded Expo build configuration', () => {
   );
 
   test('rejects an unsupported branded build ID', () => {
-    process.env.SWISH_NICHE = 'trading_cards';
+    process.env.SWISH_NICHE = 'not-a-real-niche';
     expect(() => configureApp({ config: BASE_CONFIG })).toThrow(/Unsupported SWISH_NICHE/);
   });
 });
