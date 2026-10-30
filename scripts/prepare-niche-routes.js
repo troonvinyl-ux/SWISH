@@ -54,27 +54,27 @@ if (niche === 'clothing') {
  if (!fs.existsSync(home)) throw new Error('Threads Flip home route is missing');
  let sourceText = fs.readFileSync(home, 'utf8');
  const imports = [
-  "import CoinFlipperScreen from '@/app/coin-flipper';\\n",
-  "import FlipperMXScreen from '@/app/flipper-mx';\\n",
-  "import BikeFlipperScreen from '@/app/bike-flipper';\\n",
-  "import SurplusFlipScreen from '@/app/surplus-flip';\\n"
+  "import CoinFlipperScreen from '@/app/coin-flipper';\n",
+  "import FlipperMXScreen from '@/app/flipper-mx';\n",
+  "import BikeFlipperScreen from '@/app/bike-flipper';\n",
+  "import SurplusFlipScreen from '@/app/surplus-flip';\n"
  ];
  for (const line of imports) sourceText = sourceText.replace(line, '');
  const branchBlock = [
-  "  if (product === 'coins') return <CoinFlipperScreen key={effectiveNicheId} isHomeTab />;\\n",
-  "  if (product === 'motocross') return <FlipperMXScreen key={effectiveNicheId} isHomeTab />;\\n",
-  "  if (product === 'bicycles') return <BikeFlipperScreen key={effectiveNicheId} isHomeTab />;\\n",
-  "  if (product === 'clothing') return <ThreadsFlipScreen key={effectiveNicheId} isHomeTab />;\\n",
-  "  if (product === 'surplus_flip') return <SurplusFlipScreen key={effectiveNicheId} />;\\n",
+  "  if (product === 'coins') return <CoinFlipperScreen key={effectiveNicheId} isHomeTab />;\n",
+  "  if (product === 'motocross') return <FlipperMXScreen key={effectiveNicheId} isHomeTab />;\n",
+  "  if (product === 'bicycles') return <BikeFlipperScreen key={effectiveNicheId} isHomeTab />;\n",
+  "  if (product === 'clothing') return <ThreadsFlipScreen key={effectiveNicheId} isHomeTab />;\n",
+  "  if (product === 'surplus_flip') return <SurplusFlipScreen key={effectiveNicheId} />;\n",
   "  return <Redirect href={\\"/niche-select\\" as any} />;"
  ].join('');
  if (!sourceText.includes(branchBlock)) {
    // Match the actual route-selection block without relying on formatting outside it.
    const start = sourceText.indexOf("  // Render only the product compiled for this branded APK.");
-   const end = sourceText.indexOf("\\n}", start);
+   const end = sourceText.indexOf("\n}", start);
    if (start < 0 || end < 0) throw new Error('Cannot isolate branded home route branches');
    sourceText = sourceText.slice(0, start) +
-     "  // This generated Threads Flip build has one home screen and no niche switcher.\\n  return <ThreadsFlipScreen isHomeTab />;" +
+     "  // This generated Threads Flip build has one home screen and no niche switcher.\n  return <ThreadsFlipScreen isHomeTab />;" +
      sourceText.slice(end);
  } else {
    sourceText = sourceText.replace(branchBlock, "  return <ThreadsFlipScreen isHomeTab />;");
