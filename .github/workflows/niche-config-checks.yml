@@ -21,6 +21,10 @@ on:
       - 'template/**'
       - 'plugins/**'
       - 'eas.json'
+      - '.github/workflows/build-niche-apk.yml'
+      - '.github/workflows/build-android-apk.yml'
+      - '.github/workflows/build-niche-apk.yml'
+      - '.github/workflows/build-android-apk.yml'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'jest.config.ci.js'
@@ -204,11 +208,11 @@ jobs:
       - name: Bundle Android production JavaScript
         run: npx expo export --platform android --output-dir dist-ci-android && rm -rf dist-ci-android
 
-      - name: Validate all five Expo branded configurations
+      - name: Validate all ten Expo branded configurations
         shell: bash
         run: |
           set -euo pipefail
-          for niche in coins motocross bicycles clothing surplus_flip; do
+          for niche in coins motocross bicycles clothing trading_cards antiques fossils beauty tech surplus_flip; do
             echo "Validating branded config: $niche"
             SWISH_NICHE="$niche" npx expo config --type public >/dev/null
           done
