@@ -48,6 +48,46 @@ const NICHE_BUILDS = {
     androidPackage: "com.swish.threadsflip",
     iosBundleIdentifier: "com.swish.threadsflip",
   },
+  trading_cards: {
+    id: "trading_cards",
+    name: "Card Flipper",
+    slug: "swish-card-flipper",
+    scheme: "cardflipper",
+    androidPackage: "com.swish.cardflipper",
+    iosBundleIdentifier: "com.swish.cardflipper",
+  },
+  antiques: {
+    id: "antiques",
+    name: "Antique Flipper",
+    slug: "swish-antique-flipper",
+    scheme: "antiqueflipper",
+    androidPackage: "com.swish.antiqueflipper",
+    iosBundleIdentifier: "com.swish.antiqueflipper",
+  },
+  fossils: {
+    id: "fossils",
+    name: "Fossil Flipper",
+    slug: "swish-fossil-flipper",
+    scheme: "fossilflipper",
+    androidPackage: "com.swish.fossilflipper",
+    iosBundleIdentifier: "com.swish.fossilflipper",
+  },
+  beauty: {
+    id: "beauty",
+    name: "Beauty Flipper",
+    slug: "swish-beauty-flipper",
+    scheme: "beautyflipper",
+    androidPackage: "com.swish.beautyflipper",
+    iosBundleIdentifier: "com.swish.beautyflipper",
+  },
+  tech: {
+    id: "tech",
+    name: "Tech Flipper",
+    slug: "swish-tech-flipper",
+    scheme: "techflipper",
+    androidPackage: "com.swish.techflipper",
+    iosBundleIdentifier: "com.swish.techflipper",
+  },
 };
 
 module.exports = ({ config }) => {
@@ -55,7 +95,7 @@ module.exports = ({ config }) => {
   const niche = selected ? NICHE_BUILDS[selected] : null;
   if (selected && !niche) {
     throw new Error(
-      `Unsupported SWISH_NICHE "${selected}". Choose coins, motocross, bicycles, clothing, or surplus_flip.`,
+      `Unsupported SWISH_NICHE "${selected}". Choose coins, motocross, bicycles, clothing, trading_cards, antiques, fossils, beauty, tech, or surplus_flip.`,
     );
   }
 
