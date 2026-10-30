@@ -66,7 +66,7 @@ if (niche === 'clothing') {
   "  if (product === 'bicycles') return <BikeFlipperScreen key={effectiveNicheId} isHomeTab />;\n",
   "  if (product === 'clothing') return <ThreadsFlipScreen key={effectiveNicheId} isHomeTab />;\n",
   "  if (product === 'surplus_flip') return <SurplusFlipScreen key={effectiveNicheId} />;\n",
-  "  return <Redirect href={\\"/niche-select\\" as any} />;"
+  '  return <Redirect href={"/niche-select" as any} />;'
  ].join('');
  if (!sourceText.includes(branchBlock)) {
    // Match the actual route-selection block without relying on formatting outside it.
