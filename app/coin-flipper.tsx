@@ -672,7 +672,7 @@ function CaptureTab({
                 <Text style={[ct.quickThumbsTitle, { color: CF.islamic }]}>ISLAMIC IDENTIFICATIONS</Text>
                 <View style={{ gap: Spacing.xs }}>
                   {islamicBatchItems.map(item => (
-                    <IslamicBatchMiniCard key={item.id} item={item} onPress={() => onIslamicItemPress(item)} />
+                    <Pressable key={item.id} onPress={() => onIslamicItemPress(item)} style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, padding: Spacing.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: CF.islamic + '55', backgroundColor: CF.surface }}><MaterialIcons name={item.status === 'complete' ? 'check-circle' : item.status === 'error' ? 'error-outline' : 'schedule'} size={18} color={item.status === 'complete' ? CF.success : item.status === 'error' ? CF.danger : CF.islamic} /><View style={{ flex: 1 }}><Text style={{ color: CF.textPrimary, fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold }}>{item.result?.canonicalTitle ?? item.label ?? 'Islamic coin'}</Text><Text style={{ color: CF.textSub, fontSize: Typography.size.xs }}>{item.status === 'complete' ? `${Math.round(item.result!.confidence * 100)}% confidence` : item.error ?? item.status}</Text></View><MaterialIcons name="chevron-right" size={18} color={CF.textSub} /></Pressable>
                   ))}
                 </View>
                 {selectedIslamicItem ? (
@@ -2211,7 +2211,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
           {isPremium ? <View style={main.proBadge}><Text style={main.proBadgeText}>PRO</Text></View> : null}
         </Pressable>
         {/* Specialist indicator in header */}
-        {activeTab === 'capture' && selectedSpecialist.id !== 'general' ? (
+        {activeTab !== 'home' && selectedSpecialist.id !== 'general' ? (
           <View style={[main.specialistIndicator, { backgroundColor: selectedSpecialist.color + '20', borderColor: selectedSpecialist.color + '50' }]}>
             <MaterialIcons name={selectedSpecialist.icon as any} size={11} color={selectedSpecialist.color} />
             <Text style={[main.specialistIndicatorText, { color: selectedSpecialist.color }]}>{selectedSpecialist.label}</Text>
