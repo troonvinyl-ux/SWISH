@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# Avoid overlapping matrix publishes against the same EAS project and API.
+concurrency:
+  group: swish-ota-publish-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   publish-update:
     name: Publish ${{ matrix.niche }} JavaScript update
@@ -16,6 +21,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix:
         niche: [coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech]
     env:
