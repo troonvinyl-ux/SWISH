@@ -4,9 +4,7 @@
   "name": "Threads Flip",
   "specialistIds": [
     "clothing",
-    "trainers_sneakers",
-    "threads",
-    "threads_flip"
+    "trainers_sneakers"
   ],
   "androidPackage": "com.swish.threadsflip",
   "entryRoute": "/entry/clothing",
