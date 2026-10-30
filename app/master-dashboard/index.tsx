@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { AuthRouter, getSupabaseClient, useAuth } from '@/template';
+import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/hooks/useApp';
 import { isSwishMasterAdmin } from '@/contexts/AppContext';
 import { PRODUCTION_NICHES, type NicheConfig } from '@/constants/niches';
 import { getProductionNicheSpecialistIds } from '@/services/nicheRouting';
+import { NICHE_MODULES } from '@/constants/niches';
 
 const C = { bg:'#080B10', panel:'#0D131B', line:'#20303D', text:'#E9F0F5', muted:'#7F929F', faint:'#536571', amber:'#F3C66B', cyan:'#72D7E5', green:'#79D6A4', red:'#F18C83', blue:'#8EB8FF' };
 type ItemRow = { id:string; specialist_id:string|null; status:string|null; valuation_mid:number|null; expected_selling_price:number|null; acquired_cost:number|null; sold_price:number|null; sold_at:string|null };
@@ -20,6 +22,7 @@ function inMonth(date:string|null|undefined,start:number){ if(!date)return false
 
 function MasterDashboard(){
   const {user}=useAuth();
+  const router=useRouter();
   const {tenant,tenantLoading,tenantError,reloadTenant,isMasterAdmin}=useApp();
   const insets=useSafeAreaInsets();
   const {width}=useWindowDimensions();
@@ -102,11 +105,13 @@ function MasterDashboard(){
   if(!isSwishMasterAdmin(user?.email)||!isMasterAdmin)return <View style={[s.screen,s.center]}><MaterialIcons name="lock" size={32} color={C.red}/><Text style={s.accessTitle}>Master account only</Text><Text style={s.muted}>This private dashboard is restricted to the SWISH owner account.</Text></View>;
 
   const nichePanel=<Panel title="01 / PORTFOLIO" subtitle="Niche performance at a glance" icon="grid-view">
-    <View style={s.nicheGrid}>{nicheMetrics.map(m=><View key={m.niche.id} style={s.nicheCard}>
+    <View style={s.nicheGrid}>{nicheMetrics.map(m=><Pressable key={m.niche.id} onPress={async()=>{const module=(NICHE_MODULES as Record<string,{scheme?:string;androidPackage?:string}>)[m.niche.id];const scheme=module?.scheme;if(!scheme){Alert.alert('App route unavailable',m.niche.shortName+' has no registered app scheme yet.');return;}try{await Linking.openURL(scheme+'://');}catch{Alert.alert(m.niche.shortName+' is not available','Install the dedicated '+m.niche.shortName+' APK on this device, then try again.');}}} accessibilityRole="button" accessibilityLabel={'Open '+m.niche.shortName} style={({pressed})=>[s.nicheCard,pressed&&{borderColor:m.niche.color,backgroundColor:'#111923'}]}>
       <View style={[s.nicheDot,{backgroundColor:m.niche.color}]}/>
       <View style={s.nicheMain}><Text style={s.nicheName} numberOfLines={1}>{m.niche.shortName}</Text><Text style={s.nicheMeta}>{m.stock} stock · {m.active} live</Text></View>
       <View style={s.nicheRight}><Text style={[s.nicheMoney,{color:m.salesMonth>0?C.green:C.text}]}>{compactMoney(m.salesMonth)}</Text><Text style={s.nicheCaption}>THIS MONTH</Text></View>
-    </View>)}</View>
+      <MaterialIcons name="open-in-new" size={15} color={C.muted}/>
+    </Pressable>)}</View>
+    <Pressable onPress={()=>router.push('/control' as any)} style={({pressed})=>[s.controlButton,pressed&&{opacity:0.8}]}><MaterialIcons name="tune" size={17} color={C.bg}/><Text style={s.controlButtonText}>OPEN MASTER CONTROL PANEL</Text><MaterialIcons name="arrow-forward" size={17} color={C.bg}/></Pressable>
     <View style={s.panelFoot}><Text style={s.small}> {totals.stock.toLocaleString('en-GB')} stock records · {totals.active.toLocaleString('en-GB')} active listings</Text></View>
   </Panel>;
 
@@ -172,6 +177,7 @@ const s=StyleSheet.create({
   nicheDot:{width:7,height:7,borderRadius:4},nicheMain:{flex:1,minWidth:0,gap:2},nicheName:{color:C.text,fontSize:11,fontWeight:'700'},nicheMeta:{color:C.muted,fontSize:9},
   nicheRight:{alignItems:'flex-end',gap:2},nicheMoney:{fontSize:10,fontWeight:'800'},nicheCaption:{color:C.faint,fontSize:7,letterSpacing:0.7},
   panelFoot:{paddingTop:8,borderTopWidth:1,borderTopColor:C.line},small:{color:C.faint,fontSize:9,lineHeight:14},
+  controlButton:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:8,padding:11,backgroundColor:C.amber,borderRadius:8,marginTop:2},controlButtonText:{flex:1,color:C.bg,fontSize:9,fontWeight:'900',letterSpacing:0.6},
   taskRow:{flexDirection:'row',alignItems:'flex-start',gap:8,paddingVertical:9,borderBottomWidth:1,borderBottomColor:'#1A2731'},
   taskMarker:{width:6,height:6,borderRadius:3,marginTop:4},taskBody:{flex:1,gap:4},taskTitle:{color:C.text,fontSize:11,fontWeight:'700',lineHeight:15},taskDetail:{color:C.muted,fontSize:9,lineHeight:14},
   countPill:{minWidth:24,height:24,borderRadius:7,borderWidth:1,alignItems:'center',justifyContent:'center',paddingHorizontal:5},countText:{fontSize:10,fontWeight:'800'},
