@@ -22,7 +22,7 @@ import {
   ActivityIndicator, Linking, Alert, AccessibilityInfo,
   TextInput, Modal, FlatList,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -1664,7 +1664,7 @@ class CaptureTabErrorBoundary extends React.Component<
 // MAIN SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: boolean } = {}) {
+function CoinFlipperContent({ isHomeTab = false }: { isHomeTab?: boolean } = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ tab?: string }>();
@@ -2414,3 +2414,17 @@ const main = StyleSheet.create({
   upgradeBarBtn: { backgroundColor: CF.black + '30', borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
   upgradeBarBtnText: { fontSize: Typography.size.xs, fontWeight: Typography.weight.extrabold, color: CF.black },
 });
+
+
+// The Coins screen is a protected product route. In a niche-branded APK,
+// direct navigation to this route must not expose the Coins scanner to the user.
+// The unbranded master app can still render Coins when Coins is the active niche.
+export default function CoinFlipperScreen(props: { isHomeTab?: boolean } = {}) {
+  const { fixedNicheId } = useApp();
+  if (fixedNicheId && fixedNicheId !== 'coins') {
+    const { nicheToEntryRoute } = require('@/services/nicheRouting');
+    const route = nicheToEntryRoute(fixedNicheId);
+    return route ? <Redirect href={route as any} /> : <Redirect href={'/login' as any} />;
+  }
+  return <CoinFlipperContent {...props} />;
+}
