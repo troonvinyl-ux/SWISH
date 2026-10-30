@@ -1399,29 +1399,29 @@ async function resolveTenantTier(
  * Check Stripe subscription as a secondary entitlement source.
  * Returns false on any error — does NOT throw.
  */
-async function checkStripeSubscription(userEmail: string, nicheId: string | null): Promise<boolean> {
+async function checkStripeSubscription(userId: string, userEmail: string, nicheId: string | null): Promise<boolean> {
   if (!nicheId) return false;
   const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
   if (!stripeKey) return false;
   try {
     const customersRes = await fetch(
-      `https://api.stripe.com/v1/customers?email=${encodeURIComponent(userEmail)}&limit=1`,
+      `https://api.stripe.com/v1/customers?email=${encodeURIComponent(userEmail)}&limit=100`,
       { headers: { Authorization: `Bearer ${stripeKey}` }, signal: AbortSignal.timeout(5000) },
     );
     if (!customersRes.ok) return false;
     const customersData = await customersRes.json();
-    const customerId = customersData.data?.[0]?.id;
-    if (!customerId) return false;
-
+    const customer = (customersData.data ?? []).find((candidate: any) => candidate.metadata?.user_id === userId);
+    if (!customer?.id) return false;
     const subsRes = await fetch(
-      `https://api.stripe.com/v1/subscriptions?customer=${customerId}&status=active&limit=5`,
+      `https://api.stripe.com/v1/subscriptions?customer=${customer.id}&status=all&limit=100`,
       { headers: { Authorization: `Bearer ${stripeKey}` }, signal: AbortSignal.timeout(5000) },
     );
     if (!subsRes.ok) return false;
     const subsData = await subsRes.json();
     for (const sub of subsData.data ?? []) {
-      // Existing subscriptions without metadata remain mapped to Coins so
-      // legacy Coin Flipper subscribers do not lose access during migration.
+      const linkedUserId = sub.metadata?.user_id;
+      if (linkedUserId && linkedUserId !== userId) continue;
+      if (sub.status !== 'active' && sub.status !== 'trialing') continue;
       const subscribedNiche = String(sub.metadata?.niche_id ?? 'coins').toLowerCase();
       if (subscribedNiche !== nicheId) continue;
       for (const item of sub.items?.data ?? []) {
@@ -1429,8 +1429,8 @@ async function checkStripeSubscription(userEmail: string, nicheId: string | null
       }
     }
     return false;
-  } catch (e) {
-    console.error('[swish-identify] Stripe check error (non-blocking):', e);
+  } catch {
+    console.error('[swish-identify] Stripe subscription check failed (non-blocking).');
     return false;
   }
 }
@@ -1455,7 +1455,7 @@ async function determineIsPremium(
 
   // Step 2: Check Stripe (secondary — only if no qualifying tier)
   if (userEmail) {
-    const stripeActive = await checkStripeSubscription(userEmail, nicheId);
+    const stripeActive = await checkStripeSubscription(userId, userEmail, nicheId);
     if (stripeActive) {
       console.log(`[swish-identify] Premium via Stripe subscription (user=${userId})`);
       return { isPremium: true, source: 'stripe', tier };
