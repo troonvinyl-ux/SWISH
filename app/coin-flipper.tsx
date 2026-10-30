@@ -30,6 +30,7 @@ import type { SpecialistId } from '@/constants/specialists';
 import { Image } from 'expo-image';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
+import { nicheToEntryRoute } from '@/services/nicheRouting';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAlert, getSupabaseClient } from '@/template';
 import {
@@ -2422,7 +2423,6 @@ const main = StyleSheet.create({
 export default function CoinFlipperScreen(props: { isHomeTab?: boolean } = {}) {
   const { fixedNicheId } = useApp();
   if (fixedNicheId && fixedNicheId !== 'coins') {
-    const { nicheToEntryRoute } = require('@/services/nicheRouting');
     const route = nicheToEntryRoute(fixedNicheId);
     return route ? <Redirect href={route as any} /> : <Redirect href={'/login' as any} />;
   }
