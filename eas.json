@@ -25,6 +25,31 @@
       "env": { "SWISH_NICHE": "clothing" },
       "android": { "buildType": "apk" }
     },
+    "trading_cards": {
+      "extends": "production",
+      "env": { "SWISH_NICHE": "trading_cards" },
+      "android": { "buildType": "apk" }
+    },
+    "antiques": {
+      "extends": "production",
+      "env": { "SWISH_NICHE": "antiques" },
+      "android": { "buildType": "apk" }
+    },
+    "fossils": {
+      "extends": "production",
+      "env": { "SWISH_NICHE": "fossils" },
+      "android": { "buildType": "apk" }
+    },
+    "beauty": {
+      "extends": "production",
+      "env": { "SWISH_NICHE": "beauty" },
+      "android": { "buildType": "apk" }
+    },
+    "tech": {
+      "extends": "production",
+      "env": { "SWISH_NICHE": "tech" },
+      "android": { "buildType": "apk" }
+    },
     "surplus_flip": {
       "extends": "production",
       "env": { "SWISH_NICHE": "surplus_flip" },
