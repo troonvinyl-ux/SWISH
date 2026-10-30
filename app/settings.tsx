@@ -3195,7 +3195,7 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ── Niche / Vertical ──────────────────────────────────────────── */}
-        {(!fixedNicheId || isMasterAdmin) ? (
+        {!fixedNicheId ? (
           <>
             <SectionHead title="Trading Vertical" />
             <CardGroup>
