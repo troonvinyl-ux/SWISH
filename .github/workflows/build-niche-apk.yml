@@ -98,6 +98,12 @@ jobs:
           console.log(`Verified niche ${actual} and Android package ${cfg.android.package}`);
           NODE
 
+      - name: Validate canonical niche module registry
+        env:
+          SWISH_NICHE: ${{ inputs.niche }}
+          NICHE: ${{ inputs.niche }}
+        run: node scripts/verify-niche-module.js
+
       - name: Build release APK
         working-directory: android
         run: |
