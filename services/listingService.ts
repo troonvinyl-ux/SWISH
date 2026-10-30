@@ -326,7 +326,7 @@ export async function getAllListings(
 
   let query = supabase
     .from('listings')
-    .select('*, items!inner(canonical_title, specialist_id, acquired_cost, media)')
+    .select('*, items!inner(canonical_title, specialist_id, acquired_cost, media, status)')
     .eq('tenant_id', tenantId)
     .order('updated_at', { ascending: false });
 
@@ -347,6 +347,7 @@ export async function getAllListings(
     ...mapListing(row),
     itemTitle: row.items?.canonical_title ?? 'Unknown Item',
     itemSpecialistId: row.items?.specialist_id ?? '',
+    itemStatus: row.items?.status ?? '',
     itemAcquiredCost: Number(row.items?.acquired_cost ?? 0),
     itemMedia: [...new Set([...(Array.isArray(row.items?.media) ? row.items.media : []), ...(Array.isArray(row.images) ? row.images : []), row.image_url].filter((url: unknown) => typeof url === 'string' && url.length > 0))] as string[],
     categoryId: row.category_id ?? undefined,
