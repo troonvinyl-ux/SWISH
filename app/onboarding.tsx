@@ -149,13 +149,13 @@ export default function OnboardingScreen() {
 
   // Step 0: Niche selection
   const [selectedNiche, setSelectedNiche] = useState<NicheId>(
-    (fixedNicheId && !isMasterAdmin
+    (fixedNicheId
       ? fixedNicheId
       : activeNicheId && activeNicheId !== 'general' ? activeNicheId : 'coins') as NicheId,
   );
   // A branded customer APK offers only its own niche during onboarding.
   // The master account retains the full niche list even inside a branded build.
-  const onboardingNiches = fixedNicheId && !isMasterAdmin
+  const onboardingNiches = fixedNicheId
     ? ONBOARDING_NICHES.filter(niche => niche.id === fixedNicheId)
     : ONBOARDING_NICHES;
 
