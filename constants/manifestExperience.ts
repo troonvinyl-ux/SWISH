@@ -14,7 +14,7 @@ export const SALE_OPTIONS = [
   { id: 'grouped', label: 'In packs', hint: 'Group identical products together', icon: 'widgets' },
   { id: 'whole', label: 'The whole lot', hint: 'One sale for everything', icon: 'inventory-2' },
 ] as const;
-export interface LotCostField { key: keyof LotAssumptions; label: string; percent?: boolean }
+export interface LotCostField { key: Exclude<keyof LotAssumptions, 'budget'>; label: string; percent?: boolean }
 export const LOT_COST_GROUPS: Array<{ title: string; hint: string; fields: LotCostField[] }> = [
   { title: 'Buying & getting it home', hint: 'Check the auction checkout for extra fees. Zero is not confirmation that a fee is free.', fields: [
     { key:'increment',label:'Amount the next bid goes up (£)' }, { key:'premiumRate',label:'Auction buyer fee (%)',percent:true },
@@ -25,7 +25,11 @@ export const LOT_COST_GROUPS: Array<{ title: string; hint: string; fields: LotCo
     { key:'feeRate',label:'Selling fees (%)',percent:true }, { key:'fixedFee',label:'Extra fee per order (£)' },
     { key:'sellerPostage',label:'Your postage per order (£)' }, { key:'buyerPostage',label:'Postage the buyer pays (£)' },
     { key:'packaging',label:'Packaging per order (£)' }, { key:'labourMinutes',label:'Minutes of work per product' },
-    { key:'hourlyRate',label:'What your time is worth (£/hour)' }, { key:'targetRoi',label:'Minimum return on your spend (%)',percent:true },
+    { key:'hourlyRate',label:'What your time is worth (£/hour)' },
+  ] },
+  { title: 'Extra room for profit', hint: 'Optional preferences for the suggested bid. They do not change the pallet’s profit figures. A 50% cushion means aiming for £1 profit per £2 of buying costs and valued time.', fields: [
+    { key:'targetRoi',label:'Profit cushion for the suggested bid (%)',percent:true },
+    { key:'targetProfit',label:'Optional minimum profit (£)' },
   ] },
   { title: 'Allow for the unexpected', hint: 'Choose how much might be usable and sell in your planned selling period. These are your estimates, not measured demand.', fields: [
     { key:'yieldRate',label:'Products likely to be sellable (%)',percent:true }, { key:'conservativeYield',label:'Sellable in a cautious case (%)',percent:true },

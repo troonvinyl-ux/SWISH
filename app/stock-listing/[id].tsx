@@ -17,7 +17,7 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, FlatList,
+  View, Text, StyleSheet, ScrollView, Pressable, FlatList, KeyboardAvoidingView,
   TextInput, ActivityIndicator, Modal, Dimensions, Platform, Share, Linking,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -68,6 +68,8 @@ import {
   type ItemCommercialIntelligence,
 } from '@/services/commercialEngine';
 import { CommercialIntelligenceCard } from '@/components/feature/CommercialIntelligenceCard';
+import { SpecialistItemFields } from '@/components/feature/SpecialistItemFields';
+import { ManifestInspectionReview } from '@/components/feature/ManifestInspectionReview';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const GALLERY_HEIGHT = 320;
@@ -147,7 +149,7 @@ function canonicalizeAttributes(attributes: Record<string, any>): Array<{ key: s
   const seen = new Map<string, string>(); // canonical name → value
 
   for (const [rawKey, rawVal] of Object.entries(attributes)) {
-    if (ATTR_BLACKLIST.has(rawKey)) continue;
+    if (ATTR_BLACKLIST.has(rawKey) || rawKey.startsWith('_') || typeof rawVal === 'object') continue;
     if (rawVal === null || rawVal === undefined || String(rawVal).trim() === '') continue;
     if (String(rawVal) === '0' || String(rawVal) === 'false') continue;
 
@@ -1317,7 +1319,7 @@ function isCoinNiche(specialistId: string | undefined): boolean {
   const id = specialistId ?? '';
   return id === 'coins' || id === 'coins_uk' || id === 'coins_world' ||
     id === 'islamic_silver' || id === 'banknotes' || id === 'gold' ||
-    id === 'silver' || id === 'ancient_artefacts' || id === 'curiosities_collectibles' ||
+    id === 'silver' || id === 'ancient_artefacts' ||
     id.includes('coin') || id.includes('numismatic');
 }
 
@@ -1326,7 +1328,7 @@ function getNicheEvidenceLabel(specialistId: string | undefined): string {
   if (id === 'motocross') return 'Motocross / off-road eBay sold comps';
   if (id === 'bicycles' || id === 'cycling') return 'MTB & road bike eBay sold comps';
   if (id === 'clothing' || id === 'trainers_sneakers') return 'Vintage & streetwear eBay sold comps';
-  return 'eBay sold + Numista catalogue';
+  return isCoinNiche(specialistId) ? 'eBay sold + Numista catalogue (when available)' : 'Comparable marketplace evidence (when available)';
 }
 
 function MarketValuePanel({
@@ -1995,6 +1997,7 @@ export default function StockListingScreen() {
             const attrs = item.attributes ?? {};
             const itemSpecifics: Array<{ name: string; value: string }> = [];
             for (const [key, val] of Object.entries(attrs)) {
+              if (key.startsWith('_') || typeof val === 'object' || key === 'ebay_item_specifics') continue;
               if (val !== null && val !== undefined && String(val).trim()) {
                 itemSpecifics.push({ name: String(key).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).slice(0, 65), value: String(val).slice(0, 65) });
               }
@@ -2305,7 +2308,7 @@ export default function StockListingScreen() {
   const hasAcquiredCost = (item.acquiredCost ?? 0) > 0;
 
   return (
-    <View style={s.container}>
+    <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <StatusBar style="light" />
 
       {/* ── HEADER ── */}
@@ -2829,13 +2832,16 @@ export default function StockListingScreen() {
           </View>
         </View>
 
+        <ManifestInspectionReview key={item.id} itemId={item.id} attributes={item.attributes} onReviewed={attributes=>handleMarketValueUpdated({ attributes })}/>
+        <SpecialistItemFields item={item} onUpdated={handleMarketValueUpdated} />
+
         {/* ── NICHE-AWARE ITEM DETAILS ── */}
         {(() => {
           const specialist = item.specialistId ?? '';
           const isBike = specialist === 'bicycles';
           const isMXSpec = specialist === 'motocross';
           const isClothing = specialist === 'clothing' || specialist === 'trainers_sneakers';
-          const isCoin = !isBike && !isMXSpec && !isClothing;
+          const isCoin = isCoinNiche(specialist);
           const attrs = item.attributes ?? {};
           const accentColor = isBike ? '#6ED020' : isMXSpec ? '#FF5500' : isClothing ? '#E91E8C' : Colors.gold;
           const detailIcon = isBike ? 'pedal-bike' : isMXSpec ? 'two-wheeler' : isClothing ? 'checkroom' : 'toll';
@@ -2995,7 +3001,7 @@ export default function StockListingScreen() {
         listingTitle={progressTitle}
         failed={progressFailed}
       />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

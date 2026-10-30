@@ -27,7 +27,7 @@ export function friendlyLotMessage(message: string): string {
   if (/currentBid/.test(message)) return 'Enter a valid current bid in pounds.';
   if (/bidCount/.test(message)) return 'Enter a valid number of bids.';
   if (/minutesLeft/.test(message)) return 'Enter valid minutes remaining. Use zero if the auction has ended.';
-  if (/targetProfit|budget|inbound/.test(message)) return 'Check your delivery cost, spending limit and profit target. Use positive amounts or zero.';
+  if (/targetProfit|inbound/.test(message)) return 'Check your delivery cost and optional profit cushion. Use positive amounts or zero.';
   if (/Fee rate must/.test(message)) return 'Selling fees must be below 100%, and the next bid must go up by more than zero.';
   return message;
 }
@@ -45,14 +45,22 @@ export function presentLotVerdict(evaluation: LotEvaluation) {
   const expected = evaluation.expected.find(row => row.strategy === evaluation.best.strategy)!;
   const cautious = evaluation.best;
   const variants = {
-    swerve: { title:'Swerve this one', message:'There is not enough room at this bid. Keep your money for a better lot.', tone:'warning' as const, icon:'front-hand' },
+    swerve: { title:'Swerve this one', message:'Even the usual selling estimate does not cover the bid and costs. A cheaper price or stronger resale evidence is needed.', tone:'warning' as const, icon:'front-hand' },
+    caution: { title:'Profit possible. Check the risk.', message: cautious.profit !== null && cautious.profit <= 0
+      ? 'The usual estimate shows a profit, but a cautious sale could leave a loss. Do not treat this as a safe buy.'
+      : 'The pallet may make a profit, but the next bid is above the suggested limit for a profit cushion. That is not the same as making a loss.', tone:'warning' as const, icon:'warning-amber' },
     research: { title:'A closer look first', message:'Treat this as a guide. Check real selling prices and the condition before bidding.', tone:'warning' as const, icon:'search' },
     opportunity: { title:'There could be a flip here', message:'Your figures leave room below the limit. Check the products and auction fees before bidding.', tone:'success' as const, icon:'trending-up' },
     ended: { title:'This auction has ended', message:'The time you entered has run out. Check the auction before taking another step.', tone:'neutral' as const, icon:'schedule' },
   };
   return { ...variants[evaluation.decision], expected, cautious,
     priceNote: evaluation.unpriced > 0 ? 'Guide only: some prices are based on the supplier’s retail price, not recent sales.' : 'Based on your selling-price estimates. Profit is not guaranteed.',
-    limitNote: 'Bid only · delivery, fees, possible losses and your time are allowed for separately.',
+    limitNote: 'Bid only · delivery, fees, possible losses and your time are already deducted when setting this limit. Your personal budget is not used.',
+    bidNote: evaluation.recommendedMaxBid > 0
+      ? 'This leaves a profit cushion in the cautious selling plan. It is not a guaranteed profit.'
+      : cautious.profitBeforeBid <= 0
+        ? 'No room for a cautious bid: estimated selling costs, delivery, losses and your time already use up the cautious resale proceeds.'
+        : 'There is some resale value after costs, but not enough to meet the chosen profit cushion. Check the figures below.',
   };
 }
 export function bestManifestProducts(lines: LotLine[]): LotLine[] {

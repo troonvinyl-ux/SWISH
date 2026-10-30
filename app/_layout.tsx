@@ -3,6 +3,7 @@ import { Stack, useRouter, usePathname } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AlertProvider, AuthProvider } from '@/template';
 import { AppProvider } from '@/contexts/AppContext';
+import { ManifestOpportunityProvider } from '@/contexts/ManifestOpportunityContext';
 import { NicheRouteBoundary } from '@/components/layout/NicheRouteBoundary';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useCallback } from 'react';
@@ -79,6 +80,7 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <AuthProvider>
           <AppProvider>
+            <ManifestOpportunityProvider>
             <TVBackHandlerProvider>
               <NicheRouteBoundary>
               <Stack screenOptions={{ headerShown: false }}>
@@ -86,6 +88,7 @@ export default function RootLayout() {
                 <Stack.Screen name="(tabs)" />
                 <Stack.Screen name="login" />
                 <Stack.Screen name="onboarding" />
+                <Stack.Screen name="lot-opportunity" />
                 <Stack.Screen name="item/[id]" />
                 <Stack.Screen name="acquisition/[id]" />
                 <Stack.Screen name="opportunities" />
@@ -141,6 +144,7 @@ export default function RootLayout() {
               </Stack>
               </NicheRouteBoundary>
             </TVBackHandlerProvider>
+            </ManifestOpportunityProvider>
           </AppProvider>
         </AuthProvider>
       </SafeAreaProvider>

@@ -47,6 +47,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { decryptCredentials, encryptCredentials } from '../_shared/credentialCrypto.ts';
+import { specialistNiche, profileForSpecialist } from '../_shared/specialistRegistry.ts';
 
 const EBAY_TOKEN_URL      = 'https://api.ebay.com/identity/v1/oauth2/token';
 const EBAY_BROWSE_BASE    = 'https://api.ebay.com/buy/browse/v1';
@@ -84,16 +85,7 @@ async function verifyTenantAccess(
 // do not gain access to an item's valuation context.
 function productForSpecialist(specialistId: string | null | undefined): string | null {
   const id = String(specialistId ?? '').trim().toLowerCase();
-  if (['surplus_flip', 'surplus_trader', 'catalog_flip', 'catalog_surplus'].includes(id)) return 'surplus_flip';
-  if ([
-    'coins', 'coins_uk', 'coins_world', 'coins_currency', 'islamic_silver',
-    'banknotes', 'gold', 'silver', 'ancient_artefacts',
-    'jewellery_precious_metals', 'curiosities_collectibles',
-  ].includes(id) || id.includes('coin')) return 'coins';
-  if (id === 'motocross' || id === 'mx' || id === 'flipper_mx') return 'motocross';
-  if (id === 'bicycles' || id === 'cycling' || id === 'bike_flipper') return 'bicycles';
-  if (['clothing', 'clothing_specialist', 'threads_flip', 'threads-flip', 'trainers_sneakers', 'trainers'].includes(id)) return 'clothing';
-  return null;
+  return id === 'curiosities_collectibles' ? 'general' : specialistNiche(id);
 }
 
 // ── Currency ──────────────────────────────────────────────────────────────────
@@ -346,6 +338,12 @@ export interface TeapeakResult {
   dataSource: 'terapeak_product_research';
 }
 
+// Compatibility-shaped unavailable result. Seller Hub Product Research is NOT
+// established as an authorised public API here. Reconnection/Store purchase is
+// not a proven remedy. The legacy adapter below is not called by the handler.
+function unavailableProductResearch(query: string): Promise<TeapeakResult> {
+  return Promise.resolve({ available:false,needsReauth:false,error:'Seller Hub Product Research API access is not verified for SWISH; use manual Seller Hub research or authorised sold-item data.',averageSoldPrice:0,medianConditionPrice:0,soldQuantity:0,sellThroughRate:null,liveListings:0,priceMin:0,priceMax:0,priceRangeDisplay:'Unavailable',conditionDistributions:[],salesTrend:[],topSoldListings:[],query,metricPeriod:'unknown',marketplace:EBAY_GLOBAL_ID,retrievedAt:new Date().toISOString(),dataSource:'terapeak_product_research' });
+}
 async function callTerapeak(
   accessToken: string,
   query: string,
@@ -708,12 +706,15 @@ async function runGeminiMarketResearch(imageUrls: string[], title: string, speci
     : (specialistId.includes('coin') || ['islamic_silver','ancient_artefacts','gold','silver'].includes(specialistId)) ? 'coin, medal, or precious metal collectible sold on eBay UK'
     : 'collectible or resale item sold on eBay UK';
 
+  const profile = profileForSpecialist(specialistId);
   const knownInfo = Object.entries(attributes)
-    .filter(([, v]) => v && String(v).trim() && !['Not established','Not supplied','Not legible','unknown'].includes(String(v)))
+    .filter(([key, v]) => !key.startsWith('_') && typeof v !== 'object' && v != null && String(v).trim() && !['Not established','Not supplied','Not legible','unknown'].includes(String(v)))
     .map(([k, v]) => `${k}: ${v}`).join(', ');
 
   const prompt = `You are an expert eBay UK reseller. This is a ${nicheContext}.
 ITEM: "${sanitiseTitle(title)}" | Condition: "${condition || 'Unknown'}" | ${knownInfo || 'No attributes'}
+SPECIALIST PRICING RULES: ${profile?.valuationRules ?? 'Match exact identity and condition.'}
+This call has no browser/search grounding. Do not claim to have consulted sales, manufacturer catalogues or current listings. Numeric prices are model estimates only; demand, volume and time to sell are unknown unless supplied with evidence.
 Return ONLY valid JSON:
 {
   "itemDescription":"Brief item description",
@@ -721,10 +722,10 @@ Return ONLY valid JSON:
   "estimatedLow":0,"estimatedMid":0,"estimatedHigh":0,
   "confidence":"high|medium|low|insufficient",
   "marketContext":"Demand, typical buyers, typical sell speed on eBay UK",
-  "valuationBasis":"How estimate derived from eBay UK sold prices in training data",
+  "valuationBasis":"Model estimate limitations; do not claim verified or retrieved sold data",
   "comparableDescription":"What to search for on eBay"
 }
-estimatedLow/Mid/High: typical eBay UK SOLD prices (not asking). 0 if unable to estimate.`;
+estimatedLow/Mid/High: explicitly unverified model estimates, not sold evidence. 0 if unable to estimate.`;
 
   try {
     const messageContent: any[] = [{ type: 'text', text: prompt }];
@@ -773,6 +774,13 @@ estimatedLow/Mid/High: typical eBay UK SOLD prices (not asking). 0 if unable to 
 function buildSearchQueries(title: string, attributes: Record<string, any>, specialistId: string, geminiTerms: string[]): string[] {
   const queries: string[] = [];
   const sanitised = sanitiseTitle(title);
+  const profile = profileForSpecialist(specialistId);
+  if (profile && profile.nicheId !== 'coins') {
+    const identityKeys = ['brand','manufacturer','model','model_number','part_number','card_name','set','card_number','parallel','edition','product_name','shade','size','taxonomic_group','maker','pattern'];
+    const identity = identityKeys.map(key => typeof attributes[key] === 'string' ? attributes[key].trim() : '').filter(value=>value && !/unknown|not established/i.test(value)).join(' ').slice(0,100);
+    if (identity.length >= 3) queries.push(identity);
+    if (sanitised.length >= 3 && !queries.includes(sanitised)) queries.push(sanitised.slice(0,100));
+  }
 
   const isBike = specialistId === 'bicycles' || specialistId === 'cycling';
   const isMX = specialistId === 'motocross';
@@ -1209,7 +1217,7 @@ Deno.serve(async (req: Request) => {
   const primaryQuery = searchQueries[0];
 
   const [teapeakResult, firstBrowseResult, visualSearch, firstSoldSearch] = await Promise.all([
-    callTerapeak(creds.accessToken, primaryQuery, 'PREVIOUS_3_MONTHS'),
+    unavailableProductResearch(primaryQuery),
     searchEbayBrowse(creds.accessToken, primaryQuery, 50, false, appToken),
     (appToken && (inlineImageBase64 || imageUrls.length > 0)) ? runEbayVisualSearch(inlineImageBase64 || imageUrls[0], appToken) : Promise.resolve<VisualSearchResult>({ available: false, items: [], totalFound: 0 }),
     searchEbaySoldListings(appToken, primaryQuery, 50),
@@ -1262,7 +1270,7 @@ Deno.serve(async (req: Request) => {
   let teapeakBroadResult: TeapeakResult | null = null;
   if (!teapeakResult.available && !teapeakResult.needsReauth && teapeakResult.httpStatus !== 404 && searchQueries.length > 1) {
     console.log(`[SWISH Market v8] Terapeak zero results — trying broader query "${searchQueries[1]}"`);
-    teapeakBroadResult = await callTerapeak(creds.accessToken, searchQueries[1], 'PREVIOUS_3_MONTHS');
+    teapeakBroadResult = await unavailableProductResearch(searchQueries[1]);
   }
 
   const finalTerapeak = teapeakResult.available ? teapeakResult : (teapeakBroadResult?.available ? teapeakBroadResult : teapeakResult);
@@ -1348,13 +1356,13 @@ Deno.serve(async (req: Request) => {
   let applied = false;
   if (applyToItem && itemId && valuation.valuationMid > 0) {
     try {
-      await supabase.from('items').update({
+      const { error: applyError, count: appliedCount } = await supabase.from('items').update({
         valuation_low: valuation.valuationLow, valuation_mid: valuation.valuationMid,
         valuation_high: valuation.valuationHigh, valuation_confidence: valuation.valuationConfidence,
         expected_selling_price: valuation.recommendedListingPrice,
         sale_prob_30d: valuation.saleProb30d, updated_at: new Date().toISOString(),
-      }).eq('id', itemId).eq('tenant_id', tenantId);
-      applied = true;
+      }, { count: 'exact' }).eq('id', itemId).eq('tenant_id', tenantId);
+      applied = !applyError && appliedCount !== 0;
     } catch { console.log('[SWISH Market v7] Auto-apply failed.'); }
   }
 
@@ -1441,25 +1449,19 @@ Deno.serve(async (req: Request) => {
 
     // ── SOLD MARKET (legacy field — now populated from Terapeak when available) ─
     soldMarket: {
-      verifiedSoldCount: finalTerapeak.soldQuantity,
-      relevantSoldCount: finalTerapeak.soldQuantity,   // Terapeak pre-filters by query
-      excludedSoldCount: 0,
-      medianPrice: finalTerapeak.medianConditionPrice > 0 ? finalTerapeak.medianConditionPrice : finalTerapeak.averageSoldPrice,
-      weightedMedianPrice: finalTerapeak.averageSoldPrice,
-      lowPrice: finalTerapeak.priceMin,
-      highPrice: finalTerapeak.priceMax,
+      verifiedSoldCount: finalSoldSearch.items.length,
+      relevantSoldCount: soldComparableItems.length,
+      excludedSoldCount: Math.max(0,finalSoldSearch.items.length-soldComparableItems.length),
+      medianPrice: soldComparableItems.length ? soldComparableItems[Math.floor(soldComparableItems.length/2)].price : 0,
+      weightedMedianPrice: soldComparableItems.length ? soldComparableItems[Math.floor(soldComparableItems.length/2)].price : 0,
+      lowPrice: soldComparableItems[0]?.price ?? 0,
+      highPrice: soldComparableItems[soldComparableItems.length-1]?.price ?? 0,
       auctionMedian: 0,
       binMedian: finalTerapeak.averageSoldPrice,
       auctionShare: 0,
-      dateRange: finalTerapeak.available ? `Last 3 months (${finalTerapeak.metricPeriod})` : 'unknown',
-      dataQuality: finalTerapeak.available
-        ? (finalTerapeak.soldQuantity >= 20 ? 'strong' : finalTerapeak.soldQuantity >= 5 ? 'moderate' : 'weak')
-        : 'insufficient',
-      dataQualityReason: finalTerapeak.available
-        ? `Terapeak Product Research: ${finalTerapeak.soldQuantity} verified sales on EBAY_GB in the last 3 months`
-        : finalTerapeak.needsReauth
-          ? 'Re-authorise eBay with sell.analytics.readonly scope to enable Terapeak sold data'
-          : `Terapeak: ${finalTerapeak.error ?? 'no data'}`,
+      dateRange: soldComparableItems.length ? 'Authorised Marketplace Insights response; inspect individual sold dates' : 'unknown',
+      dataQuality: soldComparableItems.length>=8 ? 'moderate' : soldComparableItems.length ? 'weak' : 'insufficient',
+      dataQualityReason: soldComparableItems.length ? 'Marketplace Insights sold-item evidence; title relevance is not independent variant verification.' : 'No authorised comparable sold data. Seller Hub manual research may be required.',
       exceptionalSales: finalTerapeak.topSoldListings.filter(l => l.price > finalTerapeak.averageSoldPrice * 1.5).map(l => ({ title: l.title, price: l.price, date: '' })),
       sampleExclusions: [],
       teapeakActive: finalTerapeak.available,
@@ -1501,10 +1503,10 @@ Deno.serve(async (req: Request) => {
 
     combinedEvidence: {
       numistaRelevant: 0,
-      ebayRelevant: finalTerapeak.soldQuantity,      // Terapeak = genuine sold
+      ebayRelevant: soldComparableItems.length,
       browseApiRelevant: relevantActiveCount,
       geminiAvailable: gemini.available,
-      total: finalTerapeak.soldQuantity + relevantActiveCount,
+      total: soldComparableItems.length, // Never combine active asking counts with realised-sale evidence.
       combinedMedian: valuation.valuationMid,
       combinedLow: valuation.valuationLow,
       combinedHigh: valuation.valuationHigh,
@@ -1566,7 +1568,7 @@ Deno.serve(async (req: Request) => {
       teapeakAvgPrice: finalTerapeak.averageSoldPrice,
       teapeakNeedsReauth: finalTerapeak.needsReauth,
       browseApiFetched: totalBrowseItems, browseApiRelevant: relevantActiveCount,
-      verifiedSoldData: finalTerapeak.soldQuantity,
+      verifiedSoldData: soldComparableItems.length,
       insufficientSoldEvidence: valuation.insufficientSoldEvidence,
       primaryEvidenceSource: valuation.primaryEvidenceSource,
       topComparables, valuationConfidence: valuation.valuationConfidence,
@@ -1603,7 +1605,7 @@ Deno.serve(async (req: Request) => {
         relevantActiveCount > 0 ? `${relevantActiveCount} relevant active eBay listings (asking prices)` : 'No relevant active listings found',
         gemini.available ? `AI estimate: £${gemini.estimatedMid} (${gemini.confidence} confidence)` : 'Gemini vision unavailable',
         valuation.valuationMid > 0 ? `Valuation: £${valuation.valuationLow}–£${valuation.valuationHigh}` : 'INSUFFICIENT SOLD-MARKET EVIDENCE',
-        valuation.insufficientSoldEvidence ? 'Re-authorise eBay with sell.analytics.readonly scope for verified sold data' : 'Valuation based on Terapeak verified sold data',
+        valuation.insufficientSoldEvidence ? 'Sold-data access is unavailable or evidence is weak; use manual Seller Hub research.' : 'Valuation based on authorised Marketplace Insights sold items',
       ].filter(Boolean),
       warningFlags: valuation.valuationWarnings,
     },

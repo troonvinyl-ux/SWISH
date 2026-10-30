@@ -56,6 +56,7 @@ import { getMarketValue, MarketValueResult } from '@/services/marketValueService
 import { startCheckout } from '@/services/subscriptionService';
 import { processCoinImage, CoinImageTool } from '@/services/coinImageProcessing';
 import { generateCoinImageReference } from '@/services/coinImageEnhancementService';
+import { BrandArtwork } from '@/components/feature/BrandArtwork';
 
 // ── Coin Flipper design tokens ────────────────────────────────────────────────
 const CF = {
@@ -335,21 +336,10 @@ function HomeTab({ onTabSelect, isPremium, tenant, onUpgrade, onPeriodSelect, se
   ];
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ht.content}>
-      <View style={ht.hero}>
-        <View style={ht.heroReticleWrap}>
-          <Reticle size={106} color={CF.gold} />
-          <View style={ht.heroLogoCenter}><MaterialIcons name="toll" size={42} color={CF.gold} /></View>
-        </View>
-        <Text style={ht.heroTitle}>COIN FLIPPER</Text>
-        <Text style={ht.heroTagline}>ANCIENT COINS • REAL VALUES • SMARTER DECISIONS</Text>
-        <Text style={ht.heroPromise}>HISTORY IDENTIFIED. OPPORTUNITY REALISED.</Text>
-        {isPremium ? (
-          <View style={ht.proBadge}>
-            <MaterialIcons name="workspace-premium" size={11} color={CF.black} />
-            <Text style={ht.proBadgeText}>PRO</Text>
-          </View>
-        ) : null}
-      </View>
+      <BrandArtwork nicheId="coins" />
+      <Pressable onPress={()=>router.push('/lot-opportunity' as any)} accessibilityRole="button" accessibilityLabel="Evaluate a coin collection before buying" style={({pressed})=>[ht.periodDetail,pressed?{opacity:0.8}:null]}>
+        <MaterialIcons name="widgets" size={24} color={CF.gold}/><View style={{flex:1,gap:Spacing.xs}}><Text style={ht.periodDetailName}>Buying a whole collection?</Text><Text style={ht.periodDetailSub}>Add the list and bid. See what is worth your money.</Text></View><MaterialIcons name="arrow-forward" size={24} color={CF.gold}/>
+      </Pressable>
 
       <View style={ht.sectionHeading}>
         <Text style={ht.sectionLabel}>YOUR COIN WORKFLOW</Text>
