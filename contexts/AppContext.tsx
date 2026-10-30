@@ -111,9 +111,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       const storageKey = `${NICHE_STORAGE_PREFIX}:${user.id}`;
 
-      // The verified master account can switch every production niche, even
-      // when the app was built as a single-niche branded build.
-      if (isMasterAdmin) {
+      // The master account can switch niches only in the unbranded master app.
+      // A niche-branded APK stays pinned to its product for every account.
+      if (isMasterAdmin && !FIXED_BUILD_NICHE_ID) {
         let active: NicheId = 'coins';
         try {
           const val = await AsyncStorage.getItem(storageKey);
@@ -130,7 +130,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Non-owner accounts in branded builds remain pinned to their product.
+      // All accounts in branded builds remain pinned to their product.
       if (FIXED_BUILD_NICHE_ID) {
         setActiveNicheId(FIXED_BUILD_NICHE_ID);
         setEnabledNiches([FIXED_BUILD_NICHE_ID]);
@@ -167,13 +167,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [user?.id, isMasterAdmin]);
 
   const persistNiches = (active: NicheId, enabled: NicheId[]) => {
-    if (!user?.id || (FIXED_BUILD_NICHE_ID && !isMasterAdmin)) return;
+    if (!user?.id || FIXED_BUILD_NICHE_ID) return;
     const storageKey = `${NICHE_STORAGE_PREFIX}:${user.id}`;
     AsyncStorage.setItem(storageKey, JSON.stringify({ active, enabled })).catch(() => {});
   };
 
   const setActiveNiche = (id: NicheId) => {
-    if (!isProductionNiche(id) || (FIXED_BUILD_NICHE_ID && id !== FIXED_BUILD_NICHE_ID && !isMasterAdmin)) return;
+    if (!isProductionNiche(id) || (FIXED_BUILD_NICHE_ID && id !== FIXED_BUILD_NICHE_ID)) return;
     setActiveNicheId(id);
     setEnabledNiches(prev => {
       const next = prev.includes(id) ? prev : [id, ...prev.filter(isProductionNiche)];
@@ -183,7 +183,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const enableNiche = (id: NicheId) => {
-    if (!isProductionNiche(id) || (FIXED_BUILD_NICHE_ID && !isMasterAdmin)) return;
+    if (!isProductionNiche(id) || FIXED_BUILD_NICHE_ID) return;
     setEnabledNiches(prev => {
       const next = prev.includes(id) ? prev : [...prev.filter(isProductionNiche), id];
       persistNiches(activeNicheId, next);
