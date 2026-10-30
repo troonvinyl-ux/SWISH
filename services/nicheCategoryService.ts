@@ -274,6 +274,13 @@ export function classifyListing(
   const catName = (categoryName ?? '').trim().toLowerCase();
   const titleStr = (title ?? '').trim();
   const titleLower = titleStr.toLowerCase();
+  const titleNiches = new Set(TITLE_NICHE_KEYWORDS
+    .filter(rule => rule.patterns.some(pattern => pattern.test(titleStr)))
+    .map(rule => rule.niche));
+  const categoryNiche = CATEGORY_ID_TO_NICHE[catId];
+  if (categoryNiche && [...titleNiches].some(niche => niche !== categoryNiche)) {
+    return { niche: 'unclassified', confidence: 'none', reason: 'Category and title evidence conflict; manual classification required' };
+  }
 
   // ── Step 1: Category ID lookup (most reliable) ─────────────────────────────
   if (catId && CATEGORY_ID_TO_NICHE[catId]) {
@@ -313,6 +320,9 @@ export function classifyListing(
     }
   }
 
+  if (titleNiches.size > 1) {
+    return { niche: 'unclassified', confidence: 'none', reason: 'Multiple niche signals; manual classification required' };
+  }
   // ── Step 3: Title pattern matching (last resort) ───────────────────────────
   for (const { patterns, niche, confidence } of TITLE_NICHE_KEYWORDS) {
     for (const pattern of patterns) {
@@ -368,11 +378,17 @@ export function isListingEligibleForNiche(
   result: ClassificationResult,
   targetNiche: NicheClassification | null,
 ): boolean {
-  // Fail closed when there is no valid niche context or the listing is
-  // unclassified. Ambiguous rows must be reviewed, never imported into a
-  // production niche merely because the user opened that niche's importer.
+  // Missing or uncertain product context is a review case, never import authorization.
   if (!targetNiche || targetNiche === 'unclassified') return false;
 
-  // Only a positive classification match is eligible for the selected niche.
-  return result.niche === targetNiche;
+  // Exact niche match → always eligible
+  if (result.niche === targetNiche) return true;
+
+  // Unclassified items: include them with confidence < category_name
+  // so that manually-created listings without a category aren't silently excluded.
+  // The user can review them in the inventory.
+  if (result.niche === 'unclassified') return false;
+
+  // Classified as a DIFFERENT niche → not eligible
+  return false;
 }

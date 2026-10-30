@@ -22,7 +22,7 @@ import {
   ActivityIndicator, Linking, Alert, AccessibilityInfo,
   TextInput, Modal, FlatList,
 } from 'react-native';
-import { useRouter, useLocalSearchParams, Redirect } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -30,7 +30,6 @@ import type { SpecialistId } from '@/constants/specialists';
 import { Image } from 'expo-image';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
-import { nicheToEntryRoute } from '@/services/nicheRouting';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAlert, getSupabaseClient } from '@/template';
 import {
@@ -673,10 +672,7 @@ function CaptureTab({
                 <Text style={[ct.quickThumbsTitle, { color: CF.islamic }]}>ISLAMIC IDENTIFICATIONS</Text>
                 <View style={{ gap: Spacing.xs }}>
                   {islamicBatchItems.map(item => (
-                    <Pressable key={item.id} onPress={() => onIslamicItemPress(item)} style={{ padding: Spacing.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: CF.border, backgroundColor: CF.surfaceHigh }}>
-                      <Text style={{ color: CF.textPrimary, fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold }}>{item.result?.canonicalTitle ?? item.error ?? item.status}</Text>
-                      <Text style={{ color: CF.textSub, fontSize: Typography.size.xs }}>{item.status === 'complete' ? 'Ready to review' : item.status === 'error' ? 'Needs another attempt' : 'Processing'}</Text>
-                    </Pressable>
+                    <IslamicBatchMiniCard key={item.id} item={item} onPress={() => onIslamicItemPress(item)} />
                   ))}
                 </View>
                 {selectedIslamicItem ? (
@@ -1109,7 +1105,7 @@ function IdentifyTab({ result, capturedImages, onSave, saving, savedItemId, uplo
           <MaterialIcons name="warning-amber" size={19} color={Colors.warning} />
           <View style={{ flex: 1, gap: 4 }}>
             <Text style={{ color: Colors.warning, fontSize: Typography.size.sm, fontWeight: Typography.weight.extrabold }}>Unconfirmed identification</Text>
-            <Text style={{ color: CF.textPrimary, fontSize: Typography.size.sm, lineHeight: 19 }}>The catalogue found no match and confidence is very low. Do not treat a ruler, period or denomination as confirmed. Add the coin&apos;s measured weight and diameter and review clearer photos before listing.</Text>
+            <Text style={{ color: CF.textPrimary, fontSize: Typography.size.sm, lineHeight: 19 }}>The catalogue found no match and confidence is very low. Do not treat a ruler, period or denomination as confirmed. Add the coin's measured weight and diameter and review clearer photos before listing.</Text>
           </View>
         </View>
       ) : null}
@@ -1665,7 +1661,7 @@ class CaptureTabErrorBoundary extends React.Component<
 // MAIN SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 
-function CoinFlipperContent({ isHomeTab = false }: { isHomeTab?: boolean } = {}) {
+export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: boolean } = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ tab?: string }>();
@@ -2214,20 +2210,28 @@ function CoinFlipperContent({ isHomeTab = false }: { isHomeTab?: boolean } = {})
           </View>
           {isPremium ? <View style={main.proBadge}><Text style={main.proBadgeText}>PRO</Text></View> : null}
         </Pressable>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.xs }}>
-          <Pressable
-            onPress={() => router.push('/deep-id-lab' as any)}
-            style={main.myCoinsBtn}
-            hitSlop={6}
-            accessibilityLabel="Open Deep ID and Re-ID Lab"
-            accessibilityRole="button"
-          >
-            <MaterialIcons name="science" size={17} color={CF.gold} />
-          </Pressable>
-          <Pressable onPress={() => router.push('/(tabs)/inventory' as any)} style={main.myCoinsBtn} hitSlop={6} accessibilityLabel="View my coin inventory" accessibilityRole="button">
-            <MaterialIcons name="inventory-2" size={16} color={CF.gold} />
-          </Pressable>
-        </View>
+        {/* Specialist indicator in header */}
+        {activeTab === 'capture' && selectedSpecialist.id !== 'general' ? (
+          <View style={[main.specialistIndicator, { backgroundColor: selectedSpecialist.color + '20', borderColor: selectedSpecialist.color + '50' }]}>
+            <MaterialIcons name={selectedSpecialist.icon as any} size={11} color={selectedSpecialist.color} />
+            <Text style={[main.specialistIndicatorText, { color: selectedSpecialist.color }]}>{selectedSpecialist.label}</Text>
+          </View>
+        ) : (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.xs }}>
+            <Pressable
+              onPress={() => router.push('/deep-id-lab' as any)}
+              style={main.myCoinsBtn}
+              hitSlop={6}
+              accessibilityLabel="Open Deep ID and Re-ID Lab"
+              accessibilityRole="button"
+            >
+              <MaterialIcons name="science" size={17} color={CF.gold} />
+            </Pressable>
+            <Pressable onPress={() => router.push('/(tabs)/inventory' as any)} style={main.myCoinsBtn} hitSlop={6} accessibilityLabel="View my coin inventory" accessibilityRole="button">
+              <MaterialIcons name="inventory-2" size={16} color={CF.gold} />
+            </Pressable>
+          </View>
+        )}
       </View>
 
       {/* ── Tab bar ── */}
@@ -2415,16 +2419,3 @@ const main = StyleSheet.create({
   upgradeBarBtn: { backgroundColor: CF.black + '30', borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
   upgradeBarBtnText: { fontSize: Typography.size.xs, fontWeight: Typography.weight.extrabold, color: CF.black },
 });
-
-
-// The Coins screen is a protected product route. In a niche-branded APK,
-// direct navigation to this route must not expose the Coins scanner to the user.
-// The unbranded master app can still render Coins when Coins is the active niche.
-export default function CoinFlipperScreen(props: { isHomeTab?: boolean } = {}) {
-  const { fixedNicheId } = useApp();
-  if (fixedNicheId && fixedNicheId !== 'coins') {
-    const route = nicheToEntryRoute(fixedNicheId);
-    return route ? <Redirect href={route as any} /> : <Redirect href={'/login' as any} />;
-  }
-  return <CoinFlipperContent {...props} />;
-}

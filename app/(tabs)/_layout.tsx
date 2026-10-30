@@ -9,16 +9,16 @@ import { Platform, View, Text, StyleSheet, Pressable } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import { Colors, Typography, Spacing, Radius } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
-import { getLiveListingCount } from '@/services/listingService';
+import { useNicheListingCount } from '@/hooks/useNicheListingCount';
 import { IS_TV } from '@/hooks/useTVNavigation';
 import { NICHES } from '@/constants/niches';
 import { SPECIALISTS } from '@/constants/specialists';
-import { getProductionNicheSpecialistIds } from '@/services/nicheRouting';
+import { resolveProductionNiche } from '@/services/nicheRouting';
 
 // Derive the home tab icon and label from the active niche
 function useNicheHomeTab() {
-  const { activeNicheId } = useApp();
-  const id = (activeNicheId ?? '').toLowerCase();
+  const { activeNicheId, fixedNicheId } = useApp();
+  const id = resolveProductionNiche(fixedNicheId ?? activeNicheId) ?? '';
   if (id.includes('coin') || id === 'gold' || id === 'silver' || id === 'banknotes' || id === 'islamic_silver') {
     return { icon: 'toll' as const, label: 'Coins' };
   }
@@ -26,34 +26,13 @@ function useNicheHomeTab() {
   if (id === 'bicycles' || id === 'cycling' || id === 'bikes') return { icon: 'pedal-bike' as const, label: 'Bikes' };
   if (id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers' || id === 'trainers') return { icon: 'checkroom' as const, label: 'Fashion' };
   if (id === 'surplus_flip') return { icon: 'inventory-2' as const, label: 'Surplus' };
-  return { icon: 'dashboard' as const, label: 'Home' };
+  const config = id ? NICHES[id] : null;
+  return { icon: (config?.icon ?? 'dashboard') as React.ComponentProps<typeof MaterialIcons>['name'], label: config?.shortName ?? 'Home' };
 }
 
 // ── Live listings count ───────────────────────────────────────────────────────
 
-function useLiveListingCount() {
-  const { tenant, activeNicheId } = useApp();
-  const [count, setCount] = useState(0);
-
-  // Derive specialist IDs for the active niche so badge only shows niche-relevant listings
-  const nicheSpecialistIds = (() => {
-    return getProductionNicheSpecialistIds(activeNicheId);
-  })();
-
-  const refresh = useCallback(async () => {
-    if (!tenant?.id) return;
-    const n = await getLiveListingCount(tenant.id, nicheSpecialistIds);
-    setCount(n);
-  }, [tenant?.id, activeNicheId]);
-
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, 30_000);
-    return () => clearInterval(interval);
-  }, [refresh]);
-
-  return count;
-}
+function useLiveListingCount() { return useNicheListingCount(); }
 
 function TabLabel({ label, focused }: { label: string; focused: boolean }) {
   return (

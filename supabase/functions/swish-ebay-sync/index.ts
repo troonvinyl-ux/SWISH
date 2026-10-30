@@ -265,7 +265,18 @@ function parseItemXml(itemXml: string, defaultStatus: 'active' | 'sold' | 'ended
       galleryUrl,
       listedAt: extractTag(itemXml, 'StartTime') || null,
       endedAt: extractTag(itemXml, 'EndTime') || null,
-      ebayStatus: defaultStatus,
+      ebayStatus: (() => {
+        const selling = extractTag(itemXml, 'SellingStatus');
+        const state = extractTag(selling, 'ListingStatus').toLowerCase();
+        const quantity = Number(extractTag(itemXml, 'Quantity') || '1');
+        const soldText = extractTag(selling, 'QuantitySold');
+        const sold = soldText ? Number(soldText) : null;
+        // Fully exhausted single/multiple quantity listings cannot be Live.
+        if (sold !== null && Number.isFinite(sold) && quantity > 0 && sold >= quantity) return 'sold';
+        if (state === 'completed' || state === 'ended') return sold !== null && sold > 0 ? 'sold' : 'ended';
+        if (state === 'active' && sold !== null && sold < quantity) return 'active';
+        return defaultStatus;
+      })(),
       itemSpecifics,
     };
   } catch (e: any) {
@@ -412,6 +423,10 @@ async function syncItemToSwish(
   try {
     // Keep the inventory lifecycle status aligned with the authoritative eBay state.
     // Without this, a sold/ended listing can leave its item marked as listed in SWISH.
+    // A stale ActiveList snapshot must never resurrect a canonical sold item.
+    if (ebay.ebayStatus === 'active' && (existingItem.sold_at || ['sold','fulfilled','completed'].includes(String(existingItem.status).toLowerCase()))) {
+      return { imageUrlsStored: 0, titleFixed: false, updated: false, error: 'Sold item conflicts with an active marketplace snapshot; check GetItem status' };
+    }
     const itemStatus = ebay.ebayStatus === 'sold' ? 'sold' : ebay.ebayStatus === 'ended' ? 'identified' : 'listed';
     const itemUpdates: Record<string, any> = { status: itemStatus, updated_at: new Date().toISOString() };
 
@@ -524,7 +539,7 @@ async function syncItemToSwish(
     const listingUpdate: Record<string, any> = {
       updated_at: new Date().toISOString(),
       status: ebay.ebayStatus === 'sold' ? 'sold' : ebay.ebayStatus === 'ended' ? 'ended' : 'active',
-      ...(ebay.ebayStatus !== 'active' ? { ended_at: ebay.endedAt ?? new Date().toISOString() } : {}),
+      ended_at: ebay.ebayStatus === 'active' ? null : ebay.endedAt && Date.parse(ebay.endedAt) <= Date.now() ? ebay.endedAt : null,
     };
     if (ebay.title) listingUpdate.title = ebay.title;
     if (ebay.description?.length > 10) listingUpdate.description = ebay.description;
@@ -702,19 +717,19 @@ Deno.serve(async (req: Request) => {
 
   if (dbListErr) return json({ error: `DB error: ${dbListErr.message}` }, 500);
 
-  const ebayIdToItemId = new Map<string, string>();
+  // Preserve every existing canonical record; do not discard duplicate import links.
+  const ebayIdToItemIds = new Map<string, Set<string>>();
   for (const l of dbListings ?? []) {
-    if (l.external_listing_id && l.item_id) ebayIdToItemId.set(String(l.external_listing_id), String(l.item_id));
+    if (!l.external_listing_id || !l.item_id) continue;
+    const id = String(l.external_listing_id);
+    const matched = ebayIdToItemIds.get(id) ?? new Set<string>();
+    matched.add(String(l.item_id)); ebayIdToItemIds.set(id, matched);
   }
-  console.log(`[EbaySync] SWISH listings matched: ${ebayIdToItemId.size}`);
+  console.log(`[EbaySync] SWISH listings matched: ${ebayIdToItemIds.size}`);
 
   const itemIdsSet = new Set<string>(itemIds ?? []);
-  const toProcess = enrichedListings.filter(ebay => {
-    const itemId = ebayIdToItemId.get(ebay.ebayItemId);
-    if (!itemId) return false;
-    if (itemIds && (itemIds as string[]).length > 0 && !itemIdsSet.has(itemId)) return false;
-    return true;
-  });
+  const toProcess = enrichedListings.flatMap(ebay => [...(ebayIdToItemIds.get(ebay.ebayItemId) ?? [])]
+    .filter(itemId => !itemIds || itemIdsSet.has(itemId)).map(itemId => ({ ebay, itemId })));
 
   if (toProcess.length === 0) {
     return json({
@@ -732,11 +747,11 @@ Deno.serve(async (req: Request) => {
   const PAGE_SIZE = 200;
   let itemPage = 0, loadMore = true;
   while (loadMore) {
-    const { data: swishPage, error: pageErr } = await supabase
-      .from('items')
-      .select('id, canonical_title, description, media, attributes, condition, condition_notes, ruler, denomination, year_made, country_of_origin, material, period, mint, sku, quantity')
-      .eq('tenant_id', tenantId)
-      .range(itemPage * PAGE_SIZE, (itemPage + 1) * PAGE_SIZE - 1);
+    let itemQuery = supabase.from('items')
+      .select('id, status, sold_at, canonical_title, description, media, attributes, condition, condition_notes, ruler, denomination, year_made, country_of_origin, material, period, mint, sku, quantity')
+      .eq('tenant_id', tenantId).order('id', { ascending: true });
+    if (allowedSpecialists) itemQuery = itemQuery.in('specialist_id', allowedSpecialists);
+    const { data: swishPage, error: pageErr } = await itemQuery.range(itemPage * PAGE_SIZE, (itemPage + 1) * PAGE_SIZE - 1);
 
     if (pageErr) return json({ error: `DB items error: ${pageErr.message}` }, 500);
     for (const item of swishPage ?? []) itemById.set(item.id, item);
@@ -752,9 +767,8 @@ Deno.serve(async (req: Request) => {
 
   for (let i = 0; i < toProcess.length; i += BATCH_SIZE) {
     const batch = toProcess.slice(i, i + BATCH_SIZE);
-    for (const ebay of batch) {
-      const itemId = ebayIdToItemId.get(ebay.ebayItemId);
-      const existingItem = itemId ? itemById.get(itemId) : null;
+    for (const { ebay, itemId } of batch) {
+      const existingItem = itemById.get(itemId);
 
       if (!itemId || !existingItem) {
         failed++;
@@ -767,7 +781,7 @@ Deno.serve(async (req: Request) => {
         updated++;
         imagesFetched += result.imageUrlsStored;
         if (result.titleFixed) titlesFixed++;
-        itemById.set(itemId, { ...existingItem, canonical_title: ebay.title || existingItem.canonical_title });
+        itemById.set(itemId, { ...existingItem, status: ebay.ebayStatus === 'sold' ? 'sold' : ebay.ebayStatus === 'active' ? 'listed' : 'identified' });
       } else {
         failed++;
         failedItems.push(ebay.ebayItemId);
@@ -788,8 +802,9 @@ Deno.serve(async (req: Request) => {
   let orphansFixed = 0;
   for (const l of swishLiveListings ?? []) {
     if (l.external_listing_id && !ebayActiveIds.has(l.external_listing_id) &&
-        ebayIdToItemId.has(String(l.external_listing_id)) &&
+        ebayIdToItemIds.has(String(l.external_listing_id)) &&
         (!itemIds || itemIdsSet.has(l.item_id)) &&
+        ebayIdToItemIds.get(String(l.external_listing_id))?.has(l.item_id) &&
         byExternalId.get(String(l.external_listing_id))?.ebayStatus !== 'active' &&
         byExternalId.has(String(l.external_listing_id))) {
       const ebayItem = allEbayListings.find(e => e.ebayItemId === l.external_listing_id);
@@ -803,7 +818,8 @@ Deno.serve(async (req: Request) => {
   }
 
   const result = {
-    success: true,
+    success: failed === 0,
+    partial: failed > 0,
     processed: toProcess.length,
     matchedListings: toProcess.length,
     totalEbayListings: allEbayListings.length,

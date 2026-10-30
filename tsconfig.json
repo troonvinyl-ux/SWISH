@@ -2,6 +2,7 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    "resolveJsonModule": true,
     "paths": {
       "@/*": [
         "./*"
@@ -16,6 +17,7 @@
   ],
   "exclude": [
     "node_modules",
+    ".swish-build/**",
     "supabase/functions/**",
     "**/__tests__/**",
     "services/__mocks__/**"

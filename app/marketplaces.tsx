@@ -24,7 +24,7 @@ import { getSupabaseClient } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import {
   MARKETPLACE_DEFINITIONS, MarketplaceId,
-  listConnectors, MarketplaceConnector,
+  listConnectors, MarketplaceConnector, disconnectMarketplace,
 } from '@/services/marketplaceService';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -187,11 +187,8 @@ function EbayConnectionSheet({
           style: 'destructive',
           onPress: async () => {
             if (!tenantId) return;
-            await supabase
-              .from('marketplace_connectors')
-              .update({ status: 'disconnected', updated_at: new Date().toISOString() })
-              .eq('tenant_id', tenantId)
-              .eq('marketplace_id', 'ebay');
+            const { error } = await disconnectMarketplace(tenantId, 'ebay');
+            if (error) { showAlert('Disconnect Failed', error); return; }
             setPhase('idle');
             onClose();
           },

@@ -29,7 +29,7 @@ function getNicheProduct(nicheId: string | null | undefined): NicheProduct {
   if (id.includes('coin') || id === 'gold' || id === 'silver' || id === 'banknotes' || id === 'islamic_silver') return 'coins';
   if (id === 'motocross' || id === 'mx') return 'mx';
   if (id === 'bicycles' || id === 'cycling' || id === 'bikes') return 'bikes';
-  if (id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers') return 'clothing';
+  if (id === 'clothing' || id === 'fashion' || id === 'trainers_sneakers' || id === 'trainers') return 'clothing';
   if (id === 'surplus_flip' || id === 'catalog_flip' || id === 'catalog_surplus') return 'surplus';
   return 'general';
 }

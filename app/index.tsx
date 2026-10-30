@@ -21,21 +21,23 @@
 import { AuthRouter } from '@/template';
 import { Redirect } from 'expo-router';
 import { useApp } from '@/hooks/useApp';
-import { View, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { nicheToEntryRoute } from '@/services/nicheRouting';
 
 function AppRouter() {
-  const { businessConfig, tenantLoading, activeNicheId, fixedNicheId } = useApp();
+  const { businessConfig, tenantLoading, tenantError, nichePreferencesLoading, activeNicheId, fixedNicheId } = useApp();
 
   // Still loading tenant/config
-  if (tenantLoading) {
+  if (tenantLoading || nichePreferencesLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" color={Colors.primary} />
       </View>
     );
   }
+
+  if (tenantError) return <AccountLoadError />;
 
   // businessConfig == null means first-time user who hasn't completed onboarding
   // onboardingComplete false also triggers onboarding
@@ -53,6 +55,15 @@ function AppRouter() {
 
   // Route to the correct niche-specific entry point.
   return <Redirect href={entryRoute as any} />;
+}
+
+function AccountLoadError() {
+  const { tenantError, reloadTenant } = useApp();
+  return <View style={{ flex: 1, backgroundColor: Colors.background, padding: 24, justifyContent: 'center', gap: 16 }}>
+    <Text style={{ color: Colors.textPrimary, fontSize: 18 }}>Account could not be loaded</Text>
+    <Text style={{ color: Colors.textSecondary, fontSize: 16 }}>{tenantError}</Text>
+    <Pressable onPress={() => { void reloadTenant(); }} style={({ pressed }) => ({ padding: 16, backgroundColor: Colors.primary, opacity: pressed ? 0.8 : 1 })}><Text style={{ color: Colors.background }}>Retry</Text></Pressable>
+  </View>;
 }
 
 export default function RootScreen() {

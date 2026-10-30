@@ -3,7 +3,7 @@
 // Routes: sync_transactions | get_payouts | get_funds_summary | get_summary
 // POST body: { tenantId, route?, daysBack? }
 
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials, isEncrypted } from '../_shared/credentialCrypto.ts';
 import { ebayFinancesSignatureHeaders } from '../_shared/ebayDigitalSignature.ts';
 

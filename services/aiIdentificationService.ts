@@ -13,6 +13,7 @@ import { FunctionsFetchError, FunctionsHttpError } from '@supabase/supabase-js';
 import { SpecialistId } from '@/constants/specialists';
 import { EvidenceSource, ConfidenceTier, DispositionDecision } from '@/constants/config';
 import { createItem, Item } from '@/services/itemService';
+import { resolveProductionNiche, getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 
 export interface CapturedImage {
   uri: string;
@@ -391,6 +392,14 @@ export async function identifyItemWithAI(
         ? specialistId                            // keep caller's niche specialist
         : (aiSpecialist ?? specialistId) as SpecialistId; // accept AI's specific value
 
+    const requestedNiche = resolveProductionNiche(specialistId);
+    if (requestedNiche && !getProductionNicheSpecialistIds(requestedNiche).includes(resolvedSpecialistId)) {
+      return { result: null, error: 'Identification returned a different niche. Review the specialist selection before saving.' };
+    }
+    if (typeof id.canonicalTitle !== 'string' || !id.canonicalTitle.trim() || !Number.isFinite(Number(id.confidence))) {
+      return { result: null, error: 'Identification returned an invalid structured result. Please retry.' };
+    }
+
     const result: AIIdentificationResult = {
       canonicalTitle: id.canonicalTitle ?? 'Unknown Item',
       specialistId: resolvedSpecialistId,
@@ -605,7 +614,7 @@ export async function saveCoinReferenceImages(
       const uploadBlob = new Blob([uploadBuffer], { type: contentType });
       const { error: uploadError } = await supabase.storage
         .from(ITEM_IMAGES_BUCKET)
-        .upload(fileName, uploadBlob, { contentType, upsert: true });
+        .upload(fileName, Platform.OS === 'web' ? uploadBlob : uploadBuffer, { contentType, upsert: true });
       if (uploadError) throw new Error('Rendered image upload failed.');
 
       const { data } = supabase.storage.from(ITEM_IMAGES_BUCKET).getPublicUrl(fileName);
@@ -711,6 +720,7 @@ export async function saveIdentifiedItem(
     saleProb30d: 0,
     attributes: {
       ...result.attributes,
+      ...(resolveProductionNiche(canonicalSpecialistId) ? { niche_id: resolveProductionNiche(canonicalSpecialistId) } : {}),
       // Ensure objectType and identificationState are stored
       ...(result.objectType ? { object_type: result.objectType } : {}),
       ...(result.identificationState ? { identification_state: result.identificationState } : {}),

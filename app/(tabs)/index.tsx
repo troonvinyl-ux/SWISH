@@ -19,6 +19,7 @@ import FlipperMXScreen from '@/app/flipper-mx';
 import BikeFlipperScreen from '@/app/bike-flipper';
 import ThreadsFlipScreen from '@/app/threads-flip';
 import SurplusFlipScreen from '@/app/surplus-flip';
+import { NicheOverview } from '@/components/feature/NicheOverview';
 
 export default function NicheHomeScreen() {
   const { activeNicheId, fixedNicheId, tenant, tenantLoading } = useApp();
@@ -43,6 +44,7 @@ export default function NicheHomeScreen() {
   if (product === 'bicycles') return <BikeFlipperScreen key={effectiveNicheId} isHomeTab />;
   if (product === 'clothing') return <ThreadsFlipScreen key={effectiveNicheId} isHomeTab />;
   if (product === 'surplus_flip') return <SurplusFlipScreen key={effectiveNicheId} />;
+  if (product) return <NicheOverview key={effectiveNicheId} />;
   return <Redirect href={"/niche-select" as any} />;
 }
 

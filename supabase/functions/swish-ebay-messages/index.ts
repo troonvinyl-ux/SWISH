@@ -9,7 +9,7 @@
 //
 // Security: JWT + tenant membership verified before any eBay operation.
 
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
 const corsHeaders = {
@@ -98,8 +98,7 @@ async function getEbayAccessToken(
 
   let creds: any;
   try { creds = await decryptCredentials(conn.credential_ref); } catch (e: any) {
-    console.error('[SWISH Security] eBay credential decryption failed for tenant connector');
-    return { error: 'Unable to read eBay connection securely. Please reconnect eBay in Marketplaces.' };
+    return { error: `eBay credentials are corrupted: ${e.message}. Please re-connect eBay in Marketplaces.` };
   }
   if (!creds.accessToken) {
     return { error: 'No eBay access token found. Please re-authorise eBay in Marketplaces.' };
@@ -193,8 +192,7 @@ async function handleSyncMessages(
     });
     responseXml = await resp.text();
   } catch (e: any) {
-    console.error('[SWISH] eBay messages network request failed');
-    return jsonResponse({ error: 'Unable to reach eBay right now. Please retry.' }, 503);
+    return jsonResponse({ error: `Network error reaching eBay: ${e.message}` }, 503);
   }
 
   const ack = parseAck(responseXml);
@@ -368,6 +366,6 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: `Unknown route: ${route}` }, 400);
   } catch (e: any) {
     console.error(`[SWISH] swish-ebay-messages unhandled error (route=${route}):`, e.message);
-    return jsonResponse({ error: 'Unable to complete the eBay messages request. Please retry or contact support.' }, 500);
+    return jsonResponse({ error: e.message ?? 'Internal server error' }, 500);
   }
 });

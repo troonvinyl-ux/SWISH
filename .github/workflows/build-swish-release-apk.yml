@@ -53,7 +53,7 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: bash scripts/install-dependencies.sh
 
       - name: Run niche isolation and Coin Flipper production tests (pre-build gate)
         # Fails the build before any Android toolchain setup if niche isolation
@@ -91,8 +91,6 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Generate Android project
-        env:
-          EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
         run: pnpm exec expo prebuild --platform android --clean
 
       - name: Restore persistent release keystore from secret
@@ -102,7 +100,8 @@ jobs:
         env:
           KEYSTORE_B64: ${{ secrets.SWISH_RELEASE_KEYSTORE_BASE64 }}
         run: |
-          set -eux
+          set -eu
+          set +x
           if [ -z "${KEYSTORE_B64}" ]; then
             echo "ERROR: SWISH_RELEASE_KEYSTORE_BASE64 secret is not set."
             echo "Generate a keystore once, base64-encode it, and store the result as this secret."
@@ -117,7 +116,8 @@ jobs:
           KEY_PASS:   ${{ secrets.SWISH_KEYSTORE_KEY_PASSWORD }}
           KEY_ALIAS:  ${{ secrets.SWISH_KEYSTORE_KEY_ALIAS }}
         run: |
-          set -eux
+          set -eu
+          set +x
           if [ -z "${STORE_PASS}" ] || [ -z "${KEY_PASS}" ] || [ -z "${KEY_ALIAS}" ]; then
             echo "ERROR: One or more keystore secrets are missing."
             echo "Required: SWISH_KEYSTORE_STORE_PASSWORD, SWISH_KEYSTORE_KEY_PASSWORD, SWISH_KEYSTORE_KEY_ALIAS"
@@ -267,6 +267,13 @@ jobs:
           ANDROID_HOME: ${{ github.workspace }}/android-sdk
           ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
         run: ./gradlew assembleRelease --no-daemon -x lint
+
+      - name: Verify signed artifact
+        run: |
+          test -s android/app/build/outputs/apk/release/app-release.apk
+          unzip -t android/app/build/outputs/apk/release/app-release.apk
+          TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$TOOLS/apksigner" verify --verbose android/app/build/outputs/apk/release/app-release.apk
 
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4

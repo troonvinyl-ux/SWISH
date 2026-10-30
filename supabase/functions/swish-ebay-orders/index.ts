@@ -15,12 +15,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 import registry from '../../../niche-modules.json' with { type: 'json' };
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+import { corsHeaders } from '../_shared/cors.ts';
 
 const EBAY_TRADING_API_URL   = 'https://api.ebay.com/ws/api.dll';
 const EBAY_FULFILLMENT_API   = 'https://api.ebay.com/sell/fulfillment/v1';
@@ -310,6 +305,24 @@ function parseTradingOrder(block: string): TradingOrder | null {
 
 // ── Import orders to SWISH DB ─────────────────────────────────────────────────
 
+// Reconcile existing orders too. The former early-continue path left sold items Live.
+// Multi-quantity listings stay available until GetItem confirms no units remain.
+async function reconcileSoldOrder(
+  supabase: ReturnType<typeof adminClient>, tenantId: string, itemId: string, listingId: string,
+  soldAt: string, salePrice: number,
+): Promise<string | null> {
+  const { data: item, error: readError } = await supabase.from('items').select('status, quantity')
+    .eq('id', itemId).eq('tenant_id', tenantId).maybeSingle();
+  if (readError || !item) return 'Sold inventory could not be verified';
+  if (Number(item.quantity ?? 1) > 1) return null;
+  const { error: listingError } = await supabase.from('listings').update({status:'sold', ended_at:soldAt,updated_at:new Date().toISOString()})
+    .eq('id',listingId).eq('item_id',itemId).eq('tenant_id',tenantId).eq('marketplace_id','ebay');
+  if (listingError) return 'Sold listing status could not be saved';
+  const { error: itemError } = await supabase.from('items').update({status:'sold',sold_price:salePrice,sold_at:soldAt,marketplace:'ebay',updated_at:new Date().toISOString()})
+    .eq('id',itemId).eq('tenant_id',tenantId);
+  return itemError ? 'Sold inventory status could not be saved' : null;
+}
+
 async function importFulfillmentOrders(
   supabase: ReturnType<typeof adminClient>,
   tenantId: string,
@@ -388,7 +401,11 @@ async function importFulfillmentOrders(
         const { error: updateErr } = await supabase.from('orders').update(updatePayload)
           .eq('id', existingRow.id).eq('tenant_id', tenantId);
         if (updateErr) errors.push(`Order ${orderId} status refresh: ${updateErr.message}`);
-        else skipped++;
+        else {
+          const reconcileError = await reconcileSoldOrder(supabase, tenantId, matchedItemId, matchedListingId, order.createdAt, salePrice);
+          if (reconcileError) errors.push(`Order ${orderId}: ${reconcileError}`);
+          skipped++;
+        }
         existingOrderIds.add(orderId);
         continue;
       }
@@ -417,8 +434,8 @@ async function importFulfillmentOrders(
       if (matchedItemId) {
         const { data: curItem } = await supabase.from('items').select('status, acquired_cost').eq('id', matchedItemId).eq('tenant_id', tenantId).maybeSingle();
         const acquiredCost = Number(curItem?.acquired_cost ?? 0);
-        await supabase.from('items').update({ status: 'sold', sold_price: salePrice, sold_at: order.createdAt, marketplace: 'ebay', updated_at: new Date().toISOString() }).eq('id', matchedItemId).eq('tenant_id', tenantId);
-        if (matchedListingId) await supabase.from('listings').update({ status: 'sold', ended_at: order.createdAt, updated_at: new Date().toISOString() }).eq('id', matchedListingId).eq('tenant_id', tenantId);
+        const reconcileError = await reconcileSoldOrder(supabase, tenantId, matchedItemId, matchedListingId!, order.createdAt, salePrice);
+        if (reconcileError) errors.push(`Order reconciliation: ${reconcileError}`);
         await supabase.from('sales').insert({
           tenant_id: tenantId, item_id: matchedItemId, listing_id: matchedListingId,
           marketplace_id: 'ebay', sale_price: salePrice, marketplace_fee: marketplaceFee,
@@ -463,7 +480,7 @@ async function importTradingOrders(
       let salePrice = order.salePrice;
       for (const ebayItemId of order.ebayItemIds) {
         const match = listingByEbayId.get(ebayItemId);
-        if (match) { matchedItemId = match.itemId; matchedListingId = match.listingId; salePrice = match.price || order.salePrice; break; }
+        if (match) { matchedItemId = match.itemId; matchedListingId = match.listingId; salePrice = order.salePrice; break; }
       }
 
       if (!matchedItemId || !matchedListingId) { skipped++; continue; }
@@ -500,7 +517,11 @@ async function importTradingOrders(
         const { error: updateErr } = await supabase.from('orders').update(updatePayload)
           .eq('id', existingRow.id).eq('tenant_id', tenantId);
         if (updateErr) errors.push(`Order ${order.orderId} status refresh: ${updateErr.message}`);
-        else skipped++;
+        else {
+          const reconcileError = await reconcileSoldOrder(supabase, tenantId, matchedItemId, matchedListingId, order.createdAt, salePrice);
+          if (reconcileError) errors.push(`Order ${order.orderId}: ${reconcileError}`);
+          skipped++;
+        }
         existingOrderIds.add(order.orderId);
         continue;
       }
@@ -528,8 +549,8 @@ async function importTradingOrders(
         const { data: curItem } = await supabase.from('items').select('status, acquired_cost').eq('id', matchedItemId).eq('tenant_id', tenantId).maybeSingle();
         const acquiredCost = Number(curItem?.acquired_cost ?? 0);
         const profit = Math.round((netRevenue - acquiredCost) * 100) / 100;
-        await supabase.from('items').update({ status: 'sold', sold_price: salePrice, sold_at: order.createdAt, marketplace: 'ebay', updated_at: new Date().toISOString() }).eq('id', matchedItemId).eq('tenant_id', tenantId);
-        if (matchedListingId) await supabase.from('listings').update({ status: 'sold', ended_at: order.createdAt, updated_at: new Date().toISOString() }).eq('id', matchedListingId).eq('tenant_id', tenantId);
+        const reconcileError = await reconcileSoldOrder(supabase, tenantId, matchedItemId, matchedListingId!, order.createdAt, salePrice);
+        if (reconcileError) errors.push(`Order reconciliation: ${reconcileError}`);
         await supabase.from('sales').insert({
           tenant_id: tenantId, item_id: matchedItemId, listing_id: matchedListingId,
           marketplace_id: 'ebay', sale_price: salePrice, marketplace_fee: marketplaceFee,
@@ -567,7 +588,7 @@ Deno.serve(async (req: Request) => {
     if (typeof tenantId !== 'string' || !/^[0-9a-f-]{36}$/i.test(tenantId)) return jsonResponse({ error: 'tenantId is required' }, 400);
     if (!Number.isInteger(daysBack) || daysBack < 1 || daysBack > 365 || !['both','fulfillment_api','trading_api'].includes(mode)) return jsonResponse({ error: 'Invalid order sync parameters' }, 400);
     const products = registry.products as Record<string, { specialists: string[]; legacySpecialists: string[] }>;
-    if (nicheId !== undefined && !products[nicheId]) return jsonResponse({ error: 'Unknown niche' }, 400);
+    if (nicheId !== undefined && (typeof nicheId !== 'string' || !Object.prototype.hasOwnProperty.call(products,nicheId))) return jsonResponse({ error: 'Unknown niche' }, 400);
     const known = Object.values(products).flatMap(product => [...product.specialists, ...product.legacySpecialists]);
     if (specialistIds !== undefined && (!Array.isArray(specialistIds) || specialistIds.some((id: unknown) => typeof id !== 'string' || !known.includes(id)))) return jsonResponse({ error: 'Invalid specialist scope' }, 400);
     const scopeIds: string[] | undefined = nicheId ? [...products[nicheId].specialists, ...products[nicheId].legacySpecialists] : specialistIds;
@@ -608,7 +629,7 @@ Deno.serve(async (req: Request) => {
     let listingQuery = supabase
       .from('listings')
       .select('id, item_id, external_listing_id, price, shipping_cost, items!inner(specialist_id)')
-      .eq('tenant_id', tenantId).eq('marketplace_id', 'ebay')
+      .eq('tenant_id', tenantId).eq('items.tenant_id', tenantId).eq('marketplace_id', 'ebay')
       .not('external_listing_id', 'is', null);
     if (scopeIds) listingQuery = listingQuery.in('items.specialist_id', scopeIds);
     const { data: listingsData, error: listingError } = await listingQuery;

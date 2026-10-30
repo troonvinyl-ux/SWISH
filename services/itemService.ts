@@ -124,7 +124,7 @@ function toConfidenceTier(v: string | null | undefined): ConfidenceTier {
   return CONFIDENCE_TIERS.includes(v as ConfidenceTier) ? (v as ConfidenceTier) : 'unknown';
 }
 
-function mapItem(row: any): Item {
+export function mapItem(row: any): Item {
   return {
     id: row.id,
     tenantId: row.tenant_id,

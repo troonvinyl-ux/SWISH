@@ -52,7 +52,7 @@ export interface SavedListing {
   updatedAt: string;
 }
 
-function mapListing(row: any): SavedListing {
+export function mapListing(row: any): SavedListing {
   return {
     id: row.id,
     itemId: row.item_id,
@@ -312,6 +312,10 @@ export async function endListing(
 export interface ListingWithItem extends SavedListing {
   itemTitle: string;
   itemStatus: string;
+  itemSoldAt?: string;
+  itemSoldPrice?: number;
+  itemQuantity?: number;
+  hasSaleEvidence?: boolean;
   itemSpecialistId: string;
   itemAcquiredCost: number;
   itemMedia: string[];
@@ -328,8 +332,9 @@ export async function getAllListings(
 
   let query = supabase
     .from('listings')
-    .select('*, items!inner(canonical_title, specialist_id, acquired_cost, media, status)')
+    .select('*, items!inner(canonical_title, specialist_id, acquired_cost, media, status, sold_at, sold_price, quantity)')
     .eq('tenant_id', tenantId)
+    .eq('items.tenant_id', tenantId)
     .order('updated_at', { ascending: false });
 
   if (statusFilter && statusFilter !== 'all') {
@@ -350,6 +355,9 @@ export async function getAllListings(
     itemTitle: row.items?.canonical_title ?? 'Unknown Item',
     itemSpecialistId: row.items?.specialist_id ?? '',
     itemStatus: row.items?.status ?? '',
+    itemSoldAt: row.items?.sold_at ?? undefined,
+    itemSoldPrice: row.items?.sold_price == null ? undefined : Number(row.items.sold_price),
+    itemQuantity: row.items?.quantity ?? 1,
     itemAcquiredCost: Number(row.items?.acquired_cost ?? 0),
     itemMedia: [...new Set([...(Array.isArray(row.items?.media) ? row.items.media : []), ...(Array.isArray(row.images) ? row.images : []), row.image_url].filter((url: unknown) => typeof url === 'string' && url.length > 0))] as string[],
     categoryId: row.category_id ?? undefined,
@@ -391,9 +399,11 @@ export async function getLiveListingCount(
   tenantId: string,
   specialistIds?: string[],
 ): Promise<number> {
-  if (specialistIds && specialistIds.length === 0) return 0;
-  const { listings, error } = await getAllListings(tenantId, undefined, specialistIds);
-  return error ? 0 : listings.filter(isLiveListing).length;
+  if (!tenantId?.trim() || !specialistIds?.length) return 0;
+  const { count, error } = await getSupabaseClient().from('swish_inventory_tab_rows')
+    .select('item_id', { count: 'exact', head: true }).eq('tenant_id', tenantId)
+    .in('specialist_id', specialistIds).eq('inventory_tab', 'live');
+  return error ? 0 : count ?? 0;
   /* Legacy counter retained only as historical reference; shared lifecycle above is authoritative.
   const supabase = getSupabaseClient();
   // If no specialist filter, count all active listings for the tenant
