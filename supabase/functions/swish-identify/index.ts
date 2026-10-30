@@ -1472,6 +1472,7 @@ async function incrementUsage(
   userId: string,
   monthKey: string,
 ): Promise<{ count: number; error: string | null }> {
+  // The atomic RPC result is authoritative; never fall back to a read that can undercount concurrent requests.
   const { data, error } = await admin.rpc(
     'upsert_ai_usage',
     { p_tenant_id: tenantId, p_user_id: userId, p_feature: FEATURE_KEY, p_month_key: monthKey },
