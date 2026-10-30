@@ -366,6 +366,6 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: `Unknown route: ${route}` }, 400);
   } catch (e: any) {
     console.error(`[SWISH] swish-ebay-messages unhandled error (route=${route}):`, e.message);
-    return jsonResponse({ error: e.message ?? 'Internal server error' }, 500);
+    return jsonResponse({ error: 'Unable to complete the eBay messages request. Please retry or contact support.' }, 500);
   }
 });
