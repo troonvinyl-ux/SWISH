@@ -1595,6 +1595,9 @@ Deno.serve(async (req: Request) => {
 
     const body = await req.json();
     const { images, imageLabels, existingImageUrls, specialistId, acquisitionContext, knownAttributes, tenantId: bodyTenantId, outputMode } = body;
+    if (typeof bodyTenantId !== 'string' || !bodyTenantId.trim() || bodyTenantId.length > 200) {
+      return new Response(JSON.stringify({ error: 'A valid tenantId is required.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     const specialist = specialistId ?? 'curiosities_collectibles';
     const requestedNiche = nicheForSpecialist(specialist);
 
@@ -1746,7 +1749,7 @@ The caller will use only the requested output (title or description). Do not inv
           }).eq('tenant_id', tenantId).eq('user_id', user.id).eq('feature', FEATURE_KEY).eq('month_key', monthKey);
         } catch {}
       }
-      return new Response(JSON.stringify({ error: `OnSpace AI: ${errText}` }), { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ error: 'Identification request failed. Please retry.' }), { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const aiData = await aiResponse.json();
