@@ -1356,9 +1356,9 @@ Deno.serve(async (req: Request) => {
 
     let aiResp = await requestIdentification(false);
     if (!aiResp.ok) {
-      const errText = await aiResp.text();
+      await aiResp.text();
       return new Response(
-        JSON.stringify({ error: `OnSpace AI error: ${errText}` }),
+        JSON.stringify({ error: 'The identification service is temporarily unavailable.' }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
@@ -1371,9 +1371,9 @@ Deno.serve(async (req: Request) => {
       console.warn('[swish-islamic-identify] AI output truncated; retrying with compact JSON');
       aiResp = await requestIdentification(true);
       if (!aiResp.ok) {
-        const errText = await aiResp.text();
+        await aiResp.text();
         return new Response(
-          JSON.stringify({ error: `OnSpace AI retry error: ${errText}` }),
+          JSON.stringify({ error: 'The identification service is temporarily unavailable.' }),
           { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
       }
