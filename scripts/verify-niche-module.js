@@ -45,6 +45,18 @@ const appConfigFactory = require(path.join(root, 'app.config.js'));
 const expoConfig = appConfigFactory({
   config: { name: 'SWISH', slug: 'swish', extra: {}, android: {}, ios: {} },
 });
+// Where a physical module manifest exists, require it to match the central registry.
+const moduleManifestPath = path.join(root, registry.nicheRoot || 'niches', requested, 'module.json');
+if (fs.existsSync(moduleManifestPath)) {
+  const moduleManifest = JSON.parse(fs.readFileSync(moduleManifestPath, 'utf8'));
+  const registered = products[requested];
+  if (moduleManifest.id !== requested) throw new Error(`Module manifest ID mismatch for ${requested}`);
+  if (moduleManifest.androidPackage !== registered.package) throw new Error(`Module package mismatch for ${requested}`);
+  if (JSON.stringify([...moduleManifest.specialistIds].sort()) !== JSON.stringify([...registered.specialistIds].sort())) {
+    throw new Error(`Module specialist IDs do not match niche-modules.json for ${requested}`);
+  }
+}
+
 const expectedPackage = products[requested].package;
 if (!expectedPackage) throw new Error(`Missing package identifier in niche-modules.json for ${requested}`);
 if (expoConfig.extra?.swishNicheId !== requested) {
