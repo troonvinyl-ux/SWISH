@@ -3072,7 +3072,7 @@ const nichStyles = StyleSheet.create({
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, businessConfig, reloadBusinessConfig, triggerInventoryReload, activeNiche, activeNicheId, setActiveNiche } = useApp();
+  const { tenant, businessConfig, reloadBusinessConfig, triggerInventoryReload, activeNiche, activeNicheId, setActiveNiche, fixedNicheId, isMasterAdmin } = useApp();
   const { logout, user } = useAuth();
   const { showAlert } = useAlert();
 
@@ -3195,16 +3195,20 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ── Niche / Vertical ──────────────────────────────────────────── */}
-        <SectionHead title="Trading Vertical" />
-        <CardGroup>
-          <SettingRow
-            icon="storefront"
-            label="Switch Niche"
-            desc={`Currently: ${activeNiche?.name ?? 'SWISH'}`}
-            onPress={() => router.push('/niche-select' as any)}
-            color={activeNiche?.color ?? Colors.primary}
-          />
-        </CardGroup>
+        {(!fixedNicheId || isMasterAdmin) ? (
+          <>
+            <SectionHead title="Trading Vertical" />
+            <CardGroup>
+              <SettingRow
+                icon="storefront"
+                label="Switch Niche"
+                desc={`Currently: ${activeNiche?.name ?? 'SWISH'}`}
+                onPress={() => router.push('/niche-select' as any)}
+                color={activeNiche?.color ?? Colors.primary}
+              />
+            </CardGroup>
+          </>
+        ) : null}
 
         {/* ── Niche Switcher — visible to lifetime / master admin only ── */}
         {(() => {
