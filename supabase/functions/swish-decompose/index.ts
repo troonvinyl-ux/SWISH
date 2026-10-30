@@ -209,9 +209,9 @@ Recommend the strategy that MAXIMISES net profit per labour hour, not just gross
         .trim();
       decomposition = JSON.parse(cleaned);
     } catch (parseErr) {
-      console.error('JSON parse error:', parseErr, 'Raw:', rawContent);
+      console.error('swish-decompose returned invalid JSON.');
       return new Response(
-        JSON.stringify({ error: 'AI returned invalid JSON', raw: rawContent }),
+        JSON.stringify({ error: 'The decomposition service returned an invalid response.' }),
         { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -252,9 +252,9 @@ Recommend the strategy that MAXIMISES net profit per labour hour, not just gross
     );
 
   } catch (err: any) {
-    console.error('swish-decompose error:', err);
+    console.error('swish-decompose failed.');
     return new Response(
-      JSON.stringify({ error: err.message ?? 'Internal error' }),
+      JSON.stringify({ error: 'The decomposition service is temporarily unavailable.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
