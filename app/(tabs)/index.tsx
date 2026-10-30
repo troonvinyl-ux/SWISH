@@ -4,13 +4,9 @@
 // This screen renders the active niche's full experience as the app home tab.
 // No "SWISH" branding shown to subscribers — they see Coin Flipper, Flipper MX, etc.
 //
-// Routing:
-//   coins / coins_uk / coins_currency / coins_world → CoinFlipperScreen
-//   motocross                                        → FlipperMXScreen
-//   bicycles / cycling                               → BikeFlipperScreen
-//   clothing / trainers_sneakers / fashion           → ThreadsFlipScreen
-//   surplus_flip / catalog_flip / catalog_surplus   → SurplusFlipScreen
-//   (no active niche / first launch)                 → NicheSelect
+// Branded APKs must use their build-time niche identity before persisted account
+// state has finished synchronising. Otherwise a Clothing APK can briefly render
+// Coin Flipper when AsyncStorage still contains the last active niche.
 
 import React from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
@@ -25,10 +21,11 @@ import ThreadsFlipScreen from '@/app/threads-flip';
 import SurplusFlipScreen from '@/app/surplus-flip';
 
 export default function NicheHomeScreen() {
-  const { activeNicheId, tenant, tenantLoading } = useApp();
+  const { activeNicheId, fixedNicheId, tenant, tenantLoading } = useApp();
 
-  // Map the active niche to a product
-  const product = resolveProductionNiche(activeNicheId);
+  // Build-time identity wins over persisted/account-selected state in branded APKs.
+  const effectiveNicheId = fixedNicheId ?? activeNicheId;
+  const product = resolveProductionNiche(effectiveNicheId);
 
   // Show a brief spinner while AppContext is initialising
   if (tenantLoading && !tenant) {
@@ -39,13 +36,13 @@ export default function NicheHomeScreen() {
     );
   }
 
-  // Render only a recognised production product. Unknown values must never
-  // fall through to Coin Flipper, even temporarily during account switching.
-  if (product === 'coins') return <CoinFlipperScreen key={activeNicheId} isHomeTab />;
-  if (product === 'motocross') return <FlipperMXScreen key={activeNicheId} isHomeTab />;
-  if (product === 'bicycles') return <BikeFlipperScreen key={activeNicheId} isHomeTab />;
-  if (product === 'clothing') return <ThreadsFlipScreen key={activeNicheId} isHomeTab />;
-  if (product === 'surplus_flip') return <SurplusFlipScreen key={activeNicheId} />;
+  // Render only the product compiled for this branded APK. Unknown values must
+  // never fall through to Coin Flipper, even temporarily during account switching.
+  if (product === 'coins') return <CoinFlipperScreen key={effectiveNicheId} isHomeTab />;
+  if (product === 'motocross') return <FlipperMXScreen key={effectiveNicheId} isHomeTab />;
+  if (product === 'bicycles') return <BikeFlipperScreen key={effectiveNicheId} isHomeTab />;
+  if (product === 'clothing') return <ThreadsFlipScreen key={effectiveNicheId} isHomeTab />;
+  if (product === 'surplus_flip') return <SurplusFlipScreen key={effectiveNicheId} />;
   return <Redirect href={"/niche-select" as any} />;
 }
 
