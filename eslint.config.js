@@ -6,5 +6,11 @@ module.exports = defineConfig([
   expoConfig,
   {
     ignores: ['dist/*'],
+    rules: {
+      // These presentation-only rules are warnings while the legacy screens are cleaned up.
+      // Keep actual correctness, type, hook and security rules blocking CI.
+      'react/no-unescaped-entities': 'warn',
+      'react/display-name': 'warn',
+    },
   },
 ]);
