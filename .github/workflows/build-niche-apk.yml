@@ -5,6 +5,7 @@ on:
     paths:
       - 'app/**'
       - 'services/**'
+      - 'supabase/**'
       - 'hooks/**'
       - 'contexts/**'
       - 'components/**'
