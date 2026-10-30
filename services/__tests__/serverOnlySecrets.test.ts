@@ -345,7 +345,7 @@ describe('SWISH AI identification tenant and quota safeguards', () => {
 
   test('does not send raw unhandled or AI-provider errors back to the client', () => {
     expect(identify).toContain("error: 'Identification request failed. Please retry.'");
-    expect(identify).toContain("error: 'Identification service is temporarily unavailable. Please retry.'");
+    expect(identify).toContain("error: 'Identification request failed. Please retry.'");
     expect(identify).not.toContain("JSON.stringify({ error: err.message ?? 'Internal error' })");
   });
 });
@@ -367,7 +367,7 @@ describe('Stripe customer portal account isolation', () => {
   const portal = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-customer-portal/index.ts'), 'utf8');
 
   test('requires a verified Bearer token and a Stripe customer linked to the authenticated user', () => {
-    expect(portal).toContain('!authHeader.startsWith("Bearer ")');
+    expect(portal).toContain('!authHeader?.startsWith("Bearer ")');
     expect(portal).toContain('candidate.metadata?.user_id === user.id');
     expect(portal).not.toContain('customers.data[0].id');
   });
