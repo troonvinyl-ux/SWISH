@@ -16,7 +16,10 @@ export async function loadListingEditor(tenantId: string, listingId: string, nic
   return { data, error: error?.message ?? (!data ? 'Listing not found in this niche' : null) };
 }
 export async function invokeListingOperation(body: Record<string, unknown>, functionName = 'swish-ebay-list'): Promise<{ data: any; error: string | null }> {
-  const { data, error } = await getSupabaseClient().functions.invoke(functionName, { body });
+  // The dedicated taxonomy service preserves eBay localizedAspectName and its normalized name/required fields.
+  // The legacy listing route can discard localized names; never let that erase mandatory manifest specifics.
+  const endpoint = body.route === 'get_category_aspects' && functionName === 'swish-ebay-list' ? 'swish-ebay-category' : functionName;
+  const { data, error } = await getSupabaseClient().functions.invoke(endpoint, { body });
   if (error) {
     let message = error.message;
     if (error instanceof FunctionsHttpError) {
@@ -24,6 +27,16 @@ export async function invokeListingOperation(body: Record<string, unknown>, func
       catch { /* Do not expose raw HTML/provider bodies. */ }
     }
     return { data: null, error: message };
+  }
+  if (body.route === 'get_category_aspects' && data?.success && Array.isArray(data.aspects)) {
+    const normalized = data.aspects.map((aspect: any) => ({ ...aspect,
+      aspectName: String(aspect.aspectName ?? aspect.localizedAspectName ?? aspect.name ?? ''),
+      aspectConstraint: { ...(aspect.aspectConstraint ?? {}), aspectRequired: aspect.aspectConstraint?.aspectRequired === true || aspect.required === true,
+        aspectUsage: aspect.aspectConstraint?.aspectUsage ?? aspect.usage ?? (aspect.required ? 'REQUIRED' : 'OPTIONAL') },
+      aspectValues: aspect.aspectValues ?? (aspect.values ?? []).map((value: string) => ({ localizedValue: value })),
+    }));
+    if (normalized.some((aspect: any) => !aspect.aspectName && aspect.aspectConstraint.aspectRequired)) return { data:null,error:'Marketplace returned unnamed required fields. Retry taxonomy lookup before publishing.' };
+    return { data:{ ...data,aspects:normalized },error:data.error ?? null };
   }
   return { data, error: data?.error ?? null };
 }

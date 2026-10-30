@@ -2089,6 +2089,9 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 
   const item = (listingRow as any).items as any;
+  if (item?.attributes?._manifest_review_required === true) {
+    return jsonResponse({ success: false, code: 'MANIFEST_REVIEW_REQUIRED', error: 'This manifest draft needs physical inspection and completed listing fields. Save editor changes, then confirm Manifest stock inspection. Nothing was submitted.' }, 400);
+  }
   const title = (listingRow.title ?? item?.canonical_title ?? '').trim().slice(0, 80);
   const description = listingRow.description ?? '';
   const price = Number(listingRow.price ?? 0);

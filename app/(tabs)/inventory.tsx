@@ -100,6 +100,9 @@ export default function MasterInventoryScreen() {
       {state.activeTab === 'stock' && filters.length > 1 ? <View style={s.rail}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.railContent}>
         {filters.map(([label, value]) => <Pressable key={value} onPress={() => setFilter(value)} style={({ pressed }) => [s.chip, { borderColor: filter === value ? config.color : Colors.surfaceBorder, opacity: pressed ? 0.7 : 1 }]}><Text style={[s.chipText, { color: filter === value ? config.color : Colors.textSecondary }]}>{label}</Text></Pressable>)}
       </ScrollView></View> : null}
+      <Pressable accessibilityRole="button" accessibilityLabel="Analyse a pallet, job lot or collection manifest" onPress={() => router.push('/lot-opportunity' as any)} style={({ pressed }) => [s.banner, { opacity: pressed ? 0.7 : 1 }]}>
+        <MaterialIcons name="account-tree" size={24} color={config.color} /><View style={s.flex}><Text style={[s.bannerTitle, { color: config.color }]}>Buy a lot · split & sell</Text><Text style={s.sub}>Manifest → max bid → unit / bundle economics → drafts</Text></View>
+      </Pressable>
       <Text style={s.info}>{state.activeTab === 'draft' ? 'Drafts are saved in SWISH — Submit publishes to eBay' : state.activeTab === 'live' ? 'Live excludes sold, ended and completed records in this niche. Sync checks current eBay availability.' : state.activeTab === 'sold' ? 'Sync pulls orders from your connected eBay account' : `${filters.find(entry => entry[1] === filter)?.[0] ?? 'In Stock'} · ${data.length} items`}</Text>
       {state.error ? <Text style={s.error}>{state.error}</Text> : null}
       <FlatList style={s.flex} data={data} keyExtractor={item => `${state.activeTab}-${item.id}-${item.listing?.id ?? ''}`} showsVerticalScrollIndicator={false} contentContainerStyle={s.list} refreshing={state.refreshing} onRefresh={state.refresh}

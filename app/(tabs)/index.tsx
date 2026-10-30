@@ -43,7 +43,7 @@ export default function NicheHomeScreen() {
   if (product === 'motocross') return <FlipperMXScreen key={effectiveNicheId} isHomeTab />;
   if (product === 'bicycles') return <BikeFlipperScreen key={effectiveNicheId} isHomeTab />;
   if (product === 'clothing') return <ThreadsFlipScreen key={effectiveNicheId} isHomeTab />;
-  if (product === 'surplus_flip') return <SurplusFlipScreen key={effectiveNicheId} />;
+  if (product === 'surplus_flip') return <SurplusFlipScreen key={effectiveNicheId} isHomeTab />;
   if (product) return <NicheOverview key={effectiveNicheId} />;
   return <Redirect href={"/niche-select" as any} />;
 }

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useApp } from './useApp';
 import { loadListingEditor, saveListingEditor, invokeListingOperation, type EditorSave } from '@/services/listingEditorService';
 export interface ListingEditorState extends EditorSave {
-  itemId: string; externalListingId: string; status: string; media: string[]; specialistId: string;
+  itemId: string; externalListingId: string; status: string; media: string[]; specialistId: string; itemAttributes?: Record<string, any>;
   inventoryId: string; valuationMid: number; itemTitle: string; subtitle: string;
   listingType: 'FixedPriceItem' | 'Chinese'; auctionDays: number; startPrice: string; reservePrice: string; bestOfferEnabled: boolean; dispatchDays: number;
 }
@@ -46,7 +46,7 @@ export function useListingEditor(listingId: string) {
         if (!names.has(name.toLowerCase())) { specifics.push({ name, value }); names.add(name.toLowerCase()); }
       }
       const categoryId = String(row.category_id ?? attrs.ebay_category_id ?? '');
-      setState({ tenantId: tenant.id, listingId: row.id, itemId: item.id, externalListingId: row.external_listing_id ?? '', status: row.status, title: row.title ?? '', description: row.description ?? '', price: String(row.price ?? 0), shippingCost: String(row.shipping_cost ?? 0), floorPrice: String(row.floor_price ?? 0), ceilingPrice: String(row.ceiling_price ?? 0), categoryId, categoryName: String(attrs.ebay_category_name ?? categoryId), condition: item.condition ?? '', conditionDescription: item.condition_grade ?? '', quantity: String(item.quantity ?? 1), sku: item.sku ?? '', itemSpecifics: specifics, media: item.media ?? [], specialistId: item.specialist_id ?? '', inventoryId: item.inventory_id ?? '', valuationMid: Number(item.valuation_mid ?? 0), itemTitle: item.canonical_title ?? '', subtitle: '', listingType: 'FixedPriceItem', auctionDays: 7, startPrice: String(row.price ?? 0), reservePrice: '', bestOfferEnabled: false, dispatchDays: 3 });
+      setState({ tenantId: tenant.id, listingId: row.id, itemAttributes: attrs, itemId: item.id, externalListingId: row.external_listing_id ?? '', status: row.status, title: row.title ?? '', description: row.description ?? '', price: String(row.price ?? 0), shippingCost: String(row.shipping_cost ?? 0), floorPrice: String(row.floor_price ?? 0), ceilingPrice: String(row.ceiling_price ?? 0), categoryId, categoryName: String(attrs.ebay_category_name ?? categoryId), condition: item.condition ?? '', conditionDescription: item.condition_grade ?? '', quantity: String(item.quantity ?? 1), sku: item.sku ?? '', itemSpecifics: specifics, media: item.media ?? [], specialistId: item.specialist_id ?? '', inventoryId: item.inventory_id ?? '', valuationMid: Number(item.valuation_mid ?? 0), itemTitle: item.canonical_title ?? '', subtitle: '', listingType: 'FixedPriceItem', auctionDays: 7, startPrice: String(row.price ?? 0), reservePrice: '', bestOfferEnabled: false, dispatchDays: 3 });
       setLoadedScope(scope); setDirty(false); setAspects([]);
       if (categoryId) await requirements(categoryId);
     } finally { if (currentScope.current === scope) setLoading(false); }

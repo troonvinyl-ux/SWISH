@@ -1,0 +1,8 @@
+jest.mock('@/template',()=>({getSupabaseClient:jest.fn()}));
+import {getSupabaseClient} from '@/template';
+import {invokeListingOperation} from '@/services/listingEditorService';
+describe('Manifest category requirements retain native and normalized names',()=>{
+  test('normalized taxonomy required fields do not disappear',async()=>{const invoke=jest.fn().mockResolvedValue({data:{success:true,isLeaf:true,aspects:[{name:'Department',required:true,usage:'REQUIRED',values:['Men','Women']}]},error:null});(getSupabaseClient as jest.Mock).mockReturnValue({functions:{invoke}});const result=await invokeListingOperation({route:'get_category_aspects',tenantId:'tenant',categoryId:'123'});expect(invoke).toHaveBeenCalledWith('swish-ebay-category',expect.anything());expect(result.data.aspects[0].aspectName).toBe('Department');expect(result.data.aspects[0].aspectConstraint.aspectRequired).toBe(true);});
+  test('native localizedAspectName is preserved',async()=>{(getSupabaseClient as jest.Mock).mockReturnValue({functions:{invoke:jest.fn().mockResolvedValue({data:{success:true,aspects:[{localizedAspectName:'Brand',aspectConstraint:{aspectRequired:true}}]},error:null})}});const result=await invokeListingOperation({route:'get_category_aspects'});expect(result.data.aspects[0].aspectName).toBe('Brand');});
+  test('unnamed mandatory aspects fail closed',async()=>{(getSupabaseClient as jest.Mock).mockReturnValue({functions:{invoke:jest.fn().mockResolvedValue({data:{success:true,aspects:[{required:true}]},error:null})}});const result=await invokeListingOperation({route:'get_category_aspects'});expect(result.data).toBeNull();expect(result.error).toContain('unnamed required fields');});
+});

@@ -19,6 +19,8 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
+import { requirePaidNiche,nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
+import { specialistNiche } from '../_shared/specialistRegistry.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -466,10 +468,10 @@ async function searchZeno(
       searchUrl, totalFound: rawCandidates.length,
     };
   } catch (e: any) {
-    console.error('[swish-islamic-identify] Zeno search failed.');
+    console.error(`[swish-islamic-identify] Zeno search error for "${query}": ${e.message}`);
     return {
       available: false, query, candidates: [], searchUrl,
-      error: 'Zeno search is temporarily unavailable.', totalFound: 0,
+      error: `Network error: ${e.message}`, totalFound: 0,
     };
   }
 }
@@ -526,9 +528,9 @@ async function searchNumistaIslamicSilver(
   // the supplied Numista type independently and keep it visible in the results.
   const referenceText = String(physicalData?.notes ?? '');
   const referenceMatch =
-    referenceText.match(/\bN\s*#\s*(\d{1,9})\b/i) ??
-    referenceText.match(/numista\.com\/(?:catalogue\/index\.php\?r=)?(\d{1,9})/i) ??
-    referenceText.match(/\bnumista\s*(?:type\s*)?(?:id\s*[:#=]?\s*)(\d{1,9})\b/i);
+    referenceText.match(/\\bN\\s*#\\s*(\\d{1,9})\\b/i) ??
+    referenceText.match(/numista\\.com\\/(?:catalogue\\/index\\.php\\?r=)?(\\d{1,9})/i) ??
+    referenceText.match(/\\bnumista\\s*(?:type\\s*)?(?:id\\s*[:#=]?\\s*)(\\d{1,9})\\b/i);
   const suppliedReferenceId = referenceMatch ? Number(referenceMatch[1]) : null;
   const queries = [
     primaryQuery,
@@ -569,7 +571,7 @@ async function searchNumistaIslamicSilver(
           firstError ||= `Numista direct lookup for N#${suppliedReferenceId} returned HTTP ${directResp.status}`;
         }
       } catch (e: any) {
-        firstError ||= 'Numista direct lookup failed.';
+        firstError ||= `Numista direct lookup failed: ${e.message}`;
       }
     }
 
@@ -612,7 +614,7 @@ async function searchNumistaIslamicSilver(
     const scoredCandidates = [...candidateMap.values()].map(t => scoreNumistaIslamic(t, aiOutput, physicalData)).sort((a, b) => b.matchScore - a.matchScore);
     const directCandidate = suppliedReferenceId ? scoredCandidates.find(candidate => candidate.typeId === suppliedReferenceId) : undefined;
     const candidates = directCandidate ? [directCandidate, ...scoredCandidates.filter(candidate => candidate.typeId !== suppliedReferenceId)] : scoredCandidates;
-    return { available: successfulQueries > 0, query, candidates: candidates.slice(0, 12), error: 'Numista search is temporarily unavailable.', totalFound: candidateMap.size };
+    return { available: successfulQueries > 0, query, candidates: candidates.slice(0, 12), error: `Numista error: ${e.message}`, totalFound: candidateMap.size };
   }
 }
 
@@ -1174,11 +1176,18 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     );
 
+    const paidAccess=await requirePaidNiche(adminClient,{ id:user.id,email:user.email },typeof tenantId==='string' ? tenantId : '', 'coins');
+    let existingItem: { specialist_id:string; attributes:Record<string,unknown> } | null=null;
+    if(itemId) {
+      const { data:ownedItem,error:itemError }=await adminClient.from('items').select('specialist_id,attributes').eq('id',itemId).eq('tenant_id',tenantId).maybeSingle();
+      if(itemError || !ownedItem || specialistNiche(ownedItem.specialist_id)!=='coins') return new Response(JSON.stringify({ error:'Item is not in the authorized coin inventory.' }),{ status:403,headers:{ ...corsHeaders,'Content-Type':'application/json' } });
+      existingItem=ownedItem;
+    }
     const monthKeyNow = new Date();
     const monthKey = `${monthKeyNow.getUTCFullYear()}-${String(monthKeyNow.getUTCMonth() + 1).padStart(2, '0')}`;
 
     // Resolve tenant tier (authoritative — service role, cannot be spoofed)
-    let isPremiumIslamic = false;
+    let isPremiumIslamic = paidAccess.isPremium;
     if (tenantId) {
       try {
         const { data: membership } = await adminClient.from('tenant_memberships')
@@ -1191,7 +1200,7 @@ Deno.serve(async (req: Request) => {
             console.log(`[swish-islamic-identify] Premium via tenant tier: ${tenantRow.subscription_tier}`);
           }
         }
-      } catch (e: any) { console.error('[swish-islamic-identify] Tier lookup failed.'); }
+      } catch (e: any) { console.error('[swish-islamic-identify] Tier lookup error:', e.message); }
     }
 
     // Secondary: Stripe check (only if no qualifying tier)
@@ -1228,7 +1237,7 @@ Deno.serve(async (req: Request) => {
             }
           }
         }
-      } catch (e: any) { console.error('[swish-islamic-identify] Stripe check failed (non-blocking).'); }
+      } catch (e: any) { console.error('[swish-islamic-identify] Stripe check error (non-blocking):', e.message); }
     }
 
     // Quota check
@@ -1356,9 +1365,9 @@ Deno.serve(async (req: Request) => {
 
     let aiResp = await requestIdentification(false);
     if (!aiResp.ok) {
-      await aiResp.text();
+      const errText = await aiResp.text();
       return new Response(
-        JSON.stringify({ error: 'The identification service is temporarily unavailable.' }),
+        JSON.stringify({ error: `OnSpace AI error: ${errText}` }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
@@ -1371,9 +1380,9 @@ Deno.serve(async (req: Request) => {
       console.warn('[swish-islamic-identify] AI output truncated; retrying with compact JSON');
       aiResp = await requestIdentification(true);
       if (!aiResp.ok) {
-        await aiResp.text();
+        const errText = await aiResp.text();
         return new Response(
-          JSON.stringify({ error: 'The identification service is temporarily unavailable.' }),
+          JSON.stringify({ error: `OnSpace AI retry error: ${errText}` }),
           { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
       }
@@ -1671,17 +1680,17 @@ Deno.serve(async (req: Request) => {
         );
         await adminClient.from('items').update({
           canonical_title: result.canonicalTitle,
-          specialist_id: 'islamic_silver',
+          // Preserve historical specialist identity; a review never reclassifies the inventory record.
           identification_confidence: result.confidence,
           condition: result.observations.condition || null,
           condition_grade: result.observations.conditionGrade || null,
           condition_notes: result.observations.conditionNotes || null,
-          attributes: result.attributes,
+          attributes: { ...(existingItem?.attributes ?? {}),...result.attributes },
           warnings: result.warnings,
           updated_at: new Date().toISOString(),
         }).eq('id', itemId).eq('tenant_id', tenantId);
       } catch (e: any) {
-        console.error('[swish-islamic-identify] DB save failed.');
+        console.error(`[swish-islamic-identify] DB save error: ${e.message}`);
       }
     }
 
@@ -1697,9 +1706,10 @@ Deno.serve(async (req: Request) => {
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (err: any) {
-    console.error('[swish-islamic-identify] Identification request failed.');
+    const accessError=nicheAccessResponse(err);if(accessError) return accessError;
+    console.error('[swish-islamic-identify] Error:', err);
     return new Response(
-      JSON.stringify({ error: 'The identification service is temporarily unavailable. Unable to complete Islamic coin identification.' }),
+      JSON.stringify({ error: err.message ?? 'Internal error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }

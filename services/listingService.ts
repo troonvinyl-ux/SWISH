@@ -573,6 +573,7 @@ export async function submitListingToMarketplace(
   // The edge function will use get_category_suggestions to resolve the title
   // if no validated categoryId is present.
   const itemAttributes = (listingRow?.items as any)?.attributes ?? {};
+  if (itemAttributes._manifest_review_required === true) return { success:false,step:'failed',error:'Manifest stock has not been physically reviewed. Save editor changes and confirm the manifest inspection before publishing.' };
   const nicheId = resolveProductionNiche((listingRow?.items as any)?.specialist_id) ?? '';
   const safety = evaluateSpecialistSafety(nicheId, itemAttributes);
   if (safety.blocked) return { success:false,step:'failed',error:safety.reasons.join(' ') };

@@ -25,6 +25,10 @@ on:
       - 'jest.config.ci.js'
       - 'tsconfig.json'
       - 'supabase/functions/**'
+      - 'supabase/tests/**'
+      - 'supabase/migrations/**'
+      - 'shared/**'
+      - 'niche-modules.json'
       - 'services/nicheRouting.ts'
       - 'constants/niches.ts'
       - 'constants/specialists.ts'
@@ -81,6 +85,10 @@ on:
       - 'jest.config.ci.js'
       - 'tsconfig.json'
       - 'supabase/functions/**'
+      - 'supabase/tests/**'
+      - 'supabase/migrations/**'
+      - 'shared/**'
+      - 'niche-modules.json'
       - 'services/nicheRouting.ts'
       - 'constants/niches.ts'
       - 'constants/specialists.ts'
@@ -200,14 +208,22 @@ jobs:
       - name: Run complete regression suite including engineering hardening
         run: pnpm dlx jest@29.7.0 --config jest.config.ci.js --runInBand
 
+      - name: Setup Deno for server authorization tests
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Test shared server authorization boundaries
+        run: deno test --allow-read --allow-env supabase/tests/paidNicheAuthorization.test.ts
+
       - name: Bundle Android production JavaScript
         run: npx expo export --platform android --output-dir dist-ci-android && rm -rf dist-ci-android
 
-      - name: Validate all five Expo branded configurations
+      - name: Validate all ten Expo branded configurations
         shell: bash
         run: |
           set -euo pipefail
-          for niche in coins motocross bicycles clothing surplus_flip; do
+          for niche in coins motocross bicycles clothing trading_cards antiques fossils beauty tech surplus_flip; do
             echo "Validating branded config: $niche"
             SWISH_NICHE="$niche" npx expo config --type public >/dev/null
           done

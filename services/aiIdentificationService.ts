@@ -8,6 +8,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Platform } from 'react-native';
+import { inspectPhotoQuality, preflightPhotos, type PhotoQuality } from './photoQualityService';
 import { getSupabaseClient } from '@/template';
 import { FunctionsFetchError, FunctionsHttpError } from '@supabase/supabase-js';
 import { SpecialistId } from '@/constants/specialists';
@@ -17,6 +18,7 @@ import { resolveProductionNiche, getProductionNicheSpecialistIds } from '@/servi
 import { getSpecialistProfile, normalizeSpecialistAnalysis, recordValue, textList, type SpecialistAnalysis } from '@/shared/specialistIntelligence';
 
 export interface CapturedImage {
+  photoQuality?: PhotoQuality;
   uri: string;
   width?: number;
   height?: number;
@@ -204,6 +206,7 @@ export async function captureFromCamera(): Promise<CapturedImage | null> {
     width: asset.width, height: asset.height,
     slotId: 'camera_capture',
     slotLabel: 'Camera Capture',
+    photoQuality: await inspectPhotoQuality(asset.uri),
   };
 }
 
@@ -229,6 +232,7 @@ export async function pickFromLibrary(slotId: string, slotLabel: string): Promis
     width: asset.width, height: asset.height,
     slotId,
     slotLabel,
+    photoQuality: await inspectPhotoQuality(asset.uri),
   };
 }
 
@@ -315,9 +319,15 @@ export async function identifyItemWithAI(
     tenantId?: string;
     existingImageUrls?: string[];  // use stored URLs instead of re-uploading
     captureMode?: string;
+    allowPhotoWarnings?: boolean; // Explicit user override of advisory checks; never a certification.
   }
 ): Promise<{ result: AIIdentificationResult | null; error: string | null; quotaExceeded?: QuotaExceededError }> {
   try {
+    const preflight = await preflightPhotos([
+      ...images,
+      ...(options?.existingImageUrls ?? []).map((uri,index) => ({ uri,slotLabel:`Stored photo ${index + 1}` })),
+    ],options?.allowPhotoWarnings ?? false);
+    if (preflight.error) return { result:null,error:preflight.error };
     // Compress any new captures; skip if using existing URLs only
     const base64Images = images.length > 0
       ? await Promise.all(images.map(img => compressForAI(img.uri)))

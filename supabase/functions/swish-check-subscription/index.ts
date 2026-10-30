@@ -1,111 +1,32 @@
-// SWISH — Stripe Subscription Check Edge Function
-// Checks whether the authenticated user has an active SWISH Niche Premium subscription.
-// Called on login, app launch, and periodically to keep subscription state fresh.
-
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import Stripe from "https://esm.sh/stripe@18.5.0";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-};
-
-const logStep = (step: string, details?: any) => {
-  const detailsStr = details ? ` — ${JSON.stringify(details)}` : "";
-  console.log(`[check-subscription] ${step}${detailsStr}`);
-};
-
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  const supabaseClient = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-    { auth: { persistSession: false } },
-  );
-
+// Verified account-bound entitlements for all registered products; also refreshes the database RLS cache.
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.2';
+import modules from '../../../niche-modules.json' with { type:'json' };
+import { corsHeaders } from '../_shared/cors.ts';
+import { refreshVerifiedNiches,nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
+import { LEGACY_PREMIUM_TIERS,SWISH_SUBSCRIPTION_PRODUCT } from '../../../shared/nicheAuthorization.ts';
+Deno.serve(async (req:Request)=>{
+  if(req.method==='OPTIONS') return new Response(null,{ headers:corsHeaders });
+  const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{ status,headers:{ ...corsHeaders,'Content-Type':'application/json' } });
+  if(!['POST','GET'].includes(req.method)) return json({ error:'Method not allowed' },405);
   try {
-    logStep("Function started");
-
-    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (!stripeKey) throw new Error("STRIPE_SECRET_KEY not set");
-
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("Authorization header not provided");
-
-    const token = authHeader.replace("Bearer ", "");
-    const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
-    if (userError || !userData.user?.email) {
-      throw new Error("User not authenticated or email unavailable");
-    }
-    const user = userData.user;
-    logStep("User authenticated", { userId: user.id, email: user.email });
-
-    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
-    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
-
-    if (customers.data.length === 0) {
-      logStep("No Stripe customer found — user not subscribed");
-      return new Response(
-        JSON.stringify({ subscribed: false, product_id: null, price_id: null, subscription_end: null, niche_entitlements: [] }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
-      );
-    }
-
-    const customerId = customers.data[0].id;
-    logStep("Stripe customer found", { customerId });
-
-    const subscriptions = await stripe.subscriptions.list({
-      customer: customerId,
-      status: "active",
-      limit: 100,
-    });
-
-    // A single active subscription unlocks only the niche stored in its verified
-    // Stripe metadata. Legacy subscriptions without niche metadata remain Coins.
-    const nicheEntitlements = new Set<string>();
-    let productId: string | null = null;
-    let subscriptionEnd: string | null = null;
-    let priceId: string | null = null;
-    const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing"]);
-
-    for (const sub of subscriptions.data) {
-      const subProductId = sub.items.data[0]?.price?.product as string | undefined;
-      if (subProductId !== "prod_VQ0JxUCL29SZPQ") continue;
-
-      const nicheId = String(sub.metadata?.niche_id ?? "coins").toLowerCase();
-      if (!allowedNiches.has(nicheId)) continue;
-      nicheEntitlements.add(nicheId);
-
-      if (!productId) {
-        productId = subProductId;
-        priceId = sub.items.data[0]?.price?.id ?? null;
-        subscriptionEnd = new Date(sub.current_period_end * 1000).toISOString();
-      }
-      logStep("Niche subscription found", { subscriptionId: sub.id, nicheId });
-    }
-
-    const entitlements = [...nicheEntitlements];
-    return new Response(
-      JSON.stringify({
-        subscribed: entitlements.length > 0,
-        product_id: productId,
-        price_id: priceId,
-        subscription_end: subscriptionEnd,
-        niche_entitlements: entitlements,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
-    );
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    logStep("Error", { message: msg });
-    return new Response(
-      JSON.stringify({ error: msg }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 },
-    );
+    const admin=createClient(Deno.env.get('SUPABASE_URL') ?? '',Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',{ auth:{ persistSession:false } });
+    const auth=req.headers.get('Authorization');
+    if(!auth?.startsWith('Bearer ')) return json({ error:'Authentication required' },401);
+    const { data:{ user },error }=await admin.auth.getUser(auth.slice(7));
+    if(error || !user) return json({ error:'Invalid or expired authentication' },401);
+    const { data:memberships,error:membershipError }=await admin.from('tenant_memberships').select('tenant_id,tenants!inner(subscription_tier)').eq('user_id',user.id);
+    if(membershipError) return json({ error:'Account authorization unavailable' },503);
+    const legacy=memberships?.some(row=>{
+      const tenant=Array.isArray(row.tenants) ? row.tenants[0] : row.tenants;
+      return (LEGACY_PREMIUM_TIERS as readonly string[]).includes(tenant?.subscription_tier ?? '');
+    }) ?? false;
+    // Existing lifetime/legacy tier access never depends on Stripe availability.
+    const niches=legacy ? Object.keys(modules.products) : await refreshVerifiedNiches(admin,{ id:user.id,email:user.email });
+    return json({ subscribed:niches.length>0,product_id:niches.length ? SWISH_SUBSCRIPTION_PRODUCT : null,
+      price_id:legacy || !niches.length ? null : 'price_1UPAIlI5Y99su2PXUrM192qL',subscription_end:null,
+      niche_entitlements:niches,entitlement_source:legacy ? 'tenant_tier' : 'verified_stripe',verified_at:new Date().toISOString(),cache_max_age_seconds:300 });
+  } catch(error:unknown) {
+    console.error('[swish-check-subscription] Verified entitlement refresh failed.');
+    return nicheAccessResponse(error) ?? json({ error:'Subscription verification unavailable' },503);
   }
 });

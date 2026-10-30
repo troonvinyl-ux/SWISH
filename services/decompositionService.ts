@@ -5,6 +5,9 @@
 
 import { getSupabaseClient } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
+// Manifest-led lot assessment is part of the shared decomposition API, not a Surplus-only stack.
+export { evaluateManifestLot, DEFAULT_LOT_ASSUMPTIONS, LOT_ENGINE_VERSION } from './lotEconomicsService';
+export type { LotLine, LotAssumptions, LotEvaluation } from './lotEconomicsService';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -239,7 +242,8 @@ export async function getDecomposition(
 
 export function computeBasicDecomposition(
   items: Array<{ valuationMid: number; status: string; specialistId: string; dispositionDecision: string }>,
-  acquisitionCost: number
+  acquisitionCost: number,
+  quotedWholeBundleValue?: number,
 ): {
   totalIndividualValue: number;
   prizeItems: typeof items;
@@ -257,8 +261,11 @@ export function computeBasicDecomposition(
   const prizeCoveragePct = acquisitionCost > 0 ? prizeItemsValue / acquisitionCost : 0;
 
   // Mis-bundling: total individual value is significantly more than likely bundle price
-  const estimatedBundleValue = totalIndividualValue * 0.5; // bundles typically sell at ~50% of sum
-  const misBundlingLikely = totalIndividualValue > estimatedBundleValue * 1.5;
+  // Without an independently supplied whole-lot quote there is no evidence of uplift.
+  // Do not manufacture a 50% bundle discount and then label every collection mis-bundled.
+  const misBundlingLikely = quotedWholeBundleValue != null && Number.isFinite(quotedWholeBundleValue) && quotedWholeBundleValue > 0
+    ? totalIndividualValue > quotedWholeBundleValue * 1.5
+    : false;
 
   // Specialist breakdown
   const specialistBreakdown: Record<string, { count: number; value: number }> = {};
