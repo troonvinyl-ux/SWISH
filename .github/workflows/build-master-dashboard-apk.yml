@@ -51,7 +51,7 @@ jobs:
         run: bash scripts/install-dependencies.sh
 
       - name: TypeScript validation
-        run: npx tsc --noEmit
+        run: npx tsc --noEmit --project tsconfig.master-dashboard.json
 
       - name: Regression tests
         run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand
