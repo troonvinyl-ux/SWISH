@@ -310,6 +310,7 @@ export async function endListing(
 
 export interface ListingWithItem extends SavedListing {
   itemTitle: string;
+  itemStatus?: string;
   itemSpecialistId: string;
   itemAcquiredCost: number;
   itemMedia: string[];
