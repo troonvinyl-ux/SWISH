@@ -803,6 +803,6 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: `Unknown route: ${route}` }, 400);
   } catch (err: any) {
     console.error(`[SWISH Dispatch] Unhandled error (route=${route}): ${err.message}`);
-    return jsonResponse({ error: err.message ?? 'Internal error' }, 500);
+    return jsonResponse({ error: 'Unable to complete the eBay fulfilment request. Please retry or contact support.' }, 500);
   }
 });
