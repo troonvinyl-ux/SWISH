@@ -20,22 +20,14 @@ const BUILDS = {
 
 describe('Branded Expo build configuration', () => {
   const originalNiche = process.env.SWISH_NICHE;
-  const originalExpoProjectId = process.env.EXPO_PROJECT_ID;
-  const originalEasProjectId = process.env.EAS_PROJECT_ID;
 
   afterEach(() => {
     if (originalNiche === undefined) delete process.env.SWISH_NICHE;
     else process.env.SWISH_NICHE = originalNiche;
-    if (originalExpoProjectId === undefined) delete process.env.EXPO_PROJECT_ID;
-    else process.env.EXPO_PROJECT_ID = originalExpoProjectId;
-    if (originalEasProjectId === undefined) delete process.env.EAS_PROJECT_ID;
-    else process.env.EAS_PROJECT_ID = originalEasProjectId;
   });
 
   test('keeps the existing OnSpace app identity when no branded profile is selected', () => {
     delete process.env.SWISH_NICHE;
-    delete process.env.EXPO_PROJECT_ID;
-    delete process.env.EAS_PROJECT_ID;
     expect(configureApp({ config: BASE_CONFIG })).toBe(BASE_CONFIG);
   });
 

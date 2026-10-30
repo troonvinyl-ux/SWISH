@@ -9,6 +9,7 @@
 
 import { getSupabaseClient } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
+import { preflightPhotos } from './photoQualityService';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -22,6 +23,7 @@ export interface IslamicCoinInput {
   notes?: string;                // user notes/context
   tenantId: string;
   itemId?: string;               // if updating existing item
+  allowPhotoWarnings?: boolean;  // Explicit human review of advisory pixel warnings.
 }
 
 export interface ZenoCandidate {
@@ -196,6 +198,8 @@ export async function identifyIslamicSilver(
   const supabase = getSupabaseClient();
 
   try {
+    const preflight=await preflightPhotos([...(input.images ?? []),...(input.existingImageUrls ?? [])].map((uri,index)=>({ uri,slotLabel:`Coin photo ${index + 1}` })),input.allowPhotoWarnings ?? false);
+    if(preflight.error) return { result:null,error:preflight.error };
     const { data, error } = await supabase.functions.invoke('swish-islamic-identify', {
       body: {
         images: input.images,

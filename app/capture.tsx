@@ -11,6 +11,7 @@ import { SpecialistReview } from '@/components/feature/SpecialistReview';
 import { PhotoQualityReview } from '@/components/feature/PhotoQualityReview';
 import { FlipIntelligencePanel } from '@/components/feature/FlipIntelligencePanel';
 import { Colors,Spacing,Typography,Radius } from '@/constants/theme';
+import { BrandArtwork } from '@/components/feature/BrandArtwork';
 export default function CaptureScreen() {
   const capture=useGenericCapture(); const router=useRouter(); const { tenant }=useApp();
   return <SafeAreaView edges={['top','bottom']} style={s.screen}><StatusBar style="light"/>
@@ -18,9 +19,11 @@ export default function CaptureScreen() {
     <FlatList data={capture.slots} keyExtractor={slot=>slot.id} contentContainerStyle={s.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled"
       ListHeaderComponent={<View style={s.block}>
         <Pressable accessibilityLabel="Back" onPress={()=>router.back()} style={({ pressed })=>[s.link,pressed ? s.pressed : null]}><MaterialIcons name="arrow-back" size={24} color={Colors.textPrimary}/><Text style={s.body}>Back</Text></Pressable>
-        <View style={s.hero}><MaterialIcons name={capture.activeNiche.icon as any} size={28} color={capture.activeNiche.color}/><Text style={s.title}>{capture.activeNiche.terms.scan}</Text><Text style={s.body}>{capture.profile?.focus ?? 'Capture evidence for the selected specialist.'}</Text></View>
-        <Pressable onPress={()=>router.push('/photo-quality-check' as any)} style={({ pressed })=>[s.link,pressed ? s.pressed : null]}><Text style={s.body}>Photo quality checks and device diagnostics</Text></Pressable>
-        <Text style={s.body}>Your draft is retained on this device for this signed-in account. {Platform.OS==='web' ? 'Browser photos may need reselection after a browser restart.' : 'Captured photos remain on this device until managed in app storage.'}</Text>
+        <BrandArtwork nicheId={capture.activeNiche.id} compact/>
+        <View style={s.hero}><MaterialIcons name={capture.activeNiche.icon as any} size={28} color={capture.activeNiche.color}/><Text style={s.title}>{capture.activeNiche.terms.scan}</Text><Text style={s.body}>A few clear photos. We will help with the rest.</Text></View>
+        <Pressable onPress={()=>router.push('/photo-quality-check' as any)} style={({ pressed })=>[s.link,pressed ? s.pressed : null]}><Text style={s.body}>Get sharper, clearer photos</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Evaluate a collection, pallet or job-lot manifest" onPress={()=>router.push('/lot-opportunity' as any)} style={({ pressed })=>[s.secondary,pressed ? s.pressed : null]}><MaterialIcons name="account-tree" size={24} color={Colors.primary}/><Text style={[s.body,s.flex]}>Buying a whole lot? Add the list and bid. Find out what is worth your money.</Text></Pressable>
+        <Text style={s.body}>Your current scan stays here while you work. {Platform.OS==='web' ? 'If you restart your browser, you may need to choose the photos again.' : 'Photos are kept on this device.'}</Text>
         {!capture.images.length && !capture.result ? <>
           {capture.activeNiche.specialists.length>1 ? <View style={s.chipWrap}><FlatList horizontal data={capture.activeNiche.specialists} keyExtractor={id=>id} showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips} renderItem={({ item:id })=><Pressable disabled={capture.busy} onPress={()=>capture.changeSpecialist(id)} style={({ pressed })=>[s.chip,capture.specialistId===id ? s.selected : null,pressed ? s.pressed : null]}><Text style={s.chipText}>{SPECIALISTS[id]?.shortName ?? id}</Text></Pressable>}/></View> : null}
           {capture.profile && capture.profile.modes.length>1 ? <View style={s.chipWrap}><FlatList horizontal data={capture.profile.modes} keyExtractor={mode=>mode.id} showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips} renderItem={({ item:mode })=><Pressable disabled={capture.busy} onPress={()=>capture.changeMode(mode.id)} style={({ pressed })=>[s.chip,capture.mode===mode.id ? s.selected : null,pressed ? s.pressed : null]}><Text style={s.chipText}>{mode.label}</Text></Pressable>}/></View> : null}
@@ -41,11 +44,11 @@ export default function CaptureScreen() {
         {capture.images.length && !capture.savedId ? <Pressable disabled={capture.busy} onPress={()=>capture.setAllowPhotoWarnings(!capture.allowPhotoWarnings)} accessibilityRole="checkbox" accessibilityState={{ checked:capture.allowPhotoWarnings }} style={({ pressed })=>[s.secondary,pressed ? s.pressed : null]}><MaterialIcons name={capture.allowPhotoWarnings ? 'check-box' : 'check-box-outline-blank'} size={24} color={Colors.primary}/><Text style={[s.body,s.flex]}>I reviewed these photos. Allow identification despite advisory warnings; confidence may be limited.</Text></Pressable> : null}
         {capture.activeNiche.id === 'trading_cards' ? <Pressable onPress={()=>router.push('/card-grading' as any)} style={({ pressed })=>[s.secondary,pressed ? s.pressed : null]}><MaterialIcons name="style" size={24} color={Colors.primary}/><Text style={s.body}>Compare raw versus graded sale scenarios</Text></Pressable> : null}
         {capture.result && !capture.savedId ? <>
-          <Pressable disabled={capture.busy} onPress={()=>{ void capture.identify(); }} style={({ pressed })=>[s.secondary,pressed ? s.pressed : null]}><MaterialIcons name="refresh" size={20} color={Colors.info}/><Text style={s.body}>Re-analyse with my answers</Text></Pressable>
+          <Pressable disabled={capture.busy} onPress={()=>{ void capture.identify(); }} style={({ pressed })=>[s.secondary,pressed ? s.pressed : null]}><MaterialIcons name="refresh" size={20} color={Colors.info}/><Text style={s.body}>Take another look with my answers</Text></Pressable>
           <FlipIntelligencePanel key={capture.specialistId} result={capture.result} nicheId={capture.activeNiche.id} tenantId={tenant?.id}/>
         </> : null}
         <Pressable disabled={capture.busy || !capture.images.length || (Boolean(capture.result) && !capture.result?.canonicalTitle.trim())} onPress={()=>{ if(capture.savedId) router.push(`/stock-listing/${capture.savedId}` as any); else if(capture.result) void capture.save(); else void capture.identify(); }} style={({ pressed })=>[s.button,{ backgroundColor:capture.activeNiche.color },capture.busy || pressed || !capture.images.length ? s.pressed : null]}>
-          <Text style={s.buttonText}>{capture.savedId ? 'View saved inventory item' : capture.result ? 'Save reviewed proposal to inventory' : 'Identify with specialist AI'}</Text>
+          <Text style={s.buttonText}>{capture.savedId ? 'View saved inventory item' : capture.result ? 'Save this find' : 'Tell me what it is'}</Text>
         </Pressable>
         {capture.savedId ? <Pressable disabled={capture.busy} onPress={()=>{ void capture.save(); }} style={({ pressed })=>[s.secondary,pressed ? s.pressed : null]}><Text style={s.body}>Retry photo upload to saved item</Text></Pressable> : null}
         {capture.images.length ? <Pressable disabled={capture.busy} onPress={capture.reset} style={({ pressed })=>[s.link,pressed ? s.pressed : null]}><Text style={s.body}>{capture.savedId ? 'Start another scan' : 'Discard this draft and start again'}</Text></Pressable> : null}

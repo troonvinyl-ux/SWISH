@@ -7,6 +7,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { ItemImage } from '@/components';
 import { useListingEditor, type ListingEditorState } from '@/hooks/useListingEditor';
 import { useAlert } from '@/template';
+import { ManifestInspectionReview } from '@/components/feature/ManifestInspectionReview';
 import { Colors, Spacing, Typography, Radius } from '@/constants/theme';
 interface FieldProps { label: string; value: string; onChange: (value: string) => void; numeric?: boolean; multiline?: boolean }
 function Field({ label, value, onChange, numeric, multiline }: FieldProps) {
@@ -32,6 +33,7 @@ export default function EbayListingEditorScreen() {
       {editor.error ? <View style={s.errorBox}><MaterialIcons name="error-outline" size={20} color={Colors.danger} /><Text style={s.error}>{editor.error}</Text></View> : null}
       {!data ? <Text style={s.body}>{editor.loading ? 'Loading listing...' : 'No listing is available in this account and niche.'}</Text> : <>
         <View style={s.section}><Text style={s.sectionTitle}>Photos · {data.media.length}</Text><View style={s.photos}>{data.media.map((uri,index) => <ItemImage key={`${uri}-${index}`} uri={uri} contentFit="cover" transition={200} style={s.photo} />)}</View><Text style={s.hint}>Photos remain attached to the canonical inventory item.</Text></View>
+        <ManifestInspectionReview key={data.itemId} itemId={data.itemId} attributes={data.itemAttributes ?? {}}/>
         <View style={s.section}><Text style={s.sectionTitle}>Listing Type</Text><View style={s.row}>{(['FixedPriceItem','Chinese'] as const).map(type => <Pressable key={type} onPress={() => editor.update('listingType',type)} style={[s.secondary,data.listingType===type ? s.selected : null]}><Text style={s.body}>{type==='Chinese' ? 'Auction' : 'Buy It Now'}</Text></Pressable>)}</View>
           {data.listingType==='Chinese' ? <><Field label="Start price (£)" value={data.startPrice} onChange={value=>editor.update('startPrice',value)} numeric /><Field label="Reserve price (£)" value={data.reservePrice} onChange={value=>editor.update('reservePrice',value)} numeric /><View style={s.row}>{[3,5,7,10].map(days=><Pressable key={days} onPress={()=>editor.update('auctionDays',days)} style={[s.secondary,data.auctionDays===days?s.selected:null]}><Text style={s.body}>{days} days</Text></Pressable>)}</View></> : <Pressable onPress={()=>editor.update('bestOfferEnabled',!data.bestOfferEnabled)} style={s.secondary}><Text style={s.body}>Best Offer: {data.bestOfferEnabled?'On':'Off'}</Text></Pressable>}
         </View>

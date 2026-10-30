@@ -165,6 +165,7 @@ export default function TabLayout() {
         name="insights"
         options={{ href: null }}
       />
+      <Tabs.Screen name="account" options={{ href: null }} />
     </Tabs>
     <TVTabHint />
     </>

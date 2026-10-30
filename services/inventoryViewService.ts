@@ -4,6 +4,8 @@ import { isLiveListing, isDraftListing } from './listingLifecycle';
 import { getProductionNicheSpecialistIds } from './nicheRouting';
 import { getSupabaseClient } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
+// Retain canonical tab-query API used by existing regression tests and inventory consumers.
+export { loadInventoryTab,loadInventoryCounts } from './inventoryTabQueryService';
 export type InventoryTab = 'stock' | 'draft' | 'live' | 'sold';
 export interface InventoryViewItem extends Partial<Item> {
   id: string; canonical_title: string; specialist_id: string; media: string[]; attributes: Record<string, any>;
@@ -11,6 +13,9 @@ export interface InventoryViewItem extends Partial<Item> {
 }
 export async function loadInventoryView(tenantId: string, nicheId: string) {
   const specialists = getProductionNicheSpecialistIds(nicheId);
+  if(!specialists.length) return { items:[],listings:[],error:'A registered niche is required.' };
+  const { data:allowed,error:accessError }=await getSupabaseClient().rpc('swish_can_access_niche',{ p_tenant_id:tenantId,p_niche_id:nicheId });
+  if(accessError || !allowed) return { items:[],listings:[],error:accessError ? 'Inventory authorization unavailable. Retry shortly.' : 'This niche requires verified paid access. Refresh your subscription after checkout.' };
   const [inventory, result] = await Promise.all([listItems(tenantId, { specialistIds: specialists }), getAllListings(tenantId, undefined, specialists)]);
   return { items: inventory.items, listings: result.listings, error: inventory.error ?? result.error };
 }

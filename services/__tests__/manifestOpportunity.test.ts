@@ -1,0 +1,42 @@
+jest.mock('@/template',()=>({ getSupabaseClient:jest.fn() }));
+jest.mock('expo-crypto',()=>({ CryptoDigestAlgorithm:{ SHA256:'SHA256' },digestStringAsync:jest.fn(async (_algorithm:string,text:string)=>require('node:crypto').createHash('sha256').update(text).digest('hex')) }));
+import { normaliseManifest,parseManifestText,validGtin } from '@/services/manifestParser';
+import { toLotLines,evaluateManifestLot,DEFAULT_LOT_ASSUMPTIONS } from '@/services/lotEconomicsService';
+import { compileManifestDrafts,manifestIdentity,savePurchasedManifest } from '@/services/manifestListingService';
+import { suppliedManifestExample } from '@/constants/manifestExample';
+import { getSupabaseClient } from '@/template';
+import { PRODUCTION_NICHE_IDS,NICHE_MODULES } from '@/constants/niches';
+import { isRouteAllowedForBuild } from '@/services/nicheRouting';
+const basic=()=>toLotLines(normaliseManifest([['Product SKU','Product Title','Quantity','Unit RRP','Currency'],['A','Generic Widget',10,100,'GBP']]).rows);
+const costs=()=>({ ...DEFAULT_LOT_ASSUMPTIONS, currentBid:100, inbound:0,reserve:0,labourMinutes:0,feeRate:0,fixedFee:0,sellerPostage:0,packaging:0,yieldRate:1,conservativeYield:1,sellThrough:1,conservativeSellThrough:1,targetProfit:50,targetRoi:0.5,budget:10000 });
+describe('Supplier manifest parsing',()=>{
+  test('supplied example contains nine products, 25 units and exact £570.69 RRP',()=>{ const result=suppliedManifestExample();expect(result.rows).toHaveLength(9);expect(result.units).toBe(25);expect(result.rrp).toBeCloseTo(570.69,2);expect(result.declaredRrp).toBeCloseTo(570.69,2); });
+  test('scientific and collided barcode values are omitted, never expanded into invented identifiers',()=>{const result=suppliedManifestExample();expect(result.rows.every(row=>!row.ean)).toBe(true);expect(result.rows[0].eanRaw).toBe('7.890499e+11');});
+  test('valid check digits preserve leading zeroes',()=>{expect(validGtin('012345678905')).toBe(true);expect(validGtin('012345678906')).toBe(false);});
+  test('multiline quoted CSV preserves description and HTML is reduced to text',()=>{const result=normaliseManifest(parseManifestText('Product Title,Quantity,Product Description\n"Widget, blue",2,"<b>Detail</b>\nMore"'));expect(result.rows[0].title).toBe('Widget, blue');expect(result.rows[0].description).toBe('Detail More');});
+  test('Markdown separator/NaN summary are not inventory records',()=>{const result=normaliseManifest(parseManifestText('| Product Title | Quantity | Unit RRP | Total RRP |\n| --- | --- | --- | --- |\n| Widget | 2.0 | £4.00 | £8.00 |\n| NaN | NaN | Total | £8.00 |'));expect(result.units).toBe(2);expect(result.rows).toHaveLength(1);});
+  test('invalid quantity is not silently changed to one',()=>{const result=normaliseManifest([['Title','Quantity'],['Widget','NaN']]);expect(result.rows[0].quantity).toBe(0);expect(result.rows[0].warnings.join(' ')).toContain('Quantity');});
+  test('non-GBP is not silently valued as pounds',()=>{const lines=toLotLines(normaliseManifest([['Title','Quantity','Currency'],['Widget',2,'USD']]).rows);expect(lines[0].include).toBe(false);});
+  test('supplier specification contradictions are exposed',()=>{const rows=suppliedManifestExample().rows;expect(rows[1].warnings.join(' ')).toContain('Resolution claim');expect(rows[7].warnings.join(' ')).toContain('Accessory count');});
+});
+describe('Transparent lot economics',()=>{
+  test('profit and ROI use quantity; no one-unit shortcut',()=>{const rows=basic();rows[0].price=50;rows[0].conservativePrice=40;rows[0].priceSource='user_scenario';const result=evaluateManifestLot(rows,costs());expect(result.expected[0].gross).toBe(500);expect(result.expected[0].profit).toBe(400);expect(result.expected[0].roi).toBe(4);expect(result.recommendedMaxBid).toBe(266.66);});
+  test('auction competition/time never inflate an intrinsic ceiling',()=>{const rows=basic();const a=evaluateManifestLot(rows,costs());const b=evaluateManifestLot(rows,{...costs(),bidCount:900,minutesLeft:1});expect(a.recommendedMaxBid).toBe(b.recommendedMaxBid);});
+  test('higher premium, VAT, delivery and labour cannot raise cap',()=>{const rows=basic();const low=evaluateManifestLot(rows,costs()).recommendedMaxBid;const high=evaluateManifestLot(rows,{...costs(),premiumRate:.2,vatRate:.2,inbound:30,labourMinutes:10}).recommendedMaxBid;expect(high).toBeLessThan(low);});
+  test('missing current bid remains an explicitly incomplete assessment',()=>{const result=evaluateManifestLot(basic(),{...costs(),currentBid:null});expect(result.decision).toBe('research');expect(result.expected[0].profit).toBeNull();});
+  test('excessive bid produces swerve, even if expected headline revenue is high',()=>{expect(evaluateManifestLot(basic(),{...costs(),currentBid:1000}).decision).toBe('swerve');});
+  test('RRP-only inputs do not produce an opportunity verdict',()=>{expect(evaluateManifestLot(basic(),{...costs(),currentBid:1}).decision).toBe('research');});
+  test('safety-critical returns receive no optimistic unit revenue',()=>{const rows=basic();rows[0].title='Customer Return Bike Helmet';const result=evaluateManifestLot(rows,costs());expect(result.expected[0].gross).toBe(0);expect(result.excluded).toBe(10);});
+  test('seller postage costs differ from buyer postage income/fee base',()=>{const result=evaluateManifestLot(basic(),{...costs(),buyerPostage:2,sellerPostage:3,feeRate:.1});expect(result.expected[0].gross).toBe(520);expect(result.expected[0].sellingCosts).toBe(82);});
+  test('zero yield/sell-through cannot support a positive bid',()=>{expect(evaluateManifestLot(basic(),{...costs(),yieldRate:0,conservativeYield:0}).recommendedMaxBid).toBe(0);});
+  test('invalid percentages fail closed',()=>{const result=evaluateManifestLot(basic(),{...costs(),feeRate:1.1});expect(result.errors.length).toBeGreaterThan(0);expect(result.recommendedMaxBid).toBe(0);});
+  test('ended auctions are not purchase opportunities',()=>{expect(evaluateManifestLot(basic(),{...costs(),minutesLeft:0}).decision).toBe('ended');});
+});
+describe('Non-overlapping manifest listing preparation',()=>{
+  test('packs plus remainders conserve physical units',()=>{const rows=basic();rows[0].quantity=5;rows[0].packSize=2;const plans=compileManifestDrafts(rows,costs(),'grouped');expect(plans).toHaveLength(2);expect(plans.map(p=>p.quantity)).toEqual([2,1]);expect(plans.reduce((s,p)=>s+p.physicalUnits,0)).toBe(5);expect(plans[0].title.length).toBeLessThanOrEqual(80);});
+  test('whole-lot plan is one sale unit, not 25 separately overlapping units',()=>{const plans=compileManifestDrafts(toLotLines(suppliedManifestExample().rows),costs(),'whole');expect(plans).toHaveLength(1);expect(plans[0].quantity).toBe(1);expect(plans[0].physicalUnits).toBe(25);});
+  test('uninspected returns and missing category/aspects are not eBay-ready',()=>{expect(compileManifestDrafts(basic(),costs(),'individual')[0].ready).toBe(false);});
+  test('a reviewed SKU uses seller specifics without coin fields',()=>{const rows=basic();Object.assign(rows[0],{inspected:true,condition:'Used, tested',priceSource:'user_scenario',categoryId:'123',taxonomyChecked:true,images:['https://example.com/photo.jpg'],requiredSpecifics:['Brand'],specifics:[{name:'Brand',value:'Manufacturer'}]});const plan=compileManifestDrafts(rows,costs(),'individual')[0];expect(plan.ready).toBe(true);expect(plan.attributes.ebay_item_specifics).toEqual([{name:'Brand',value:'Manufacturer'}]);expect(plan.attributes).not.toHaveProperty('ruler');});
+  test('identity survives filename-free price/grouping changes',async()=>{const rows=basic();const first=await manifestIdentity(rows,'surplus_flip');const next=await manifestIdentity(rows.map(row=>({...row,price:999,packSize:3})),'surplus_flip');expect(first).toBe(next);});
+  test.each(PRODUCTION_NICHE_IDS)('%s reuses its established specialist when saving',async niche=>{const rpc=jest.fn().mockResolvedValue({ data:{acquisitionId:'lot',itemIds:['item'],listingIds:['draft'],existing:false},error:null });(getSupabaseClient as jest.Mock).mockReturnValue({rpc});await savePurchasedManifest({tenantId:'tenant',nicheId:niche,name:'lot',key:'a'.repeat(64),paidHammer:10,assumptions:costs(),units:compileManifestDrafts(basic(),costs(),'individual')});expect(rpc.mock.calls[0][1].p_lot.specialist).toBe(NICHE_MODULES[niche].defaultSpecialist);expect(rpc).toHaveBeenCalledWith('swish_import_manifest_lot',expect.objectContaining({p_tenant_id:'tenant',p_niche_id:niche}));expect(isRouteAllowedForBuild('/lot-opportunity',niche)).toBe(true);});
+});

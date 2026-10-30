@@ -35,7 +35,7 @@ function prepareNicheRoutes(niche, root = path.resolve(__dirname, '..')) {
   const homeImport = product.home
     ? `import ProductHome from '@/app/${product.home.replace(/\.tsx$/, '')}';`
     : "import { NicheOverview as ProductHome } from '@/components/feature/NicheOverview';";
-  const props = product.home === 'surplus-flip.tsx' || !product.home ? '' : ' isHomeTab';
+  const props = product.home ? ' isHomeTab' : '';
   save('(tabs)/index.tsx', `${homeImport}\nexport default function NicheHomeScreen() { return <ProductHome${props} />; }\n`);
   // Only remove Stack declarations for routes actually absent from this artifact.
   const layoutPath = path.join(output, '_layout.tsx');
