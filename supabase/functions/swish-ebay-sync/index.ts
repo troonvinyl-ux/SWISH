@@ -411,7 +411,10 @@ async function syncItemToSwish(
   let titleFixed = false;
 
   try {
-    const itemUpdates: Record<string, any> = { updated_at: new Date().toISOString() };
+    // Keep the inventory lifecycle status aligned with the authoritative eBay state.
+    // Without this, a sold/ended listing can leave its item marked as listed in SWISH.
+    const itemStatus = ebay.ebayStatus === 'sold' ? 'sold' : ebay.ebayStatus === 'ended' ? 'identified' : 'listed';
+    const itemUpdates: Record<string, any> = { status: itemStatus, updated_at: new Date().toISOString() };
 
     // ── Title: eBay is authoritative — always sync ──────────────────────────
     if (ebay.title && ebay.title.length > 3) {
@@ -524,6 +527,7 @@ async function syncItemToSwish(
     const listingUpdate: Record<string, any> = {
       updated_at: new Date().toISOString(),
       status: ebay.ebayStatus === 'sold' ? 'sold' : ebay.ebayStatus === 'ended' ? 'ended' : 'active',
+      ...(ebay.ebayStatus !== 'active' ? { ended_at: ebay.endedAt ?? new Date().toISOString() } : {}),
     };
     if (ebay.title) listingUpdate.title = ebay.title;
     if (ebay.description?.length > 10) listingUpdate.description = ebay.description;
