@@ -143,9 +143,10 @@ describe('SWISH eBay finance scope refresh coordination', () => {
     expect(finance).toContain('needsRefresh || (needsFinanceScopeRefresh && hasRefreshCredentials)');
   });
 
-  test('scope-restricted sync refresh clears the finance-scope marker', () => {
-    expect(sync).toContain("scope: 'https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.fulfillment https://api.ebay.com/oauth/api_scope/sell.account'");
-    expect(sync).toContain('delete updatedCredentials.financeScopeRefreshedAt');
+  test('sync token refresh preserves the consented scope set and records refresh metadata', () => {
+    expect(sync).toContain('Omit scope: preserve the full consented permissions, including finances.');
+    expect(sync).toContain('financeScopeRefreshedAt: new Date().toISOString()');
+    expect(sync).not.toContain('delete updatedCredentials.financeScopeRefreshedAt');
   });
 
   test('temporary token-service failures are retryable, not falsely marked as reauthentication-required', () => {
