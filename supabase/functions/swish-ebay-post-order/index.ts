@@ -88,7 +88,7 @@ async function getAccessToken(
 
   let creds: any;
   try { creds = await decryptCredentials(conn.credential_ref); }
-  catch (e: any) { return { error: `eBay credentials corrupted: ${e.message}. Re-connect eBay.` }; }
+  catch (e: any) { console.error('[SWISH] eBay credential decryption failed for fulfilment.'); return { error: 'Unable to read eBay connection securely. Please reconnect eBay in Marketplaces.' }; }
 
   if (!creds.accessToken) return { error: 'No eBay access token. Re-authorise eBay in Marketplaces.' };
 
