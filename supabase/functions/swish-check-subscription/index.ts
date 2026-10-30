@@ -85,6 +85,11 @@ serve(async (req) => {
     const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing", "surplus_flip", "trading_cards", "antiques", "fossils", "beauty", "tech"]);
 
     for (const sub of subscriptions.data) {
+      const linkedUserId = sub.metadata?.user_id;
+      if (linkedUserId && linkedUserId !== user.id) {
+        logStep("Skipping subscription linked to a different user", { subscriptionId: sub.id });
+        continue;
+      }
       const subProductId = sub.items.data[0]?.price?.product as string | undefined;
       if (subProductId !== "prod_VQ0JxUCL29SZPQ") continue;
 
