@@ -556,7 +556,7 @@ export default function MasterInventoryScreen() {
 
     // Update counts from already-filtered results
     const draftCount = all.filter(l => l.status === 'draft' || l.status === 'pending').length;
-    const liveCount = all.filter(l => l.status === 'active').length;
+    const liveCount = all.filter(l => l.status === 'active' && String(l.itemStatus || '').toLowerCase() !== 'sold').length;
     setTabCounts(prev => ({ ...prev, draft: draftCount, live: liveCount }));
     setListingsLoading(false);
   }, [tenant?.id, theme.specialistIds]);
@@ -659,7 +659,7 @@ export default function MasterInventoryScreen() {
 
     if (activeTab === 'live') {
       return listings
-        .filter(l => l.status === 'active')
+        .filter(l => l.status === 'active' && String(l.itemStatus || '').toLowerCase() !== 'sold')
         .filter(l => !searchLower || l.itemTitle.toLowerCase().includes(searchLower) || l.title.toLowerCase().includes(searchLower))
         .map(l => ({
           id: l.itemId,
