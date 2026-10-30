@@ -11,7 +11,7 @@ const C = { bg:'#080B10', panel:'#0D131B', line:'#20303D', text:'#E9F0F5', muted
 type ItemRow = { id:string; specialist_id:string|null; status:string|null; valuation_mid:number|null; expected_selling_price:number|null; acquired_cost:number|null; sold_price:number|null; sold_at:string|null };
 type ListingRow = { id:string; item_id:string|null; status:string|null; price:number|null; published_at:string|null; items?:{specialist_id?:string|null}|null };
 type SaleRow = { sale_price:number|null; net_revenue:number|null; profit:number|null; sold_at:string|null; items?:{specialist_id?:string|null}|null };
-type NicheMetric = { niche:NicheConfig; stock:number; active:number; drafts:number; soldMonth:number; salesMonth:number; activeValue:number; potential:number };
+type NicheMetric = { niche:NicheConfig; stock:number; active:number; drafts:number; unlisted:number; soldMonth:number; salesMonth:number; activeValue:number; potential:number };
 
 function money(v:number){ return new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP',maximumFractionDigits:0}).format(Number.isFinite(v)?v:0); }
 function compactMoney(v:number){ if(v>=1000000)return '£'+(v/1000000).toFixed(1)+'m'; if(v>=10000)return '£'+(v/1000).toFixed(1)+'k'; return money(v); }
@@ -65,9 +65,10 @@ function MasterDashboard(){
     const draftRows=nl.filter(l=>l.status==='draft'||l.status==='pending');
     const monthRows=ns.filter(s=>inMonth(s.sold_at,monthStart));
     const activeIds=new Set(activeRows.map(l=>l.item_id).filter(Boolean));
-    const potential=ni.filter(i=>!['sold','archived','deleted'].includes((i.status??'').toLowerCase())&&!activeIds.has(i.id))
-      .reduce((sum,i)=>sum+Number(i.expected_selling_price??i.valuation_mid??0),0);
-    return {niche,stock:ni.length,active:activeRows.length,drafts:draftRows.length,soldMonth:monthRows.length,
+    const eligible=ni.filter(i=>!['sold','archived','deleted'].includes((i.status??'').toLowerCase()));
+    const unlisted=eligible.filter(i=>!activeIds.has(i.id));
+    const potential=unlisted.reduce((sum,i)=>sum+Number(i.expected_selling_price??i.valuation_mid??0),0);
+    return {niche,stock:ni.length,active:activeRows.length,drafts:draftRows.length,unlisted:unlisted.length,soldMonth:monthRows.length,
       salesMonth:monthRows.reduce((sum,s)=>sum+Number(s.sale_price??0),0),
       activeValue:activeRows.reduce((sum,l)=>sum+Number(l.price??0),0),potential};
   }),[items,listings,sales,monthStart]);
@@ -87,7 +88,7 @@ function MasterDashboard(){
     if(dataIssue)r.push({key:'data',title:'Dashboard data needs attention',detail:dataIssue,count:1,tone:C.red});
     const drafts=nicheMetrics.reduce((s,n)=>s+n.drafts,0);
     if(drafts)r.push({key:'drafts',title:'Listings waiting to go live',detail:'Review drafts and confirm category-specific item specifics before publishing.',count:drafts,tone:C.amber});
-    const unlisted=nicheMetrics.reduce((s,n)=>s+Math.max(0,n.stock-n.active),0);
+    const unlisted=nicheMetrics.reduce((s,n)=>s+n.unlisted,0);
     if(unlisted)r.push({key:'unlisted',title:'Inventory to review for listing',detail:'Stock not currently represented by an active eBay listing. Some items may be sold, archived or intentionally held.',count:unlisted,tone:C.cyan});
     if(connector?.status!=='connected')r.push({key:'connector',title:'Check eBay connection',detail:'The shared marketplace connector is not reporting a connected state.',count:1,tone:C.red});
     else if(!connector.last_sync_at||Date.now()-new Date(connector.last_sync_at).getTime()>86400000)r.push({key:'sync',title:'Check marketplace sync',detail:'The last recorded sync is over 24 hours old, or no successful sync timestamp is recorded.',count:1,tone:C.amber});
