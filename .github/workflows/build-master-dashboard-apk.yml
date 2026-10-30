@@ -83,7 +83,6 @@ jobs:
           if (config.android?.package !== 'com.swish.masterdashboard') throw new Error('Unexpected Android package: ' + config.android?.package);
           if (config.extra?.swishMasterDashboard !== true) throw new Error('Master dashboard identity flag missing');
           if (Array.isArray(router) && router[1]?.root) throw new Error('Master build must use default Expo Router root; src/app staging isolates the routes.');
-          const fs = require('node:fs');
           for (const route of ['index.tsx', 'login.tsx', '_layout.tsx']) {
             if (!fs.existsSync('src/app/' + route)) throw new Error('Missing staged dashboard route: ' + route);
           }
