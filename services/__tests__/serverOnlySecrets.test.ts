@@ -627,8 +627,8 @@ describe('SWISH image download error sanitization', () => {
   test('direct Numista lookup failures use a generic diagnostic', () => {
     expect(islamicIdentify).toContain("firstError ||= 'Numista direct lookup failed.'");
     expect(islamicIdentify).not.toContain('Numista direct lookup failed: ${e.message}');
-    expect(islamicIdentify).toContain("referenceText.match(/\\bN\\s*#\\s*(\\d{1,9})\\b/i)");
-    expect(islamicIdentify).toContain("referenceText.match(/numista\\.com\\/(?:catalogue\\/index\\.php\\?r=)?(\\d{1,9})/i)");
+    expect(islamicIdentify).toContain(String.raw`referenceText.match(/\bN\s*#\s*(\d{1,9})\b/i)`);
+    expect(islamicIdentify).toContain(String.raw`referenceText.match(/numista\.com\/(?:catalogue\/index\.php\?r=)?(\d{1,9})/i)`);
   });
 
   test('image download and category authentication failures do not expose raw exceptions', () => {
