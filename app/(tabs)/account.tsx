@@ -12,7 +12,7 @@ export default function AccountScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { isMasterAdmin } = useApp();
+  const { isMasterAdmin, fixedNicheId } = useApp();
   const [signingOut, setSigningOut] = useState(false);
   const owner = isMasterAdmin && isSwishMasterAdmin(user?.email);
 
@@ -39,14 +39,16 @@ export default function AccountScreen() {
       <Text style={styles.title}>Account & workspace</Text>
       <Text style={styles.email}>{user?.email ?? 'Signed-in account'}</Text>
 
-      <Pressable style={styles.action} onPress={() => router.push('/niche-select' as any)}>
-        <MaterialIcons name="apps" size={24} color={Colors.primary} />
-        <View style={styles.copy}>
-          <Text style={styles.actionTitle}>Switch niche</Text>
-          <Text style={styles.description}>Open SWISH Verticals and choose a workspace.</Text>
-        </View>
-        <MaterialIcons name="chevron-right" size={24} color={Colors.textTertiary} />
-      </Pressable>
+      {(!fixedNicheId || owner) ? (
+        <Pressable style={styles.action} onPress={() => router.push('/niche-select' as any)}>
+          <MaterialIcons name="apps" size={24} color={Colors.primary} />
+          <View style={styles.copy}>
+            <Text style={styles.actionTitle}>Switch niche</Text>
+            <Text style={styles.description}>Open SWISH Verticals and choose a workspace.</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={24} color={Colors.textTertiary} />
+        </Pressable>
+      ) : null}
 
       {owner ? (
         <Pressable style={styles.action} onPress={() => router.push('/master-admin' as any)}>
