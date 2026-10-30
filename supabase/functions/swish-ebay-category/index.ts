@@ -124,7 +124,8 @@ async function verifyAccess(
     if (!m) return { ok: false, error: 'Access denied.', status: 403 };
     return { ok: true };
   } catch (e: any) {
-    return { ok: false, error: `Auth error: ${e.message}`, status: 401 };
+    console.error('[swish-ebay-category] Application token request failed.');
+    return { ok: false, error: 'Authentication required.', status: 401 };
   }
 }
 
