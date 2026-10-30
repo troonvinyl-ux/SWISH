@@ -1,6 +1,16 @@
 name: Build SWISH Android APK (Fast)
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/(tabs)/inventory.tsx'
+      - 'services/listingService.ts'
+      - '.github/workflows/build-niche-apk.yml'
+      - 'scripts/prepare-niche-routes.js'
+      - 'app.config.js'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
   workflow_dispatch:
     inputs:
       niche:
@@ -25,7 +35,7 @@ permissions:
 
 jobs:
   build-apk:
-    name: Build ${{ inputs.niche }} APK
+    name: Build ${{ inputs.niche || 'clothing' }} APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -67,7 +77,7 @@ jobs:
       # This repository does not commit the generated android/ project.
       - name: Prepare isolated niche route tree
         env:
-          SWISH_NICHE: ${{ inputs.niche }}
+          SWISH_NICHE: ${{ inputs.niche || 'clothing' }}
         run: node scripts/prepare-niche-routes.js
 
       # Generate it on every run so app.config.js applies the selected niche
@@ -81,7 +91,7 @@ jobs:
       # Fail before compiling if Expo did not embed the requested product identity.
       - name: Verify generated niche configuration
         env:
-          NICHE: ${{ inputs.niche }}
+          NICHE: ${{ inputs.niche || 'clothing' }}
           SWISH_NICHE: ${{ inputs.niche }}
         run: |
           set -euo pipefail
@@ -132,9 +142,9 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: swish-${{ inputs.niche }}-apk
+          name: swish-${{ inputs.niche || 'clothing' }}-apk
           path: |
-            dist/${{ inputs.niche }}.apk
-            dist/${{ inputs.niche }}.sha256
+            dist/${{ inputs.niche || 'clothing' }}.apk
+            dist/${{ inputs.niche || 'clothing' }}.sha256
           if-no-files-found: error
           retention-days: 14
