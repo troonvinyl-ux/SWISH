@@ -15,19 +15,18 @@ module.exports = ({ config }) => {
   } : {};
   const baseConfig = Object.keys(otaConfig).length ? { ...config, ...otaConfig } : config;
 
-  // Standalone owner-only command centre build. This is a separate Android
-  // application identity and a separate Expo Router root; it cannot open a
-  // subscriber niche shell from its navigation tree.
+  // Standalone owner-only command centre build. The workflow stages its routes
+  // into src/app (Expo Router's supported precedence) so Metro never scans the
+  // main app route tree. Keep Router on its default root; custom roots are not
+  // consistently respected by every Expo CLI/Metro tool in this SDK.
   if (process.env.SWISH_MASTER_DASHBOARD === '1') {
     const plugins = (baseConfig.plugins || []).map(plugin => {
       const name = Array.isArray(plugin) ? plugin[0] : plugin;
-      return name === 'expo-router'
-        ? ['expo-router', { ...(Array.isArray(plugin) ? plugin[1] : {}), root: './app/master-dashboard' }]
-        : plugin;
+      if (name !== 'expo-router') return plugin;
+      const options = Array.isArray(plugin) ? { ...(plugin[1] || {}) } : {};
+      delete options.root;
+      return Object.keys(options).length ? ['expo-router', options] : 'expo-router';
     });
-    if (!plugins.some(plugin => (Array.isArray(plugin) ? plugin[0] : plugin) === 'expo-router')) {
-      plugins.push(['expo-router', { root: './app/master-dashboard' }]);
-    }
     return {
       ...baseConfig,
       name: 'SWISH Master',
