@@ -9,6 +9,7 @@ on:
       - 'constants/**'
       - 'contexts/**'
       - 'services/**'
+      - 'supabase/**'
       - 'hooks/**'
       - 'assets/**'
       - 'niche-modules.json'
@@ -35,7 +36,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        niche: [coins, motocross, bicycles, clothing, surplus_flip]
+        niche: [coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech]
 
     steps:
       - name: Checkout
