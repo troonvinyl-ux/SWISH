@@ -39,7 +39,7 @@ export default function AccountScreen() {
       <Text style={styles.title}>Account & workspace</Text>
       <Text style={styles.email}>{user?.email ?? 'Signed-in account'}</Text>
 
-      {(!fixedNicheId || owner) ? (
+      {!fixedNicheId ? (
         <Pressable style={styles.action} onPress={() => router.push('/niche-select' as any)}>
           <MaterialIcons name="apps" size={24} color={Colors.primary} />
           <View style={styles.copy}>
