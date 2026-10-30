@@ -307,7 +307,7 @@ describe('SWISH Stripe account binding', () => {
   });
 
   test('subscription check returns only canonical production niche entitlements', () => {
-    expect(subscription).toContain('const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing", "surplus_flip"])');
+    expect(subscription).toContain('const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing", "surplus_flip", "trading_cards", "antiques", "fossils", "beauty", "tech"])');
     expect(subscription).toContain('niche_entitlements: entitlements');
   });
 });
@@ -340,7 +340,7 @@ describe('SWISH AI identification tenant and quota safeguards', () => {
     expect(identify).toContain("if (sub.status !== 'active' && sub.status !== 'trialing') continue;");
     expect(identify).toContain('const linkedUserId = sub.metadata?.user_id');
     expect(identify).toContain('if (linkedUserId && linkedUserId !== userId) continue;');
-    expect(identify).toContain("if (subscribedNiche === 'surplus_trader') subscribedNiche = 'surplus_flip';");
+    expect(identify).toContain("const subscribedNiche = String(sub.metadata?.niche_id ?? 'coins').toLowerCase();");
   });
 
   test('does not send raw unhandled or AI-provider errors back to the client', () => {
@@ -391,7 +391,7 @@ describe('Stripe checkout customer isolation', () => {
 
   test('checkout reuses only a Stripe customer explicitly linked to this user', () => {
     expect(checkout).toContain('candidate.metadata?.user_id === user.id');
-    expect(checkout).toContain('metadata: { user_id: user.id }');
+    expect(checkout).toContain('metadata: { user_id: user.id, swish_customer: "true" }');
     expect(checkout).not.toContain('!candidate.metadata?.user_id');
     expect(checkout).not.toContain('stripe.customers.update(unlinkedCustomer.id');
     expect(checkout).not.toContain('customers.data[0].id');
