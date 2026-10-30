@@ -34,9 +34,11 @@ serve(async (req) => {
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY not set");
 
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("Authorization header not provided");
-
-    const token = authHeader.replace("Bearer ", "");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Authentication required." }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 401 });
+    }
+    const token = authHeader.slice("Bearer ".length).trim();
+    if (!token) return new Response(JSON.stringify({ error: "Authentication required." }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 401 });
     const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
     if (userError || !userData.user?.email) {
       throw new Error("User not authenticated or email unavailable");
@@ -45,15 +47,31 @@ serve(async (req) => {
     logStep("User authenticated", { userId: user.id, email: user.email });
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
-    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+    const customers = await stripe.customers.list({ email: user.email, limit: 100 });
+    let customer = customers.data.find((candidate) => candidate.metadata?.user_id === user.id);
 
-    if (customers.data.length === 0) {
-      throw new Error("No Stripe customer found for this user. Please subscribe first.");
+    // Recover a legacy customer only when a verified account has one unambiguous
+    // customer whose active SWISH subscription already identifies this user.
+    if (!customer && user.email_confirmed_at) {
+      const eligibleLegacyCustomers = [];
+      for (const candidate of customers.data.filter((entry) => !entry.metadata?.user_id)) {
+        const legacySubs = await stripe.subscriptions.list({ customer: candidate.id, status: "all", limit: 100 });
+        const ownsSwishSubscription = legacySubs.data.some((sub) => sub.metadata?.user_id === user.id &&
+          (sub.status === "active" || sub.status === "trialing") &&
+          sub.items.data.some((item) => item.price.product === "prod_VQ0JxUCL29SZPQ"));
+        if (ownsSwishSubscription) eligibleLegacyCustomers.push(candidate);
+      }
+      if (eligibleLegacyCustomers.length === 1) {
+        customer = await stripe.customers.update(eligibleLegacyCustomers[0].id, {
+          metadata: { ...eligibleLegacyCustomers[0].metadata, user_id: user.id, swish_customer: "true" },
+        });
+      }
     }
-
-    const customerId = customers.data[0].id;
-    logStep("Stripe customer found", { customerId });
-
+    if (!customer) return new Response(JSON.stringify({ error: "No subscription customer is linked to this account." }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 404,
+    });
+    const customerId = customer.id;
+    logStep("Stripe customer verified", { customerId });
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: customerId,
       return_url: "onspaceapp://subscription",
@@ -66,10 +84,9 @@ serve(async (req) => {
       status: 200,
     });
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    logStep("Error", { message: msg });
+    logStep("Customer portal request failed.");
     return new Response(
-      JSON.stringify({ error: msg }),
+      JSON.stringify({ error: "Unable to open billing management. Please retry or contact support." }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 },
     );
   }
