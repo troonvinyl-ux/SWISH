@@ -34,7 +34,7 @@ export function useMasterInventory() {
         imagesStarted.current.add(scope);
         // Image repair is secondary work. Let navigation, scrolling and the
         // first inventory render finish before starting network/storage work.
-        const imageTask = InteractionManager.runAfterInteractions(() => {
+        InteractionManager.runAfterInteractions(() => {
           if (scopeRef.current !== scope) return;
           void fetchAndStoreEbayImages(tenant.id, { itemIds: ids, fixTitles: true }).then(progress => {
             if (scopeRef.current === scope && progress.phase === 'error') showAlert('Image Sync Incomplete', progress.errorMsg);
@@ -42,9 +42,6 @@ export function useMasterInventory() {
             if (scopeRef.current === scope) showAlert('Image Sync Incomplete', error?.message ?? 'Image sync failed');
           });
         });
-        // If the user changes niche or leaves inventory before interactions
-        // settle, cancel the queued work rather than competing with the new screen.
-        if (scopeRef.current !== scope) imageTask.cancel();
       }
     } catch (error: any) { if (scopeRef.current === scope && request.current === version) setSnapshot({ scope, items: [], listings: [], error: error?.message ?? 'Inventory could not be loaded' }); }
     finally { if (pendingScope.current === scope) pendingScope.current = null; if (scopeRef.current === scope && request.current === version) setLoading(false); }
