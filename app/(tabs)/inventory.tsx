@@ -554,9 +554,17 @@ export default function MasterInventoryScreen() {
     );
     setListings(all);
 
-    // Update counts from already-filtered results
-    const draftCount = all.filter(l => l.status === 'draft' || l.status === 'pending').length;
-    const liveCount = all.filter(l => l.status === 'active' && String(l.itemStatus || '').toLowerCase() !== 'sold').length;
+    // Keep the native app's counts aligned with the web inventory rules.
+    // A stale "active" listing must not count as live if the item is sold or
+    // the listing has ended/cancelled/failed/deleted in SWISH.
+    const normaliseStatus = (value: unknown) => String(value || '').trim().toLowerCase();
+    const terminalListingStatuses = new Set(['sold', 'ended', 'expired', 'cancelled', 'canceled', 'failed', 'deleted', 'completed']);
+    const isLiveListing = (listing: ListingWithItem) =>
+      ['active', 'live'].includes(normaliseStatus(listing.status)) &&
+      !terminalListingStatuses.has(normaliseStatus(listing.status)) &&
+      !['sold', 'fulfilled', 'completed'].includes(normaliseStatus(listing.itemStatus));
+    const draftCount = all.filter(l => ['draft', 'pending'].includes(normaliseStatus(l.status))).length;
+    const liveCount = all.filter(isLiveListing).length;
     setTabCounts(prev => ({ ...prev, draft: draftCount, live: liveCount }));
     setListingsLoading(false);
   }, [tenant?.id, theme.specialistIds]);
@@ -776,7 +784,7 @@ export default function MasterInventoryScreen() {
 
   // Filter draft/live by the niche listing data already filtered
   const draftListings = listings.filter(l => l.status === 'draft' || l.status === 'pending');
-  const liveListings = listings.filter(l => l.status === 'active');
+  const liveListings = listings.filter(l => ['active', 'live'].includes(String(l.status || '').trim().toLowerCase()) && !['sold', 'fulfilled', 'completed'].includes(String(l.itemStatus || '').trim().toLowerCase()));
 
   return (
     <View style={s.container}>
