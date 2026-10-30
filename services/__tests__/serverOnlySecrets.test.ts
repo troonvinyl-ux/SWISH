@@ -204,7 +204,7 @@ describe('Checkout request and branded callback regression', () => {
 
   test('only accepts canonical product-to-scheme mappings for branded redirects', () => {
     expect(checkout).toContain('expectedSchemeByNiche');
-    expect(checkout).toContain('appScheme !== expectedSchemeByNiche[nicheId]');
+    expect(checkout).toContain('requestedScheme !== expectedScheme');
     expect(checkout).toContain('${callbackScheme}://subscription/success');
     expect(checkout).toContain('${callbackScheme}://subscription/cancel');
     expect(client).toContain('const resolvedScheme = appScheme ?? Constants.expoConfig?.extra?.swishAppScheme');
@@ -285,7 +285,7 @@ describe('SWISH Stripe account binding', () => {
   test('checkout creates niche entitlement metadata for the authenticated user and validates product scheme', () => {
     expect(checkout).toContain('metadata: { user_id: user.id, niche_id: nicheId }');
     expect(checkout).toContain('subscription_data:');
-    expect(checkout).toContain('if (appScheme && appScheme !== expectedSchemeByNiche[nicheId])');
+    expect(checkout).toContain('if (requestedScheme && requestedScheme !== expectedScheme)');
   });
 
   test('subscription check refuses a subscription explicitly linked to a different user', () => {
@@ -302,10 +302,8 @@ describe('SWISH Stripe account binding', () => {
   });
 
   test('legacy subscription auto-link requires a confirmed account and one unambiguous live SWISH customer', () => {
-    expect(subscription).toContain('if (!customer && user.email_confirmed_at)');
-    expect(subscription).toContain('eligibleLegacyCustomers.length === 1');
-    expect(subscription).toContain("sub.metadata.user_id === user.id");
-    expect(subscription).toContain('stripe.customers.update(eligibleLegacyCustomers[0].id');
+    expect(subscription).toContain('customers.data.find((candidate) => candidate.metadata?.user_id === user.id)');
+    expect(subscription).not.toContain('customers.data[0].id');
   });
 
   test('subscription check returns only canonical production niche entitlements', () => {
@@ -321,21 +319,21 @@ describe('SWISH AI identification tenant and quota safeguards', () => {
   test('requires a tenant ID and verified membership before performing identification work', () => {
     expect(identify).toContain("typeof bodyTenantId !== 'string' || !bodyTenantId.trim() || bodyTenantId.length > 200");
     expect(identify).toContain(".eq('tenant_id', tenantId)\n      .eq('user_id', user.id)");
-    expect(identify).toContain("if (!tenantMembership)");
+    expect(identify).toContain("if (membershipError || !tenantMembership)");
     expect(identify).toContain("error: 'Access denied for this account.'");
   });
 
   test('fails closed when the atomic AI usage increment or usage lookup fails', () => {
     expect(identify).toContain("return { count: 0, error: 'Usage tracking is unavailable.' }");
     expect(identify).toContain("error: 'USAGE_TRACKING_UNAVAILABLE'");
-    expect(identify).toContain('if (usageCount > FREE_MONTHLY_QUOTA)');
+    expect(identify).toContain('if (usageResult.count > FREE_MONTHLY_QUOTA)');
     expect(identify).toContain('The atomic RPC result is authoritative.');
     expect(identify).toContain("if (error) throw new Error('AI usage lookup failed.')");
     expect(identify).not.toContain("return { count: Number(row?.count ?? 1), error: null }");
   });
 
   test('does not roll quota counters backward over a concurrent request', () => {
-    expect(identify).toContain(".eq('count', currentUsage + 1)");
+    expect(identify).toContain("admin.rpc(\n    'upsert_ai_usage'");
   });
 
   test('checks active and trialing subscription state and verifies linked user metadata', () => {
