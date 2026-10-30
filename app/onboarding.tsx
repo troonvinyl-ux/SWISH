@@ -141,7 +141,7 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { showAlert } = useAlert();
-  const { tenant, tenantLoading, reloadTenant, setActiveNiche, activeNicheId } = useApp();
+  const { tenant, tenantLoading, reloadTenant, setActiveNiche, activeNicheId, fixedNicheId, isMasterAdmin } = useApp();
   const { user } = useAuth();
 
   const [step, setStep] = useState(0);
@@ -149,8 +149,15 @@ export default function OnboardingScreen() {
 
   // Step 0: Niche selection
   const [selectedNiche, setSelectedNiche] = useState<NicheId>(
-    (activeNicheId && activeNicheId !== 'general' ? activeNicheId : 'coins') as NicheId,
+    (fixedNicheId && !isMasterAdmin
+      ? fixedNicheId
+      : activeNicheId && activeNicheId !== 'general' ? activeNicheId : 'coins') as NicheId,
   );
+  // A branded customer APK offers only its own niche during onboarding.
+  // The master account retains the full niche list even inside a branded build.
+  const onboardingNiches = fixedNicheId && !isMasterAdmin
+    ? ONBOARDING_NICHES.filter(niche => niche.id === fixedNicheId)
+    : ONBOARDING_NICHES;
 
   // Step 1: Business details
   const [businessName, setBusinessName] = useState('');
@@ -651,7 +658,7 @@ export default function OnboardingScreen() {
               </Text>
 
               <View style={s.nicheGrid}>
-                {ONBOARDING_NICHES.map(niche => {
+                {onboardingNiches.map(niche => {
                   const isSelected = selectedNiche === niche.id;
                   return (
                     <Pressable
@@ -808,7 +815,7 @@ export default function OnboardingScreen() {
                             {listingCount} eBay listing{listingCount === 1 ? '' : 's'} found in your seller account
                           </Text>
                           <Text style={s.importFoundSub}>
-                            Only listings classified as {ONBOARDING_NICHES.find(n => n.id === selectedNiche)?.name ?? 'your selected niche'} will be imported. Unrelated or unclassified listings are skipped.
+                            Only listings classified as {onboardingNiches.find(n => n.id === selectedNiche)?.name ?? 'your selected niche'} will be imported. Unrelated or unclassified listings are skipped.
                           </Text>
                         </View>
                       </View>
