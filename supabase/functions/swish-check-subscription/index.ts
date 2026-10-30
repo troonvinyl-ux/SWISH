@@ -82,7 +82,7 @@ serve(async (req) => {
     let productId: string | null = null;
     let subscriptionEnd: string | null = null;
     let priceId: string | null = null;
-    const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing", "surplus_flip"]);
+    const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing", "surplus_flip", "trading_cards", "antiques", "fossils", "beauty", "tech"]);
 
     for (const sub of subscriptions.data) {
       const subProductId = sub.items.data[0]?.price?.product as string | undefined;
