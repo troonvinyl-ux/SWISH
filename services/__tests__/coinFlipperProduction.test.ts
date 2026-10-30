@@ -84,6 +84,8 @@ describe('Server-authoritative identification', () => {
   };
 
   beforeEach(() => {
+    mockInvoke.mockClear();
+    mockFrom.mockClear();
     mockInvoke.mockResolvedValue({
       data: { identification: MOCK_COIN_RESULT, quota: { isPremium: false, used: 1, limit: 5, remaining: 4 } },
       error: null,
