@@ -5,7 +5,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/hooks/useApp';
 import { isSwishMasterAdmin } from '@/contexts/AppContext';
-import { PRODUCTION_NICHES, getNicheSpecialistIds, type NicheConfig } from '@/constants/niches';
+import { PRODUCTION_NICHES, type NicheConfig } from '@/constants/niches';
+import { getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 
 const C = { bg:'#080B10', panel:'#0D131B', line:'#20303D', text:'#E9F0F5', muted:'#7F929F', faint:'#536571', amber:'#F3C66B', cyan:'#72D7E5', green:'#79D6A4', red:'#F18C83', blue:'#8EB8FF' };
 type ItemRow = { id:string; specialist_id:string|null; status:string|null; valuation_mid:number|null; expected_selling_price:number|null; acquired_cost:number|null; sold_price:number|null; sold_at:string|null };
@@ -57,10 +58,10 @@ function MasterDashboard(){
   const monthStart=useMemo(()=>new Date(new Date().getFullYear(),new Date().getMonth(),1).getTime(),[]);
 
   const nicheMetrics=useMemo<NicheMetric[]>(()=>PRODUCTION_NICHES.map(niche=>{
-    const ids=getNicheSpecialistIds(niche.id);
-    const ni=items.filter(i=>!!i.specialist_id&&ids.includes(i.specialist_id));
-    const nl=listings.filter(l=>!!l.items?.specialist_id&&ids.includes(l.items.specialist_id));
-    const ns=sales.filter(s=>!!s.items?.specialist_id&&ids.includes(s.items.specialist_id));
+    const ids=getProductionNicheSpecialistIds(niche.id);
+    const ni=items.filter(i=>{const sid=i.specialist_id;return sid?ids.includes(sid):false;});
+    const nl=listings.filter(l=>{const sid=l.items?.specialist_id;return sid?ids.includes(sid):false;});
+    const ns=sales.filter(s=>{const sid=s.items?.specialist_id;return sid?ids.includes(sid):false;});
     const activeRows=nl.filter(l=>l.status==='active');
     const draftRows=nl.filter(l=>l.status==='draft'||l.status==='pending');
     const monthRows=ns.filter(s=>inMonth(s.sold_at,monthStart));
