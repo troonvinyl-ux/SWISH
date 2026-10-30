@@ -7,27 +7,26 @@
       "id": "coins",
       "specialistIds": [
         "coins",
-        "coins_uk",
-        "coins_world",
-        "coins_currency",
-        "numismatic"
+        "islamic_silver",
+        "banknotes",
+        "gold",
+        "silver",
+        "jewellery_precious_metals",
+        "ancient_artefacts"
       ],
       "package": "com.swish.coinflipper"
     },
     "motocross": {
       "id": "motocross",
       "specialistIds": [
-        "motocross",
-        "mx"
+        "motocross"
       ],
       "package": "com.swish.flippermx"
     },
     "bicycles": {
       "id": "bicycles",
       "specialistIds": [
-        "bicycles",
-        "bikes",
-        "cycling"
+        "bicycles"
       ],
       "package": "com.swish.bikeflipper"
     },
@@ -35,18 +34,15 @@
       "id": "clothing",
       "specialistIds": [
         "clothing",
-        "trainers_sneakers",
-        "threads",
-        "threads_flip"
+        "trainers_sneakers"
       ],
       "package": "com.swish.threadsflip"
     },
     "trading_cards": {
       "id": "trading_cards",
       "specialistIds": [
-        "trading_cards",
         "pokemon_cards",
-        "cards"
+        "trading_cards"
       ],
       "package": "com.swish.cardflipper"
     },
