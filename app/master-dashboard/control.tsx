@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { AuthRouter, getSupabaseClient, useAuth } from '@/template';
+import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/hooks/useApp';
@@ -16,7 +17,7 @@ function daysSince(v:string|null|undefined){if(!v)return null;const t=new Date(v
 function agedPrice(price:number,age:number,drop:number,floor:number){if(price<=0)return 0;const steps=Math.floor(Math.max(0,age)/30);return Math.max(price*floor,price*Math.pow(1-drop/100,steps));}
 function Panel({title,subtitle,children}:{title:string;subtitle:string;children:React.ReactNode}){return <View style={s.panel}><Text style={s.panelTitle}>{title}</Text><Text style={s.sub}>{subtitle}</Text>{children}</View>;}
 function ControlPanel(){
- const {user}=useAuth();const {tenant,tenantLoading,tenantError,isMasterAdmin}=useApp();const inset=useSafeAreaInsets();
+ const {user}=useAuth();const {tenant,tenantLoading,tenantError,isMasterAdmin}=useApp();const inset=useSafeAreaInsets();const router=useRouter();
  const [items,setItems]=useState<Item[]>([]);const [listings,setListings]=useState<Listing[]>([]);const [loading,setLoading]=useState(true);const [refreshing,setRefreshing]=useState(false);const [error,setError]=useState<string|null>(null);
  const [drop,setDrop]=useState(10);const [floor,setFloor]=useState(60);const [autoEnabled,setAutoEnabled]=useState(false);const [crossNiche,setCrossNiche]=useState(false);
  const load=useCallback(async()=>{if(!tenant?.id){setLoading(false);return;}const db=getSupabaseClient();const [ir,lr]=await Promise.all([
@@ -33,7 +34,7 @@ function ControlPanel(){
  if(!isSwishMasterAdmin(user?.email)||!isMasterAdmin)return <View style={[s.screen,s.center]}><MaterialIcons name="lock" size={32} color={C.red}/><Text style={s.title}>Owner access only</Text><Text style={s.sub}>This control panel is private to the SWISH master account.</Text></View>;
  const actionPreview=()=>Alert.alert('Price reduction preview',`${ready} active listings qualify under the current rule. Estimated total asking-price reduction: ${gbp(savings)}. This is a simulation only; no eBay prices have been changed.`,[{text:'Keep preview only',style:'cancel'},{text:'Understood',onPress:()=>{}}]);
  return <View style={[s.screen,{paddingTop:Math.max(inset.top,8),paddingBottom:Math.max(inset.bottom,8)}]}>
-  <View style={s.header}><View style={s.icon}><MaterialIcons name="tune" size={22} color={C.amber}/></View><View style={{flex:1}}><Text style={s.eyebrow}>SWISH / OWNER CONSOLE</Text><Text style={s.title}>MASTER CONTROL</Text></View><Pressable onPress={refresh} style={s.iconButton}><MaterialIcons name="refresh" size={20} color={C.text}/></Pressable></View>
+  <View style={s.header}><Pressable onPress={()=>router.replace('/' as any)} accessibilityRole="button" accessibilityLabel="Back to master dashboard" style={s.iconButton}><MaterialIcons name="arrow-back" size={20} color={C.text}/></Pressable><View style={s.icon}><MaterialIcons name="tune" size={22} color={C.amber}/></View><View style={{flex:1}}><Text style={s.eyebrow}>SWISH / OWNER CONSOLE</Text><Text style={s.title}>MASTER CONTROL</Text></View><Pressable onPress={refresh} style={s.iconButton}><MaterialIcons name="refresh" size={20} color={C.text}/></Pressable></View>
   {tenantLoading||loading?<View style={s.center}><ActivityIndicator size="large" color={C.amber}/><Text style={s.sub}>Loading live inventory and listing records…</Text></View>:tenantError?<View style={s.center}><Text style={s.title}>Account unavailable</Text><Text style={s.sub}>{tenantError}</Text></View>:
   <ScrollView contentContainerStyle={s.body} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={C.amber}/>}>
    {error?<Text style={s.warning}>{error}</Text>:null}
