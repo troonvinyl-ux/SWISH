@@ -193,13 +193,13 @@ async function handleSyncMessages(
     });
     responseXml = await resp.text();
   } catch (e: any) {
-    return jsonResponse({ error: `Network error reaching eBay: ${e.message}` }, 503);
+    return jsonResponse({ error: 'Unable to reach eBay messages service. Please retry.' }, 503);
   }
 
   const ack = parseAck(responseXml);
   if (ack === 'Failure') {
     const errMsg = responseXml.match(/<LongMessage>([\s\S]*?)<\/LongMessage>/)?.[1] ?? 'eBay API error';
-    return jsonResponse({ error: errMsg }, 400);
+    return jsonResponse({ error: 'The eBay messages request failed. Please retry.' }, 400);
   }
 
   const msgMatches = Array.from(responseXml.matchAll(/<MessageSummary>([\s\S]*?)<\/MessageSummary>/g));
@@ -305,7 +305,7 @@ async function handleSendReply(
         console.log(`[SWISH] eBay send reply failed for message ${messageId}: ${errMsg}`);
       }
     } catch (e: any) {
-      console.log(`[SWISH] eBay send reply network error: ${e.message}`);
+      console.log('[SWISH] eBay send reply network error.');
     }
   }
 
