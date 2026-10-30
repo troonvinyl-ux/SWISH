@@ -26,7 +26,7 @@ import { Colors } from '@/constants/theme';
 import { nicheToEntryRoute } from '@/services/nicheRouting';
 
 function AppRouter() {
-  const { businessConfig, tenantLoading, activeNicheId } = useApp();
+  const { businessConfig, tenantLoading, activeNicheId, fixedNicheId } = useApp();
 
   // Still loading tenant/config
   if (tenantLoading) {
@@ -45,7 +45,10 @@ function AppRouter() {
 
   // Fail closed: an unset/unknown niche must never silently open Coins.
   // Ask the user to select a product until a registered niche is available.
-  const entryRoute = nicheToEntryRoute(activeNicheId);
+  // A branded APK's build-time product identity takes precedence over account
+  // preferences, including for the master administrator. Never route a branded
+  // installation into another niche.
+  const entryRoute = nicheToEntryRoute(fixedNicheId ?? activeNicheId);
   if (!entryRoute) return <Redirect href={"/niche-select" as any} />;
 
   // Route to the correct niche-specific entry point.
