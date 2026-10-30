@@ -5,6 +5,8 @@ import { getSupabaseClient } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { getBusinessConfig } from '@/services/businessConfigService';
 import { isLiveListing } from '@/services/listingLifecycle';
+import { evaluateSpecialistSafety } from '@/shared/specialistIntelligence';
+import { resolveProductionNiche } from '@/services/nicheRouting';
 
 export interface GeneratedListing {
   title: string;
@@ -126,26 +128,14 @@ export async function saveListing(
   // handles the no-category case using current EBAY_GB suggestions.
   const resolvedCategoryId = categoryId ?? null;
 
-  const { data, error } = await supabase
-    .from('listings')
-    .insert({
-      tenant_id: tenantId,
-      item_id: itemId,
-      marketplace_id: marketplaceId,
-      title: generated.title,
-      description: generated.description,
-      price: generated.recommended_price,
-      floor_price: generated.floor_price,
-      ceiling_price: generated.ceiling_price,
-      shipping_cost: defaultShipping,
-      status: 'draft',
-      ...(resolvedCategoryId ? { category_id: resolvedCategoryId } : {}),
-    })
-    .select()
-    .single();
-
-  if (error) return { listing: null, error: error.message };
-  return { listing: mapListing(data), error: null };
+  const { data: draftId, error: draftError } = await supabase.rpc('swish_create_listing_draft', {
+    p_tenant_id: tenantId, p_item_id: itemId, p_marketplace_id: marketplaceId,
+    p_listing: generated, p_shipping_cost: defaultShipping, p_category_id: resolvedCategoryId,
+  });
+  if (draftError || !draftId) return { listing:null,error:draftError?.message ?? 'Draft creation was not confirmed.' };
+  const { data,error } = await supabase.from('listings').select('*').eq('id',draftId).eq('tenant_id',tenantId).single();
+  if (error || !data) return { listing:null,error:error?.message ?? 'Draft saved but could not be reopened. Retry without creating another draft.' };
+  return { listing:mapListing(data),error:null }; 
 }
 
 // ── Get listings for an item ──────────────────────────────────────────────────
@@ -583,6 +573,9 @@ export async function submitListingToMarketplace(
   // The edge function will use get_category_suggestions to resolve the title
   // if no validated categoryId is present.
   const itemAttributes = (listingRow?.items as any)?.attributes ?? {};
+  const nicheId = resolveProductionNiche((listingRow?.items as any)?.specialist_id) ?? '';
+  const safety = evaluateSpecialistSafety(nicheId, itemAttributes);
+  if (safety.blocked) return { success:false,step:'failed',error:safety.reasons.join(' ') };
   const attributeCategoryId = String(
     itemAttributes.ebay_category_id ?? itemAttributes._ebay_category_id ?? '',
   ).trim();

@@ -8,6 +8,7 @@ import { useInventory } from '@/hooks/useInventory';
 import { Colors, Spacing, Typography, Radius } from '@/constants/theme';
 import { NICHE_MODULES } from '@/constants/niches';
 import { resolveProductionNiche } from '@/services/nicheRouting';
+import { getSpecialistProfile } from '@/shared/specialistIntelligence';
 
 interface NicheOverviewProps {}
 /** Configuration-driven home for products without an existing dedicated screen. */
@@ -16,18 +17,21 @@ export const NicheOverview = memo(function NicheOverview(_props: NicheOverviewPr
   const { items, stats, syncError, loading, reload } = useInventory();
   const router = useRouter();
   const id = resolveProductionNiche(fixedNicheId ?? activeNicheId);
+  const profile = id ? getSpecialistProfile(id) : null;
   return <SafeAreaView edges={['top']} style={styles.screen}>
     <FlatList data={items} keyExtractor={item => item.id} refreshing={loading} onRefresh={reload}
       contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}
       ListHeaderComponent={<View style={styles.hero}>
         <MaterialIcons name={activeNiche.icon as any} color={activeNiche.color} size={32} />
         <Text style={styles.title}>{id ? NICHE_MODULES[id].name : activeNiche.name}</Text>
-        <Text style={styles.body}>{activeNiche.tagline}</Text>
+        <Text style={styles.body}>{profile?.focus ?? activeNiche.tagline}</Text>
         <Text style={styles.body}>{stats.activeTotal} active · {stats.soldCount} sold</Text>
-        <Pressable onPress={() => router.push('/(tabs)/scan' as any)} style={({ pressed }) => [styles.button, { backgroundColor: activeNiche.color, opacity: pressed ? 0.8 : 1 }]}>
+        <Pressable onPress={() => router.push('/(tabs)/scan')} style={({ pressed }) => [styles.button, { backgroundColor: activeNiche.color, opacity: pressed ? 0.8 : 1 }]}>
           <Text style={styles.buttonText}>{activeNiche.terms.scan}</Text>
         </Pressable>
         {syncError ? <Text style={styles.error}>{syncError}</Text> : null}
+        {profile ? <View style={styles.card}><Text style={styles.section}>Sourcing checklist</Text>{profile.sourcingChecks.map(check=><Text key={check} style={styles.body}>{check}</Text>)}<Pressable onPress={()=>router.push('/capture')} style={({ pressed })=>[styles.button,{ backgroundColor:Colors.surfaceHighlight,opacity:pressed ? 0.7 : 1 }]}><Text style={styles.body}>Review specialist evidence and buying costs</Text></Pressable></View> : null}
+        {id === 'trading_cards' ? <Pressable onPress={()=>router.push('/card-grading' as any)} style={({ pressed })=>[styles.card,{ opacity:pressed ? 0.7 : 1 }]}><MaterialIcons name="style" size={24} color={Colors.primary}/><Text style={styles.section}>Raw versus graded</Text><Text style={styles.body}>Compare your grade probabilities, insured shipping and holding costs. No professional grade is promised.</Text></Pressable> : null}
         <Text style={styles.section}>Current inventory</Text>
       </View>}
       renderItem={({ item }) => <Pressable onPress={() => router.push(`/item/${item.id}` as any)} style={({ pressed }) => [styles.card, { opacity: pressed ? 0.8 : 1 }]}>

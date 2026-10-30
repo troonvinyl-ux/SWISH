@@ -19,6 +19,7 @@ import { useApp } from '@/hooks/useApp';
 import { useSubscription } from '@/hooks/useSubscription';
 import { resolveProductionNiche } from '@/services/nicheRouting';
 import { NICHE_MODULES } from '@/constants/niches';
+import { getSpecialistProfile } from '@/shared/specialistIntelligence';
 
 // ── Map active niche to its product ──────────────────────────────────────────
 
@@ -215,10 +216,13 @@ export default function ScanScreen() {
 
   const product = getNicheProduct(activeNicheId);
   const canonicalId = resolveProductionNiche(activeNicheId);
+  const profile = canonicalId ? getSpecialistProfile(canonicalId) : null;
   const config = product === 'general' && canonicalId ? {
     ...NICHE_CAPTURE.general,
     title: NICHE_MODULES[canonicalId].name,
     color: activeNiche.color,
+    subtitle: 'Specialist evidence capture',
+    aiCapabilities: profile ? [profile.focus,profile.conditionRules,'Targeted follow-up questions and editable evidence review','Transparent buying scenarios with configurable costs'] : NICHE_CAPTURE.general.aiCapabilities,
     captureOptions: activeNiche.captureInstructions.map(desc => ({ icon: 'photo-camera', label: 'Capture guidance', desc })),
   } : NICHE_CAPTURE[product];
 
@@ -310,6 +314,7 @@ export default function ScanScreen() {
         </View>
         <View style={s.quickLinks}>
           {[
+            { icon: 'fact-check', label: 'Specialist Evidence & Buying Review', route: '/capture' },
             { icon: 'inventory-2', label: 'My Inventory', route: '/(tabs)/inventory' },
             { icon: 'receipt-long', label: 'My Listings', route: '/(tabs)/listings' },
             { icon: 'savings', label: 'Should I Buy This?', route: '/buy-decision' },

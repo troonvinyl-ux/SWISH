@@ -12,7 +12,7 @@ interface Snapshot { scope: string; items: any[]; counts: Record<string, number>
 
 /** Polling is the supported OnSpace Cloud mechanism; no Realtime dependency. */
 export function useInventory(filter: ItemFilter = {}) {
-  const { tenant, activeNicheId, fixedNicheId, inventoryReloadSignal } = useApp();
+  const { tenant, activeNicheId, fixedNicheId, inventoryReloadSignal, subscriptionLoading } = useApp();
   const niche = fixedNicheId ?? activeNicheId;
   const filterKey = JSON.stringify(filter);
   const scope = `${tenant?.id ?? ''}:${niche}:${filterKey}`;
@@ -23,7 +23,7 @@ export function useInventory(filter: ItemFilter = {}) {
   const [snapshot, setSnapshot] = useState<Snapshot>({ scope: '', items: [], counts: {}, error: null, loading: false });
 
   const load = useCallback(async () => {
-    if (!tenant?.id || inFlight.current === scope) return;
+    if (!tenant?.id || subscriptionLoading || inFlight.current === scope) return;
     const version = ++requestId.current;
     inFlight.current = scope;
     const allowList = getProductionNicheSpecialistIds(niche);
@@ -41,12 +41,12 @@ export function useInventory(filter: ItemFilter = {}) {
       setSnapshot({ scope, items: result.items, counts, error: null, loading: false });
     } catch (error: any) {
       if (scopeRef.current === scope && requestId.current === version) {
-        setSnapshot(prev => ({ ...prev, scope, loading: false, error: error?.message ?? 'Inventory refresh failed' }));
+        setSnapshot({ scope, items:[], counts:{}, loading:false, error:error?.message ?? 'Inventory refresh failed' });
       }
     } finally {
       if (inFlight.current === scope) inFlight.current = null;
     }
-  }, [tenant?.id, niche, filterKey, scope]);
+  }, [tenant?.id, niche, filterKey, scope, subscriptionLoading]);
 
   useEffect(() => {
     void load();

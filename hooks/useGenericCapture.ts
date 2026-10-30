@@ -5,6 +5,7 @@ import { captureFromCamera, pickFromLibrary, identifyItemWithAI, saveIdentifiedI
 import { SPECIALISTS, type SpecialistId } from '@/constants/specialists';
 import { getSpecialistProfile } from '@/shared/specialistIntelligence';
 import { readCaptureDraft, persistCaptureDraft, retainCaptureImage, type CaptureDraft } from '@/services/captureDraftService';
+import { inspectPhotoQuality } from '@/services/photoQualityService';
 const emptyDraft = (specialistId: string): CaptureDraft => ({ images:[],result:null,savedId:null,mode:'item',specialistId,answers:{} });
 export function useGenericCapture() {
   const { tenant, activeNiche, triggerInventoryReload } = useApp(); const { user } = useAuth(); const { showAlert } = useAlert();
@@ -13,6 +14,7 @@ export function useGenericCapture() {
   const [draft,setDraft]=useState<CaptureDraft>(emptyDraft(activeNiche.defaultSpecialist));
   const [loadedScope,setLoadedScope]=useState(''); const [busy,setBusy]=useState(false);
   const [phase,setPhase]=useState(''); const [error,setError]=useState<string|null>(null);
+  const [allowPhotoWarnings,setAllowPhotoWarnings]=useState(false);
   const profile=getSpecialistProfile(activeNiche.id); const ready=loadedScope===scope;
   const visible=ready ? draft : emptyDraft(activeNiche.defaultSpecialist);
   const specialistId=visible.specialistId as SpecialistId;
@@ -23,7 +25,7 @@ export function useGenericCapture() {
     { id:'condition',label:'Wear / damage',description:'Document damage, corrosion, seals and missing parts',required:false },
   ] : SPECIALISTS[specialistId]?.captureRequirements ?? [];
   useEffect(()=>{
-    let cancelled=false; setError(null); setPhase(''); setBusy(false); setLoadedScope('');
+    let cancelled=false; setError(null); setPhase(''); setBusy(false); setLoadedScope(''); setAllowPhotoWarnings(false);
     void readCaptureDraft(scope).then(saved=>{
       if (cancelled) return;
       const valid = saved && activeNiche.specialists.includes(saved.specialistId as SpecialistId) && Array.isArray(saved.images);
@@ -50,8 +52,10 @@ export function useGenericCapture() {
     try {
       const selected=library ? await pickFromLibrary(slot.id,slot.label) : await captureFromCamera();
       if(!selected || current.current!==scope) return;
+      setAllowPhotoWarnings(false);
       if(selected.width && selected.height && Math.min(selected.width,selected.height)<320) { setError('This photo has too little detail. Retake closer or choose a higher-resolution image.'); return; }
-      const image=await retainCaptureImage({ ...selected,slotId,slotLabel:slot.label });
+      const photoQuality=selected.photoQuality ?? await inspectPhotoQuality(selected.uri);
+      const image=await retainCaptureImage({ ...selected,photoQuality,slotId,slotLabel:slot.label });
       if(current.current===scope) setDraft(previous=>({ ...previous,images:[...previous.images.filter(i=>i.slotId!==slotId),image],result:null }));
     } catch(e:any) { if(current.current===scope) setError(e?.message ?? 'Photo capture failed.'); }
     finally { lock.current=false; if(current.current===scope) { setBusy(false); setPhase(''); } }
@@ -61,13 +65,13 @@ export function useGenericCapture() {
     lock.current=true; setBusy(true); setPhase('Analysing specialist evidence'); setError(null);
     try {
       const notes=Object.entries(visible.answers).filter(([,value])=>value.trim()).map(([key,value])=>`${key}: ${value} (user-supplied; cross-check)`).join('\n');
-      const response=await identifyItemWithAI(visible.images,specialistId,undefined,{ customNotes:notes,existingAttributes:visible.result?.attributes },{ tenantId:tenant.id,captureMode:visible.mode });
+      const response=await identifyItemWithAI(visible.images,specialistId,undefined,{ customNotes:notes,existingAttributes:visible.result?.attributes },{ tenantId:tenant.id,captureMode:visible.mode,allowPhotoWarnings });
       if(current.current!==scope) return;
       if(response.error || !response.result) { setError(response.error ?? 'No identification was returned.'); return; }
       setDraft(previous=>({ ...previous,result:response.result }));
     } catch(e:any) { if(current.current===scope) setError(e?.message ?? 'Identification failed.'); }
     finally { lock.current=false; if(current.current===scope) { setBusy(false); setPhase(''); } }
-  },[tenant?.id,ready,scope,visible,specialistId]);
+  },[tenant?.id,ready,scope,visible,specialistId,allowPhotoWarnings]);
   const answer=useCallback((key:string,value:string)=>setDraft(previous=>({ ...previous,answers:{ ...previous.answers,[key]:value } })),[]);
   const correctTitle=useCallback((title:string)=>setDraft(previous=>({ ...previous,result:previous.result ? { ...previous.result,canonicalTitle:title } : null })),[]);
   const reviewedResult=useCallback(()=>{
@@ -104,6 +108,6 @@ export function useGenericCapture() {
     } catch(e:any) { if(current.current===scope) setError(e?.message ?? 'Save failed.'); }
     finally { lock.current=false; if(current.current===scope) { setBusy(false); setPhase(''); } }
   },[tenant?.id,visible,scope,reviewedResult,triggerInventoryReload]);
-  const reset=useCallback(()=>{ if(busy) return; const clear=()=>{ setDraft(emptyDraft(activeNiche.defaultSpecialist));setError(null); }; if(visible.savedId) clear(); else showAlert('Discard capture draft?', 'Unsaved identification and selected photos will be removed from this draft. No inventory records are deleted.', [{ text:'Keep draft',style:'cancel' },{ text:'Discard draft',style:'destructive',onPress:clear }]); },[busy,activeNiche.defaultSpecialist,visible.savedId,showAlert]);
-  return { activeNiche,profile,slots,images:visible.images,result:visible.result,busy:busy || !ready,savedId:visible.savedId,error,phase,answers:visible.answers,mode:visible.mode,specialistId,capture,identify,save,reset,answer,correctTitle,changeMode,changeSpecialist };
+  const reset=useCallback(()=>{ if(busy) return; const clear=()=>{ setDraft(emptyDraft(activeNiche.defaultSpecialist));setError(null);setAllowPhotoWarnings(false); }; if(visible.savedId) clear(); else showAlert('Discard capture draft?', 'Unsaved identification and selected photos will be removed from this draft. No inventory records are deleted.', [{ text:'Keep draft',style:'cancel' },{ text:'Discard draft',style:'destructive',onPress:clear }]); },[busy,activeNiche.defaultSpecialist,visible.savedId,showAlert]);
+  return { allowPhotoWarnings,setAllowPhotoWarnings,activeNiche,profile,slots,images:visible.images,result:visible.result,busy:busy || !ready,savedId:visible.savedId,error,phase,answers:visible.answers,mode:visible.mode,specialistId,capture,identify,save,reset,answer,correctTitle,changeMode,changeSpecialist };
 }

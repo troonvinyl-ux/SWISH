@@ -19,6 +19,7 @@
     "node_modules",
     ".swish-build/**",
     "supabase/functions/**",
+    "supabase/tests/**",
     "**/__tests__/**",
     "services/__mocks__/**"
   ]

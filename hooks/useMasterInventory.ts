@@ -9,7 +9,7 @@ import type { Item } from '@/services/itemService';
 import type { ListingWithItem } from '@/services/listingService';
 
 export function useMasterInventory() {
-  const { tenant, fixedNicheId, activeNicheId, inventoryReloadSignal } = useApp();
+  const { tenant, fixedNicheId, activeNicheId, inventoryReloadSignal, subscriptionLoading } = useApp();
   const nicheId = fixedNicheId ?? activeNicheId;
   const scope = `${tenant?.id ?? ''}:${nicheId}`;
   const scopeRef = useRef(scope); scopeRef.current = scope;
@@ -21,7 +21,7 @@ export function useMasterInventory() {
   const [submitStep, setSubmitStep] = useState<SubmitStep | null>(null); const [submitTitle, setSubmitTitle] = useState('');
   const [syncing, setSyncing] = useState(false);
   const reload = useCallback(async () => {
-    if (!tenant?.id || pendingScope.current === scope) return;
+    if (!tenant?.id || subscriptionLoading || pendingScope.current === scope) return;
     pendingScope.current = scope; const version = ++request.current;
     setLoading(true);
     try {
@@ -48,7 +48,7 @@ export function useMasterInventory() {
       }
     } catch (error: any) { if (scopeRef.current === scope && request.current === version) setSnapshot({ scope, items: [], listings: [], error: error?.message ?? 'Inventory could not be loaded' }); }
     finally { if (pendingScope.current === scope) pendingScope.current = null; if (scopeRef.current === scope && request.current === version) setLoading(false); }
-  }, [tenant?.id, nicheId, scope, showAlert]);
+  }, [tenant?.id, nicheId, scope, showAlert, subscriptionLoading]);
   useEffect(() => { void reload(); const timer = setInterval(() => { void reload(); }, 30_000); const sub = AppState.addEventListener('change', state => { if (state === 'active') void reload(); });
     return () => { request.current++; clearInterval(timer); sub.remove(); }; }, [reload]);
   useEffect(() => { if (inventoryReloadSignal > 0) void reload(); }, [inventoryReloadSignal, reload]);

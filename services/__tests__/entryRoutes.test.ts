@@ -1545,7 +1545,7 @@ describe('SWISH-030 Issue 3: Android CI/CD Signing (Static Config Inspection)', 
       expect(resolveProductionNiche(input)).toBe(expected);
     });
 
-    test.each([null, undefined, '', 'general', 'made_up_niche'])(
+    test.each([null, undefined, '', 'general', 'trading_cards', 'antiques', 'made_up_niche'])(
       'inactive or unknown niche %s fails closed',
       (input) => expect(resolveProductionNiche(input as string | null | undefined)).toBeNull(),
     );

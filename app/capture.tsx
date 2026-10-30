@@ -8,6 +8,7 @@ import { useGenericCapture } from '@/hooks/useGenericCapture';
 import { useApp } from '@/hooks/useApp';
 import { SPECIALISTS } from '@/constants/specialists';
 import { SpecialistReview } from '@/components/feature/SpecialistReview';
+import { PhotoQualityReview } from '@/components/feature/PhotoQualityReview';
 import { FlipIntelligencePanel } from '@/components/feature/FlipIntelligencePanel';
 import { Colors,Spacing,Typography,Radius } from '@/constants/theme';
 export default function CaptureScreen() {
@@ -18,6 +19,7 @@ export default function CaptureScreen() {
       ListHeaderComponent={<View style={s.block}>
         <Pressable accessibilityLabel="Back" onPress={()=>router.back()} style={({ pressed })=>[s.link,pressed ? s.pressed : null]}><MaterialIcons name="arrow-back" size={24} color={Colors.textPrimary}/><Text style={s.body}>Back</Text></Pressable>
         <View style={s.hero}><MaterialIcons name={capture.activeNiche.icon as any} size={28} color={capture.activeNiche.color}/><Text style={s.title}>{capture.activeNiche.terms.scan}</Text><Text style={s.body}>{capture.profile?.focus ?? 'Capture evidence for the selected specialist.'}</Text></View>
+        <Pressable onPress={()=>router.push('/photo-quality-check' as any)} style={({ pressed })=>[s.link,pressed ? s.pressed : null]}><Text style={s.body}>Photo quality checks and device diagnostics</Text></Pressable>
         <Text style={s.body}>Your draft is retained on this device for this signed-in account. {Platform.OS==='web' ? 'Browser photos may need reselection after a browser restart.' : 'Captured photos remain on this device until managed in app storage.'}</Text>
         {!capture.images.length && !capture.result ? <>
           {capture.activeNiche.specialists.length>1 ? <View style={s.chipWrap}><FlatList horizontal data={capture.activeNiche.specialists} keyExtractor={id=>id} showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips} renderItem={({ item:id })=><Pressable disabled={capture.busy} onPress={()=>capture.changeSpecialist(id)} style={({ pressed })=>[s.chip,capture.specialistId===id ? s.selected : null,pressed ? s.pressed : null]}><Text style={s.chipText}>{SPECIALISTS[id]?.shortName ?? id}</Text></Pressable>}/></View> : null}
@@ -31,10 +33,13 @@ export default function CaptureScreen() {
         const image=capture.images.find(i=>i.slotId===slot.id);
         return <View style={s.card}><Text style={s.section}>{slot.label}{slot.required ? ' · recommended evidence' : ''}</Text><Text style={s.body}>{slot.description}</Text>
           {image ? <Image source={{ uri:image.uri }} transition={200} contentFit="contain" style={s.photo}/> : null}
+          {image?.photoQuality ? <PhotoQualityReview quality={image.photoQuality}/> : null}
           <View style={s.row}><Pressable disabled={capture.busy || Boolean(capture.savedId)} onPress={()=>{ void capture.capture(slot.id,false); }} style={({ pressed })=>[s.secondary,pressed ? s.pressed : null]}><MaterialIcons name="photo-camera" size={20} color={Colors.primary}/><Text style={s.body}>{image ? 'Retake' : 'Camera'}</Text></Pressable><Pressable disabled={capture.busy || Boolean(capture.savedId)} onPress={()=>{ void capture.capture(slot.id,true); }} style={({ pressed })=>[s.secondary,pressed ? s.pressed : null]}><Text style={s.body}>Upload photo</Text></Pressable></View>
         </View>;
       }}
       ListFooterComponent={<View style={s.block}>
+        {capture.images.length && !capture.savedId ? <Pressable disabled={capture.busy} onPress={()=>capture.setAllowPhotoWarnings(!capture.allowPhotoWarnings)} accessibilityRole="checkbox" accessibilityState={{ checked:capture.allowPhotoWarnings }} style={({ pressed })=>[s.secondary,pressed ? s.pressed : null]}><MaterialIcons name={capture.allowPhotoWarnings ? 'check-box' : 'check-box-outline-blank'} size={24} color={Colors.primary}/><Text style={[s.body,s.flex]}>I reviewed these photos. Allow identification despite advisory warnings; confidence may be limited.</Text></Pressable> : null}
+        {capture.activeNiche.id === 'trading_cards' ? <Pressable onPress={()=>router.push('/card-grading' as any)} style={({ pressed })=>[s.secondary,pressed ? s.pressed : null]}><MaterialIcons name="style" size={24} color={Colors.primary}/><Text style={s.body}>Compare raw versus graded sale scenarios</Text></Pressable> : null}
         {capture.result && !capture.savedId ? <>
           <Pressable disabled={capture.busy} onPress={()=>{ void capture.identify(); }} style={({ pressed })=>[s.secondary,pressed ? s.pressed : null]}><MaterialIcons name="refresh" size={20} color={Colors.info}/><Text style={s.body}>Re-analyse with my answers</Text></Pressable>
           <FlipIntelligencePanel key={capture.specialistId} result={capture.result} nicheId={capture.activeNiche.id} tenantId={tenant?.id}/>

@@ -1,6 +1,6 @@
 // SWISH Master Admin — owner-only platform control centre.
 import React from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, Linking } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -89,42 +89,6 @@ export default function MasterAdminScreen() {
         </View>
 
         <View style={styles.sectionHeading}>
-          <Text style={styles.sectionTitle}>Production readiness pipelines</Text>
-          <Text style={styles.sectionMeta}>CI-backed checks</Text>
-        </View>
-        <Text style={styles.helpText}>Launch the automated test pipelines in GitHub Actions. A pipeline only counts as passed when its latest run is green; live provider checks are deliberately reported separately.</Text>
-        <View style={styles.pipelineList}>
-          <PipelineCard
-            icon="rule"
-            title="Regression & niche isolation"
-            description="Lint, route guards, niche data isolation, branded config, Surplus Flip logic and server-only secret tests."
-            action="Open test pipelines"
-            onPress={() => Linking.openURL('https://github.com/troonvinyl-ux/SWISH/actions/workflows/master-admin-readiness.yml')}
-          />
-          <PipelineCard
-            icon="security"
-            title="Edge Function & secret boundary"
-            description="Transpile-checks Supabase Edge Functions and runs the client secret-boundary regression test."
-            action="Open security checks"
-            onPress={() => Linking.openURL('https://github.com/troonvinyl-ux/SWISH/actions/workflows/master-admin-readiness.yml')}
-          />
-          <PipelineCard
-            icon="devices"
-            title="Five niche production bundles"
-            description="Validates Coins, Motocross, Bikes, Clothing and Surplus Flip Expo config and Android JavaScript bundling."
-            action="Open build checks"
-            onPress={() => Linking.openURL('https://github.com/troonvinyl-ux/SWISH/actions/workflows/master-admin-readiness.yml')}
-          />
-          <PipelineCard
-            icon="cloud-done"
-            title="Live integration gate"
-            description="eBay OAuth, order/finance sync, Stripe entitlements and deployed Edge Functions require a configured test environment. These are not marked passed by static CI."
-            action="Review latest workflow runs"
-            onPress={() => Linking.openURL('https://github.com/troonvinyl-ux/SWISH/actions')}
-          />
-        </View>
-
-        <View style={styles.sectionHeading}>
           <Text style={styles.sectionTitle}>Platform controls</Text>
           <Text style={styles.sectionMeta}>Owner view</Text>
         </View>
@@ -137,25 +101,9 @@ export default function MasterAdminScreen() {
 
         <View style={styles.notice}>
           <MaterialIcons name="info-outline" size={18} color={Colors.primary} />
-          <Text style={styles.noticeText}>Pipeline buttons open the authoritative GitHub Actions workflows; this screen does not fabricate live pass/fail states. Live eBay, Stripe and deployed-backend tests remain gated until a dedicated test environment and credentials are configured.</Text>
+          <Text style={styles.noticeText}>This is the first admin slice: secure owner recognition, all-niche access and workspace switching. User management, live platform metrics, audit history and integration diagnostics need their own server-backed admin endpoints before they can be exposed here.</Text>
         </View>
       </ScrollView>
-    </View>
-  );
-}
-
-function PipelineCard({ icon, title, description, action, onPress }: { icon: string; title: string; description: string; action: string; onPress: () => void }) {
-  return (
-    <View style={styles.pipelineCard}>
-      <View style={styles.pipelineIcon}><MaterialIcons name={icon as any} size={22} color={Colors.primary} /></View>
-      <View style={styles.pipelineCopy}>
-        <Text style={styles.pipelineTitle}>{title}</Text>
-        <Text style={styles.pipelineDescription}>{description}</Text>
-        <Pressable accessibilityRole="link" onPress={onPress} style={({ pressed }) => [styles.pipelineAction, pressed && styles.pressed]}>
-          <Text style={styles.pipelineActionText}>{action}</Text>
-          <MaterialIcons name="open-in-new" size={15} color={Colors.primary} />
-        </Pressable>
-      </View>
     </View>
   );
 }
@@ -193,14 +141,6 @@ const styles = StyleSheet.create({
   sectionMeta: { color: Colors.textTertiary, fontSize: Typography.size.xs },
   helpText: { color: Colors.textSecondary, fontSize: Typography.size.sm, lineHeight: 20, marginTop: -Spacing.md },
   nicheList: { gap: Spacing.sm },
-  pipelineList: { gap: Spacing.sm },
-  pipelineCard: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.surfaceBorder, borderRadius: Radius.lg, padding: Spacing.md },
-  pipelineIcon: { width: 42, height: 42, borderRadius: Radius.md, backgroundColor: Colors.primary + '18', alignItems: 'center', justifyContent: 'center' },
-  pipelineCopy: { flex: 1, gap: 6 },
-  pipelineTitle: { color: Colors.textPrimary, fontSize: Typography.size.sm, fontWeight: '800' },
-  pipelineDescription: { color: Colors.textSecondary, fontSize: Typography.size.xs, lineHeight: 18 },
-  pipelineAction: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 5 },
-  pipelineActionText: { color: Colors.primary, fontSize: Typography.size.xs, fontWeight: '800' },
   nicheCard: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.surfaceBorder, borderRadius: Radius.lg, padding: Spacing.md },
   nicheIcon: { width: 46, height: 46, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
   nicheCopy: { flex: 1, gap: 3 },

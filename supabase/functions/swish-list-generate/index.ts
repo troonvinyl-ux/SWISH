@@ -18,6 +18,8 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
+import { profileForSpecialist } from '../_shared/specialistRegistry.ts';
+import { mappedSpecialistSpecifics, evaluateSpecialistSafety } from '../../../shared/specialistIntelligence.ts';
 
 interface ListingRequest {
   item_id: string;
@@ -121,7 +123,7 @@ function buildMXBrief(item: any): MXBrief {
   const engineCc  = get('engine_size', 'engine_cc', 'cc', 'displacement', 'Engine Size (cc)', 'Engine Size');
   const stroke    = get('stroke_type', 'stroke', 'engine_type', 'Engine Type', 'Stroke');
   const running   = get('running_status', 'Running Status');
-  const vehicleTypeRaw = get('vehicle_type', 'discipline', 'type', 'Vehicle Type', 'Discipline');
+  const vehicleTypeRaw = get('vehicle_type', 'bike_type', 'discipline', 'type', 'Vehicle Type', 'Discipline');
 
   // Classify vehicle type
   const vtl = vehicleTypeRaw.toLowerCase();
@@ -159,7 +161,9 @@ function buildMXBrief(item: any): MXBrief {
   let runSuffix = '';
   if (running) {
     const r = running.toLowerCase();
-    runSuffix = r.includes('run') && r.includes('ride') ? ' - Runs & Rides'
+    runSuffix = /unknown|unconfirmed|not established/.test(r) ? ' - Untested'
+      : /non.running|not running|no start|doesn.t/.test(r) ? ' - Non-Running'
+      : r.includes('run') && r.includes('ride') ? ' - Runs & Rides'
       : r.includes('run') ? ' - Runs'
       : (r.includes('not') || r.includes("doesn't") || r.includes('no start')) ? ' - Non-Running'
       : r.includes('project') ? ' - Project'
@@ -381,8 +385,12 @@ Deno.serve(async (req) => {
     const isClothing = ['clothing','clothing_specialist','trainers_sneakers'].includes(item.specialist_id);
     // ── Detect specialist ────────────────────────────────────────────────────
     const specialistId: string = item.specialist_id ?? 'curiosities_collectibles';
+    const profile = profileForSpecialist(specialistId);
+    const safety = evaluateSpecialistSafety(profile?.nicheId ?? '', item.attributes ?? {});
+    if (safety.blocked) return new Response(JSON.stringify({ error: safety.reasons.join(' '), reviewRequired: true }), { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     const isMXSpecialist = specialistId === 'motocross';
-    const mxBrief: MXBrief | null = isMXSpecialist ? buildMXBrief(item) : null;
+    const isMXPart = isMXSpecialist && (item.attributes?.object_type === 'motorcycle_part' || item.attributes?.component_type || item.attributes?.part_number);
+    const mxBrief: MXBrief | null = isMXSpecialist && !isMXPart ? buildMXBrief(item) : null;
 
     // ── Safety gate evaluation ───────────────────────────────────────────────
     const provisional = identificationIsProvisional(item, isMXSpecialist);
@@ -442,7 +450,7 @@ Deno.serve(async (req) => {
         const kl = k.toLowerCase().replace(/[^a-z0-9_]/g, '');
         if (k.startsWith('_') || ATTR_BLOCK_LIST.has(k) || ATTR_BLOCK_LIST.has(kl)) continue;
         if (kl.startsWith('inferred') || kl.startsWith('numista') || kl.startsWith('ebay')) continue;
-        if (v === null || v === undefined || Array.isArray(v)) continue;
+        if (v === null || v === undefined || typeof v === 'object') continue;
         const strVal = String(v).trim();
         if (!strVal || strVal === 'false' || strVal === '0' || strVal === 'Unknown') continue;
         const displayName = (isCoin ? ATTR_CANONICAL[k] ?? ATTR_CANONICAL[kl] : undefined) ??
@@ -520,6 +528,10 @@ CORE PRINCIPLES:
 You always respond with ONLY valid JSON — no markdown, no explanation, no preamble.`;
 
     const userPrompt = `Generate a ${marketplace_id.toUpperCase()} listing for this item.
+SPECIALIST RULES: ${profile?.listingRules ?? 'Use supported item evidence only.'}
+${isMXPart ? 'This is a motorcycle COMPONENT, not a complete bike. Use exact part number/component identity. Fitment is not verified by visual resemblance.' : ''}
+Category IDs must not be invented. Use an empty category_id unless a saved, seller-selected ID is supplied. Current category requirements are checked in the existing editor/publish Taxonomy flow.
+Mapped, evidence-based candidate specifics (use only when applicable to the chosen category): ${JSON.stringify(profile ? mappedSpecialistSpecifics(profile,item.attributes ?? {}) : {})}
 
 ITEM DATA:
 - Canonical title: ${item.canonical_title}
@@ -737,6 +749,13 @@ Return ONLY this exact JSON:
       listing.item_specifics = cleanedSpecs;
     }
 
+    if (profile && !mxBrief) {
+      const mapped = mappedSpecialistSpecifics(profile,item.attributes ?? {});
+      for (const [name,value] of Object.entries(mapped)) {
+        if (!listing.item_specifics[name]) listing.item_specifics[name] = value;
+      }
+    }
+    if (profile?.nicheId === 'beauty') safetyFlags.push('Seller must verify seal, expiry, recalls, ingredients, EAN and responsible-person requirements before publication; AI does not certify safety.');
     listing.safety_flags = safetyFlags;
 
     console.log(`[swish-list-generate v2] Generated: "${listing.title}" @ £${listing.recommended_price} (priceBlocked=${priceGateBlocked} provisional=${provisional} specialist=${specialistId})`);

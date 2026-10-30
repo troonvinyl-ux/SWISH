@@ -13,6 +13,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
+import { requirePaidNiche,nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
 import { canonicalSpecialist, specialistNiche, profileForSpecialist } from '../_shared/specialistRegistry.ts';
 import { normalizeSpecialistAnalysis, specialistOutputInstructions, recordValue, textList } from '../../../shared/specialistIntelligence.ts';
 
@@ -1451,23 +1452,8 @@ async function determineIsPremium(
   tenantId: string,
   nicheId: string | null,
 ): Promise<{ isPremium: boolean; source: string; tier: string | null }> {
-  // Step 1: Check tenant tier (authoritative, server-side, cannot be spoofed)
-  const tier = await resolveTenantTier(admin, userId, tenantId);
-  if (tier && PREMIUM_TIERS.has(tier)) {
-    console.log(`[swish-identify] Premium via tenant tier: ${tier} (tenant=${tenantId}, user=${userId})`);
-    return { isPremium: true, source: 'tenant_tier', tier };
-  }
-
-  // Step 2: Check Stripe (secondary — only if no qualifying tier)
-  if (userEmail) {
-    const stripeActive = await checkStripeSubscription(userId, userEmail, nicheId);
-    if (stripeActive) {
-      console.log(`[swish-identify] Premium via Stripe subscription (user=${userId})`);
-      return { isPremium: true, source: 'stripe', tier };
-    }
-  }
-
-  return { isPremium: false, source: 'none', tier };
+  // Shared guard is authoritative: unentitled paid niches fail before any AI or usage request.
+  return requirePaidNiche(admin,{ id:userId,email:userEmail },tenantId,nicheId);
 }
 
 async function incrementUsage(
@@ -2074,6 +2060,8 @@ The caller will use only the requested output (title or description). Do not inv
     );
 
   } catch (err: any) {
+    const accessError=nicheAccessResponse(err);
+    if(accessError) return accessError;
     console.error('[swish-identify v6] Identification request failed.');
     return new Response(JSON.stringify({ error: 'Identification request failed. Please retry.' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }

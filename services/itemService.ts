@@ -5,6 +5,7 @@
 import { getSupabaseClient } from '@/template';
 import { EvidenceSource, ConfidenceTier, ItemStatus, DispositionDecision } from '@/constants/config';
 import { SpecialistId } from '@/constants/specialists';
+import { resolveProductionNiche } from './nicheRouting';
 
 export interface Item {
   id: string;
@@ -187,6 +188,13 @@ export async function listItems(
   if (filter.specialistIds?.length === 0) return { items: [], error: null };
   if (!tenantId?.trim()) return { items: [], error: 'tenantId is required' };
   const supabase = getSupabaseClient();
+  // Surface entitlement denials as actionable errors rather than an apparently empty stock list.
+  const requestedSpecialists=filter.specialistIds ?? (filter.specialistId ? [filter.specialistId] : []);
+  const requestedNiches=[...new Set(requestedSpecialists.map(resolveProductionNiche))];
+  for(const niche of requestedNiches) {
+    const { data:allowed,error:authorizationError }=await supabase.rpc('swish_can_access_niche',{ p_tenant_id:tenantId,p_niche_id:niche });
+    if(authorizationError || !allowed) return { items:[],error:authorizationError ? 'Inventory authorization unavailable. Retry shortly.' : 'Verified paid access is required for this inventory niche. Refresh your subscription after checkout.' };
+  }
   let query = supabase
     .from('items')
     .select('*')

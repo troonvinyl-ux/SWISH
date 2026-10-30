@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState } from 'react-native';
 import Constants from 'expo-constants';
 import { useAuth } from '@/template';
 import { Tenant, getUserPrimaryTenant, provisionTenant } from '@/services/tenantService';
@@ -30,6 +31,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const isMasterAdmin = isSwishMasterAdmin(user?.email);
   const currentUser = useRef(user?.id); currentUser.current = user?.id;
   const loadVersion = useRef(0);
+  const subscriptionVersion = useRef(0);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loadedUserId, setLoadedUserId] = useState<string | null>(null);
   const [tenantLoading, setTenantLoading] = useState(true);
@@ -86,9 +88,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const loadSubscription = useCallback(async () => {
     const uid = currentUser.current;
     if (!uid) return;
+    const version=++subscriptionVersion.current;
     setSubscriptionLoading(true);
-    try { const { status, error } = await checkSubscription(); if (currentUser.current === uid) setSubscriptionStatus(error ? null : status); }
-    finally { if (currentUser.current === uid) setSubscriptionLoading(false); }
+    try {
+      const { status,error }=await checkSubscription();
+      if(currentUser.current===uid && subscriptionVersion.current===version) {
+        setSubscriptionStatus(error ? null : status);
+        if(!error) setInventoryReloadSignal(value=>value+1); // First inventory fetch may precede trusted cache hydration.
+      }
+    } finally { if(currentUser.current===uid && subscriptionVersion.current===version) setSubscriptionLoading(false); }
   }, []);
   const loadTenant = useCallback(async () => {
     const uid = user?.id;
@@ -123,6 +131,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void loadTenant();
     return () => { loadVersion.current++; };
   }, [loadTenant]);
+  useEffect(()=>{
+    if(!user?.id) return;
+    const timer=setInterval(()=>{ if(AppState.currentState==='active') void loadSubscription().catch(()=>{}); },240000);
+    const subscription=AppState.addEventListener('change',state=>{ if(state==='active') void loadSubscription().catch(()=>{}); });
+    return ()=>{ clearInterval(timer);subscription.remove();subscriptionVersion.current++; };
+  },[user?.id,loadSubscription]);
   const accountMatches = Boolean(user?.id && loadedUserId === user.id);
   const effectiveTenant = accountMatches ? tenant : null;
   const reloadBusinessConfig = useCallback(async () => {
