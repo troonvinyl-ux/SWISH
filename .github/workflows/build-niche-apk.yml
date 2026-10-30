@@ -84,7 +84,7 @@ jobs:
       # and native package identifier consistently.
       - name: Generate Android project for selected niche
         env:
-          SWISH_NICHE: ${{ inputs.niche }}
+          SWISH_NICHE: ${{ inputs.niche || 'clothing' }}
           EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
         run: pnpm exec expo prebuild --platform android --clean
 
@@ -92,7 +92,7 @@ jobs:
       - name: Verify generated niche configuration
         env:
           NICHE: ${{ inputs.niche || 'clothing' }}
-          SWISH_NICHE: ${{ inputs.niche }}
+          SWISH_NICHE: ${{ inputs.niche || 'clothing' }}
         run: |
           set -euo pipefail
           pnpm exec expo config --type public --json > /tmp/swish-expo-config.json
@@ -115,8 +115,8 @@ jobs:
 
       - name: Validate canonical niche module registry
         env:
-          SWISH_NICHE: ${{ inputs.niche }}
-          NICHE: ${{ inputs.niche }}
+          SWISH_NICHE: ${{ inputs.niche || 'clothing' }}
+          NICHE: ${{ inputs.niche || 'clothing' }}
         run: node scripts/verify-niche-module.js
 
       - name: Build release APK
@@ -129,7 +129,7 @@ jobs:
 
       - name: Verify and name APK
         env:
-          NICHE: ${{ inputs.niche }}
+          NICHE: ${{ inputs.niche || 'clothing' }}
         run: |
           set -euo pipefail
           APK="android/app/build/outputs/apk/release/app-release.apk"
