@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "sharedRoot": "shared",
+  "nicheRoot": "niches",
+  "products": {
+    "coins": {
+      "id": "coins",
+      "specialistIds": [
+        "coins",
+        "coins_uk",
+        "coins_world",
+        "coins_currency",
+        "numismatic"
+      ],
+      "package": "com.swish.coinflipper"
+    },
+    "motocross": {
+      "id": "motocross",
+      "specialistIds": [
+        "motocross",
+        "mx"
+      ],
+      "package": "com.swish.flippermx"
+    },
+    "bicycles": {
+      "id": "bicycles",
+      "specialistIds": [
+        "bicycles",
+        "bikes",
+        "cycling"
+      ],
+      "package": "com.swish.bikeflipper"
+    },
+    "clothing": {
+      "id": "clothing",
+      "specialistIds": [
+        "clothing",
+        "trainers_sneakers",
+        "threads",
+        "threads_flip"
+      ],
+      "package": "com.swish.threadsflip"
+    },
+    "trading_cards": {
+      "id": "trading_cards",
+      "specialistIds": [
+        "trading_cards",
+        "pokemon_cards",
+        "cards"
+      ],
+      "package": "com.swish.cardflipper"
+    },
+    "antiques": {
+      "id": "antiques",
+      "specialistIds": [
+        "antiques",
+        "books"
+      ],
+      "package": "com.swish.antiqueflipper"
+    },
+    "fossils": {
+      "id": "fossils",
+      "specialistIds": [
+        "fossils"
+      ],
+      "package": "com.swish.fossilflipper"
+    },
+    "beauty": {
+      "id": "beauty",
+      "specialistIds": [
+        "beauty"
+      ],
+      "package": "com.swish.beautyflipper"
+    },
+    "tech": {
+      "id": "tech",
+      "specialistIds": [
+        "tech",
+        "retro_games",
+        "retro_consoles"
+      ],
+      "package": "com.swish.techflipper"
+    },
+    "surplus_flip": {
+      "id": "surplus_flip",
+      "specialistIds": [
+        "surplus_trader"
+      ],
+      "package": "com.swish.surplusflip"
+    }
+  }
+}
