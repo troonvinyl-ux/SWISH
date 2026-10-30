@@ -64,6 +64,7 @@ export default function MasterInventoryScreen() {
   const [progress, setProgress] = useState<any>(null);
   const id = resolveProductionNiche(state.nicheId); const config = id ? NICHES[id] : NICHES.general;
   const filters = FILTERS[id ?? ''] ?? [[`All ${config.terms.items}`, '']]; const banner = BANNERS[id ?? ''];
+  const counts = { stock: state.views.stock.length, draft: state.views.draft.length, live: state.views.live.length, sold: state.views.sold.length };
   const data = useMemo(() => state.views[state.activeTab].filter(item => {
     const haystack = `${item.canonical_title} ${item.catalogueNumber ?? ''} ${item.inventoryId ?? ''} ${JSON.stringify(item.attributes)}`.toLowerCase();
     return (!search.trim() || haystack.includes(search.trim().toLowerCase())) && (state.activeTab !== 'stock' || !filter || haystack.includes(filter));
@@ -75,19 +76,18 @@ export default function MasterInventoryScreen() {
       <View style={s.header}>
         <View style={s.headerIcon}><MaterialIcons name={config.icon as any} size={22} color={config.color} /></View>
         <View style={s.flex}><Text style={[s.headerTitle, { color: config.color }]}>{config.shortName} Inventory</Text>
-          <Text style={s.sub}>{state.counts.stock} in stock · {state.counts.draft} draft · {state.counts.live} live · {state.counts.sold} sold</Text></View>
-        <Pressable onPress={() => void state.syncListings()} disabled={state.syncingListings} style={({ pressed }) => [s.hBtn, { opacity: pressed || state.syncingListings ? 0.6 : 1 }]} accessibilityLabel="Check this niche's listing statuses on eBay">{state.syncingListings ? <ActivityIndicator size="small" color={config.color} /> : <MaterialIcons name="sync" size={20} color={config.color} />}</Pressable>
+          <Text style={s.sub}>{counts.stock} in stock · {counts.draft} draft · {counts.live} live · {counts.sold} sold</Text></View>
         {state.activeTab === 'sold' ? <Pressable onPress={state.syncSold} disabled={state.syncing} style={s.hBtn} accessibilityLabel="Sync sold orders"><MaterialIcons name="sync" size={20} color={config.color} /></Pressable> : null}
         {state.activeTab === 'stock' && data.length ? <>
           <Pressable onPress={() => setShowReValue(true)} style={s.hBtn} accessibilityLabel="Bulk revalue"><MaterialIcons name="travel-explore" size={20} color={config.color} /></Pressable>
           <Pressable onPress={() => setShowReIdentify(true)} style={s.hBtn} accessibilityLabel="Bulk reidentify"><MaterialIcons name="auto-awesome" size={20} color={Colors.accent} /></Pressable>
         </> : null}
-        <Pressable onPress={() => router.push('/(tabs)/scan')} style={[s.hBtn, { backgroundColor: config.color }]} accessibilityLabel="Add inventory"><MaterialIcons name="add" size={22} color={Colors.background} /></Pressable>
+        <Pressable onPress={() => router.push('/(tabs)/scan' as any)} style={[s.hBtn, { backgroundColor: config.color }]} accessibilityLabel="Add inventory"><MaterialIcons name="add" size={22} color={Colors.background} /></Pressable>
       </View>
       <View style={s.rail}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.railContent}>
         {TABS.map(tab => <Pressable key={tab.id} onPress={() => state.setActiveTab(tab.id)} style={({ pressed }) => [s.chip, { borderColor: state.activeTab === tab.id ? tab.color : Colors.surfaceBorder, opacity: pressed ? 0.7 : 1 }]}>
           <MaterialIcons name={tab.icon as any} size={16} color={state.activeTab === tab.id ? tab.color : Colors.textTertiary} />
-          <Text style={[s.chipText, { color: state.activeTab === tab.id ? tab.color : Colors.textSecondary }]}>{tab.label} {state.counts[tab.id]}</Text>
+          <Text style={[s.chipText, { color: state.activeTab === tab.id ? tab.color : Colors.textSecondary }]}>{tab.label} {counts[tab.id]}</Text>
         </Pressable>)}
       </ScrollView></View>
       <View style={s.searchWrap}><MaterialIcons name="search" size={20} color={Colors.textTertiary} />
@@ -101,8 +101,6 @@ export default function MasterInventoryScreen() {
         {filters.map(([label, value]) => <Pressable key={value} onPress={() => setFilter(value)} style={({ pressed }) => [s.chip, { borderColor: filter === value ? config.color : Colors.surfaceBorder, opacity: pressed ? 0.7 : 1 }]}><Text style={[s.chipText, { color: filter === value ? config.color : Colors.textSecondary }]}>{label}</Text></Pressable>)}
       </ScrollView></View> : null}
       <Text style={s.info}>{state.activeTab === 'draft' ? 'Drafts are saved in SWISH — Submit publishes to eBay' : state.activeTab === 'live' ? 'Live excludes sold, ended and completed records in this niche. Sync checks current eBay availability.' : state.activeTab === 'sold' ? 'Sync pulls orders from your connected eBay account' : `${filters.find(entry => entry[1] === filter)?.[0] ?? 'In Stock'} · ${data.length} items`}</Text>
-      {state.syncingListings ? <Text style={s.info}>Checking eBay status · {state.syncProgress.checked}/{state.syncProgress.total}</Text> : null}
-      {state.syncError ? <View style={s.syncError}><MaterialIcons name="error-outline" size={20} color={Colors.warning} /><Text style={s.syncErrorText}>{state.syncError} Unchecked records retain their last stored status.</Text></View> : null}
       {state.error ? <Text style={s.error}>{state.error}</Text> : null}
       <FlatList style={s.flex} data={data} keyExtractor={item => `${state.activeTab}-${item.id}-${item.listing?.id ?? ''}`} showsVerticalScrollIndicator={false} contentContainerStyle={s.list} refreshing={state.refreshing} onRefresh={state.refresh}
         ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
