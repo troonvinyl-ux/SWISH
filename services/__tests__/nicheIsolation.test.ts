@@ -839,7 +839,7 @@ describe('Cross-niche contamination simulation', () => {
 // invisible in all niche views and require manual review.
 
 describe('Rogue specialist ID isolation', () => {
-  const ROGUE_IDS = ['motocross_expert', 'numismatist_v1', 'Not established', 'retro_games', 'retro_games_specialist'];
+  const ROGUE_IDS = ['motocross_expert', 'numismatist_v1', 'Not established', 'retro_games_specialist'];
 
   test.each(ROGUE_IDS)(
     'Rogue specialist "%s" is not in any production niche specialist list',
@@ -856,15 +856,8 @@ describe('Rogue specialist ID isolation', () => {
     (rogueId) => {
       // nicheIdForSpecialist checks ALL niches including non-production ones,
       // but rogue IDs aren't in any niche config at all.
-      // Exception: retro_games is in the 'general' niche config — acceptable since
-      // 'general' is not a production niche so it won't appear in production views.
       const result = nicheIdForSpecialist(rogueId);
-      if (rogueId === 'retro_games') {
-        // retro_games appears in 'general' niche (non-production)
-        expect(result === 'general' || result === null).toBe(true);
-      } else {
-        expect(result).toBeNull();
-      }
+      expect(result).toBeNull();
     },
   );
 });
