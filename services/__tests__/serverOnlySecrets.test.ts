@@ -375,7 +375,7 @@ describe('Stripe customer portal account isolation', () => {
   test('legacy billing customer linking is confirmed, subscription-backed, and ambiguity-safe', () => {
     expect(portal).toContain('if (!customer && user.email_confirmed_at)');
     expect(portal).toContain('eligibleLegacyCustomers.length === 1');
-    expect(portal).toContain("sub.metadata.user_id === user.id");
+    expect(portal).toContain("sub.metadata?.user_id === user.id");
     expect(portal).toContain('stripe.customers.update(eligibleLegacyCustomers[0].id');
   });
 
