@@ -24,7 +24,7 @@ export const NicheOverview = memo(function NicheOverview(_props: NicheOverviewPr
         <Text style={styles.title}>{id ? NICHE_MODULES[id].name : activeNiche.name}</Text>
         <Text style={styles.body}>{activeNiche.tagline}</Text>
         <Text style={styles.body}>{stats.activeTotal} active · {stats.soldCount} sold</Text>
-        <Pressable onPress={() => router.push('/(tabs)/scan')} style={({ pressed }) => [styles.button, { backgroundColor: activeNiche.color, opacity: pressed ? 0.8 : 1 }]}>
+        <Pressable onPress={() => router.push('/(tabs)/scan' as any)} style={({ pressed }) => [styles.button, { backgroundColor: activeNiche.color, opacity: pressed ? 0.8 : 1 }]}>
           <Text style={styles.buttonText}>{activeNiche.terms.scan}</Text>
         </Pressable>
         {syncError ? <Text style={styles.error}>{syncError}</Text> : null}
