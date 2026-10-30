@@ -591,15 +591,14 @@ export default function MasterInventoryScreen() {
     setSoldLoading(false);
   }, [tenant?.id, search, theme.specialistIds]);
 
-  // Load data for the active tab
+  // Load niche-scoped listing and sold counts together so the tab badges
+  // are correct on first render, not only after the user opens the Sold tab.
+  // The sold query reads item lifecycle status (including eBay order sync) and
+  // remains separately scoped to this niche's canonical specialist IDs.
   useEffect(() => {
-    if (activeTab === 'draft' || activeTab === 'live') loadListings();
-    if (activeTab === 'sold') loadSold();
-    if (activeTab === 'stock') {
-      // Also load listings (niche-scoped) to know which items are already listed
-      loadListings();
-    }
-  }, [activeTab, loadListings, loadSold]);
+    loadListings();
+    loadSold();
+  }, [loadListings, loadSold]);
 
   // Update stock count
   useEffect(() => {
