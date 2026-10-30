@@ -421,7 +421,6 @@ async function handleGetShipping(
       },
     );
     if (!resp.ok) {
-      const errText = await resp.text().catch(() => '');
       return jsonResponse({ error: 'The eBay request failed. Please retry.' }, resp.status >= 500 ? 503 : 400);
     }
     const data = await resp.json();
