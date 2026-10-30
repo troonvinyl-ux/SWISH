@@ -127,7 +127,7 @@ function MasterDashboard(){
     <View style={s.panelFoot}><Text style={s.small}>Sales ≠ profit ≠ eBay payout. Figures reflect available SWISH records.</Text></View>
   </Panel>;
 
-  return <View style={[s.screen,{paddingTop:Math.max(insets.top,8),paddingBottom:Math.max(insets.bottom,8)]}>
+  return <View style={[s.screen,{paddingTop:Math.max(insets.top,8),paddingBottom:Math.max(insets.bottom,8)}]}>
     <View style={s.topBar}>
       <View style={s.brandMark}><MaterialIcons name="radar" size={23} color={C.amber}/></View>
       <View style={s.brandCopy}><Text style={s.eyebrow}>SWISH / PRIVATE OPERATIONS</Text><Text style={s.brandTitle}>MASTER DASHBOARD</Text></View>
