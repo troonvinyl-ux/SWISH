@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "clothing",
+  "name": "Threads Flip",
+  "specialistIds": [
+    "clothing",
+    "trainers_sneakers"
+  ],
+  "androidPackage": "com.swish.threadsflip",
+  "entryRoute": "/entry/clothing",
+  "responsibilities": "Clothing and footwear identification, garment attributes, category item specifics, clothing valuation rules, prompts and theme.",
+  "sharedCapabilities": [
+    "auth",
+    "tenant-and-subscription",
+    "inventory-persistence",
+    "ebay-oauth-listings-drafts-orders-sync",
+    "shared-ai-orchestration",
+    "learning-and-prediction",
+    "reusable-ui-primitives"
+  ],
+  "isolationStatus": "migration-started-not-yet-bundle-isolated"
+}

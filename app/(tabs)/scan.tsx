@@ -294,10 +294,13 @@ const NICHE_CAPTURE: Record<NicheProduct, NicheCaptureConfig> = {
 export default function ScanScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { activeNicheId } = useApp();
+  const { activeNicheId, fixedNicheId } = useApp();
   const { isPremium } = useSubscription();
 
-  const product = getNicheProduct(activeNicheId);
+  // Branded APK identity takes precedence over saved account preferences.
+  // This prevents a master account's Coins preference opening the coin scanner
+  // inside a clothing/MX/bike installation.
+  const product = getNicheProduct(fixedNicheId ?? activeNicheId);
   const config = NICHE_CAPTURE[product];
 
   const handleOpenNiche = () => {

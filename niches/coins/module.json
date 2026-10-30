@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "coins",
+  "name": "Coin Flipper",
+  "specialistIds": [
+    "coins",
+    "islamic_silver",
+    "banknotes",
+    "gold",
+    "silver",
+    "jewellery_precious_metals",
+    "ancient_artefacts"
+  ],
+  "androidPackage": "com.swish.coinflipper",
+  "entryRoute": "/entry/coins",
+  "responsibilities": "Coin identification, numismatic attributes, coin valuation rules, coin-specific prompts and coin theme.",
+  "sharedCapabilities": [
+    "auth",
+    "tenant-and-subscription",
+    "inventory-persistence",
+    "ebay-oauth-listings-drafts-orders-sync",
+    "shared-ai-orchestration",
+    "learning-and-prediction",
+    "reusable-ui-primitives"
+  ],
+  "isolationStatus": "migration-started-not-yet-bundle-isolated"
+}
