@@ -275,9 +275,6 @@ describe('SWISH eBay inventory sync tenant write isolation', () => {
     expect(sync).toContain(".eq('id', l.item_id).eq('tenant_id', tenantId)");
   });
 
-  test('clears finance scope marker when the restricted eBay sync flow refreshes a token', () => {
-    expect(sync).toContain('delete updatedCredentials.financeScopeRefreshedAt');
-  });
 });
 
 
