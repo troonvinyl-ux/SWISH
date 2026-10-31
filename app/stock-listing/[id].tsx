@@ -1823,7 +1823,9 @@ export default function StockListingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, businessConfig } = useApp();
+  const { tenant, businessConfig, activeNicheId, fixedNicheId } = useApp();
+  const isThreadsFlip = (fixedNicheId ?? activeNicheId) === 'clothing';
+  const threads = { background: '#0C080C', surface: '#160E16', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5', muted: '#9A7090' };
   const { showAlert } = useAlert();
 
   const [item, setItem] = useState<Item | null>(null);
@@ -2303,10 +2305,10 @@ export default function StockListingScreen() {
   const draftListings = useMemo(() => listings.filter(l => l.status === 'draft' || l.status === 'pending'), [listings]);
   const canonicalAttrs = useMemo(() => item ? canonicalizeAttributes(item.attributes) : [], [item?.attributes]);
 
-  if (loading) { return <View style={s.container}><ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 100 }} /></View>; }
+  if (loading) { return <View testID={isThreadsFlip ? "threads-flip-screen-item-detail-loading" : undefined} style={[s.container, isThreadsFlip && { backgroundColor: threads.background }]}><ActivityIndicator size="large" color={isThreadsFlip ? threads.pink : Colors.primary} style={{ marginTop: 100 }} /></View>; }
   if (!item) {
     return (
-      <View style={[s.container, s.center]}>
+      <View testID={isThreadsFlip ? "threads-flip-screen-item-detail" : undefined} style={[s.container, s.center, isThreadsFlip && { backgroundColor: threads.background }]}>
         <MaterialIcons name="error-outline" size={48} color={Colors.textTertiary} />
         <Text style={s.emptyTitle}>Item not found</Text>
         <Pressable onPress={() => router.back()} style={s.backLink}><Text style={s.backLinkText}>Go back</Text></Pressable>
@@ -2328,17 +2330,17 @@ export default function StockListingScreen() {
   const hasAcquiredCost = (item.acquiredCost ?? 0) > 0;
 
   return (
-    <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <KeyboardAvoidingView testID={isThreadsFlip ? "threads-flip-screen-item-detail" : undefined} accessibilityLabel={isThreadsFlip ? "Threads Flip inventory item details" : undefined} style={[s.container, isThreadsFlip && { backgroundColor: threads.background }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <StatusBar style="light" />
 
       {/* ── HEADER ── */}
-      <View style={[s.header, { paddingTop: insets.top + Spacing.sm }]}>
+      <View style={[s.header, { paddingTop: insets.top + Spacing.sm }, isThreadsFlip && { backgroundColor: threads.surface, borderBottomColor: threads.border }]}>
         <Pressable onPress={() => router.back()} style={s.headerBtn} hitSlop={8}>
           <MaterialIcons name="arrow-back" size={20} color={Colors.textSecondary} />
         </Pressable>
         <View style={s.flex}>
           {item.inventoryId ? <View style={s.kcBadge}><MaterialIcons name="qr-code" size={10} color={Colors.primary} /><Text style={s.kcBadgeText}>{item.inventoryId}</Text></View> : null}
-          <Text style={s.headerTitle} numberOfLines={1}>{item.canonicalTitle}</Text>
+          <Text style={[s.headerTitle, isThreadsFlip && { color: threads.cream }]} numberOfLines={1}>{item.canonicalTitle}</Text>
         </View>
         <View style={[s.statusDot, { backgroundColor: statusColor }]} />
         <Text style={[s.statusLabel, { color: statusColor }]}>{item.status.replace(/_/g, ' ')}</Text>
