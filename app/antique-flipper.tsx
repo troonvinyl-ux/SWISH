@@ -14,7 +14,8 @@ const ACTIONS = [
   { icon: 'photo-camera', title: 'Scan & Identify', subtitle: 'Identify an antique with photographs', route: '/capture', primary: true },
   { icon: 'inventory-2', title: 'My Inventory', subtitle: 'Stock, drafts, live and sold', route: '/(tabs)/inventory' },
   { icon: 'sell', title: 'Create eBay Listing', subtitle: 'Prepare a category-specific listing', route: '/(tabs)/inventory' },
-  { icon: 'query-stats', title: 'Market Value', subtitle: 'Review valuation evidence', route: '/(tabs)/inventory' },
+  { icon: 'query-stats', title: 'Market Value', subtitle: 'Review sold and asking-price evidence', route: '/antique-value' },
+  { icon: 'fact-check', title: 'Condition Assessment', subtitle: 'Record wear, damage and repairs', route: '/antique-condition' },
   { icon: 'handyman', title: 'Restoration Tips', subtitle: 'Conservation-aware guidance', route: '/antique-restoration' },
   { icon: 'menu-book', title: 'Antique Guides', subtitle: 'Periods, materials and maker marks', route: '/antique-guides' },
 ];
@@ -29,8 +30,9 @@ export default function AntiqueFlipperHome() {
       router.push(firstItem ? ('/create-listing?id=' + firstItem.id) as any : ('/(tabs)/inventory' as any));
       return;
     }
-    if (title === 'Market Value') {
-      router.push(firstItem ? ('/stock-listing/' + firstItem.id) as any : ('/capture' as any));
+    if (title === 'Market Value' || title === 'Condition Assessment') {
+      const routeName = title === 'Market Value' ? '/antique-value?id=' : '/antique-condition?id=';
+      router.push(firstItem ? (routeName + firstItem.id) as any : ('/capture' as any));
       return;
     }
     router.push(route as any);
