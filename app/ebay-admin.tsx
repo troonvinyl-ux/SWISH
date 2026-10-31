@@ -1998,7 +1998,7 @@ export default function EbayAdminScreen() {
                 onPress={() => setActiveTab(tab.id)}
                 style={[s.tab, active && s.tabActive, isThreadsFlip && active && { backgroundColor: '#250014' }]}
               >
-                <Text style={[s.tabLabel, active && { color: isThreadsFlip ? '#E91E8C' : tab.color }]}>{tab.label}</Text>
+                <Text style={[s.tabLabel, active && { color: isThreadsFlip ? '#E91E8C' : tab.color }]}>{isThreadsFlip && tab.id === 'active' ? 'Live' : isThreadsFlip && tab.id === 'draft' ? 'Drafts' : tab.label}</Text>
                 {count > 0 ? (
                   <View style={[s.tabCount, { backgroundColor: active ? (isThreadsFlip ? '#E91E8C30' : tab.color + '20') : Colors.surfaceHighlight }]}>
                     <Text style={[s.tabCountText, active && { color: isThreadsFlip ? '#E91E8C' : tab.color }]}>{count}</Text>
