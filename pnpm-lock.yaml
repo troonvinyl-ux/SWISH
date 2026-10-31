@@ -266,6 +266,9 @@ importers:
       graphql:
         specifier: ^15.3.0
         version: 15.10.3
+      jpeg-js:
+        specifier: ^0.4.4
+        version: 0.4.4
       immutable:
         specifier: ^4.0.0
         version: 4.3.9
@@ -431,6 +434,9 @@ importers:
         version: 5.8.3
 
 packages:
+  jpeg-js@0.4.4:
+    resolution: {tarball: https://registry.npmjs.org/jpeg-js/-/jpeg-js-0.4.4.tgz}
+
 
   '@0no-co/graphql.web@1.1.2':
     resolution: {integrity: sha512-N2NGsU5FLBhT8NZ+3l2YrzZSHITjNXNuDhC4iDiikv0IujaJ0Xc6xIxQZ/Ek3Cb+rgPjnLHYyJm11tInuJn+cw==}
@@ -6349,6 +6355,7 @@ packages:
         optional: true
 
 snapshots:
+  jpeg-js@0.4.4: {}
 
   '@0no-co/graphql.web@1.1.2(graphql@15.10.3)':
     optionalDependencies:
