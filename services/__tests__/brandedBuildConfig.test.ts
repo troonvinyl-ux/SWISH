@@ -72,6 +72,7 @@ describe('Branded Expo build configuration', () => {
     expect(config.android.package).toBe('com.swish.masteradmin');
     expect(config.ios.bundleIdentifier).toBe('com.swish.masteradmin');
     expect(config.extra.swishMasterAdminBuild).toBe(true);
+    expect(config.plugins).toEqual(expect.arrayContaining([expect.arrayContaining(['expo-router', expect.objectContaining({ root: 'master-admin-app' })])]));
   });
 
   test('rejects combining Master Admin identity with a niche lock', () => {
