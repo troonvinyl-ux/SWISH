@@ -23,7 +23,7 @@ The reference is the **pink-and-black Threads Flip Neon Resale App Showcase**. S
 | 11 | Create Listing | `app/create-listing.tsx` | eBay listing workflow using saved garment details/photos, title and description generation |
 | 12 | Category & Specifics | `app/create-listing.tsx` category/item-specific stage | Clothing category and required eBay aspects such as Department, Style, Outer Shell Material, Brand, Size and Colour |
 | 13 | Listing Review | `app/create-listing.tsx` review stage | Garment gallery, final title, price, postage, draft status, Edit and Publish actions |
-| 14 | My Listings | `/(tabs)/listings` | Clothing-only listing status tabs, thumbnail-led rows, selection and publish actions |
+| 14 | My Listings | `/ebay-admin` | Clothing-only listing status tabs, thumbnail-led rows, selection and publish actions |
 | 15 | Sold Items & Orders | `app/orders.tsx` | Clothing order thumbnails, order reference, sale amount, fulfilment status and order tabs |
 | 16 | Settings / More | `app/settings.tsx` | eBay connection, AI & identification, pricing rules, listing templates, preferences, support and About |
 
