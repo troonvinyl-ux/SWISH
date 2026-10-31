@@ -100,9 +100,7 @@ async function getValidToken(supabase: ReturnType<typeof adminClient>, tenantId:
   if (expired && creds.refreshToken) {
     try {
       const { accessToken, expiresAt: newExp } = await refreshToken(creds.clientId, creds.clientSecret, creds.refreshToken);
-      const updatedCredentials = { ...creds, accessToken, expiresAt: newExp };
-      // This restricted-scope refresh invalidates the prior broad-finances consent marker.
-      delete updatedCredentials.financeScopeRefreshedAt;
+      const updatedCredentials = { ...creds, accessToken, expiresAt: newExp, financeScopeRefreshedAt: new Date().toISOString() };
       const updatedRef = await encryptCredentials(updatedCredentials);
       const { error: tokenSaveError } = await supabase.from('marketplace_connectors').update({
         credential_ref: updatedRef, access_token_expires_at: newExp,
