@@ -140,7 +140,7 @@ export default function TabLayout() {
                   </View>
                 ) : null}
               </View>
-              <TabLabel label={nicheHome.isAntiques ? "Inventory" : "Stock"} focused={focused} accentColor={isThreadsFlip ? threads.pink : Colors.primary} />
+              <TabLabel label={nicheHome.isAntiques || isThreadsFlip ? "Inventory" : "Stock"} focused={focused} accentColor={isThreadsFlip ? threads.pink : Colors.primary} />
             </View>
           ),
         }}
