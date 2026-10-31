@@ -120,6 +120,7 @@
     "dedent": "^0.7.0",
     "es6-error": "^4.1.1",
     "graphql": "^15.3.0",
+    "jpeg-js": "^0.4.4",
     "immutable": "^4.0.0",
     "path-to-regexp": "^1.9.0",
     "prop-types": "^15.7.2",
