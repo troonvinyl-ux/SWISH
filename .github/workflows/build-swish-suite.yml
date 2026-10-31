@@ -72,13 +72,39 @@ jobs:
         run: ./gradlew assembleRelease --console=plain -Dorg.gradle.workers.max=2 -Dkotlin.compiler.execution.strategy=in-process
       - name: Verify APK file and package contents
         run: |
-          APK=android/app/build/outputs/apk/release/app-release.apk
+          set -euo pipefail
+          echo "Locating the release APK produced by Gradle..."
+          find android/app/build/outputs -type f -name '*.apk' -print
+          mapfile -t APKS < <(find android/app/build/outputs/apk -type f -name '*.apk' | sort)
+          if [ "${#APKS[@]}" -eq 0 ]; then
+            echo "::error::Gradle completed but produced no APK under android/app/build/outputs/apk"
+            find android/app/build/outputs -maxdepth 6 -type f -print || true
+            exit 1
+          fi
+          if [ "${#APKS[@]}" -ne 1 ]; then
+            printf '::error::Expected exactly one release APK, found %s: %s\n' "${#APKS[@]}" "${APKS[*]}"
+            exit 1
+          fi
+          APK="${APKS[0]}"
           test -s "$APK"
-          file "$APK" | grep -qi 'zip archive'
-          unzip -t "$APK" >/dev/null
+          unzip -t "$APK"
+          unzip -Z1 "$APK" | grep -qx 'AndroidManifest.xml'
+          unzip -Z1 "$APK" | grep -Eq '^classes([0-9]+)?\.dex
+      - uses: actions/upload-artifact@v4
+        with:
+          name: swish-master-switch-admin-apk
+          path: |
+            dist/swish-master-switch-admin.apk
+            dist/swish-master-switch-admin.sha256
+          if-no-files-found: error
+          retention-days: 14
+
           mkdir -p dist
           cp "$APK" dist/swish-master-switch-admin.apk
           sha256sum dist/swish-master-switch-admin.apk > dist/swish-master-switch-admin.sha256
+          echo "Verified Master Switch APK: $APK"
+          ls -lh dist/swish-master-switch-admin.apk
+          cat dist/swish-master-switch-admin.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: swish-master-switch-admin-apk
