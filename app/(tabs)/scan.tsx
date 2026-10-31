@@ -17,13 +17,13 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { useSubscription } from '@/hooks/useSubscription';
-import { resolveProductionNiche } from '@/services/nicheRouting';
+import { resolveProductionNiche, nicheToScannerRoute } from '@/services/nicheRouting';
 import { NICHE_MODULES } from '@/constants/niches';
 import { getSpecialistProfile } from '@/shared/specialistIntelligence';
 
 // ── Map active niche to its product ──────────────────────────────────────────
 
-type NicheProduct = 'coins' | 'mx' | 'bikes' | 'clothing' | 'surplus' | 'general';
+type NicheProduct = 'coins' | 'mx' | 'bikes' | 'clothing' | 'surplus' | 'antiques' | 'fossils' | 'general';
 
 function getNicheProduct(nicheId: string | null | undefined): NicheProduct {
   // resolveProductionNiche returns canonical ProductionNicheId values only.
@@ -36,6 +36,8 @@ function getNicheProduct(nicheId: string | null | undefined): NicheProduct {
   if (id === 'bicycles') return 'bikes';
   if (id === 'clothing') return 'clothing';
   if (id === 'surplus_flip') return 'surplus';
+  if (id === 'antiques') return 'antiques';
+  if (id === 'fossils') return 'fossils';
   return 'general';
 }
 
@@ -159,6 +161,58 @@ const NICHE_CAPTURE: Record<NicheProduct, NicheCaptureConfig> = {
       'Recommended marketplace and selling strategy',
     ],
   },
+  antiques: {
+    title: 'Antique Flipper',
+    subtitle: 'AI Antiques & Collectibles Identification',
+    tagline: 'MARKS • MAKERS • PERIODS • CONDITION • VALUE',
+    icon: 'museum',
+    color: '#D97706',
+    bgColor: '#0B0907',
+    dimColor: '#2A1808',
+    route: '/capture',
+    captureOptions: [
+      { icon: 'photo-camera', label: 'Main View', desc: 'Full object, straight-on — required' },
+      { icon: 'photo-camera', label: 'Reverse / Underside', desc: 'Base, joints, construction and labels' },
+      { icon: 'photo-camera', label: 'Maker Marks', desc: 'Hallmarks, signatures, stamps and labels' },
+      { icon: 'photo-camera', label: 'Condition Details', desc: 'Chips, cracks, repairs and restoration' },
+      { icon: 'straighten', label: 'Scale / Dimensions', desc: 'Include a ruler and record measurements' },
+    ],
+    aiCapabilities: [
+      'Ceramics, glass, silverware, furniture, art and decorative-arts classification',
+      'Literal transcription of maker marks and hallmarks',
+      'Evidence-led maker, origin and period candidates',
+      'Condition, restoration and composite-piece observations',
+      'Comparable-sale research with asking prices kept separate from sold prices',
+      'Provenance and export-risk prompts',
+      'Editable specialist attributes and listing preparation',
+    ],
+  },
+  fossils: {
+    title: 'Fossil Flipper',
+    subtitle: 'AI Fossil & Specimen Identification',
+    tagline: 'SPECIMEN • ANATOMY • GEOLOGY • PROVENANCE • VALUE',
+    icon: 'yard',
+    color: '#8B5CF6',
+    bgColor: '#09070D',
+    dimColor: '#1D1230',
+    route: '/capture',
+    captureOptions: [
+      { icon: 'photo-camera', label: 'Main Specimen', desc: 'Full specimen, all visible features — required' },
+      { icon: 'photo-camera', label: 'Diagnostic Detail', desc: 'Teeth, sutures, shell, bone or plant structures' },
+      { icon: 'straighten', label: 'Scale Reference', desc: 'Place a ruler beside the specimen' },
+      { icon: 'photo-camera', label: 'Matrix / Reverse', desc: 'Show rock matrix, preparation and reverse' },
+      { icon: 'photo-camera', label: 'Restoration Details', desc: 'Repairs, composites, casts or reconstruction' },
+    ],
+    aiCapabilities: [
+      'Broad fossil, mineral, cast and replica classification',
+      'Diagnostic anatomy and cautious taxonomic candidates',
+      'Geological period and formation research leads — not visual certification',
+      'Completeness, preparation and restoration observations',
+      'Measured size and reported locality / provenance capture',
+      'Protected-site, collecting-permission and export-risk flags',
+      'Editable specialist attributes and listing preparation',
+    ],
+  },
   surplus: {
     title: 'Surplus Flip',
     subtitle: 'AI Surplus & Wholesale Identification',
@@ -211,11 +265,12 @@ const NICHE_CAPTURE: Record<NicheProduct, NicheCaptureConfig> = {
 export default function ScanScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { activeNicheId, activeNiche } = useApp();
+  const { activeNicheId, fixedNicheId, activeNiche } = useApp();
   const { isPremium } = useSubscription();
 
-  const product = getNicheProduct(activeNicheId);
-  const canonicalId = resolveProductionNiche(activeNicheId);
+  const selectedNicheId = fixedNicheId ?? activeNicheId;
+  const product = getNicheProduct(selectedNicheId);
+  const canonicalId = resolveProductionNiche(selectedNicheId);
   const profile = canonicalId ? getSpecialistProfile(canonicalId) : null;
   const config = product === 'general' && canonicalId ? {
     ...NICHE_CAPTURE.general,
@@ -225,6 +280,12 @@ export default function ScanScreen() {
     aiCapabilities: profile ? [profile.focus,profile.conditionRules,'Targeted follow-up questions and editable evidence review','Transparent buying scenarios with configurable costs'] : NICHE_CAPTURE.general.aiCapabilities,
     captureOptions: activeNiche.captureInstructions.map(desc => ({ icon: 'photo-camera', label: 'Capture guidance', desc })),
   } : NICHE_CAPTURE[product];
+
+  // The centre Scan tab is a one-tap action, not a second landing page.
+  // Replace this route immediately with the active product's actual capture screen.
+  useEffect(() => {
+    router.replace(nicheToScannerRoute(selectedNicheId) as any);
+  }, [selectedNicheId, router]);
 
   const handleOpenNiche = () => {
     // The Scan tab is an action, not a second landing page. Open the active

@@ -184,7 +184,7 @@ export const NICHES: Record<NicheId, NicheConfig> = {
       { icon: 'receipt-long', label: 'Orders', route: '/orders' },
       { icon: 'inventory-2', label: 'Stock', route: '/(tabs)/inventory' },
     ],
-    keyAttributes: ['type', 'maker', 'period', 'material', 'condition', 'marks'],
+    keyAttributes: ['object_type', 'maker', 'period', 'material', 'marks', 'dimensions', 'restoration', 'provenance'],
     acquisitionSources: ['Auctions', 'Estate sales', 'Car boot sales', 'Antique shops', 'House clearances', 'Online auctions', 'Charity shops'],
     marketplaces: ['eBay', 'Etsy', 'Auction houses', '1stDibs'],
     captureInstructions: [
@@ -312,7 +312,7 @@ export const NICHES: Record<NicheId, NicheConfig> = {
       { icon: 'receipt-long', label: 'Orders', route: '/orders' },
       { icon: 'inventory-2', label: 'Stock', route: '/(tabs)/inventory' },
     ],
-    keyAttributes: ['species', 'period', 'location', 'size', 'condition', 'completeness'],
+    keyAttributes: ['taxonomic_group', 'species', 'period', 'formation', 'locality', 'dimensions', 'matrix', 'restoration', 'provenance'],
     acquisitionSources: ['Fossil shows', 'eBay', 'Etsy', 'Rock shops', 'Digs', 'Collectors'],
     marketplaces: ['eBay', 'Etsy', 'Fossil fairs', 'Specialist dealers'],
     captureInstructions: [
