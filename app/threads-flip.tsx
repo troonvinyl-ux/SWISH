@@ -432,6 +432,27 @@ function IdentifyTab({
             </View>
           </View>
 
+          <View style={id.photoGuidePanel}>
+            <Text style={id.photoGuideTitle}>GET THE BEST IDENTIFICATION</Text>
+            <View style={id.photoGuideGrid}>
+              {[
+                { icon: 'checkroom', title: 'Full garment', copy: 'Lay flat or hang straight. Show the complete shape.' },
+                { icon: 'sell', title: 'Brand & size', copy: 'Flatten the neck or waist label. Keep every word sharp.' },
+                { icon: 'local-laundry-service', title: 'Care label', copy: 'Show fabric composition and washing symbols.' },
+                { icon: 'zoom-in', title: 'Details & flaws', copy: 'Close-ups of stitching, logos, wear and damage.' },
+              ].map((guide) => (
+                <View key={guide.title} style={id.photoGuideCard}>
+                  <View style={id.photoGuideIcon}><MaterialIcons name={guide.icon as any} size={17} color={TF.pink} /></View>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={id.photoGuideLabel}>{guide.title}</Text>
+                    <Text style={id.photoGuideCopy}>{guide.copy}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+            <Text style={id.photoGuideFoot}>Use bright, even daylight. Avoid filters and keep the real garment colour.</Text>
+          </View>
+
           {aiError ? (
             <View style={id.errorBanner}>
               <MaterialIcons
@@ -718,6 +739,14 @@ const id = StyleSheet.create({
   hero: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, backgroundColor: TF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: TF.pink + '30' },
   heroTitle: { fontSize: Typography.size.xl, fontWeight: Typography.weight.extrabold, color: TF.white },
   heroSub: { fontSize: Typography.size.xs, color: TF.textSub, lineHeight: 17, marginTop: 3 },
+  photoGuidePanel: { backgroundColor: TF.surface, borderWidth: 1, borderColor: TF.border, borderRadius: Radius.xl, padding: Spacing.md, gap: Spacing.sm },
+  photoGuideTitle: { fontSize: 9, color: TF.pink, fontWeight: Typography.weight.extrabold, letterSpacing: 1 },
+  photoGuideGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  photoGuideCard: { width: '48%', minHeight: 62, flexDirection: 'row', alignItems: 'flex-start', gap: 7, padding: 8, borderRadius: Radius.md, backgroundColor: TF.surfaceHigh },
+  photoGuideIcon: { width: 28, height: 28, borderRadius: Radius.sm, backgroundColor: TF.pinkDim, alignItems: 'center', justifyContent: 'center' },
+  photoGuideLabel: { fontSize: 10, color: TF.cream, fontWeight: Typography.weight.bold },
+  photoGuideCopy: { fontSize: 8, color: TF.textSub, lineHeight: 12 },
+  photoGuideFoot: { fontSize: 9, color: TF.textMuted, lineHeight: 13 },
   errorBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: TF.pinkDim, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: TF.danger + '40' },
   errorText: { flex: 1, fontSize: Typography.size.xs, color: TF.danger, lineHeight: 17 },
   quotaBtn: { backgroundColor: TF.pinkDim, borderRadius: Radius.md, paddingHorizontal: Spacing.sm, paddingVertical: 4, borderWidth: 1, borderColor: TF.pink + '40' },
