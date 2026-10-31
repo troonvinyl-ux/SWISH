@@ -23,8 +23,8 @@ Deliver Antique Flipper as a specialist experience on the existing SWISH engine.
 | 4 | Scanner / Capture | `app/capture.tsx` via central Scan tab | Existing multi-angle photo capture, camera and gallery, evidence slots |
 | 5 | AI Identification | `app/capture.tsx` + `useGenericCapture` | Existing shared identification pipeline and progress state |
 | 6 | Identification Result | `SpecialistReview` in capture | Evidence review, editable title and specialist follow-up answers |
-| 7 | Condition Assessment | Specialist follow-up in capture and saved item condition fields | Damage, repairs, wear and uncertainty captured as evidence; no visual-only authentication |
-| 8 | Market Value | `FlipIntelligencePanel` in capture and existing item valuation flow | Shared valuation service; sold evidence distinguished from asking prices |
+| 7 | Condition Assessment | `app/antique-condition.tsx` | Loads an antique inventory item, saves condition grade and location-specific notes through the shared item service |
+| 8 | Market Value | `app/antique-value.tsx` | Calls shared market value service and displays verified sold evidence separately from active asking prices; applies returned valuation to the existing item |
 | 9 | Add to Inventory | Existing capture save action | Persists identified item through shared item service under antique specialist |
 | 10 | Inventory | `app/(tabs)/inventory.tsx` | Existing niche-filtered stock, draft, live and sold lifecycle |
 | 11 | Create eBay Listing | `app/create-listing.tsx?id=<item-id>` | Existing shared listing generation flow |
