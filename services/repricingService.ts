@@ -189,8 +189,8 @@ export async function deleteRepricingRule(ruleId: string): Promise<{ error: stri
 
 export async function getStaleListings(
   tenantId: string,
-  staleDays = 7,
-  nicheId: string
+  nicheId: string,
+  staleDays = 7
 ): Promise<{ listings: StaleListingInfo[]; error: string | null }> {
   // Fail closed: an unknown/missing niche must never expose tenant-wide inventory.
   const specialistIds = getProductionNicheSpecialistIds(nicheId);
@@ -343,7 +343,7 @@ export async function applyReprice(
 
 export async function scanForStaleListingExceptions(tenantId: string, nicheId: string): Promise<void> {
   const supabase = getSupabaseClient();
-  const { listings } = await getStaleListings(tenantId, 7, nicheId);
+  const { listings } = await getStaleListings(tenantId, nicheId, 7);
   if (listings.length === 0) return;
 
   // Check if repricing exception already exists
