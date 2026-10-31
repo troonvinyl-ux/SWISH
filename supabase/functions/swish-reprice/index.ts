@@ -4,27 +4,13 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
+import { isSpecialistAllowedForReprice } from '../_shared/repriceNicheAccess.ts';
 
 interface RepriceRequest {
   listing_id: string;
   tenant_id: string;
   niche_id: string;
 }
-
-// Canonical specialist scope mirrors niche-modules.json. Keep this allowlist
-// server-side: client filtering is useful UX, never an authorization boundary.
-const NICHE_SPECIALISTS: Record<string, readonly string[]> = {
-  coins: ['coins', 'islamic_silver', 'banknotes', 'gold', 'silver', 'jewellery_precious_metals', 'ancient_artefacts'],
-  motocross: ['motocross'],
-  bicycles: ['bicycles'],
-  clothing: ['clothing', 'trainers_sneakers'],
-  trading_cards: ['pokemon_cards', 'trading_cards'],
-  antiques: ['antiques', 'books'],
-  fossils: ['fossils'],
-  beauty: ['beauty'],
-  tech: ['tech', 'retro_games', 'retro_consoles'],
-  surplus_flip: ['surplus_trader'],
-};
 
 interface RepriceResult {
   listing_id: string;
@@ -114,7 +100,7 @@ Deno.serve(async (req) => {
     }
 
     const item = Array.isArray(listing.items) ? listing.items[0] : listing.items;
-    if (!item?.specialist_id || !allowedSpecialists.includes(item.specialist_id)) {
+    if (!isSpecialistAllowedForReprice(niche_id, item?.specialist_id)) {
       console.warn('[SWISH Security] swish-reprice denied listing outside requested niche.');
       return new Response(JSON.stringify({ error: 'Listing is not available in the requested niche.' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
