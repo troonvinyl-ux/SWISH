@@ -787,7 +787,7 @@ export default function OrdersScreen() {
           <MaterialIcons name="arrow-back" size={20} color={Colors.textSecondary} />
         </Pressable>
         <View style={s.flex}>
-          <Text style={[s.title, isThreadsFlip && { color: threads.cream }]}>Threads Flip · Orders</Text>
+          <Text style={[s.title, isThreadsFlip && { color: threads.cream }]}>{isThreadsFlip ? 'Threads Flip · Orders' : 'Orders'}</Text>
           <Text style={[s.subtitle, isThreadsFlip && { color: threads.muted }]}>{orders.length} orders · {fmt(stats.netRevenue)} net</Text>
           {loadError ? <Text style={{ color: Colors.danger, fontSize: 10 }} numberOfLines={2}>Orders error: {loadError}</Text> : null}
         </View>
