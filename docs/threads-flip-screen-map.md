@@ -58,6 +58,7 @@ These routes are not substitutes for any of the 16 numbered screens. They must b
 ## Asset checklist
 
 - [x] Existing Threads Flip brand artwork is used on the screen 01 welcome splash.
+- [x] Screen 02 home hero uses the latest clothing/trainer inventory photo when available, with a branded fallback for empty wardrobes.
 - [ ] Add separate editorial apparel photography for the screen 02 home hero and category tiles (vintage, designer, streetwear, trainers and accessories).
 - [ ] Add clear brand-label, care-label, size-label and garment-detail photo examples for the capture guidance.
 - [ ] Add neutral garment thumbnails for empty/demo states; never imply demo prices are real market evidence.
