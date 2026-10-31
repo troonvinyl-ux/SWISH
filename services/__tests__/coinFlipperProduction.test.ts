@@ -47,6 +47,8 @@ jest.mock('expo-image-manipulator', () => ({
   SaveFormat: { JPEG: 'JPEG' },
 }));
 
+jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
+
 import { identifyItemWithAI, saveIdentifiedItem } from '@/services/aiIdentificationService';
 import { getNicheSpecialistIds, isSpecialistInNiche } from '@/constants/niches';
 
