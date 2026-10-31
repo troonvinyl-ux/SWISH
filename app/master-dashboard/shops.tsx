@@ -25,6 +25,7 @@ function Storefronts() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const columns = width >= 900 ? 3 : width >= 560 ? 2 : 1;
+  const cardWidth = columns === 1 ? '100%' : (width - 26 - (columns - 1) * 12) / columns;
   const [items,setItems] = useState<StockRow[]>([]);
   const [listings,setListings] = useState<ListingRow[]>([]);
   const [loading,setLoading] = useState(true);
@@ -88,7 +89,7 @@ function Storefronts() {
     : <ScrollView style={s.scroll} contentContainerStyle={s.grid} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={C.amber}/>} showsVerticalScrollIndicator={false}>
       {error?<View style={s.warning}><MaterialIcons name="info-outline" color={C.amber} size={17}/><Text style={s.warningText}>{error}</Text></View>:null}
       <View style={[s.shopGrid,{gap:12}]}>
-        {shops.map((shop,index)=><Pressable key={shop.niche.id} onPress={()=>void openShop(shop.niche)} accessibilityRole="button" accessibilityLabel={'Enter '+shop.niche.shortName+' shop'} style={({pressed})=>[s.shopCard,{borderColor:shop.niche.color+'66',minHeight:columns===1?150:188,flexBasis:columns===1?'100%':columns===2?'48%':'31.8%',backgroundColor:'#0B121A'},pressed&&s.pressed]}>
+        {shops.map((shop,index)=><Pressable key={shop.niche.id} onPress={()=>void openShop(shop.niche)} accessibilityRole="button" accessibilityLabel={'Enter '+shop.niche.shortName+' shop'} style={({pressed})=>[s.shopCard,{borderColor:shop.niche.color+'66',minHeight:columns===1?150:188,flexBasis:cardWidth,width:cardWidth,backgroundColor:'#0B121A'},pressed&&s.pressed]}>
           <View style={[s.shopGlow,{backgroundColor:shop.niche.color+'16'}]}/>
           <View style={s.cardTop}>
             <View style={[s.shopIcon,{borderColor:shop.niche.color+'88',backgroundColor:shop.niche.color+'18'}]}><MaterialIcons name={shop.niche.icon as any} size={25} color={shop.niche.color}/></View>
