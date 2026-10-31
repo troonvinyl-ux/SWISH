@@ -15,7 +15,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { requirePaidNiche,nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
 import { canonicalSpecialist, specialistNiche, profileForSpecialist } from '../_shared/specialistRegistry.ts';
-import { normalizeSpecialistAnalysis, specialistOutputInstructions, recordValue, textList } from '../../../shared/specialistIntelligence.ts';
+import { normalizeSpecialistAnalysis, specialistOutputInstructions, recordValue, textList } from '../_shared/specialistIntelligence.ts';
 
 const NUMISTA_API = 'https://api.numista.com/api/v3';
 
