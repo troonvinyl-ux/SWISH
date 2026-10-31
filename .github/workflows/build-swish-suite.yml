@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       include_master_admin:
-        description: Build the full Master Switch admin and shopfront APK
+        description: Build the dedicated SWISH Master Admin and shopfront APK
         required: true
         type: boolean
         default: true
@@ -33,6 +33,7 @@ jobs:
   master-admin-apk:
     env:
       EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
+      SWISH_MASTER_ADMIN: '1'
     if: ${{ github.event_name == 'push' || inputs.include_master_admin }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -55,11 +56,22 @@ jobs:
       - name: Regression tests (reported separately; typecheck remains a hard gate)
         continue-on-error: true
         run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand
-      - name: Confirm full Master Switch and shopfront routes are present
+      - name: Confirm dedicated Master Admin app identity and routes
         run: |
           test -f app/master-admin.tsx
           test -f app/_layout.tsx
           test -f 'app/(tabs)/_layout.tsx'
+          npx expo config --type public --json > /tmp/swish-master-config.json
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const config = JSON.parse(fs.readFileSync('/tmp/swish-master-config.json', 'utf8'));
+          if (config.name !== 'SWISH Master Admin') throw new Error('Wrong app name: ' + config.name);
+          if (config.slug !== 'swish-master-admin') throw new Error('Wrong app slug: ' + config.slug);
+          if (config.android?.package !== 'com.swish.masteradmin') throw new Error('Wrong Android package: ' + config.android?.package);
+          if (config.extra?.swishMasterAdminBuild !== true) throw new Error('Master Admin build marker missing');
+          if (config.extra?.swishNicheId) throw new Error('Master Admin APK must not carry a niche identity');
+          console.log('Verified dedicated Master Admin app identity and owner-routing marker.');
+          NODE
       - name: Generate full Android project
         run: npx expo prebuild --platform android --clean
       - uses: actions/cache@v4
@@ -84,7 +96,7 @@ jobs:
             exit 1
           fi
           if [ "${#APKS[@]}" -ne 1 ]; then
-            printf '::error::Expected exactly one release APK, found %s: %s\n' "${#APKS[@]}" "${APKS[*]}"
+            printf '::error::Expected exactly one release APK, found %s: %s\\n' "${#APKS[@]}" "${APKS[*]}"
             exit 1
           fi
           APK="${APKS[0]}"
@@ -92,11 +104,11 @@ jobs:
           unzip -t "$APK"
           unzip -Z1 "$APK" > /tmp/swish-apk-entries.txt
           grep -qx 'AndroidManifest.xml' /tmp/swish-apk-entries.txt
-          grep -Eq '^classes([0-9]+)?\.dex$' /tmp/swish-apk-entries.txt
+          grep -Eq '^classes([0-9]+)?\\.dex$' /tmp/swish-apk-entries.txt
           mkdir -p dist
           cp "$APK" dist/swish-master-switch-admin.apk
           sha256sum dist/swish-master-switch-admin.apk > dist/swish-master-switch-admin.sha256
-          echo "Verified Master Switch APK: $APK"
+          echo "Verified Master Admin APK: $APK"
           ls -lh dist/swish-master-switch-admin.apk
           cat dist/swish-master-switch-admin.sha256
       - uses: actions/upload-artifact@v4
