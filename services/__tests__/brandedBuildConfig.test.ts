@@ -20,10 +20,13 @@ const BUILDS = {
 
 describe('Branded Expo build configuration', () => {
   const originalNiche = process.env.SWISH_NICHE;
+  const originalMasterAdmin = process.env.SWISH_MASTER_ADMIN;
   const originalExpoProjectId = process.env.EXPO_PROJECT_ID;
   const originalEasProjectId = process.env.EAS_PROJECT_ID;
 
   afterEach(() => {
+    if (originalMasterAdmin === undefined) delete process.env.SWISH_MASTER_ADMIN;
+    else process.env.SWISH_MASTER_ADMIN = originalMasterAdmin;
     if (originalNiche === undefined) delete process.env.SWISH_NICHE;
     else process.env.SWISH_NICHE = originalNiche;
 
@@ -58,6 +61,24 @@ describe('Branded Expo build configuration', () => {
       expect(config.extra.preserveMe).toBe(true);
     },
   );
+
+  test('creates a unique Master Admin native identity without a niche lock', () => {
+    delete process.env.SWISH_NICHE;
+    process.env.SWISH_MASTER_ADMIN = '1';
+    const config = configureApp({ config: BASE_CONFIG });
+    expect(config.name).toBe('SWISH Master Admin');
+    expect(config.slug).toBe('swish-master-admin');
+    expect(config.scheme).toBe('swishmasteradmin');
+    expect(config.android.package).toBe('com.swish.masteradmin');
+    expect(config.ios.bundleIdentifier).toBe('com.swish.masteradmin');
+    expect(config.extra.swishMasterAdminBuild).toBe(true);
+  });
+
+  test('rejects combining Master Admin identity with a niche lock', () => {
+    process.env.SWISH_NICHE = 'coins';
+    process.env.SWISH_MASTER_ADMIN = '1';
+    expect(() => configureApp({ config: BASE_CONFIG })).toThrow(/cannot be combined/);
+  });
 
   test('rejects an unsupported branded build ID', () => {
     process.env.SWISH_NICHE = 'unregistered_product';
