@@ -25,6 +25,20 @@ export function nicheToEntryRoute(value: string | null | undefined): ProductEntr
   return niche ? `/${NICHE_MODULES[niche].entry.replace(/\.tsx$/, '')}` as ProductEntryRoute : null;
 }
 
+/** Resolve the one-tap Scan action to the active niche's real capture workflow. */
+export function nicheToScannerRoute(value: string | null | undefined): string {
+  const niche = resolveProductionNiche(value);
+  if (!niche) return '/capture';
+  switch (niche) {
+    case 'coins': return '/coin-flipper?tab=capture';
+    case 'motocross': return '/flipper-mx';
+    case 'bicycles': return '/bike-flipper';
+    case 'clothing': return '/threads-flip';
+    case 'surplus_flip': return '/surplus-flip';
+    default: return '/capture';
+  }
+}
+
 export function isRouteAllowedForBuild(pathname: string, fixedNiche: string | null): boolean {
   if (!fixedNiche) return true;
   const niche = resolveProductionNiche(fixedNiche);
