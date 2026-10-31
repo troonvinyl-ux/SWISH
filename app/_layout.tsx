@@ -6,7 +6,7 @@ import { AppProvider } from '@/contexts/AppContext';
 import { ManifestOpportunityProvider } from '@/contexts/ManifestOpportunityContext';
 import { WatchedLotsProvider } from '@/contexts/WatchedLotsContext';
 import { Colors } from '@/constants/theme';
-import { NicheRouteBoundary } from '@/components/layout/NicheRouteBoundary';
+import { NicheRouteBoundary } from '@/components/layout/NicheRouteBoundary';\nimport { GlobalAccountControls } from '@/components/layout/GlobalAccountControls';
 import { useApp } from '@/hooks/useApp';
 import { nicheToScannerRoute } from '@/services/nicheRouting';
 import * as SplashScreen from 'expo-splash-screen';
@@ -203,7 +203,7 @@ export default function RootLayout() {
                 <Stack.Screen name="research" />
                 <Stack.Screen name="deep-id-lab" />
               </Stack>
-              <GlobalScanShortcut />
+              <GlobalScanShortcut />\n              <GlobalAccountControls />
               </View>
               </NicheRouteBoundary>
             </TVBackHandlerProvider>
