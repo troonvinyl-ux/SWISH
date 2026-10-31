@@ -28,7 +28,7 @@ export function useRepricing() {
     setLoading(true);
     const [rulesResult, staleResult] = await Promise.all([
       listRepricingRules(tenant.id),
-      getStaleListings(tenant.id, 7, activeNicheId),
+      getStaleListings(tenant.id, activeNicheId, 7),
     ]);
     setRules(rulesResult.rules);
     setStaleListings(staleResult.listings);
@@ -44,7 +44,7 @@ export function useRepricing() {
     const { rule, error } = await createRepricingRule(tenant.id, input);
     if (rule) setRules(prev => [rule, ...prev]);
     return { rule, error };
-  }, [tenant?.id, activeNicheId]);
+  }, [tenant?.id]);
 
   const toggleRule = useCallback(async (ruleId: string, isActive: boolean) => {
     const { error } = await toggleRepricingRule(ruleId, isActive);
@@ -76,7 +76,7 @@ export function useRepricing() {
       }));
     }
     return { error };
-  }, [tenant?.id]);
+  }, [tenant?.id, activeNicheId]);
 
   const applyPrice = useCallback(async (listingId: string, newPrice: number) => {
     const { error } = await applyReprice(listingId, newPrice, tenant?.id ?? '', activeNicheId);
@@ -91,7 +91,7 @@ export function useRepricing() {
       });
     }
     return { error };
-  }, []);
+  }, [tenant?.id, activeNicheId]);
 
   const activeRules = rules.filter(r => r.isActive);
 
