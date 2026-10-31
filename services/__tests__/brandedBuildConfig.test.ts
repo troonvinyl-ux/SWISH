@@ -39,6 +39,7 @@ describe('Branded Expo build configuration', () => {
 
   test('keeps the existing OnSpace app identity when no branded profile is selected', () => {
     delete process.env.SWISH_NICHE;
+    delete process.env.SWISH_MASTER_ADMIN;
     // The OTA workflow injects this variable globally. Keep this identity test
     // independent of deployment configuration so it tests the true base case.
     delete process.env.EXPO_PROJECT_ID;
@@ -49,6 +50,7 @@ describe('Branded Expo build configuration', () => {
   test.each(Object.entries(BUILDS))(
     '%s has its own name, slug, deep link, and package ID',
     (nicheId, expected) => {
+      delete process.env.SWISH_MASTER_ADMIN;
       process.env.SWISH_NICHE = nicheId;
       const config = configureApp({ config: BASE_CONFIG });
       expect(config.name).toBe(expected[0]);
@@ -82,6 +84,7 @@ describe('Branded Expo build configuration', () => {
   });
 
   test('rejects an unsupported branded build ID', () => {
+    delete process.env.SWISH_MASTER_ADMIN;
     process.env.SWISH_NICHE = 'unregistered_product';
     expect(() => configureApp({ config: BASE_CONFIG })).toThrow(/Unsupported SWISH_NICHE/);
   });
