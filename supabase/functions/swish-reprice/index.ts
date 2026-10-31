@@ -10,6 +10,8 @@ interface RepriceRequest {
   listing_id: string;
   tenant_id: string;
   niche_id: string;
+  action?: 'suggest' | 'apply';
+  new_price?: number;
 }
 
 interface RepriceResult {
@@ -108,6 +110,33 @@ Deno.serve(async (req) => {
     const currentPrice = Number(listing.price ?? 0);
     const floorPrice = Number(listing.floor_price ?? 0) || Number(item?.acquired_cost ?? 0) * 1.1;
     const ceilingPrice = Number(listing.ceiling_price ?? 0) || Number(item?.valuation_high ?? currentPrice * 1.5);
+
+    // Applying a repricing change is authorised and bounded on the server. Never
+    // trust the client-side niche preflight as the write boundary.
+    if (body.action === 'apply') {
+      const newPrice = Number(body.new_price);
+      if (!Number.isFinite(newPrice) || newPrice <= 0) {
+        return new Response(JSON.stringify({ error: 'A valid positive price is required.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      if (newPrice < floorPrice || newPrice > ceilingPrice) {
+        return new Response(JSON.stringify({ error: 'The requested price is outside the permitted floor and ceiling.' }), { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const { data: updatedListing, error: updateError } = await supabaseAdmin
+        .from('listings')
+        .update({ price: Math.round(newPrice * 100) / 100, updated_at: new Date().toISOString() })
+        .eq('id', listing_id)
+        .eq('tenant_id', tenant_id)
+        .select('id')
+        .maybeSingle();
+      if (updateError || !updatedListing) {
+        console.error('[SWISH Reprice] Server-side price update failed.');
+        return new Response(JSON.stringify({ error: 'Unable to apply this price change. Please reload and retry.' }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ success: true, listing_id, price: Math.round(newPrice * 100) / 100 }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    if (body.action && body.action !== 'suggest') {
+      return new Response(JSON.stringify({ error: 'Unsupported repricing action.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
     // Calculate days listed
     const listedDate = listing.published_at ?? listing.created_at;
