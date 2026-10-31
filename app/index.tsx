@@ -4,7 +4,8 @@
 //   Not logged in          → /login
 //   Logged in, loading     → spinner
 //   Logged in, no onboard  → /onboarding
-//   Logged in, onboarded   → /entry/<niche>  (each niche has its own entry route)
+//   Logged in owner       → /master-admin (unbranded Master Admin installation)
+  Logged in, onboarded   → /entry/<niche>  (each niche has its own entry route)
 //
 // The explicit /entry/<niche> redirect ensures that every authenticated subscriber
 // lands in their correct niche shell. The /(tabs) screen is the destination AFTER
@@ -16,7 +17,7 @@
 //   motocross              → /entry/motocross
 //   bicycles / cycling     → /entry/bicycles
 //   clothing / fashion     → /entry/clothing
-//   general / unknown      → /entry/coins  (fallback; subscriber should be prompted to select)
+//   general / unknown      → /niche-select (never silently default to Coins)
 
 import { AuthRouter } from '@/template';
 import { Redirect } from 'expo-router';
