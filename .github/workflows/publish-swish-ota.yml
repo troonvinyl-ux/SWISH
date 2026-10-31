@@ -37,6 +37,7 @@ jobs:
       EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
       SWISH_NICHE: ${{ inputs.target != 'master' && inputs.target || '' }}
       SWISH_MASTER_ADMIN: ${{ inputs.target == 'master' && '1' || '0' }}
+      EXPO_NO_DOTENV: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
