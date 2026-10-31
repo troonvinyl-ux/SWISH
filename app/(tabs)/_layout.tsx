@@ -103,6 +103,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
+          href: isThreadsFlip ? null : undefined,
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.tabItem, focused && styles.tabItemActive, focused && isThreadsFlip && { backgroundColor: '#E91E8C20' }]}>
               <MaterialIcons name={nicheHome.icon} size={22} color={color} />
