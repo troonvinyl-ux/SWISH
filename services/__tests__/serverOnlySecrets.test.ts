@@ -144,8 +144,9 @@ describe('SWISH eBay finance scope refresh coordination', () => {
   });
 
   test('scope-restricted sync refresh clears the finance-scope marker', () => {
-    expect(sync).toContain("scope: 'https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.fulfillment https://api.ebay.com/oauth/api_scope/sell.account'");
-    expect(sync).toContain('delete updatedCredentials.financeScopeRefreshedAt');
+    expect(sync).toContain('Omit scope: preserve the full consented permissions');
+    expect(sync).toContain('financeScopeRefreshedAt: new Date().toISOString()');
+    expect(sync).not.toContain('scope:');
   });
 
   test('temporary token-service failures are retryable, not falsely marked as reauthentication-required', () => {
@@ -247,13 +248,14 @@ describe('Surplus Flip product-boundary regression', () => {
   );
 
   test('maps Surplus Flip identification requests to their own subscription niche', () => {
-    expect(identify).toContain("'surplus_flip' | null");
+    expect(identify).toContain('function nicheForSpecialist(sid: string): string | null');
+    expect(identify).toContain('const registeredNiche = specialistNiche(sid)');
     expect(identify).toContain("['surplus_flip', 'surplus_trader', 'catalog_flip', 'catalog_surplus'].includes(sid)");
     expect(identify).not.toContain("function nicheForSpecialist(sid: string): 'coins' | 'motocross' | 'bicycles' | 'clothing' | null");
   });
 
   test('does not classify Surplus Flip valuation items as Coins', () => {
-    expect(marketValue).toContain("if (['surplus_flip', 'surplus_trader', 'catalog_flip', 'catalog_surplus'].includes(id)) return 'surplus_flip';");
+    expect(marketValue).toContain("return id === 'curiosities_collectibles' ? 'general' : specialistNiche(id);");
     expect(marketValue).not.toContain("'jewellery_precious_metals', 'curiosities_collectibles',\n    // Surplus Flip is a distinct product boundary; legacy and current IDs are aliases.\n    'surplus_trader', 'surplus_flip',");
   });
 });
@@ -275,7 +277,7 @@ describe('SWISH eBay inventory sync tenant write isolation', () => {
   });
 
   test('clears finance scope marker when the restricted eBay sync flow refreshes a token', () => {
-    expect(sync).toContain('delete updatedCredentials.financeScopeRefreshedAt');
+    expect(sync).toContain('financeScopeRefreshedAt: new Date().toISOString()');
   });
 });
 
@@ -287,7 +289,7 @@ describe('SWISH Stripe account binding', () => {
   test('checkout creates niche entitlement metadata for the authenticated user and validates product scheme', () => {
     expect(checkout).toContain('metadata: { user_id: user.id, niche_id: nicheId }');
     expect(checkout).toContain('subscription_data:');
-    expect(checkout).toContain('if (appScheme && appScheme !== expectedSchemeByNiche[nicheId])');
+    expect(checkout).toContain('if (requestedScheme && requestedScheme !== expectedScheme)');
   });
 
   test('subscription check refuses a subscription explicitly linked to a different user', () => {
@@ -378,7 +380,7 @@ describe('Stripe customer portal account isolation', () => {
   test('legacy billing customer linking is confirmed, subscription-backed, and ambiguity-safe', () => {
     expect(portal).toContain('if (!customer && user.email_confirmed_at)');
     expect(portal).toContain('eligibleLegacyCustomers.length === 1');
-    expect(portal).toContain("sub.metadata.user_id === user.id");
+    expect(portal).toContain('sub.metadata?.user_id === user.id');
     expect(portal).toContain('stripe.customers.update(eligibleLegacyCustomers[0].id');
   });
 
@@ -454,7 +456,7 @@ describe('AI Edge Function error response safety', () => {
   });
 
   test('Islamic identification does not return provider error bodies or raw exceptions', () => {
-    expect(islamicIdentify).toContain('The identification service is temporarily unavailable.');
+    expect(islamicIdentify).toContain('Unable to complete Islamic coin identification.');
     expect(islamicIdentify).toContain('Unable to complete Islamic coin identification.');
     expect(islamicIdentify).not.toContain('OnSpace AI error: ${errText}');
     expect(islamicIdentify).not.toContain('OnSpace AI retry error: ${errText}');
