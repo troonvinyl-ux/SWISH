@@ -3502,6 +3502,7 @@ export default function SettingsScreen() {
         />
       ) : null}
     </View>
+    </SettingsThemeContext.Provider>
   );
 }
 
