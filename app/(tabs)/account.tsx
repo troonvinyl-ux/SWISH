@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth, authService } from '@/template';
@@ -12,7 +12,8 @@ export default function AccountScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { isMasterAdmin } = useApp();
+  const { isMasterAdmin, activeNicheId, fixedNicheId } = useApp();
+  if ((fixedNicheId ?? activeNicheId) === 'antiques') return <Redirect href="/antique-more" />;
   const [signingOut, setSigningOut] = useState(false);
   const owner = isMasterAdmin && isSwishMasterAdmin(user?.email);
 
