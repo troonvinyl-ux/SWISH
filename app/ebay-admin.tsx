@@ -196,6 +196,7 @@ interface EbayListing {
   ruler?: string;
   denomination?: string;
   countryOfOrigin?: string;
+  itemAttributes?: Record<string, unknown>;
 }
 
 interface InventoryItem {
@@ -1096,6 +1097,9 @@ function ListingRow({
   const itemStatusColor = ITEM_STATUS_COLORS[item.itemStatus] ?? Colors.textTertiary;
   const itemStatusLabel = ITEM_STATUS_LABELS[item.itemStatus] ?? item.itemStatus;
   const statusMismatch  = !!item.itemStatus && !isStatusMatch(item.status, item.itemStatus);
+  const clothingBrand = String(item.itemAttributes?.brand ?? item.itemAttributes?.brand_label ?? '').trim();
+  const clothingSize = String(item.itemAttributes?.size ?? item.itemAttributes?.labelled_size ?? '').trim();
+  const clothingMaterial = String(item.itemAttributes?.composition ?? item.itemAttributes?.fabric ?? '').trim();
 
   return (
     <View style={[row.card, isThreadsFlip && { backgroundColor: '#160E16', borderColor: '#301830' }, statusMismatch && row.cardMismatch]}>
@@ -1179,8 +1183,16 @@ function ListingRow({
               </View>
             ) : null}
 
-            {/* Coin meta */}
-            {(item.ruler || item.denomination || item.countryOfOrigin) ? (
+            {/* Niche-specific item metadata */}
+            {isThreadsFlip ? (
+              clothingBrand || clothingSize || clothingMaterial ? (
+                <View style={row.coinMeta}>
+                  {clothingBrand ? <Text style={[row.metaText, { color: '#E91E8C' }]}>{clothingBrand}</Text> : null}
+                  {clothingSize ? <Text style={[row.metaText, { color: '#FFF0F5' }]}>Size {clothingSize}</Text> : null}
+                  {clothingMaterial ? <Text style={row.metaText}>{clothingMaterial}</Text> : null}
+                </View>
+              ) : null
+            ) : (item.ruler || item.denomination || item.countryOfOrigin) ? (
               <View style={row.coinMeta}>
                 {item.ruler ? <Text style={row.metaText}>{item.ruler}</Text> : null}
                 {item.denomination ? <Text style={[row.metaText, { color: Colors.gold }]}>{item.denomination}</Text> : null}
@@ -1505,7 +1517,7 @@ export default function EbayAdminScreen() {
 
     const { data, error } = await supabase
       .from('listings')
-      .select(`*, items!inner(id, canonical_title, specialist_id, status, condition, inventory_id, catalogue_number, folder_number, pocket_position, storage_location, media, ruler, denomination, country_of_origin)`)
+      .select(`*, items!inner(id, canonical_title, specialist_id, status, condition, inventory_id, catalogue_number, folder_number, pocket_position, storage_location, media, ruler, denomination, country_of_origin, attributes)`)
       .eq('tenant_id', tenant.id)
       .eq('marketplace_id', 'ebay')
       .in('items.specialist_id', specialistIds)
@@ -1539,6 +1551,7 @@ export default function EbayAdminScreen() {
       ruler: r.items?.ruler ?? undefined,
       denomination: r.items?.denomination ?? undefined,
       countryOfOrigin: r.items?.country_of_origin ?? undefined,
+      itemAttributes: r.items?.attributes ?? {},
     })));
 
     setLoading(false);
@@ -1563,7 +1576,8 @@ export default function EbayAdminScreen() {
         l.folderNumber?.toLowerCase().includes(q) ||
         l.externalListingId?.includes(q) ||
         l.ruler?.toLowerCase().includes(q) ||
-        l.denomination?.toLowerCase().includes(q)
+        l.denomination?.toLowerCase().includes(q) ||
+        Object.values(l.itemAttributes ?? {}).some(value => typeof value === 'string' && value.toLowerCase().includes(q))
       );
     }
     return result;
@@ -1974,7 +1988,7 @@ export default function EbayAdminScreen() {
           style={[s.searchInput, isThreadsFlip && { color: '#FFF0F5' }]}
           value={search}
           onChangeText={setSearch}
-          placeholder="KC ID, catalogue, title, folder, eBay ID..."
+          placeholder={isThreadsFlip ? 'Brand, title, size, material, eBay ID...' : 'KC ID, catalogue, title, folder, eBay ID...'}
           placeholderTextColor={Colors.textTertiary}
           returnKeyType="search"
           clearButtonMode="while-editing"
