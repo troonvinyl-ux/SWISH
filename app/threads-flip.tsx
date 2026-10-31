@@ -77,6 +77,19 @@ const CLOTHING_CATEGORIES = [
 
 const TOP_BRANDS = ["Levi's", 'Nike', 'Carhartt', 'Ralph Lauren', 'Stone Island', 'The North Face', 'Adidas', 'Burberry', 'Prada', 'Supreme'];
 
+// Editorial category photography. These Pexels images are free-to-use under the
+// Pexels licence; attribution and source links are recorded in docs/threads-flip-screen-map.md.
+const CLOTHING_CATEGORY_IMAGES: Record<string, string> = {
+  vintage: 'https://images.pexels.com/photos/32734335/pexels-photo-32734335.jpeg?auto=compress&cs=tinysrgb&w=600',
+  designer: 'https://images.pexels.com/photos/3927390/pexels-photo-3927390.jpeg?auto=compress&cs=tinysrgb&w=600',
+  streetwear: 'https://images.pexels.com/photos/11757389/pexels-photo-11757389.jpeg?auto=compress&cs=tinysrgb&w=600',
+  high_street: 'https://images.pexels.com/photos/3927390/pexels-photo-3927390.jpeg?auto=compress&cs=tinysrgb&w=600',
+  sustainable: 'https://images.pexels.com/photos/32734335/pexels-photo-32734335.jpeg?auto=compress&cs=tinysrgb&w=600',
+  trainers: 'https://images.pexels.com/photos/18380045/pexels-photo-18380045.jpeg?auto=compress&cs=tinysrgb&w=600',
+  accessories: 'https://images.pexels.com/photos/31078822/pexels-photo-31078822.jpeg?auto=compress&cs=tinysrgb&w=600',
+  sportswear: 'https://images.pexels.com/photos/29790060/pexels-photo-29790060.jpeg?auto=compress&cs=tinysrgb&w=600',
+};
+
 // ── Paywall ───────────────────────────────────────────────────────────────────
 function TFPaywall({ onBack }: { onBack: () => void }) {
   const insets = useSafeAreaInsets();
@@ -216,7 +229,7 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ht.content}>
       <View style={ht.hero}>
         <View style={ht.heroLeft}>
-          {heroImage ? <Image source={{ uri: heroImage }} style={ht.heroImage} contentFit="cover" transition={180} /> : <View style={ht.heroIcon}><MaterialIcons name="checkroom" size={32} color={TF.pink} /></View>}
+          {heroImage ? <Image source={{ uri: heroImage }} style={ht.heroImage} contentFit="cover" transition={180} /> : <Image source={{ uri: CLOTHING_CATEGORY_IMAGES.vintage }} style={ht.heroImage} contentFit="cover" transition={180} />}
         </View>
         <View style={{ flex: 1, gap: 3 }}>
           <Text style={ht.brandText}>Threads<Text style={{ color: TF.pink }}> Flip</Text></Text>
@@ -272,7 +285,7 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm, paddingVertical: 4 }}>
         {CLOTHING_CATEGORIES.map(cat => (
           <Pressable key={cat.id} onPress={() => onTabSelect('identify')} style={({ pressed }) => [ht.catCard, pressed && { opacity: 0.82 }]}>
-            <MaterialIcons name="checkroom" size={16} color={TF.pink} />
+            <Image source={{ uri: CLOTHING_CATEGORY_IMAGES[cat.id] ?? CLOTHING_CATEGORY_IMAGES.vintage }} style={ht.catImage} contentFit="cover" transition={180} />
             <Text style={ht.catLabel}>{cat.label}</Text>
             <Text style={ht.catSub}>{cat.sub}</Text>
           </Pressable>
@@ -322,7 +335,8 @@ const ht = StyleSheet.create({
   gridLabel: { fontSize: 9, fontWeight: Typography.weight.bold, color: TF.textPrimary, textAlign: 'center' },
   proTag: { backgroundColor: TF.pinkDim, borderRadius: Radius.pill, paddingHorizontal: 5, paddingVertical: 2 },
   proTagText: { fontSize: 7, fontWeight: Typography.weight.extrabold, color: TF.pink, letterSpacing: 0.5 },
-  catCard: { backgroundColor: TF.surface, borderRadius: Radius.xl, padding: Spacing.md, gap: 4, alignItems: 'center', width: 100, borderWidth: 1, borderColor: TF.border },
+  catCard: { backgroundColor: TF.surface, borderRadius: Radius.xl, padding: 7, gap: 5, alignItems: 'center', width: 116, borderWidth: 1, borderColor: TF.border, overflow: 'hidden' },
+  catImage: { width: '100%', height: 82, borderRadius: Radius.md, backgroundColor: TF.surfaceHigh },
   catLabel: { fontSize: Typography.size.xs, fontWeight: Typography.weight.bold, color: TF.textPrimary, textAlign: 'center' },
   catSub: { fontSize: 8, color: TF.textMuted, textAlign: 'center', lineHeight: 12 },
   upgradeBanner: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, backgroundColor: TF.pink, borderRadius: Radius.xxl, paddingVertical: Spacing.base, paddingHorizontal: Spacing.lg, shadowColor: TF.pink, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 14, elevation: 6 },
