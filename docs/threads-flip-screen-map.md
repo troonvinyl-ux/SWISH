@@ -57,12 +57,13 @@ These routes are not substitutes for any of the 16 numbered screens. They must b
 
 ## Asset checklist
 
-- Threads Flip wordmark / app icon treatment (existing brand asset retained).
-- Editorial hero apparel photography.
-- Vintage garment, designer garment, streetwear, trainers and accessories category imagery.
-- Brand-label, care-label, size-label and garment-detail photo examples.
-- Neutral garment thumbnails for empty/demo states (never imply demo prices are real market evidence).
-- Consistent 3:4 garment imagery and square category tiles; avoid embedded brand logos unless licensed.
+- [x] Existing Threads Flip brand artwork is used on the screen 01 welcome splash.
+- [ ] Add separate editorial apparel photography for the screen 02 home hero and category tiles (vintage, designer, streetwear, trainers and accessories).
+- [ ] Add clear brand-label, care-label, size-label and garment-detail photo examples for the capture guidance.
+- [ ] Add neutral garment thumbnails for empty/demo states; never imply demo prices are real market evidence.
+- [ ] Standardise 3:4 garment imagery and square category tiles; avoid embedded brand logos unless licensed.
+
+The capture flow now has four functional photo slots and a separate checklist screen. The additional product/category photography remains a pre-merge visual asset task.
 
 ## Known issue found during code inspection
 
