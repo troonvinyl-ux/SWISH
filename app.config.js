@@ -17,14 +17,27 @@ module.exports = ({ config }) => {
   } : {};
   const baseConfig = Object.keys(otaConfig).length ? { ...config, ...otaConfig } : config;
   if (masterAdminBuild) {
+    // The Master Admin is a launcher shell, not a bundled copy of all ten
+    // niche products. Its route tree contains only auth, owner console and
+    // diagnostics; each niche opens from its own installed APK via deep link.
+    const masterPlugins = (baseConfig.plugins || []).map(plugin => {
+      const name = Array.isArray(plugin) ? plugin[0] : plugin;
+      return name === 'expo-router'
+        ? ['expo-router', { ...(Array.isArray(plugin) ? plugin[1] : {}), root: 'master-admin-app' }]
+        : plugin;
+    });
+    if (!masterPlugins.some(plugin => (Array.isArray(plugin) ? plugin[0] : plugin) === 'expo-router')) {
+      masterPlugins.push(['expo-router', { root: 'master-admin-app' }]);
+    }
     return {
       ...baseConfig,
+      plugins: masterPlugins,
       name: 'SWISH Master Admin',
       slug: 'swish-master-admin',
       scheme: 'swishmasteradmin',
-      ios: { ...config.ios, bundleIdentifier: 'com.swish.masteradmin' },
-      android: { ...config.android, package: 'com.swish.masteradmin' },
-      extra: { ...(otaConfig.extra || config.extra || {}), swishMasterAdminBuild: true },
+      ios: { ...baseConfig.ios, bundleIdentifier: 'com.swish.masteradmin' },
+      android: { ...baseConfig.android, package: 'com.swish.masteradmin' },
+      extra: { ...(baseConfig.extra || {}), swishMasterAdminBuild: true },
     };
   }
   if (!niche) return baseConfig;
