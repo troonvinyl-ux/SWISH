@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
+import SettingsScreen from '../settings';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth, authService } from '@/template';
@@ -17,7 +18,7 @@ export default function AccountScreen() {
   const threads = { background: '#0C080C', surface: '#160E16', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5', muted: '#9A7090' };
   const [signingOut, setSigningOut] = useState(false);
   if ((fixedNicheId ?? activeNicheId) === 'antiques') return <Redirect href={"/(tabs)/antique-more" as any} />;
-  if (isThreadsFlip) return <Redirect href={'/settings' as any} />;
+  if (isThreadsFlip) return <SettingsScreen embedded />;
   const owner = isMasterAdmin && isSwishMasterAdmin(user?.email);
 
   const signOut = async () => {
