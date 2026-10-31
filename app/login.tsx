@@ -21,12 +21,16 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useAuth, useAlert } from '@/template';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
+import { useApp } from '@/hooks/useApp';
 
 type AuthMode = 'login' | 'register';
 type RegisterStep = 'email_password' | 'verify_otp';
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
+  const { activeNicheId, fixedNicheId } = useApp();
+  const isThreadsFlip = (fixedNicheId ?? activeNicheId) === 'clothing';
+  const threads = { background: '#0C080C', surface: '#160E16', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5', muted: '#9A7090' };
   const { sendOTP, verifyOTPAndLogin, signInWithPassword, operationLoading } = useAuth();
   const { showAlert } = useAlert();
   const router = useRouter();
@@ -95,7 +99,7 @@ export default function LoginScreen() {
   }, [email, sendOTP, showAlert]);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View testID={isThreadsFlip ? 'threads-flip-screen-02' : undefined} style={[styles.container, { paddingTop: insets.top }, isThreadsFlip && { backgroundColor: threads.background }]}>
       <StatusBar style="light" />
       <KeyboardAvoidingView
         style={styles.flex}
@@ -109,30 +113,30 @@ export default function LoginScreen() {
           {/* Brand header */}
           <View style={styles.brand}>
             <View style={styles.logoWrap}>
-              <View style={styles.logoMark}>
-                <Text style={styles.logoS}>S</Text>
+              <View style={[styles.logoMark, isThreadsFlip && { backgroundColor: threads.pink }]}>
+                <Text style={[styles.logoS, isThreadsFlip && { color: threads.background }]}>T</Text>
               </View>
               <View style={styles.logoGlow} />
             </View>
-            <Text style={styles.appName}>SWISH</Text>
-            <Text style={styles.appTagline}>Commerce Intelligence Platform</Text>
+            <Text style={[styles.appName, isThreadsFlip && { color: threads.cream }]}>THREADS FLIP</Text>
+            <Text style={[styles.appTagline, isThreadsFlip && { color: threads.muted }]}>IDENTIFY · VALUE · STYLE · SELL</Text>
           </View>
 
           {/* Mode selector */}
-          <View style={styles.modeTabs}>
+          <View style={[styles.modeTabs, isThreadsFlip && { backgroundColor: threads.surface, borderColor: threads.border }]}>
             <Pressable
-              style={[styles.modeTab, mode === 'login' && styles.modeTabActive]}
+              style={[styles.modeTab, mode === 'login' && styles.modeTabActive, isThreadsFlip && mode === 'login' && { backgroundColor: threads.pink }]}
               onPress={() => { setMode('login'); setRegisterStep('email_password'); }}
             >
-              <Text style={[styles.modeTabText, mode === 'login' && styles.modeTabTextActive]}>
+              <Text style={[styles.modeTabText, mode === 'login' && styles.modeTabTextActive, isThreadsFlip && mode === 'login' && { color: threads.background }]}>
                 Sign In
               </Text>
             </Pressable>
             <Pressable
-              style={[styles.modeTab, mode === 'register' && styles.modeTabActive]}
+              style={[styles.modeTab, mode === 'register' && styles.modeTabActive, isThreadsFlip && mode === 'register' && { backgroundColor: threads.pink }]}
               onPress={() => { setMode('register'); setRegisterStep('email_password'); }}
             >
-              <Text style={[styles.modeTabText, mode === 'register' && styles.modeTabTextActive]}>
+              <Text style={[styles.modeTabText, mode === 'register' && styles.modeTabTextActive, isThreadsFlip && mode === 'register' && { color: threads.background }]}>
                 Create Account
               </Text>
             </Pressable>
@@ -142,11 +146,11 @@ export default function LoginScreen() {
           {mode === 'login' ? (
             <View style={styles.form}>
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Email Address</Text>
-                <View style={styles.inputWrap}>
+                <Text style={[styles.fieldLabel, isThreadsFlip && { color: threads.cream }]}>Email Address</Text>
+                <View style={[styles.inputWrap, isThreadsFlip && { backgroundColor: threads.surface, borderColor: threads.border }]}>
                   <MaterialIcons name="email" size={18} color={Colors.textTertiary} />
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, isThreadsFlip && { color: threads.cream }]}
                     value={email}
                     onChangeText={setEmail}
                     placeholder="you@example.com"
@@ -159,11 +163,11 @@ export default function LoginScreen() {
               </View>
 
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Password</Text>
-                <View style={styles.inputWrap}>
+                <Text style={[styles.fieldLabel, isThreadsFlip && { color: threads.cream }]}>Password</Text>
+                <View style={[styles.inputWrap, isThreadsFlip && { backgroundColor: threads.surface, borderColor: threads.border }]}>
                   <MaterialIcons name="lock" size={18} color={Colors.textTertiary} />
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, isThreadsFlip && { color: threads.cream }]}
                     value={password}
                     onChangeText={setPassword}
                     placeholder="Your password"
@@ -185,6 +189,8 @@ export default function LoginScreen() {
               <Pressable
                 style={({ pressed }) => [
                   styles.primaryBtn,
+                  isThreadsFlip && { backgroundColor: threads.pink, shadowColor: threads.pink },
+                  isThreadsFlip && { backgroundColor: threads.pink, shadowColor: threads.pink },
                   (operationLoading || !isValidEmail || !password) && styles.btnDisabled,
                   pressed && { opacity: 0.88 },
                 ]}
@@ -195,7 +201,7 @@ export default function LoginScreen() {
                   <ActivityIndicator color={Colors.background} size="small" />
                 ) : (
                   <>
-                    <Text style={styles.primaryBtnText}>Sign In to SWISH</Text>
+                    <Text style={[styles.primaryBtnText, isThreadsFlip && { color: threads.background }]}>Sign In to SWISH</Text>
                     <MaterialIcons name="arrow-forward" size={18} color={Colors.background} />
                   </>
                 )}
@@ -206,19 +212,19 @@ export default function LoginScreen() {
           {/* ── REGISTER: Step 1 — Email + Password ── */}
           {mode === 'register' && registerStep === 'email_password' ? (
             <View style={styles.form}>
-              <View style={styles.infoBox}>
+              <View style={[styles.infoBox, isThreadsFlip && { backgroundColor: threads.surface, borderColor: threads.border }]}>
                 <MaterialIcons name="info-outline" size={14} color={Colors.info} />
-                <Text style={styles.infoText}>
+                <Text style={[styles.infoText, isThreadsFlip && { color: threads.muted }]}>
                   A verification code will be sent to your email to confirm your account.
                 </Text>
               </View>
 
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Email Address</Text>
-                <View style={styles.inputWrap}>
+                <Text style={[styles.fieldLabel, isThreadsFlip && { color: threads.cream }]}>Email Address</Text>
+                <View style={[styles.inputWrap, isThreadsFlip && { backgroundColor: threads.surface, borderColor: threads.border }]}>
                   <MaterialIcons name="email" size={18} color={Colors.textTertiary} />
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, isThreadsFlip && { color: threads.cream }]}
                     value={email}
                     onChangeText={setEmail}
                     placeholder="you@example.com"
@@ -231,11 +237,11 @@ export default function LoginScreen() {
               </View>
 
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Password</Text>
-                <View style={styles.inputWrap}>
+                <Text style={[styles.fieldLabel, isThreadsFlip && { color: threads.cream }]}>Password</Text>
+                <View style={[styles.inputWrap, isThreadsFlip && { backgroundColor: threads.surface, borderColor: threads.border }]}>
                   <MaterialIcons name="lock" size={18} color={Colors.textTertiary} />
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, isThreadsFlip && { color: threads.cream }]}
                     value={password}
                     onChangeText={setPassword}
                     placeholder="At least 6 characters"
@@ -255,14 +261,14 @@ export default function LoginScreen() {
               </View>
 
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Confirm Password</Text>
+                <Text style={[styles.fieldLabel, isThreadsFlip && { color: threads.cream }]}>Confirm Password</Text>
                 <View style={[
                   styles.inputWrap,
                   confirmPassword && confirmPassword !== password && { borderColor: Colors.danger }
                 ]}>
                   <MaterialIcons name="lock-outline" size={18} color={Colors.textTertiary} />
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, isThreadsFlip && { color: threads.cream }]}
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
                     placeholder="Repeat your password"
@@ -273,13 +279,14 @@ export default function LoginScreen() {
                   />
                 </View>
                 {confirmPassword && confirmPassword !== password ? (
-                  <Text style={styles.fieldError}>Passwords do not match</Text>
+                  <Text style={[styles.fieldError, isThreadsFlip && { color: threads.pink }]}>Passwords do not match</Text>
                 ) : null}
               </View>
 
               <Pressable
                 style={({ pressed }) => [
                   styles.primaryBtn,
+                  isThreadsFlip && { backgroundColor: threads.pink, shadowColor: threads.pink },
                   (operationLoading || !isValidEmail || !password || password !== confirmPassword) && styles.btnDisabled,
                   pressed && { opacity: 0.88 },
                 ]}
@@ -290,7 +297,7 @@ export default function LoginScreen() {
                   <ActivityIndicator color={Colors.background} size="small" />
                 ) : (
                   <>
-                    <Text style={styles.primaryBtnText}>Send Verification Code</Text>
+                    <Text style={[styles.primaryBtnText, isThreadsFlip && { color: threads.background }]}>Send Verification Code</Text>
                     <MaterialIcons name="send" size={18} color={Colors.background} />
                   </>
                 )}
@@ -302,11 +309,11 @@ export default function LoginScreen() {
           {mode === 'register' && registerStep === 'verify_otp' ? (
             <View style={styles.form}>
               <View style={styles.otpHeader}>
-                <View style={styles.otpIconWrap}>
+                <View style={[styles.otpIconWrap, isThreadsFlip && { backgroundColor: threads.surface, borderColor: threads.pink + '60' }]}>
                   <MaterialIcons name="mark-email-read" size={32} color={Colors.primary} />
                 </View>
-                <Text style={styles.otpTitle}>Check Your Email</Text>
-                <Text style={styles.otpSubtitle}>
+                <Text style={[styles.otpTitle, isThreadsFlip && { color: threads.cream }]}>Check Your Email</Text>
+                <Text style={[styles.otpSubtitle, isThreadsFlip && { color: threads.muted }]}>
                   We sent a 4-digit code to{'\n'}
                   <Text style={{ color: Colors.textPrimary, fontWeight: Typography.weight.semibold }}>
                     {email}
@@ -315,8 +322,8 @@ export default function LoginScreen() {
               </View>
 
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Verification Code</Text>
-                <View style={[styles.inputWrap, styles.otpInputWrap]}>
+                <Text style={[styles.fieldLabel, isThreadsFlip && { color: threads.cream }]}>Verification Code</Text>
+                <View style={[styles.inputWrap, styles.otpInputWrap, isThreadsFlip && { backgroundColor: threads.surface, borderColor: threads.border } ]}>
                   <MaterialIcons name="pin" size={18} color={Colors.primary} />
                   <TextInput
                     style={[styles.input, styles.otpInput]}
@@ -334,6 +341,7 @@ export default function LoginScreen() {
               <Pressable
                 style={({ pressed }) => [
                   styles.primaryBtn,
+                  isThreadsFlip && { backgroundColor: threads.pink, shadowColor: threads.pink },
                   (operationLoading || otp.length !== 4) && styles.btnDisabled,
                   pressed && { opacity: 0.88 },
                 ]}
@@ -344,16 +352,16 @@ export default function LoginScreen() {
                   <ActivityIndicator color={Colors.background} size="small" />
                 ) : (
                   <>
-                    <Text style={styles.primaryBtnText}>Create My Account</Text>
+                    <Text style={[styles.primaryBtnText, isThreadsFlip && { color: threads.background }]}>Create My Account</Text>
                     <MaterialIcons name="check" size={18} color={Colors.background} />
                   </>
                 )}
               </Pressable>
 
               <View style={styles.resendRow}>
-                <Text style={styles.resendText}>Did not receive the code?</Text>
+                <Text style={[styles.resendText, isThreadsFlip && { color: threads.muted }]}>Did not receive the code?</Text>
                 <Pressable onPress={handleResendOTP} disabled={operationLoading}>
-                  <Text style={styles.resendLink}>Resend Code</Text>
+                  <Text style={[styles.resendLink, isThreadsFlip && { color: threads.pink }]}>Resend Code</Text>
                 </Pressable>
               </View>
 
@@ -362,14 +370,14 @@ export default function LoginScreen() {
                 style={styles.backLink}
               >
                 <MaterialIcons name="arrow-back" size={14} color={Colors.textTertiary} />
-                <Text style={styles.backLinkText}>Change email or password</Text>
+                <Text style={[styles.backLinkText, isThreadsFlip && { color: threads.muted }]}>Change email or password</Text>
               </Pressable>
             </View>
           ) : null}
 
           {/* Footer */}
           <View style={styles.footer}>
-            <View style={styles.footerDivider} />
+            <View style={[styles.footerDivider, isThreadsFlip && { backgroundColor: threads.border }]} />
             <Text style={styles.footerText}>
               By continuing you agree to the SWISH Terms of Service and{' '}
               <Text
