@@ -15,7 +15,7 @@ export const WatchedLotCard = memo(function WatchedLotCard({lot,busy,onOpen,onRe
     <View style={s.row}>
       <Pressable accessibilityRole="button" accessibilityLabel={`Open watched plan for ${lot.name}`} disabled={busy} accessibilityState={{disabled:busy}} onPress={onOpen} style={({pressed})=>[s.open,(pressed||busy)?s.pressed:null]}><Text style={s.openText}>Open my plan</Text><MaterialIcons name="arrow-forward" size={20} color={Colors.primary}/></Pressable>
       {lot.auction_url ? <Pressable accessibilityRole="button" accessibilityLabel={`Open auction for ${lot.name}`} disabled={busy} onPress={onOpenAuction} style={({pressed})=>[s.remove,(pressed||busy)?s.pressed:null]}><MaterialIcons name="open-in-new" size={22} color={Colors.primary}/></Pressable> : null}
-      <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${lot.name} from watched lots` disabled={busy} accessibilityState={{disabled:busy}} onPress={onRemove} style={({pressed})=>[s.remove,(pressed||busy)?s.pressed:null]}><MaterialIcons name="bookmark-remove" size={24} color={Colors.textSecondary}/></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${lot.name} from watched lots`} disabled={busy} accessibilityState={{disabled:busy}} onPress={onRemove} style={({pressed})=>[s.remove,(pressed||busy)?s.pressed:null]}><MaterialIcons name="bookmark-remove" size={24} color={Colors.textSecondary}/></Pressable>
     </View>
   </View>;
 });
