@@ -71,9 +71,6 @@ export default function MasterAdminScreen() {
       <StatusBar style="light" />
       <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + Spacing.xl }]}>
         <View style={styles.header}>
-          <Pressable accessibilityLabel="Back" onPress={() => router.back()} style={styles.iconButton}>
-            <MaterialIcons name="arrow-back" size={22} color={Colors.textPrimary} />
-          </Pressable>
           <View style={styles.headerCopy}>
             <Text style={styles.eyebrow}>SWISH PLATFORM</Text>
             <Text style={styles.title}>Master Admin</Text>
