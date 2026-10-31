@@ -28,6 +28,15 @@ function adminClient() {
   );
 }
 
+function nicheForSpecialist(specialistId: string | null | undefined): string | null {
+  if (!specialistId) return null;
+  const products = (registry as any).products as Record<string, { specialists: string[]; legacySpecialists: string[] }>;
+  const matches = Object.entries(products)
+    .filter(([, product]) => [...product.specialists, ...product.legacySpecialists].includes(specialistId))
+    .map(([nicheId]) => nicheId);
+  return matches.length === 1 ? matches[0] : null;
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -327,7 +336,7 @@ async function importFulfillmentOrders(
   supabase: ReturnType<typeof adminClient>,
   tenantId: string,
   ffOrders: FulfillmentOrder[],
-  listingByEbayId: Map<string, { listingId: string; itemId: string; price: number; shippingCost: number }>,
+  listingByEbayId: Map<string, { listingId: string; itemId: string; price: number; shippingCost: number; categoryId: string | null; specialistId: string | null; nicheId: string | null }>,
   existingOrderIds: Set<string>,
   logId: string,
 ): Promise<{ imported: number; skipped: number; errors: string[] }> {
@@ -438,6 +447,9 @@ async function importFulfillmentOrders(
         if (reconcileError) errors.push(`Order reconciliation: ${reconcileError}`);
         await supabase.from('sales').insert({
           tenant_id: tenantId, item_id: matchedItemId, listing_id: matchedListingId,
+          niche_id: [...listingByEbayId.values()].find(l => l.listingId === matchedListingId)?.nicheId ?? null,
+          specialist_id: [...listingByEbayId.values()].find(l => l.listingId === matchedListingId)?.specialistId ?? null,
+          category_id: [...listingByEbayId.values()].find(l => l.listingId === matchedListingId)?.categoryId ?? null,
           marketplace_id: 'ebay', sale_price: salePrice, marketplace_fee: marketplaceFee,
           shipping_cost: shippingCost, net_revenue: netRevenue,
           profit: Math.round((netRevenue - acquiredCost) * 100) / 100,
@@ -466,7 +478,7 @@ async function importTradingOrders(
   supabase: ReturnType<typeof adminClient>,
   tenantId: string,
   tradingOrders: TradingOrder[],
-  listingByEbayId: Map<string, { listingId: string; itemId: string; price: number; shippingCost: number }>,
+  listingByEbayId: Map<string, { listingId: string; itemId: string; price: number; shippingCost: number; categoryId: string | null; specialistId: string | null; nicheId: string | null }>,
   existingOrderIds: Set<string>,
 ): Promise<{ imported: number; skipped: number; errors: string[] }> {
   let imported = 0, skipped = 0;
@@ -553,6 +565,9 @@ async function importTradingOrders(
         if (reconcileError) errors.push(`Order reconciliation: ${reconcileError}`);
         await supabase.from('sales').insert({
           tenant_id: tenantId, item_id: matchedItemId, listing_id: matchedListingId,
+          niche_id: [...listingByEbayId.values()].find(l => l.listingId === matchedListingId)?.nicheId ?? null,
+          specialist_id: [...listingByEbayId.values()].find(l => l.listingId === matchedListingId)?.specialistId ?? null,
+          category_id: [...listingByEbayId.values()].find(l => l.listingId === matchedListingId)?.categoryId ?? null,
           marketplace_id: 'ebay', sale_price: salePrice, marketplace_fee: marketplaceFee,
           shipping_cost: shippingCost, net_revenue: netRevenue, profit,
           predicted_profit: 0, sold_at: order.createdAt, external_order_id: order.orderId,
@@ -628,17 +643,17 @@ Deno.serve(async (req: Request) => {
     // Load existing listings for matching
     let listingQuery = supabase
       .from('listings')
-      .select('id, item_id, external_listing_id, price, shipping_cost, items!inner(specialist_id)')
+      .select('id, item_id, external_listing_id, price, shipping_cost, category_id, items!inner(specialist_id)')
       .eq('tenant_id', tenantId).eq('items.tenant_id', tenantId).eq('marketplace_id', 'ebay')
       .not('external_listing_id', 'is', null);
     if (scopeIds) listingQuery = listingQuery.in('items.specialist_id', scopeIds);
     const { data: listingsData, error: listingError } = await listingQuery;
     if (listingError) return jsonResponse({ error: 'Listing scope could not be verified' }, 503);
 
-    const listingByEbayId = new Map<string, { listingId: string; itemId: string; price: number; shippingCost: number }>();
+    const listingByEbayId = new Map<string, { listingId: string; itemId: string; price: number; shippingCost: number; categoryId: string | null; specialistId: string | null; nicheId: string | null }>();
     for (const l of listingsData ?? []) {
       if (l.external_listing_id) listingByEbayId.set(l.external_listing_id, {
-        listingId: l.id, itemId: l.item_id, price: Number(l.price ?? 0), shippingCost: Number(l.shipping_cost ?? 0),
+        listingId: l.id, itemId: l.item_id, price: Number(l.price ?? 0), shippingCost: Number(l.shipping_cost ?? 0), categoryId: l.category_id == null ? null : String(l.category_id), specialistId: (l as any).items?.specialist_id ?? null, nicheId: nicheForSpecialist((l as any).items?.specialist_id),
       });
     }
 
