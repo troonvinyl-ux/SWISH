@@ -102,7 +102,8 @@ async function getAccessToken(
         credential_ref: updatedRef, access_token_expires_at: newExpiry, updated_at: new Date().toISOString(),
       }).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay');
     } catch (e: any) {
-      return { error: `Token refresh failed: ${e.message}. Please re-authorise eBay.` };
+      console.error('[SWISH Security] eBay token refresh failed for fulfilment connector.');
+      return { error: 'eBay authorisation needs attention. Please reconnect eBay.' };
     }
   }
 
@@ -216,7 +217,7 @@ async function handleDispatch(
       }
     }
   } catch (e: any) {
-    console.log(`[SWISH Dispatch] eBay order fetch error: ${e.message} — proceeding with fulfillment without line item IDs`);
+    console.warn('[SWISH Dispatch] eBay order details unavailable; proceeding only with validated fulfillment data.');
   }
 
   // 3b. Submit shipping fulfillment to eBay
@@ -275,12 +276,12 @@ async function handleDispatch(
         const errors: any[] = errData.errors ?? [];
         if (errors.length > 0) {
           const messages = errors.map(e => e.message ?? e.longMessage ?? e.errorId ?? 'unknown error');
-          parsedError = `eBay rejected dispatch: ${messages.join('; ')}`;
+          parsedError = `eBay rejected dispatch (HTTP ${fulfillResp.status}).`;
         } else if (errData.message) {
-          parsedError = `eBay: ${errData.message}`;
+          parsedError = `eBay rejected dispatch (HTTP ${fulfillResp.status}).`;
         }
       } catch {
-        parsedError = `eBay Fulfillment API error (${fulfillResp.status}): ${responseText.slice(0, 300)}`;
+        parsedError = `eBay Fulfillment API error (HTTP ${fulfillResp.status}).`;
       }
 
       ebayFulfillmentError = parsedError;
@@ -313,8 +314,8 @@ async function handleDispatch(
       }, 400);
     }
   } catch (e: any) {
-    ebayFulfillmentError = `Network error reaching eBay: ${e.message}`;
-    console.error(`[SWISH Dispatch] eBay fulfillment network error: ${e.message}`);
+    ebayFulfillmentError = 'Unable to reach eBay to confirm dispatch. Please retry after checking eBay.';
+    console.error('[SWISH Dispatch] eBay fulfillment network request failed.');
 
     return jsonResponse({
       success: false,
@@ -381,7 +382,8 @@ async function updateSwishOrderDispatched(
     updated_at: new Date().toISOString(),
   }).eq('id', orderId).eq('tenant_id', tenantId);
 
-  return { error: error?.message ?? null };
+  if (error) console.error('[SWISH Dispatch] SWISH order status update failed.');
+  return { error: error ? 'Unable to update the SWISH order status.' : null };
 }
 
 // ── Route: get_shipping ───────────────────────────────────────────────────────
@@ -422,12 +424,13 @@ async function handleGetShipping(
     );
     if (!resp.ok) {
       const errText = await resp.text().catch(() => '');
-      return jsonResponse({ error: `eBay API ${resp.status}: ${errText.slice(0, 200)}` }, resp.status >= 500 ? 503 : 400);
+      return jsonResponse({ error: `eBay shipping lookup failed (HTTP ${resp.status}).` }, resp.status >= 500 ? 503 : 400);
     }
     const data = await resp.json();
     return jsonResponse({ success: true, fulfillments: data.fulfillments ?? [] });
   } catch (e: any) {
-    return jsonResponse({ error: `Network error: ${e.message}` }, 503);
+    console.error('[SWISH Shipping] eBay shipping lookup request failed.');
+    return jsonResponse({ error: 'Unable to retrieve shipping information from eBay. Please retry.' }, 503);
   }
 }
 
@@ -467,13 +470,12 @@ async function handleSyncReturns(
 
       if (!response.ok) {
         const responseText = await response.text().catch(() => '');
-        const detail = responseText.slice(0, 700);
         const approvalHint = response.status === 403
           ? ' eBay may require additional Post-Order API approval or re-authorisation with the required scopes.'
           : '';
         return jsonResponse({
           success: false,
-          error: `eBay Post-Order return search failed (HTTP ${response.status}). ${detail}${approvalHint}`,
+          error: `eBay Post-Order return search failed (HTTP ${response.status}).${approvalHint}`, 
           fetched, imported, updated,
           requiresApproval: response.status === 403,
         }, response.status >= 500 ? 503 : 400);
@@ -575,8 +577,8 @@ async function handleSyncReturns(
           .limit(1)
           .maybeSingle();
         if (lookupError) {
-          console.error(`[SWISH Returns] Lookup failed for ${ebayReturnId}: ${lookupError.message}`);
-          return jsonResponse({ success: false, error: `Database lookup failed while syncing return ${ebayReturnId}: ${lookupError.message}`, fetched, imported, updated }, 500);
+          console.error('[SWISH Returns] Database lookup failed.');
+          return jsonResponse({ success: false, error: 'Unable to read saved return records.', fetched, imported, updated }, 500);
         }
 
         if (existing?.id) {
@@ -585,15 +587,15 @@ async function handleSyncReturns(
           const { error: updateError } = await supabase.from('ebay_returns')
             .update(updateRow).eq('id', existing.id).eq('tenant_id', tenantId);
           if (updateError) {
-            console.error(`[SWISH Returns] Update failed for ${ebayReturnId}: ${updateError.message}`);
-            return jsonResponse({ success: false, error: `Database update failed while syncing return ${ebayReturnId}: ${updateError.message}`, fetched, imported, updated }, 500);
+            console.error('[SWISH Returns] Database update failed.');
+            return jsonResponse({ success: false, error: 'Unable to update the saved return record.', fetched, imported, updated }, 500);
           }
           updated++;
         } else {
           const { error: insertError } = await supabase.from('ebay_returns').insert(row);
           if (insertError) {
-            console.error(`[SWISH Returns] Insert failed for ${ebayReturnId}: ${insertError.message}`);
-            return jsonResponse({ success: false, error: `Database insert failed while syncing return ${ebayReturnId}: ${insertError.message}`, fetched, imported, updated }, 500);
+            console.error('[SWISH Returns] Database insert failed.');
+            return jsonResponse({ success: false, error: 'Unable to save the return record.', fetched, imported, updated }, 500);
           }
           imported++;
         }
@@ -606,8 +608,8 @@ async function handleSyncReturns(
     console.log(`[SWISH Returns] tenant=${tenantId} fetched=${fetched} imported=${imported} updated=${updated}`);
     return jsonResponse({ success: true, fetched, imported, updated, source: 'ebay_post_order', syncedAt: new Date().toISOString() });
   } catch (e: any) {
-    console.error(`[SWISH Returns] Sync failed: ${e.message}`);
-    return jsonResponse({ success: false, error: `Could not sync eBay returns: ${e.message}`, fetched, imported, updated }, 503);
+    console.error('[SWISH Returns] Return synchronisation failed.');
+    return jsonResponse({ success: false, error: 'Could not synchronise eBay returns. Please retry.', fetched, imported, updated }, 503);
   }
 }
 
@@ -652,7 +654,7 @@ async function handleSyncCases(
           : '';
         return jsonResponse({
           success: false,
-          error: `eBay case search failed (HTTP ${response.status}). ${responseText.slice(0, 700)}${approvalHint}`,
+          error: `eBay case search failed (HTTP ${response.status}).${approvalHint}`, 
           fetched, imported, updated,
           requiresApproval: response.status === 403,
         }, response.status >= 500 ? 503 : 400);
@@ -712,8 +714,8 @@ async function handleSyncCases(
           .limit(1)
           .maybeSingle();
         if (lookupError) {
-          console.error(`[SWISH Cases] Lookup failed for ${ebayCaseId}: ${lookupError.message}`);
-          return jsonResponse({ success: false, error: `Database lookup failed while syncing case ${ebayCaseId}: ${lookupError.message}`, fetched, imported, updated }, 500);
+          console.error('[SWISH Cases] Database lookup failed.');
+          return jsonResponse({ success: false, error: 'Unable to read saved case records.', fetched, imported, updated }, 500);
         }
 
         if (existing?.id) {
@@ -724,15 +726,15 @@ async function handleSyncCases(
           const { error: updateError } = await supabase.from('ebay_cases')
             .update(updateRow).eq('id', existing.id).eq('tenant_id', tenantId);
           if (updateError) {
-            console.error(`[SWISH Cases] Update failed for ${ebayCaseId}: ${updateError.message}`);
-            return jsonResponse({ success: false, error: `Database update failed while syncing case ${ebayCaseId}: ${updateError.message}`, fetched, imported, updated }, 500);
+            console.error('[SWISH Cases] Database update failed.');
+            return jsonResponse({ success: false, error: 'Unable to update the saved case record.', fetched, imported, updated }, 500);
           }
           updated++;
         } else {
           const { error: insertError } = await supabase.from('ebay_cases').insert(row);
           if (insertError) {
-            console.error(`[SWISH Cases] Insert failed for ${ebayCaseId}: ${insertError.message}`);
-            return jsonResponse({ success: false, error: `Database insert failed while syncing case ${ebayCaseId}: ${insertError.message}`, fetched, imported, updated }, 500);
+            console.error('[SWISH Cases] Database insert failed.');
+            return jsonResponse({ success: false, error: 'Unable to save the case record.', fetched, imported, updated }, 500);
           }
           imported++;
         }
@@ -745,8 +747,8 @@ async function handleSyncCases(
     console.log(`[SWISH Cases] tenant=${tenantId} fetched=${fetched} imported=${imported} updated=${updated}`);
     return jsonResponse({ success: true, fetched, imported, updated, source: 'ebay_post_order', syncedAt: new Date().toISOString() });
   } catch (e: any) {
-    console.error(`[SWISH Cases] Sync failed: ${e.message}`);
-    return jsonResponse({ success: false, error: `Could not sync eBay cases: ${e.message}`, fetched, imported, updated }, 503);
+    console.error('[SWISH Cases] Case synchronisation failed.');
+    return jsonResponse({ success: false, error: 'Could not synchronise eBay cases. Please retry.', fetched, imported, updated }, 503);
   }
 }
 
@@ -779,7 +781,8 @@ Deno.serve(async (req: Request) => {
     const { data: member } = await supabase.from('tenant_memberships').select('id').eq('tenant_id', tenantId).eq('user_id', user.id).maybeSingle();
     if (!member) return jsonResponse({ error: 'Access denied.' }, 403);
   } catch (e: any) {
-    return jsonResponse({ error: `Auth error: ${e.message}` }, 401);
+    console.error('[SWISH Security] Post-Order authentication verification failed.');
+    return jsonResponse({ error: 'Authentication verification failed. Please sign in again.' }, 401);
   }
 
   try {
