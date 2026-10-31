@@ -191,6 +191,12 @@ export default function RootLayout() {
                 <Stack.Screen name="entry/motocross" />
                 <Stack.Screen name="entry/bicycles" />
                 <Stack.Screen name="entry/clothing" />
+                <Stack.Screen name="entry/cards" />
+                <Stack.Screen name="entry/antiques" />
+                <Stack.Screen name="entry/fossils" />
+                <Stack.Screen name="entry/beauty" />
+                <Stack.Screen name="entry/tech" />
+                <Stack.Screen name="entry/surplus-flip" />
                 <Stack.Screen name="buy-decision" />
                 <Stack.Screen name="research" />
                 <Stack.Screen name="deep-id-lab" />
