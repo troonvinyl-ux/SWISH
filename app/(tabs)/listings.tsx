@@ -51,7 +51,7 @@ export default function ListingsTabScreen() {
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[s.headerTitle, { color: isThreadsFlip ? threads.pink : '#E53238' }]}>{isThreadsFlip ? 'Threads Flip · eBay' : 'eBay Management'}</Text>
-          <Text style={[s.headerSub, isThreadsFlip && { color: threads.muted }]}>Threads Flip · Orders · Messages · Analytics · Finances</Text>
+          <Text style={[s.headerSub, isThreadsFlip && { color: threads.muted }]}>{isThreadsFlip ? 'Threads Flip · Orders · Messages · Analytics · Finances' : 'Orders · Messages · Analytics · Finances'}</Text>
         </View>
         <Pressable
           onPress={() => router.push('/ebay-hub' as any)}
