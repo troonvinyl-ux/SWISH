@@ -18,7 +18,7 @@ import {
 } from '@/services/listingService';
 import { Colors, Spacing, Radius, Typography } from '@/constants/theme';
 
-type TestItem = { id: string; canonical_title: string; description?: string; expected_selling_price?: number; condition?: string; condition_notes?: string; media?: string[]; specialist_id: string; attributes?: Record<string, any>; quantity?: number; inventory_id?: string };
+type TestItem = { id: string; canonical_title: string; description?: string; expected_selling_price?: number; condition?: string; condition_notes?: string; media?: string[]; specialist_id: string; attributes?: Record<string, any>; quantity?: number; inventory_id?: string; status?: string };
 type Check = 'create' | 'modify' | 'delete';
 type CheckState = 'waiting' | 'running' | 'passed' | 'failed';
 const INITIAL: Record<Check, CheckState> = { create: 'waiting', modify: 'waiting', delete: 'waiting' };
@@ -45,10 +45,15 @@ export default function MasterDiagnosticsScreen() {
     if (!tenant?.id || !specialists.length) return;
     setLoading(true);
     const { data, error } = await getSupabaseClient().from('items')
-      .select('id,canonical_title,description,expected_selling_price,condition,condition_notes,media,specialist_id,attributes,quantity,inventory_id')
+      .select('id,canonical_title,description,expected_selling_price,condition,condition_notes,media,specialist_id,attributes,quantity,inventory_id,status')
       .eq('tenant_id', tenant.id).in('specialist_id', specialists)
-      .not('canonical_title', 'is', null).order('updated_at', { ascending: false }).limit(40);
-    setItems(error ? [] : (data ?? []) as TestItem[]);
+      .not('canonical_title', 'is', null).order('updated_at', { ascending: false }).limit(80);
+    const { data: liveRows, error: liveError } = await getSupabaseClient().from('listings')
+      .select('item_id').eq('tenant_id', tenant.id).eq('marketplace_id', 'ebay').in('status', ['active','live']);
+    const alreadyLive = new Set((liveRows ?? []).map((row: { item_id: string }) => row.item_id));
+    setItems(error || liveError ? [] : ((data ?? []) as TestItem[]).filter(item =>
+      !alreadyLive.has(item.id) && !['sold','listed','active','disposed'].includes(String(item.status ?? '').toLowerCase())
+    ));
     setSelected(null);
     setLoading(false);
     if (error) setMessage('Could not load niche inventory: ' + error.message);
