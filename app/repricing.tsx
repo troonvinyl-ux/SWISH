@@ -500,7 +500,7 @@ export default function RepricingScreen() {
           <MaterialIcons name="dashboard" size={16} color={Colors.textTertiary} />
         </Pressable>
         <View style={styles.flex}>
-          <Text style={[styles.title, isThreadsFlip && { color: threads.cream }]}>Threads Flip · Repricing</Text>
+          <Text style={[styles.title, isThreadsFlip && { color: threads.cream }]}>{isThreadsFlip ? 'Threads Flip · Repricing' : 'Repricing Engine'}</Text>
           <Text style={[styles.subtitle, isThreadsFlip && { color: threads.muted }]}>
             {staleCount} stale listing{staleCount !== 1 ? 's' : ''} · {activeRules.length} active rule{activeRules.length !== 1 ? 's' : ''}
           </Text>
