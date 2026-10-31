@@ -11,7 +11,7 @@
 // Run with: npx jest services/__tests__/entryRoutes.test.ts
 // (No native modules required — pure TypeScript logic tests.)
 
-import { getAuthenticatedHomeRoute, nicheToEntryRoute, resolveProductionNiche } from '@/services/nicheRouting';
+import { getAuthenticatedHomeRoute, nicheToAppSchemeUrl, nicheToEntryRoute, resolveProductionNiche } from '@/services/nicheRouting';
 
 type NicheId =
   | 'coins' | 'trading_cards' | 'antiques' | 'bicycles' | 'motocross'
@@ -1694,5 +1694,27 @@ describe('Authenticated launch destination', () => {
       activeNicheId: 'general',
       onboardingRequired: true,
     })).toBe('/onboarding');
+  });
+});
+
+
+describe('Separate niche app launch links', () => {
+  test.each([
+    ['coins', 'coinflipper://'],
+    ['motocross', 'flippermx://'],
+    ['bicycles', 'bikeflipper://'],
+    ['clothing', 'threadsflip://'],
+    ['trading_cards', 'cardflipper://'],
+    ['antiques', 'antiqueflipper://'],
+    ['fossils', 'fossilflipper://'],
+    ['beauty', 'beautyflipper://'],
+    ['tech', 'techflipper://'],
+    ['surplus_flip', 'surplusflip://'],
+  ])('%s launches its separately installed app', (niche, expected) => {
+    expect(nicheToAppSchemeUrl(niche)).toBe(expected);
+  });
+
+  test('unknown niche never creates an app launch URL', () => {
+    expect(nicheToAppSchemeUrl('not-a-real-niche')).toBeNull();
   });
 });
