@@ -331,13 +331,6 @@ const ht = StyleSheet.create({
   upgradePrice: { fontSize: Typography.size.base, fontWeight: Typography.weight.extrabold, color: TF.black },
   proConfirmed: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: TF.pinkDim, borderRadius: Radius.xl, padding: Spacing.md, borderWidth: 1, borderColor: TF.pink + '40' },
   proConfirmedText: { fontSize: Typography.size.sm, color: TF.pink, fontWeight: Typography.weight.semibold },
-  processingHero: { alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xl },
-  processingRing: { width: 116, height: 116, borderRadius: 58, borderWidth: 3, borderColor: TF.pink, backgroundColor: TF.pinkDim, alignItems: 'center', justifyContent: 'center', shadowColor: TF.pink, shadowOpacity: 0.6, shadowRadius: 20, elevation: 8 },
-  checklistRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.sm, backgroundColor: TF.surface, borderWidth: 1, borderColor: TF.border, borderRadius: Radius.lg },
-  checklistThumb: { width: 64, height: 64, borderRadius: Radius.md },
-  checklistPlaceholder: { backgroundColor: TF.surfaceHigh, alignItems: 'center', justifyContent: 'center' },
-  checklistTitle: { fontSize: Typography.size.sm, color: TF.white, fontWeight: Typography.weight.bold },
-  checklistHint: { fontSize: Typography.size.xs, color: TF.textSub },
 });
 
 // ── Identify Tab — Full AI Identification Flow ────────────────────────────────
@@ -699,6 +692,13 @@ function IdentifyTab({
 }
 
 const id = StyleSheet.create({
+  processingHero: { alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xl },
+  processingRing: { width: 116, height: 116, borderRadius: 58, borderWidth: 3, borderColor: TF.pink, backgroundColor: TF.pinkDim, alignItems: 'center', justifyContent: 'center', shadowColor: TF.pink, shadowOpacity: 0.6, shadowRadius: 20, elevation: 8 },
+  checklistRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.sm, backgroundColor: TF.surface, borderWidth: 1, borderColor: TF.border, borderRadius: Radius.lg },
+  checklistThumb: { width: 64, height: 64, borderRadius: Radius.md },
+  checklistPlaceholder: { backgroundColor: TF.surfaceHigh, alignItems: 'center', justifyContent: 'center' },
+  checklistTitle: { fontSize: Typography.size.sm, color: TF.white, fontWeight: Typography.weight.bold },
+  checklistHint: { fontSize: Typography.size.xs, color: TF.textSub },
   content: { padding: Spacing.base, gap: Spacing.md, paddingBottom: 40 },
   sectionLabel: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: TF.textMuted, textTransform: 'uppercase', letterSpacing: 0.8 },
   hero: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, backgroundColor: TF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: TF.pink + '30' },
