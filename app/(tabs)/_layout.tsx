@@ -27,7 +27,7 @@ function useNicheHomeTab() {
   if (id === 'clothing') return { icon: 'checkroom' as const, label: 'Fashion' };
   if (id === 'surplus_flip') return { icon: 'inventory-2' as const, label: 'Surplus' };
   const config = id ? NICHES[id] : null;
-  return { icon: (config?.icon ?? 'dashboard') as React.ComponentProps<typeof MaterialIcons>['name'], label: config?.shortName ?? 'Home' };
+  return { icon: (config?.icon ?? 'dashboard') as React.ComponentProps<typeof MaterialIcons>['name'], label: config?.shortName ?? 'Home', isAntiques: id === 'antiques' };
 }
 
 // ── Live listings count ───────────────────────────────────────────────────────
@@ -165,7 +165,7 @@ export default function TabLayout() {
         name="insights"
         options={{ href: null }}
       />
-      <Tabs.Screen name="account" options={{ href: null }} />
+      <Tabs.Screen name="account" options={{ href: nicheHome.isAntiques ? undefined : null, tabBarIcon: ({ focused }) => (<View style={[styles.tabItem, focused && styles.tabItemActive]}><MaterialIcons name="more-horiz" size={22} color={focused ? Colors.primary : Colors.textTertiary} /><TabLabel label="More" focused={focused} /></View>) }} />
     </Tabs>
     <TVTabHint />
     </>
