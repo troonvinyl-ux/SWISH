@@ -185,13 +185,22 @@ const pw = StyleSheet.create({
 function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boolean; onTabSelect: (t: TFTab) => void; onUpgrade: () => void; tenant: any }) {
   const router = useRouter();
   const [itemCount, setItemCount] = useState<number | null>(null);
+  const [heroImage, setHeroImage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!tenant?.id) return;
-    getSupabaseClient()
-      .from('items').select('id', { count: 'exact', head: true })
+    const supabase = getSupabaseClient();
+    supabase.from('items').select('id', { count: 'exact', head: true })
       .eq('tenant_id', tenant.id).in('specialist_id', ['clothing', 'trainers_sneakers'])
       .then(({ count }) => setItemCount(count ?? 0));
+    supabase.from('items').select('media')
+      .eq('tenant_id', tenant.id).in('specialist_id', ['clothing', 'trainers_sneakers'])
+      .order('updated_at', { ascending: false }).limit(12)
+      .then(({ data }) => {
+        const firstPhoto = (data ?? []).map(item => Array.isArray(item.media) ? item.media[0] : null)
+          .find((uri): uri is string => typeof uri === 'string' && uri.startsWith('https://'));
+        setHeroImage(firstPhoto ?? null);
+      });
   }, [tenant?.id]);
 
   const FEATURES = [
@@ -207,7 +216,7 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ht.content}>
       <View style={ht.hero}>
         <View style={ht.heroLeft}>
-          <View style={ht.heroIcon}><MaterialIcons name="checkroom" size={32} color={TF.pink} /></View>
+          {heroImage ? <Image source={{ uri: heroImage }} style={ht.heroImage} contentFit="cover" transition={180} /> : <View style={ht.heroIcon}><MaterialIcons name="checkroom" size={32} color={TF.pink} /></View>}
         </View>
         <View style={{ flex: 1, gap: 3 }}>
           <Text style={ht.brandText}>Threads<Text style={{ color: TF.pink }}> Flip</Text></Text>
@@ -293,6 +302,7 @@ const ht = StyleSheet.create({
   sectionLabel: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: TF.textMuted, textTransform: 'uppercase', letterSpacing: 0.8 },
   hero: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md, backgroundColor: TF.surface, borderRadius: Radius.xxl, padding: Spacing.base, borderWidth: 1, borderColor: TF.pink + '40' },
   heroLeft: { alignItems: 'center' },
+  heroImage: { width: 76, height: 92, borderRadius: Radius.lg, borderWidth: 1, borderColor: TF.pink + '50' },
   heroIcon: { width: 56, height: 56, borderRadius: Radius.lg, backgroundColor: TF.pinkDim, alignItems: 'center', justifyContent: 'center' },
   brandText: { fontSize: 20, fontWeight: Typography.weight.extrabold, color: TF.white },
   tagline: { fontSize: Typography.size.xs, color: TF.textSub, lineHeight: 17 },
