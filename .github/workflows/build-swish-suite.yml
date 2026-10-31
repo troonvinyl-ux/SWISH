@@ -58,8 +58,11 @@ jobs:
       - name: Confirm full Master Switch and shopfront routes are present
         run: |
           test -f app/master-admin.tsx
-          test -f app/_layout.tsx
-          test -f 'app/(tabs)/_layout.tsx'
+          test -f master-admin-app/_layout.tsx
+          test -f master-admin-app/index.tsx
+          test -f master-admin-app/login.tsx
+          test -f master-admin-app/master-admin.tsx
+          test -f app.config.js
       - name: Generate dedicated Master Admin Android project
         env:
           SWISH_MASTER_ADMIN: '1'
