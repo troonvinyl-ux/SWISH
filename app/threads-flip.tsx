@@ -189,7 +189,7 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
     if (!tenant?.id) return;
     getSupabaseClient()
       .from('items').select('id', { count: 'exact', head: true })
-      .eq('tenant_id', tenant.id).eq('specialist_id', 'clothing')
+      .eq('tenant_id', tenant.id).in('specialist_id', ['clothing', 'trainers_sneakers'])
       .then(({ count }) => setItemCount(count ?? 0));
   }, [tenant?.id]);
 
@@ -528,7 +528,7 @@ function IdentifyTab({
         </View>
       ) : null}
 
-      <View style={id.resultHero}>
+      <View testID="threads-flip-screen-06" accessibilityLabel="Threads Flip screen 06 identification result" style={id.resultHero}>
         <View style={id.resultIconWrap}>
           <MaterialIcons name="checkroom" size={32} color={TF.pink} />
         </View>
@@ -602,7 +602,7 @@ function IdentifyTab({
         </View>
       </View>
 
-      <View style={id.condCard}>
+      <View testID="threads-flip-screen-07" accessibilityLabel="Threads Flip screen 07 condition and authentication" style={id.condCard}>
         <Text style={id.specsTitle}>CONDITION</Text>
         <Text style={id.condOverall}>{idResult.condition}</Text>
         {clothingFields.damage ? (
@@ -747,21 +747,21 @@ function ValueTab() {
           <Text style={vt.heroSub}>Resale Value - Costs - Trends</Text>
         </View>
       </View>
-      <Text style={vt.sectionLabel}>EXAMPLE — VALUE ANALYSIS</Text>
+      <Text style={vt.sectionLabel}>ILLUSTRATIVE EXAMPLE — NOT A LIVE VALUATION</Text>
       <View style={vt.valueCard}>
         <Text style={vt.valueName}>Levis Vintage Denim Jacket - 1980s</Text>
         <View style={vt.priceRange}>
           <Text style={vt.priceLabel}>Estimated Resale Value</Text>
-          <Text style={vt.priceMain}>70 - 140</Text>
+          <Text style={vt.priceMain}>£70–£140</Text>
         </View>
         <View style={vt.opportunitySection}>
           <Text style={vt.oppTitle}>SELLING OPPORTUNITY</Text>
           {[
-            { label: 'Typical Buy Price', value: '10 - 25' },
-            { label: 'Cleaning / Minor Repairs', value: '5' },
-            { label: 'Total Investment', value: '25', bold: false },
-            { label: 'Likely Selling Price', value: '100', bold: false },
-            { label: 'Potential Profit', value: '60 - 75', pink: true },
+            { label: 'Typical Buy Price', value: '£10–£25' },
+            { label: 'Cleaning / Minor Repairs', value: '£5' },
+            { label: 'Total Investment', value: '£25', bold: false },
+            { label: 'Likely Selling Price', value: '£100', bold: false },
+            { label: 'Potential Profit', value: '£60–£75', pink: true },
           ].map(row => (
             <View key={row.label} style={vt.oppRow}>
               <Text style={[vt.oppLabel, row.bold ? { fontWeight: Typography.weight.bold, color: TF.white } : null]}>{row.label}</Text>
@@ -772,7 +772,7 @@ function ValueTab() {
       </View>
       <View style={vt.infoCard}>
         <MaterialIcons name="info-outline" size={14} color={TF.pink} />
-        <Text style={vt.infoText}>Identify an item first to get real eBay sold prices and a personalised profit estimate.</Text>
+        <Text style={vt.infoText}>Illustrative figures only. Identify an item to request current comparable sold-price evidence and calculate fees, costs and estimated profit.</Text>
       </View>
     </ScrollView>
   );
@@ -815,14 +815,13 @@ function StyleTab() {
         </View>
       </View>
       {CATEGORIES_INFO.map(cat => (
-        <Pressable key={cat.id} style={({ pressed }) => [st.catCard, { borderColor: cat.color + '40' }, pressed && { opacity: 0.85 }]}>
+        <View key={cat.id} style={[st.catCard, { borderColor: cat.color + '40' }]}>
           <View style={[st.catIcon, { backgroundColor: cat.color + '20' }]}><MaterialIcons name={cat.icon as any} size={22} color={cat.color} /></View>
           <View style={{ flex: 1 }}>
             <Text style={st.catLabel}>{cat.label}</Text>
             <Text style={st.catDesc}>{cat.desc}</Text>
           </View>
-          <MaterialIcons name="chevron-right" size={16} color={TF.textMuted} />
-        </Pressable>
+        </View>
       ))}
       <Text style={st.sectionLabel}>TOP BRANDS FOR RESALE</Text>
       <View style={st.brandsGrid}>
@@ -961,15 +960,15 @@ function InsightsTab() {
         </Pressable>
       ))}
       <View style={ins.factsCard}>
-        <Text style={ins.sectionLabel}>FASHION FLIPPING FACTS</Text>
+        <Text style={ins.sectionLabel}>SELLER CHECKLIST</Text>
         {[
-          "Levi's 501s sell every 3 minutes on eBay globally",
-          'Vintage band tees can yield 10x+ on charity shop finds',
-          'Authentication evidence doubles sale price on designer items',
-          'Good photography is worth more than any listing upgrade',
-          'Stone Island sells fastest in autumn and winter',
-          'Deadstock with tags commands 30-50% premium',
-          'Depop buyers skew younger — use trend-aware language',
+          'Compare completed sales in the same brand, model, size and condition.',
+          'Photograph labels, care tags, flaws, measurements and fabric clearly.',
+          'Check authenticity markers before describing an item as genuine.',
+          'Include pit-to-pit, length, waist and inside-leg measurements where relevant.',
+          'Calculate platform fees, postage, cleaning and packaging before pricing.',
+          'Use accurate condition notes and disclose every visible defect.',
+          'Review comparable sold listings again before accepting an offer.',
         ].map((fact, i) => (
           <View key={i} style={ins.factRow}>
             <MaterialIcons name="lightbulb-outline" size={12} color={TF.pink} />
@@ -1116,8 +1115,15 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
 
   if (showPaywall) return <TFPaywall onBack={() => setShowPaywall(false)} />;
 
+  // Stable QA IDs make every Threads Flip state capturable against the numbered screen pack.
+  const screenId = activeTab === 'home' ? '03'
+    : activeTab === 'identify' ? (savedItemId ? '09' : idResult ? '06' : identifying ? '05' : '04')
+    : activeTab === 'value' ? '08'
+    : activeTab === 'style' ? 'TF-A'
+    : activeTab === 'sell' ? 'TF-B' : 'TF-C';
+
   return (
-    <View style={main.container}>
+    <View testID={'threads-flip-screen-' + screenId} accessibilityLabel={'Threads Flip screen ' + screenId} style={main.container}>
       <StatusBar style="light" />
       <View style={[main.header, { paddingTop: insets.top + Spacing.sm }]}>
         {!isHomeTab ? (
