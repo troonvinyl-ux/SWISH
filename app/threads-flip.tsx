@@ -31,6 +31,7 @@ import {
   updateItemMedia,
 } from '@/services/aiIdentificationService';
 import { Image } from 'expo-image';
+import { getMarketValue, MarketValueResult } from '@/services/marketValueService';
 
 // ── Threads Flip design tokens ────────────────────────────────────────────────
 const TF = {
@@ -763,43 +764,121 @@ const id = StyleSheet.create({
 });
 
 // ── Value Tab ─────────────────────────────────────────────────────────────────
-function ValueTab() {
+function ValueTab({ idResult, tenant, onIdentify }: { idResult: AIIdentificationResult | null; tenant: any; onIdentify: () => void }) {
+  const [marketData, setMarketData] = useState<MarketValueResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!idResult || !tenant?.id) {
+      setMarketData(null);
+      setError(null);
+      return;
+    }
+    let current = true;
+    setLoading(true);
+    setError(null);
+    getMarketValue({
+      tenantId: tenant.id,
+      title: idResult.canonicalTitle,
+      specialistId: idResult.specialistId,
+      attributes: idResult.attributes ?? {},
+      condition: idResult.condition,
+      identificationConfidence: idResult.confidence,
+      identificationTier: idResult.confidenceTier,
+      applyToItem: false,
+    }).then(({ result, error: requestError }) => {
+      if (!current) return;
+      setMarketData(result);
+      setError(requestError);
+    }).catch((requestError: unknown) => {
+      if (current) setError(requestError instanceof Error ? requestError.message : 'Market value lookup failed');
+    }).finally(() => {
+      if (current) setLoading(false);
+    });
+    return () => { current = false; };
+  }, [idResult, tenant?.id]);
+
+  const money = (value: number | undefined) => typeof value === 'number' && value > 0
+    ? new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(value)
+    : '—';
+  const valuation = marketData?.valuation;
+  const sold = marketData?.soldMarket;
+  const hasValuation = Boolean(valuation && (valuation.valuationLow > 0 || valuation.valuationMid > 0 || valuation.valuationHigh > 0));
+
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={vt.content}>
       <View style={vt.hero}>
         <MaterialIcons name="bar-chart" size={28} color={TF.pink} />
         <View style={{ flex: 1 }}>
-          <Text style={vt.heroTitle}>Value & Profit</Text>
-          <Text style={vt.heroSub}>Resale Value - Costs - Trends</Text>
+          <Text style={vt.heroTitle}>Market Value</Text>
+          <Text style={vt.heroSub}>Verified sold evidence · pricing intelligence</Text>
         </View>
       </View>
-      <Text style={vt.sectionLabel}>ILLUSTRATIVE EXAMPLE — NOT A LIVE VALUATION</Text>
-      <View style={vt.valueCard}>
-        <Text style={vt.valueName}>Levis Vintage Denim Jacket - 1980s</Text>
-        <View style={vt.priceRange}>
-          <Text style={vt.priceLabel}>Estimated Resale Value</Text>
-          <Text style={vt.priceMain}>£70–£140</Text>
+
+      {!idResult ? (
+        <View style={vt.emptyCard}>
+          <MaterialIcons name="search" size={34} color={TF.pink} />
+          <Text style={vt.emptyTitle}>Identify an item first</Text>
+          <Text style={vt.infoText}>Threads Flip will use the clothing specialist and current comparable sold-market evidence. Asking prices are kept separate from completed sales.</Text>
+          <Pressable onPress={onIdentify} style={vt.actionBtn}><Text style={vt.actionBtnText}>Scan an Item →</Text></Pressable>
         </View>
-        <View style={vt.opportunitySection}>
-          <Text style={vt.oppTitle}>SELLING OPPORTUNITY</Text>
-          {[
-            { label: 'Typical Buy Price', value: '£10–£25' },
-            { label: 'Cleaning / Minor Repairs', value: '£5' },
-            { label: 'Total Investment', value: '£25', bold: false },
-            { label: 'Likely Selling Price', value: '£100', bold: false },
-            { label: 'Potential Profit', value: '£60–£75', pink: true },
-          ].map(row => (
-            <View key={row.label} style={vt.oppRow}>
-              <Text style={[vt.oppLabel, row.bold ? { fontWeight: Typography.weight.bold, color: TF.white } : null]}>{row.label}</Text>
-              <Text style={[vt.oppValue, row.pink ? { color: TF.pink, fontWeight: Typography.weight.extrabold } : null]}>{row.value}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-      <View style={vt.infoCard}>
-        <MaterialIcons name="info-outline" size={14} color={TF.pink} />
-        <Text style={vt.infoText}>Illustrative figures only. Identify an item to request current comparable sold-price evidence and calculate fees, costs and estimated profit.</Text>
-      </View>
+      ) : (
+        <>
+          <View style={vt.valueCard}>
+            <Text style={vt.valueName}>{idResult.canonicalTitle}</Text>
+            {loading ? (
+              <View style={vt.loading}><ActivityIndicator size="large" color={TF.pink} /><Text style={vt.infoText}>Checking current sold-market evidence…</Text></View>
+            ) : error ? (
+              <View style={vt.infoCard}><MaterialIcons name="info-outline" size={14} color={TF.pink} /><Text style={vt.infoText}>{error}</Text></View>
+            ) : hasValuation && valuation ? (
+              <>
+                <View style={vt.priceRange}>
+                  <Text style={vt.priceLabel}>Evidence-based resale range</Text>
+                  <Text style={vt.priceMain}>{money(valuation.valuationLow)} – {money(valuation.valuationHigh)}</Text>
+                  <Text style={vt.heroSub}>Suggested listing price: {money(valuation.recommendedListingPrice)}</Text>
+                </View>
+                <View style={vt.opportunitySection}>
+                  <Text style={vt.oppTitle}>COMPLETED-SALE EVIDENCE</Text>
+                  <View style={vt.oppRow}><Text style={vt.oppLabel}>Verified sold listings</Text><Text style={vt.oppValue}>{sold?.verifiedSoldCount ?? 0}</Text></View>
+                  <View style={vt.oppRow}><Text style={vt.oppLabel}>Relevant sold matches</Text><Text style={vt.oppValue}>{sold?.relevantSoldCount ?? 0}</Text></View>
+                  <View style={vt.oppRow}><Text style={vt.oppLabel}>Median sold price</Text><Text style={vt.oppValue}>{money(sold?.medianPrice)}</Text></View>
+                  <View style={vt.oppRow}><Text style={vt.oppLabel}>Data quality</Text><Text style={[vt.oppValue, { color: TF.pink }]}>{sold?.dataQuality ?? 'insufficient'}</Text></View>
+                </View>
+                {marketData?.stats.recentSales.length ? (
+                  <View style={vt.opportunitySection}>
+                    <Text style={vt.oppTitle}>RECENT SOLD COMPARABLES</Text>
+                    {marketData.stats.recentSales.slice(0, 3).map((sale, index) => (
+                      <View key={index} style={vt.oppRow}>
+                        <Text style={vt.oppLabel} numberOfLines={2}>{sale.title}</Text>
+                        <Text style={vt.oppValue}>{money(sale.price)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+                {marketData?.activeAskingPrices.count ? (
+                  <View style={vt.infoCard}>
+                    <MaterialIcons name="info-outline" size={14} color={TF.pink} />
+                    <Text style={vt.infoText}>Active asking prices are shown separately and are not treated as completed sales. {marketData.activeAskingPrices.note}</Text>
+                  </View>
+                ) : null}
+                {valuation.valuationWarnings?.length ? (
+                  <View style={vt.infoCard}><MaterialIcons name="warning" size={14} color={TF.warning} /><Text style={vt.infoText}>{valuation.valuationWarnings.join(' ')}</Text></View>
+                ) : null}
+              </>
+            ) : (
+              <View style={vt.infoCard}>
+                <MaterialIcons name="info-outline" size={14} color={TF.pink} />
+                <Text style={vt.infoText}>There is not enough relevant sold evidence to produce a reliable price range yet. Do not substitute active asking prices for sold prices.</Text>
+              </View>
+            )}
+          </View>
+          <View style={vt.infoCard}>
+            <MaterialIcons name="account-balance-wallet" size={14} color={TF.pink} />
+            <Text style={vt.infoText}>Net profit needs your actual acquisition cost, cleaning, postage and fees. Add those in the listing workflow before treating a margin as confirmed.</Text>
+          </View>
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -821,6 +900,11 @@ const vt = StyleSheet.create({
   oppValue: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: TF.white },
   infoCard: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: TF.pinkDim, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: TF.pink + '25' },
   infoText: { flex: 1, fontSize: Typography.size.xs, color: TF.pink, lineHeight: 17 },
+  emptyCard: { alignItems: 'center', gap: Spacing.md, backgroundColor: TF.surface, borderRadius: Radius.xxl, padding: Spacing.xl, borderWidth: 1, borderColor: TF.border },
+  emptyTitle: { fontSize: Typography.size.lg, fontWeight: Typography.weight.extrabold, color: TF.white },
+  actionBtn: { backgroundColor: TF.pink, borderRadius: Radius.md, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md },
+  actionBtnText: { color: TF.black, fontSize: Typography.size.sm, fontWeight: Typography.weight.extrabold },
+  loading: { alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xl },
 });
 
 // ── Style Tab ─────────────────────────────────────────────────────────────────
@@ -1218,7 +1302,7 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
             tenant={tenant}
           />
         ) : null}
-        {activeTab === 'value' ? <ValueTab /> : null}
+        {activeTab === 'value' ? <ValueTab idResult={idResult} tenant={tenant} onIdentify={() => handleTabSelect('identify')} /> : null}
         {activeTab === 'style' ? <StyleTab /> : null}
         {activeTab === 'sell' ? <SellTab /> : null}
         {activeTab === 'insights' ? <InsightsTab /> : null}
