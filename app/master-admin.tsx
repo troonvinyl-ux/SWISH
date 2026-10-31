@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/template';
 import { useApp } from '@/hooks/useApp';
 import { isSwishMasterAdmin } from '@/contexts/AppContext';
+import { resolveProductionNiche } from '@/services/nicheRouting';
 import { PRODUCTION_NICHES, NICHE_MODULES } from '@/constants/niches';
 import { Colors, Typography, Spacing, Radius } from '@/constants/theme';
 
@@ -50,8 +51,10 @@ export default function MasterAdminScreen() {
   }
 
   const switchNiche = async (id: (typeof PRODUCTION_NICHES)[number]['id']) => {
-    const scheme = NICHE_MODULES[id]?.scheme;
-    if (!scheme) {
+    const nicheId = resolveProductionNiche(id);
+    const nicheModule = nicheId ? NICHE_MODULES[nicheId] : null;
+    const scheme = nicheModule?.scheme;
+    if (!nicheId || !nicheModule || !scheme) {
       Alert.alert('App unavailable', 'This niche does not have a registered app launch link.');
       return;
     }
@@ -60,8 +63,8 @@ export default function MasterAdminScreen() {
       setActiveNiche(id);
     } catch {
       Alert.alert(
-        `${NICHE_MODULES[id].name} is not installed`,
-        `Install the ${NICHE_MODULES[id].name} APK on this device, then return here to launch it. The Master Admin app does not contain the niche workspace.`,
+        `${nicheModule.name} is not installed`,
+        `Install the ${nicheModule.name} APK on this device, then return here to launch it. The Master Admin app does not contain the niche workspace.`,
       );
     }
   };
