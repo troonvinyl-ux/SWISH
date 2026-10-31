@@ -51,6 +51,7 @@ describe('Branded Expo build configuration', () => {
     '%s has its own name, slug, deep link, and package ID',
     (nicheId, expected) => {
       delete process.env.SWISH_MASTER_ADMIN;
+      delete process.env.SWISH_OTA_PUBLISH;
       process.env.SWISH_NICHE = nicheId;
       const config = configureApp({ config: BASE_CONFIG });
       expect(config.name).toBe(expected[0]);
