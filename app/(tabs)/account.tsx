@@ -38,7 +38,7 @@ export default function AccountScreen() {
 
   return (
     <View testID={isThreadsFlip ? "threads-flip-screen-account" : undefined} accessibilityLabel={isThreadsFlip ? "Threads Flip account and workspace" : undefined} style={[styles.screen, { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + Spacing.lg }, isThreadsFlip && { backgroundColor: threads.background }]}>
-      <Text style={[styles.eyebrow, isThreadsFlip && { color: threads.pink }]}>THREADS FLIP · ACCOUNT</Text>
+      <Text style={[styles.eyebrow, isThreadsFlip && { color: threads.pink }]}>{isThreadsFlip ? 'THREADS FLIP · ACCOUNT' : 'SWISH ACCOUNT'}</Text>
       <Text style={[styles.title, isThreadsFlip && { color: threads.cream }]}>Account & workspace</Text>
       <Text style={[styles.email, isThreadsFlip && { color: threads.muted }]}>{user?.email ?? 'Signed-in account'}</Text>
 
