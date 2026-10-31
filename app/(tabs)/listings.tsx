@@ -29,9 +29,11 @@ const EBAY_ROUTES = [
 export default function ListingsTabScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, activeNicheId } = useApp();
+  const { tenant, activeNicheId, fixedNicheId } = useApp();
 
-  const nicheId = (activeNicheId ?? '').toLowerCase();
+  const nicheId = (fixedNicheId ?? activeNicheId ?? '').toLowerCase();
+  const isThreadsFlip = nicheId === 'clothing';
+  const threads = { background: '#0C080C', surface: '#160E16', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5', muted: '#9A7090' };
   const accentColor =
     nicheId.includes('coin') ? '#F5C842' :
     nicheId === 'motocross' ? '#FF5500' :
@@ -39,17 +41,17 @@ export default function ListingsTabScreen() {
     nicheId === 'clothing' ? '#E91E8C' : Colors.primary;
 
   return (
-    <View style={s.container}>
+    <View testID={isThreadsFlip ? 'threads-flip-screen-14' : undefined} accessibilityLabel={isThreadsFlip ? 'Threads Flip screen 14 Listings and eBay tools' : undefined} style={[s.container, isThreadsFlip && { backgroundColor: threads.background }]}>
       <StatusBar style="light" />
 
       {/* Header */}
-      <View style={[s.header, { paddingTop: insets.top + Spacing.base }]}>
+      <View style={[s.header, { paddingTop: insets.top + Spacing.base }, isThreadsFlip && { backgroundColor: threads.surface, borderBottomColor: threads.border }]}>
         <View style={[s.headerIcon, { backgroundColor: '#E53238' + '20' }]}>
           <MaterialIcons name="storefront" size={18} color="#E53238" />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[s.headerTitle, { color: '#E53238' }]}>eBay Management</Text>
-          <Text style={s.headerSub}>Orders · Messages · Analytics · Finances</Text>
+          <Text style={[s.headerSub, isThreadsFlip && { color: threads.muted }]}>Threads Flip · Orders · Messages · Analytics · Finances</Text>
         </View>
         <Pressable
           onPress={() => router.push('/ebay-hub' as any)}
@@ -61,7 +63,7 @@ export default function ListingsTabScreen() {
       </View>
 
       {/* Info banner — direct users to Stock tab for listings */}
-      <View style={s.infoBanner}>
+      <View style={[s.infoBanner, isThreadsFlip && { backgroundColor: threads.surface, borderColor: threads.border }]}>
         <MaterialIcons name="info-outline" size={13} color={accentColor} />
         <View style={{ flex: 1 }}>
           <Text style={[s.infoBannerTitle, { color: accentColor }]}>Listings are now in the Stock tab</Text>
