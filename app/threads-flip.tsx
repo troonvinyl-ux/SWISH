@@ -76,6 +76,21 @@ const CLOTHING_CATEGORIES = [
 ];
 
 const TOP_BRANDS = ["Levi's", 'Nike', 'Carhartt', 'Ralph Lauren', 'Stone Island', 'The North Face', 'Adidas', 'Burberry', 'Prada', 'Supreme'];
+function CategoryPhoto({ uri, style, icon = 'checkroom' }: { uri: string; style: any; icon?: string }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <View style={[style, { backgroundColor: TF.surfaceHigh, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }]}>
+      {!failed ? (
+        <Image source={{ uri }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={180} onError={() => setFailed(true)} />
+      ) : (
+        <View style={{ flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center', backgroundColor: TF.pinkDim }}>
+          <MaterialIcons name={icon as any} size={26} color={TF.pink} />
+        </View>
+      )}
+    </View>
+  );
+}
+
 
 // Editorial category photography. These Pexels images are free-to-use under the
 // Pexels licence; attribution and source links are recorded in docs/threads-flip-screen-map.md.
@@ -199,6 +214,7 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
   const router = useRouter();
   const [itemCount, setItemCount] = useState<number | null>(null);
   const [heroImage, setHeroImage] = useState<string | null>(null);
+  const [heroImageFailed, setHeroImageFailed] = useState(false);
 
   useEffect(() => {
     if (!tenant?.id) return;
@@ -213,6 +229,7 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
         const firstPhoto = (data ?? []).map(item => Array.isArray(item.media) ? item.media[0] : null)
           .find((uri): uri is string => typeof uri === 'string' && uri.startsWith('https://'));
         setHeroImage(firstPhoto ?? null);
+        setHeroImageFailed(false);
       });
   }, [tenant?.id]);
 
@@ -229,7 +246,7 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ht.content}>
       <View style={ht.hero}>
         <View style={ht.heroLeft}>
-          {heroImage ? <Image source={{ uri: heroImage }} style={ht.heroImage} contentFit="cover" transition={180} /> : <Image source={{ uri: CLOTHING_CATEGORY_IMAGES.vintage }} style={ht.heroImage} contentFit="cover" transition={180} />}
+          {heroImage && !heroImageFailed ? <Image source={{ uri: heroImage }} style={ht.heroImage} contentFit="cover" transition={180} onError={() => setHeroImageFailed(true)} /> : <CategoryPhoto uri={CLOTHING_CATEGORY_IMAGES.vintage} style={ht.heroImage} />}
         </View>
         <View style={{ flex: 1, gap: 3 }}>
           <Text style={ht.brandText}>Threads<Text style={{ color: TF.pink }}> Flip</Text></Text>
@@ -285,7 +302,7 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm, paddingVertical: 4 }}>
         {CLOTHING_CATEGORIES.map(cat => (
           <Pressable key={cat.id} onPress={() => onTabSelect('identify')} style={({ pressed }) => [ht.catCard, pressed && { opacity: 0.82 }]}>
-            <Image source={{ uri: CLOTHING_CATEGORY_IMAGES[cat.id] ?? CLOTHING_CATEGORY_IMAGES.vintage }} style={ht.catImage} contentFit="cover" transition={180} />
+            <CategoryPhoto uri={CLOTHING_CATEGORY_IMAGES[cat.id] ?? CLOTHING_CATEGORY_IMAGES.vintage} style={ht.catImage} icon={cat.id === 'trainers' ? 'directions-run' : cat.id === 'accessories' ? 'shopping-bag' : 'checkroom'} />
             <Text style={ht.catLabel}>{cat.label}</Text>
             <Text style={ht.catSub}>{cat.sub}</Text>
           </Pressable>
