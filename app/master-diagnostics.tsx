@@ -38,8 +38,6 @@ export default function MasterDiagnosticsScreen() {
   const [message, setMessage] = useState('Choose a real inventory item in the active niche. The test creates a clearly labelled temporary live eBay listing.');
   const [testTitle, setTestTitle] = useState('');
 
-  if (!isSwishMasterAdmin(user?.email)) return <Redirect href="/" />;
-
   const nicheName = PRODUCTION_NICHES.find(n => n.id === activeNicheId)?.shortName ?? String(activeNicheId);
   const specialists = getProductionNicheSpecialistIds(activeNicheId);
 
@@ -57,6 +55,8 @@ export default function MasterDiagnosticsScreen() {
   }, [tenant?.id, activeNicheId]);
 
   useEffect(() => { void loadItems(); }, [loadItems]);
+
+  if (!isSwishMasterAdmin(user?.email)) return <Redirect href="/" />;
 
   const setCheck = (key: Check, value: CheckState) => setChecks(previous => ({ ...previous, [key]: value }));
   const fail = (key: Check, error: string) => { setCheck(key, 'failed'); setMessage(error); setBusy(false); };
@@ -84,14 +84,16 @@ export default function MasterDiagnosticsScreen() {
     setListing(created.listing); setTestTitle(title);
     const result = await submitListingToMarketplace(tenant.id, created.listing.id);
     if (!result.success || !result.externalListingId) {
-      await deleteListing(created.listing.id, tenant.id);
-      setListing(null);
-      return fail('create', result.error ?? 'eBay did not confirm a live listing ID. The local test draft was cleaned up.');
+      // A timeout can mean eBay accepted the listing but the response was lost.
+      // Keep the local record for reconciliation; never delete an unknown outcome.
+      const { data: uncertain } = await getSupabaseClient().from('listings').select('*').eq('id', created.listing.id).eq('tenant_id', tenant.id).maybeSingle();
+      if (uncertain) setListing({ ...created.listing, status: uncertain.status ?? 'pending', externalListingId: uncertain.external_listing_id ?? undefined });
+      return fail('create', (result.error ?? 'eBay did not confirm a live listing ID.') + ' The test record was retained because the marketplace outcome may be unknown. Reconcile eBay before retrying.');
     }
-    const { data: persisted, error } = await getSupabaseClient().from('listings').select('id,status,external_listing_id').eq('id', created.listing.id).eq('tenant_id', tenant.id).maybeSingle();
-    if (error || !persisted || !['active','live'].includes(String(persisted.status).toLowerCase()) || !persisted.external_listing_id) {
+    const { data: persisted, error } = await getSupabaseClient().from('listings').select('id,status,external_listing_id,title,price').eq('id', created.listing.id).eq('tenant_id', tenant.id).maybeSingle();
+    if (error || !persisted || !['active','live'].includes(String(persisted.status).toLowerCase()) || !persisted.external_listing_id || persisted.title !== title || Number(persisted.price) !== price) {
       setExternalId(result.externalListingId);
-      return fail('create', 'eBay returned a listing ID, but SWISH could not verify the persisted active listing. Do not retry automatically; reconcile this test listing first.');
+      return fail('create', 'eBay returned a listing ID, but the SWISH row did not pass the status, ID, title and price column checks. Do not retry automatically; reconcile this test listing first.');
     }
     setExternalId(String(persisted.external_listing_id));
     setCheck('create', 'passed'); setMessage('CREATE passed: eBay confirmed a listing ID and SWISH persisted the active listing. Next, run MODIFY.');
@@ -117,6 +119,10 @@ export default function MasterDiagnosticsScreen() {
       itemSpecifics, mediaUrls: (selected.media ?? []).filter(url => typeof url === 'string' && url.startsWith('https://')),
     } });
     if (error || !data?.success) return fail('modify', data?.error ?? error?.message ?? 'eBay did not confirm the revise operation.');
+    const { data: revised, error: readError } = await getSupabaseClient().from('listings').select('title,price,external_listing_id').eq('id', listing.id).eq('tenant_id', tenant.id).maybeSingle();
+    if (readError || !revised || revised.title !== nextTitle || Number(revised.price) !== nextPrice || revised.external_listing_id !== externalId) {
+      return fail('modify', 'eBay accepted the revise request, but SWISH title/price/external ID column read-back did not match. Keep the test listing for reconciliation.');
+    }
     setTestTitle(nextTitle);
     setCheck('modify', 'passed'); setMessage('MODIFY passed: eBay confirmed the revise request. Next, run DELETE to end the test listing and remove its SWISH test record.');
     setBusy(false);
