@@ -50,7 +50,7 @@ jobs:
       - name: Regression tests (reported separately; typecheck remains a hard gate)
         continue-on-error: true
         run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand
-      - name: Confirm full Master Switch and shopfront routes are present
+      - name: Confirm lightweight Master Admin route tree is present
         run: |
           test -f app/master-admin.tsx
           test -f master-admin-app/_layout.tsx
