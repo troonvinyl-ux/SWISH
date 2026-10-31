@@ -471,10 +471,12 @@ function useNicheHubStyle(activeNicheId: string | null | undefined) {
 function EbayHubScreenContent() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, activeNicheId } = useApp();
+  const { tenant, activeNicheId, fixedNicheId } = useApp();
+  const effectiveNicheId = fixedNicheId ?? activeNicheId;
+  const isThreadsFlip = effectiveNicheId === 'clothing';
   const { showAlert } = useAlert();
   const supabase = getSupabaseClient();
-  const nicheStyle = useNicheHubStyle(activeNicheId);
+  const nicheStyle = useNicheHubStyle(effectiveNicheId);
 
   const [metrics, setMetrics] = useState<EbayMetrics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -653,11 +655,11 @@ function EbayHubScreenContent() {
   }
 
   return (
-    <View style={s.container}>
+    <View testID={isThreadsFlip ? 'threads-flip-screen-ebay-hub' : undefined} accessibilityLabel={isThreadsFlip ? 'Threads Flip eBay Seller Hub' : undefined} style={[s.container, isThreadsFlip && { backgroundColor: '#0C080C' }]}>
       <StatusBar style="light" />
 
       {/* Header — niche-aware */}
-      <View style={[s.header, { paddingTop: insets.top + Spacing.base, borderBottomColor: nicheStyle.accent + '30' }]}>
+      <View style={[s.header, { paddingTop: insets.top + Spacing.base, borderBottomColor: nicheStyle.accent + '30' }, isThreadsFlip && { backgroundColor: '#160E16' }]}>
         <Pressable onPress={() => router.back()} style={s.backBtn} hitSlop={8}>
           <MaterialIcons name="arrow-back" size={20} color={Colors.textSecondary} />
         </Pressable>
