@@ -786,9 +786,7 @@ function DispatchModal({
   const [tracking, setTracking] = useState('');
   const [carrier, setCarrier] = useState('Royal Mail');
   const [saving, setSaving] = useState(false);
-  const { tenant, activeNicheId, fixedNicheId } = useApp();
-  const nicheId = fixedNicheId ?? activeNicheId;
-  const isThreadsFlip = nicheId === 'clothing';
+  const { tenant } = useApp();
 
   useEffect(() => { if (visible) { setTracking(''); setCarrier('Royal Mail'); } }, [visible]);
 
@@ -1452,7 +1450,9 @@ const row = StyleSheet.create({
 export default function EbayAdminScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, activeNicheId } = useApp();
+  const { tenant, activeNicheId, fixedNicheId } = useApp();
+  const nicheId = fixedNicheId ?? activeNicheId;
+  const isThreadsFlip = nicheId === 'clothing';
   const { showAlert } = useAlert();
 
   const [listings, setListings] = useState<EbayListing[]>([]);
