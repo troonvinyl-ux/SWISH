@@ -79,9 +79,6 @@ export default function MasterAdminScreen() {
             <Text style={styles.title}>Master Admin</Text>
             <Text style={styles.subtitle}>Owner control centre</Text>
           </View>
-          <View style={styles.shield}>
-            <MaterialIcons name="admin-panel-settings" size={26} color={Colors.primary} />
-          </View>
         </View>
 
         <View style={styles.ownerCard}>
