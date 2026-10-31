@@ -7,6 +7,8 @@ describe('Antique Flipper production pack', () => {
     expect(NICHE_MODULES.antiques.home).toBe('antique-flipper.tsx');
     expect(NICHE_MODULES.antiques.specialists).toEqual(['antiques', 'books']);
     expect(NICHE_MODULES.antiques.dedicatedRoutes).toContain('antique-guides.tsx');
+    expect(NICHE_MODULES.antiques.dedicatedRoutes).toContain('antique-condition.tsx');
+    expect(NICHE_MODULES.antiques.dedicatedRoutes).toContain('antique-value.tsx');
     expect(NICHE_MODULES.antiques.dedicatedRoutes).toContain('(tabs)/antique-more.tsx');
   });
 
