@@ -1,23 +1,9 @@
 // SWISH app/index.tsx — Authentication + niche-aware entry router
 //
-// Routing decision tree:
-//   Not logged in          → /login
-//   Logged in, loading     → spinner
-//   Logged in, no onboard  → /onboarding
-//   Logged in, onboarded   → /entry/<niche>  (each niche has its own entry route)
-//
-// The explicit /entry/<niche> redirect ensures that every authenticated subscriber
-// lands in their correct niche shell. The /(tabs) screen is the destination AFTER
-// the entry route enforces the niche. No subscriber is silently dropped into a
-// default niche without an explicit route decision.
-//
-// Niche → entry route mapping:
-//   coins / coin variants  → /entry/coins
-//   motocross              → /entry/motocross
-//   bicycles / cycling     → /entry/bicycles
-//   clothing / fashion     → /entry/clothing
-//   general / unknown      → /entry/coins  (fallback; subscriber should be prompted to select)
+// Subscriber installs enter their own niche. The dedicated Master Admin build
+// enters the owner console directly after authentication and account loading.
 
+import Constants from 'expo-constants';
 import { AuthRouter } from '@/template';
 import { Redirect } from 'expo-router';
 import { useApp } from '@/hooks/useApp';
@@ -26,9 +12,13 @@ import { Colors } from '@/constants/theme';
 import { nicheToEntryRoute } from '@/services/nicheRouting';
 
 function AppRouter() {
-  const { businessConfig, tenantLoading, tenantError, nichePreferencesLoading, activeNicheId, fixedNicheId } = useApp();
+  const {
+    businessConfig, tenantLoading, tenantError, nichePreferencesLoading,
+    activeNicheId, fixedNicheId, isMasterAdmin,
+  } = useApp();
+  const isMasterAdminBuild = Constants.expoConfig?.extra?.swishMasterAdminBuild === true;
 
-  // Still loading tenant/config
+  // Wait until auth, tenant and niche state have settled before routing.
   if (tenantLoading || nichePreferencesLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center' }}>
@@ -39,21 +29,21 @@ function AppRouter() {
 
   if (tenantError) return <AccountLoadError />;
 
-  // businessConfig == null means first-time user who hasn't completed onboarding
-  // onboardingComplete false also triggers onboarding
+  // A dedicated Master Admin APK must open the owner console, not the default
+  // Coins workspace or subscriber onboarding. The screen itself independently
+  // checks the signed-in owner account and redirects everyone else.
+  if (isMasterAdminBuild && isMasterAdmin) {
+    return <Redirect href={"/master-admin" as any} />;
+  }
+
+  // businessConfig == null means first-time subscriber who has not completed onboarding.
   if (businessConfig === null || businessConfig?.onboardingComplete === false) {
     return <Redirect href={"/onboarding" as any} />;
   }
 
-  // Fail closed: an unset/unknown niche must never silently open Coins.
-  // Ask the user to select a product until a registered niche is available.
-  // A branded APK's build-time product identity takes precedence over account
-  // preferences, including for the master administrator. Never route a branded
-  // installation into another niche.
+  // Branded APK identity takes precedence over account preferences.
   const entryRoute = nicheToEntryRoute(fixedNicheId ?? activeNicheId);
   if (!entryRoute) return <Redirect href={"/niche-select" as any} />;
-
-  // Route to the correct niche-specific entry point.
   return <Redirect href={entryRoute as any} />;
 }
 

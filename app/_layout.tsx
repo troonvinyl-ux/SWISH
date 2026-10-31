@@ -1,5 +1,6 @@
 // SWISH root layout
 import { Stack, useRouter, usePathname, useSegments } from 'expo-router';
+import Constants from 'expo-constants';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AlertProvider, AuthProvider } from '@/template';
 import { AppProvider } from '@/contexts/AppContext';
@@ -60,6 +61,28 @@ function TVBackHandlerEffect({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function GlobalAdminShortcut() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const segments = useSegments();
+  const { isMasterAdmin } = useApp();
+  const isMasterAdminBuild = Constants.expoConfig?.extra?.swishMasterAdminBuild === true;
+  const inTabs = segments[0] === '(tabs)';
+  const hidden = pathname === '/master-admin' || pathname === '/login' || pathname === '/onboarding';
+  if (!isMasterAdminBuild || !isMasterAdmin || hidden) return null;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Return to Master Admin dashboard"
+      onPress={() => router.replace('/master-admin' as any)}
+      style={({ pressed }) => [globalAdminStyles.button, inTabs && globalAdminStyles.inTabs, pressed && globalAdminStyles.pressed]}
+    >
+      <MaterialIcons name="admin-panel-settings" size={21} color="#111111" />
+      <Text style={globalAdminStyles.label}>ADMIN</Text>
+    </Pressable>
+  );
+}
+
 function GlobalScanShortcut() {
   const router = useRouter();
   const pathname = usePathname();
@@ -82,6 +105,31 @@ function GlobalScanShortcut() {
     </Pressable>
   );
 }
+
+const globalAdminStyles = StyleSheet.create({
+  button: {
+    position: 'absolute',
+    left: 18,
+    bottom: 24,
+    zIndex: 1000,
+    minHeight: 54,
+    paddingHorizontal: 16,
+    borderRadius: 28,
+    backgroundColor: '#F5C842',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    elevation: 10,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  label: { color: '#111111', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+  inTabs: { bottom: 88 },
+  pressed: { opacity: 0.82, transform: [{ scale: 0.97 }] },
+});
 
 const globalScanStyles = StyleSheet.create({
   button: {
@@ -204,6 +252,7 @@ export default function RootLayout() {
                 <Stack.Screen name="deep-id-lab" />
               </Stack>
               <GlobalScanShortcut />
+              <GlobalAdminShortcut />
               </View>
               </NicheRouteBoundary>
             </TVBackHandlerProvider>
