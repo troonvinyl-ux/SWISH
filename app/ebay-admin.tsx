@@ -1458,7 +1458,7 @@ export default function EbayAdminScreen() {
   const [listings, setListings] = useState<EbayListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<StatusTab>('all');
+  const [activeTab, setActiveTab] = useState<StatusTab>(isThreadsFlip ? 'draft' : 'all');
   const [search, setSearch] = useState('');
 
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
@@ -1989,7 +1989,7 @@ export default function EbayAdminScreen() {
       {/* Status tabs */}
       <View style={[s.tabsOuter, isThreadsFlip && { backgroundColor: '#160E16', borderBottomColor: '#301830' }]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabsContent}>
-          {STATUS_TABS.map(tab => {
+          {(isThreadsFlip ? STATUS_TABS.filter(tab => ['draft', 'active', 'ended'].includes(tab.id)) : STATUS_TABS).map(tab => {
             const active = activeTab === tab.id;
             const count  = tab.id === 'all' ? listings.length : (tabCounts[tab.id] ?? 0);
             return (
