@@ -19,7 +19,7 @@ function Field({ label, value, onChange, numeric, multiline }: FieldProps) {
 }
 export default function EbayListingEditorScreen() {
   const { id } = useLocalSearchParams<{ id: string }>(); const editor = useListingEditor(typeof id === 'string' ? id : '');
-  const router = useRouter(); const { showAlert } = useAlert(); const { activeNicheId, fixedNicheId } = useApp(); const isThreadsFlip = (fixedNicheId ?? activeNicheId) === 'clothing'; const threads = { background: '#0C080C', surface: '#160E16', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5', muted: '#9A7090' }; const [query, setQuery] = useState('');
+  const router = useRouter(); const { showAlert } = useAlert(); const { activeNicheId, fixedNicheId } = useApp(); const isThreadsFlip = (fixedNicheId ?? activeNicheId) === 'clothing'; const threads = { background: '#0C080C', surface: '#160E16', surfaceHigh: '#201420', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5', muted: '#9A7090' }; const [query, setQuery] = useState('');
   const data = editor.data;
   const save = async () => { if (await editor.save()) showAlert('Saved', 'Listing, category and item specifics saved together.'); };
   const revise = (skuOnly: boolean) => showAlert(skuOnly ? 'Update SKU only?' : 'Revise on eBay?', skuOnly ? 'Only the custom label is sent to eBay. Canonical inventory identity is unchanged.' : 'Push the saved title, description, price, category, condition, specifics and photos to the live listing?', [
