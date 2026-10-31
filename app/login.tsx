@@ -114,12 +114,12 @@ export default function LoginScreen() {
           <View style={styles.brand}>
             <View style={styles.logoWrap}>
               <View style={[styles.logoMark, isThreadsFlip && { backgroundColor: threads.pink }]}>
-                <Text style={[styles.logoS, isThreadsFlip && { color: threads.background }]}>T</Text>
+                <Text style={[styles.logoS, isThreadsFlip && { color: threads.background }]}>{isThreadsFlip ? 'T' : 'S'}</Text>
               </View>
               <View style={styles.logoGlow} />
             </View>
-            <Text style={[styles.appName, isThreadsFlip && { color: threads.cream }]}>THREADS FLIP</Text>
-            <Text style={[styles.appTagline, isThreadsFlip && { color: threads.muted }]}>IDENTIFY · VALUE · STYLE · SELL</Text>
+            <Text style={[styles.appName, isThreadsFlip && { color: threads.cream }]}>{isThreadsFlip ? 'THREADS FLIP' : 'SWISH'}</Text>
+            <Text style={[styles.appTagline, isThreadsFlip && { color: threads.muted }]}>{isThreadsFlip ? 'IDENTIFY · VALUE · STYLE · SELL' : 'Commerce Intelligence Platform'}</Text>
           </View>
 
           {/* Mode selector */}
@@ -190,7 +190,6 @@ export default function LoginScreen() {
                 style={({ pressed }) => [
                   styles.primaryBtn,
                   isThreadsFlip && { backgroundColor: threads.pink, shadowColor: threads.pink },
-                  isThreadsFlip && { backgroundColor: threads.pink, shadowColor: threads.pink },
                   (operationLoading || !isValidEmail || !password) && styles.btnDisabled,
                   pressed && { opacity: 0.88 },
                 ]}
@@ -201,7 +200,7 @@ export default function LoginScreen() {
                   <ActivityIndicator color={Colors.background} size="small" />
                 ) : (
                   <>
-                    <Text style={[styles.primaryBtnText, isThreadsFlip && { color: threads.background }]}>Sign In to SWISH</Text>
+                    <Text style={[styles.primaryBtnText, isThreadsFlip && { color: threads.background }]}>Sign In to {isThreadsFlip ? 'Threads Flip' : 'SWISH'}</Text>
                     <MaterialIcons name="arrow-forward" size={18} color={Colors.background} />
                   </>
                 )}
