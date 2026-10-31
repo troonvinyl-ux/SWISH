@@ -1428,7 +1428,8 @@ async function checkStripeSubscription(userId: string, userEmail: string, nicheI
       const linkedUserId = sub.metadata?.user_id;
       if (linkedUserId && linkedUserId !== userId) continue;
       if (sub.status !== 'active' && sub.status !== 'trialing') continue;
-      const subscribedNiche = String(sub.metadata?.niche_id ?? 'coins').toLowerCase();
+      let subscribedNiche = String(sub.metadata?.niche_id ?? 'coins').toLowerCase();
+      if (subscribedNiche === 'surplus_trader') subscribedNiche = 'surplus_flip';
       if (subscribedNiche !== nicheId) continue;
       for (const item of sub.items?.data ?? []) {
         if (item.price?.product === STRIPE_PRODUCT_ID) return true;
