@@ -65,3 +65,12 @@ These routes are not substitutes for any of the 16 numbered screens. They must b
 ## Known issue found during code inspection
 
 The Threads Flip home metric counted only `specialist_id = 'clothing'`, while the clothing module declares both `clothing` and `trainers_sneakers`. The count query has been corrected on this branch to include both IDs. The shared inventory hook already resolves the production specialist IDs. The Orders screen and eBay Hub were also using `activeNicheId` directly; they now respect `fixedNicheId` first so niche APKs remain correctly scoped. Repricing stale-listing results and linked rules are filtered to the active niche in the shared hook.
+
+
+## Repricing isolation regression check
+
+The shared repricing service must receive the effective niche ID for every read and write. The UI hook uses `fixedNicheId ?? activeNicheId`, and the service fails closed for an unknown niche, filters stale listings by the production specialist IDs at query time, and verifies listing ownership before generating an AI suggestion or applying a price change. Do not replace this with client-side filtering alone.
+
+## Authentication branding
+
+The shared login route remains shared across all niches. Threads Flip branding is conditional on the effective niche being `clothing`; all other niche builds retain the SWISH mark and Commerce Intelligence Platform tagline.
