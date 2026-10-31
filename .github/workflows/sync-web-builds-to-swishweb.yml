@@ -6,6 +6,11 @@ on:
     types: [completed]
     branches: [main]
   workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Successful SWISH branded web build run ID
+        required: true
+        type: string
 
 permissions:
   actions: read
@@ -37,14 +42,14 @@ jobs:
         if: steps.credentials.outputs.ready == 'true'
         uses: actions/download-artifact@v4
         with:
-          run-id: ${{ github.event.workflow_run.id || github.run_id }}
+          run-id: ${{ inputs.source_run_id || github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
           pattern: swish-web-*
           path: web-artifacts
           merge-multiple: false
 
-      - name: Validate all ten exports and prepare destination tree
+      - name: Validate all ten exports
         if: steps.credentials.outputs.ready == 'true'
         shell: bash
         run: |
@@ -100,7 +105,7 @@ jobs:
             exit 0
           fi
           git commit -m "chore: update ten SWISH niche web exports"
-          git push --force-with-lease origin "$branch"
+          git push --force origin "$branch"
           if gh pr view "$branch" --repo troonvinyl-ux/SwishWeb >/dev/null 2>&1; then
             echo "Updated existing SwishWeb deployment PR."
           else
