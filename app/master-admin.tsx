@@ -16,7 +16,7 @@ export default function MasterAdminScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { activeNicheId, enabledNiches, isMasterAdmin, tenant, subscriptionTier } = useApp();
+  const { activeNicheId, enabledNiches, setActiveNiche, isMasterAdmin, tenant, subscriptionTier } = useApp();
   const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   const checkForAppUpdate = async () => {
@@ -57,6 +57,7 @@ export default function MasterAdminScreen() {
     }
     try {
       await Linking.openURL(`${scheme}://`);
+      setActiveNiche(id);
     } catch {
       Alert.alert(
         `${NICHE_MODULES[id].name} is not installed`,
@@ -119,7 +120,7 @@ export default function MasterAdminScreen() {
                   <Text style={styles.nicheStatus}>{enabled ? 'Premium access enabled' : 'Available to master account'}</Text>
                 </View>
                 {active
-                  ? <View style={[styles.activePill, { backgroundColor: niche.color }]}><Text style={styles.activePillText}>ACTIVE</Text></View>
+                  ? <View style={[styles.activePill, { backgroundColor: niche.color }]}><Text style={styles.activePillText} >LAST OPENED</Text></View>
                   : <MaterialIcons name="chevron-right" size={24} color={Colors.textTertiary} />}
               </Pressable>
             );
