@@ -60,7 +60,9 @@ jobs:
           test -f app/master-admin.tsx
           test -f app/_layout.tsx
           test -f 'app/(tabs)/_layout.tsx'
-      - name: Generate full Android project
+      - name: Generate dedicated Master Admin Android project
+        env:
+          SWISH_MASTER_ADMIN: '1'
         run: npx expo prebuild --platform android --clean
       - uses: actions/cache@v4
         with:
