@@ -11,7 +11,7 @@ import {
   View, Text, StyleSheet, Pressable, ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -1024,10 +1024,12 @@ const ins = StyleSheet.create({
 export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean } = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const routeParams = useLocalSearchParams<{ tab?: string }>();
+  const initialTab = (['home', 'identify', 'value', 'style', 'sell', 'insights'].includes(routeParams.tab ?? '') ? routeParams.tab : 'home') as TFTab;
   const { tenant } = useApp();
   const { isPremium } = useSubscription();
   const { showAlert } = useAlert();
-  const [activeTab, setActiveTab] = useState<TFTab>('home');
+  const [activeTab, setActiveTab] = useState<TFTab>(initialTab);
   const [showPaywall, setShowPaywall] = useState(false);
 
   // ── Identify Tab capture & AI state ──────────────────────────────────────
