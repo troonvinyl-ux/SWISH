@@ -320,11 +320,18 @@ const ht = StyleSheet.create({
   upgradePrice: { fontSize: Typography.size.base, fontWeight: Typography.weight.extrabold, color: TF.black },
   proConfirmed: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: TF.pinkDim, borderRadius: Radius.xl, padding: Spacing.md, borderWidth: 1, borderColor: TF.pink + '40' },
   proConfirmedText: { fontSize: Typography.size.sm, color: TF.pink, fontWeight: Typography.weight.semibold },
+  processingHero: { alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xl },
+  processingRing: { width: 116, height: 116, borderRadius: 58, borderWidth: 3, borderColor: TF.pink, backgroundColor: TF.pinkDim, alignItems: 'center', justifyContent: 'center', shadowColor: TF.pink, shadowOpacity: 0.6, shadowRadius: 20, elevation: 8 },
+  checklistRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.sm, backgroundColor: TF.surface, borderWidth: 1, borderColor: TF.border, borderRadius: Radius.lg },
+  checklistThumb: { width: 64, height: 64, borderRadius: Radius.md },
+  checklistPlaceholder: { backgroundColor: TF.surfaceHigh, alignItems: 'center', justifyContent: 'center' },
+  checklistTitle: { fontSize: Typography.size.sm, color: TF.white, fontWeight: Typography.weight.bold },
+  checklistHint: { fontSize: Typography.size.xs, color: TF.textSub },
 });
 
 // ── Identify Tab — Full AI Identification Flow ────────────────────────────────
 function IdentifyTab({
-  capturedImages, onCapture, onRemoveImage, onIdentify, identifying,
+  capturedImages, reviewingPhotos, onReviewPhotos, onBackToCapture, onCapture, onRemoveImage, onIdentify, identifying,
   processingStatus, aiError, idResult, isSaving, savedItemId, isUploading,
   uploadProgress, onSave, onReset, isPremium, tenant,
 }: {
@@ -332,6 +339,9 @@ function IdentifyTab({
   onCapture: (index: number) => void;
   onRemoveImage: (index: number) => void;
   onIdentify: () => void;
+  onReviewPhotos: () => void;
+  onBackToCapture: () => void;
+  reviewingPhotos: boolean;
   identifying: boolean;
   processingStatus: string;
   aiError: string | null;
@@ -372,13 +382,29 @@ function IdentifyTab({
 
   if (!idResult) {
     const SLOTS = [
-      { label: 'Brand Label', hint: 'Inside neck or waist - required', primary: true },
-      { label: 'Garment', hint: 'Full front view of item', primary: false },
-      { label: 'Detail / Flaw', hint: 'Damage, hardware, care label', primary: false },
+      { label: 'Front View', hint: 'Full front of the garment', primary: true },
+      { label: 'Back View', hint: 'Show the full back and shape', primary: false },
+      { label: 'Label / Tag', hint: 'Brand, size and care labels', primary: false },
+      { label: 'Detail / Flaw', hint: 'Logo, fabric, damage or hardware', primary: false },
     ];
-    const canIdentify = capturedImages.length > 0;
+    const validImages = capturedImages.filter((image): image is CapturedImage => Boolean(image));
+    const canIdentify = validImages.length > 0;
+    if (identifying) return (
+      <View testID="threads-flip-screen-05" accessibilityLabel="Threads Flip screen 05 AI identification" style={{ flex: 1, padding: Spacing.base, justifyContent: 'center', gap: Spacing.lg }}>
+        <View style={id.processingHero}><View style={id.processingRing}><MaterialIcons name="checkroom" size={42} color={TF.pink} /></View><Text style={id.resultTitle}>Identifying Item…</Text><Text style={id.heroSub}>{processingStatus || 'Analysing your garment photos'}</Text></View>
+        {['Analysing photos…', 'Identifying brand…', 'Reading label…', 'Determining category…', 'Finding item specifics…'].map((step, index) => <View key={step} style={id.aiRow}><MaterialIcons name={index < 4 ? 'check-circle' : 'radio-button-unchecked'} size={16} color={index < 4 ? TF.success : TF.pink} /><Text style={id.aiText}>{step}</Text></View>)}
+      </View>
+    );
+    if (reviewingPhotos) return (
+      <ScrollView testID="threads-flip-screen-04" accessibilityLabel="Threads Flip screen 04 photo checklist" showsVerticalScrollIndicator={false} contentContainerStyle={id.content}>
+        <View style={id.hero}><MaterialIcons name="photo-library" size={26} color={TF.pink} /><View style={{ flex: 1 }}><Text style={id.heroTitle}>Item Photos</Text><Text style={id.heroSub}>Check each view before asking the AI to identify your item.</Text></View></View>
+        {SLOTS.map((slot, idx) => { const img = capturedImages[idx] ?? null; return <Pressable key={slot.label} onPress={() => onCapture(idx)} style={id.checklistRow}>{img ? <Image source={{ uri: img.uri }} style={id.checklistThumb} contentFit="cover" /> : <View style={[id.checklistThumb, id.checklistPlaceholder]}><MaterialIcons name="add-a-photo" size={20} color={TF.textMuted} /></View>}<View style={{ flex: 1, gap: 3 }}><Text style={id.checklistTitle}>{slot.label}</Text><Text style={id.checklistHint}>{img ? 'Photo captured · tap to retake' : slot.hint}</Text></View><MaterialIcons name={img ? 'check-circle' : 'add-circle-outline'} size={20} color={img ? TF.success : TF.pink} /></Pressable>; })}
+        <Text style={id.tipText}>A clear label photo helps identify the brand, size and material. Add all four views where possible.</Text>
+        <View style={id.actions}><Pressable onPress={onBackToCapture} style={id.resetBtn}><Text style={id.resetText}>Back to Capture</Text></Pressable><Pressable onPress={onIdentify} disabled={!canIdentify} style={[id.primaryBtn, !canIdentify && { opacity: 0.45 }]}><MaterialIcons name="auto-awesome" size={16} color={TF.black} /><Text style={id.primaryBtnText}>Continue</Text></Pressable></View>
+      </ScrollView>
+    );
     return (
-      <View style={{ flex: 1 }}>
+      <View testID="threads-flip-screen-03" accessibilityLabel="Threads Flip screen 03 scan and capture" style={{ flex: 1 }}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={id.content}>
           <View style={id.hero}>
             <MaterialIcons name="photo-camera" size={28} color={TF.pink} />
@@ -406,7 +432,7 @@ function IdentifyTab({
             </View>
           ) : null}
 
-          <Text style={id.sectionLabel}>PHOTOS</Text>
+          <Text style={id.sectionLabel}>CAPTURE FOUR VIEWS</Text>
           <View style={id.photoGrid}>
             {SLOTS.map((slot, idx) => {
               const img = capturedImages[idx] ?? null;
@@ -484,13 +510,13 @@ function IdentifyTab({
 
         <View style={id.actionBar}>
           <View style={{ flex: 1, gap: 2 }}>
-            <Text style={id.actionCount}>{capturedImages.length} of 3 photos added</Text>
+            <Text style={id.actionCount}>{validImages.length} of 4 photos added</Text>
             <Text style={id.actionHint}>
-              {capturedImages.length === 0 ? 'Add brand label photo first' : 'Ready - tap Identify to analyse'}
+              {validImages.length === 0 ? 'Start with a clear front view' : 'Review your photos before AI identification'}
             </Text>
           </View>
           <Pressable
-            onPress={onIdentify}
+            onPress={onReviewPhotos}
             disabled={!canIdentify || identifying}
             style={({ pressed }) => [
               id.identifyBtn,
@@ -504,7 +530,7 @@ function IdentifyTab({
               <MaterialIcons name="auto-awesome" size={18} color={canIdentify ? TF.black : TF.textMuted} />
             )}
             <Text style={[id.identifyBtnText, !canIdentify ? { color: TF.textMuted } : null]}>
-              {identifying ? (processingStatus || 'Identifying...') : 'Identify Item'}
+              Review Photos
             </Text>
           </Pressable>
         </View>
@@ -1006,6 +1032,7 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
 
   // ── Identify Tab capture & AI state ──────────────────────────────────────
   const [capturedImages, setCapturedImages] = useState<CapturedImage[]>([]);
+  const [reviewingPhotos, setReviewingPhotos] = useState(false);
   const [identifying, setIdentifying] = useState(false);
   const [processingStatus, setProcessingStatus] = useState('');
   const [aiError, setAiError] = useState<string | null>(null);
@@ -1027,11 +1054,13 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
   }, []);
 
   const handleRemoveImage = useCallback((index: number) => {
-    setCapturedImages(prev => prev.filter((_, i) => i !== index));
+    setCapturedImages(prev => { const next = [...prev]; delete next[index]; return next; });
   }, []);
 
   const handleIdentify = useCallback(async () => {
-    if (capturedImages.length === 0) return;
+    const validImages = capturedImages.filter((image): image is CapturedImage => Boolean(image));
+    if (validImages.length === 0) return;
+    setReviewingPhotos(false);
     setIdentifying(true);
     setAiError(null);
 
@@ -1048,7 +1077,7 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
     }
 
     const { result, error, quotaExceeded } = await identifyItemWithAI(
-      capturedImages, 'clothing', undefined, undefined,
+      validImages, 'clothing', undefined, undefined,
       { tenantId: tenant?.id },
     );
 
@@ -1071,18 +1100,19 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
 
   const handleSaveClothing = useCallback(async () => {
     if (!idResult || !tenant) return;
+    const validImages = capturedImages.filter((image): image is CapturedImage => Boolean(image));
     setIsSaving(true);
     const { item, error } = await saveIdentifiedItem(tenant.id, idResult, {
-      mediaUris: capturedImages.map(i => i.uri),
+      mediaUris: validImages.map(i => i.uri),
     });
     setIsSaving(false);
     if (error || !item) { showAlert('Save Failed', error ?? 'Could not save item.'); return; }
     setSavedItemId(item.id);
-    if (capturedImages.length > 0) {
+    if (validImages.length > 0) {
       setIsUploading(true);
       setUploadProgress('Uploading photos...');
       try {
-        const { urls } = await uploadItemImages(item.id, capturedImages);
+        const { urls } = await uploadItemImages(item.id, validImages);
         if (urls.length > 0) {
           await updateItemMedia(tenant.id, item.id, urls);
           setUploadProgress(`${urls.length} photo${urls.length === 1 ? '' : 's'} saved`);
@@ -1099,6 +1129,7 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
 
   const handleResetIdentify = useCallback(() => {
     setCapturedImages([]);
+    setReviewingPhotos(false);
     setIdResult(null);
     setAiError(null);
     setSavedItemId(null);
@@ -1116,8 +1147,8 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
   if (showPaywall) return <TFPaywall onBack={() => setShowPaywall(false)} />;
 
   // Stable QA IDs make every Threads Flip state capturable against the numbered screen pack.
-  const screenId = activeTab === 'home' ? '03'
-    : activeTab === 'identify' ? (savedItemId ? '09' : idResult ? '06' : identifying ? '05' : '04')
+  const screenId = activeTab === 'home' ? '02'
+    : activeTab === 'identify' ? (savedItemId ? '09' : idResult ? '06' : identifying ? '05' : reviewingPhotos ? '04' : '03')
     : activeTab === 'value' ? '08'
     : activeTab === 'style' ? 'TF-A'
     : activeTab === 'sell' ? 'TF-B' : 'TF-C';
@@ -1165,6 +1196,9 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
         {activeTab === 'identify' ? (
           <IdentifyTab
             capturedImages={capturedImages}
+            reviewingPhotos={reviewingPhotos}
+            onReviewPhotos={() => setReviewingPhotos(true)}
+            onBackToCapture={() => setReviewingPhotos(false)}
             onCapture={handleCapture}
             onRemoveImage={handleRemoveImage}
             onIdentify={handleIdentify}
