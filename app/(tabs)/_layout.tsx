@@ -20,12 +20,12 @@ function useNicheHomeTab() {
   const { activeNicheId, fixedNicheId } = useApp();
   const id = resolveProductionNiche(fixedNicheId ?? activeNicheId) ?? '';
   if (id === 'coins') {
-    return { icon: 'toll' as const, label: 'Coins' };
+    return { icon: 'toll' as const, label: 'Coins', isAntiques: false };
   }
-  if (id === 'motocross') return { icon: 'two-wheeler' as const, label: 'MX' };
-  if (id === 'bicycles') return { icon: 'pedal-bike' as const, label: 'Bikes' };
-  if (id === 'clothing') return { icon: 'checkroom' as const, label: 'Fashion' };
-  if (id === 'surplus_flip') return { icon: 'inventory-2' as const, label: 'Surplus' };
+  if (id === 'motocross') return { icon: 'two-wheeler' as const, label: 'MX', isAntiques: false };
+  if (id === 'bicycles') return { icon: 'pedal-bike' as const, label: 'Bikes', isAntiques: false };
+  if (id === 'clothing') return { icon: 'checkroom' as const, label: 'Fashion', isAntiques: false };
+  if (id === 'surplus_flip') return { icon: 'inventory-2' as const, label: 'Surplus', isAntiques: false };
   const config = id ? NICHES[id] : null;
   return { icon: (config?.icon ?? 'dashboard') as React.ComponentProps<typeof MaterialIcons>['name'], label: config?.shortName ?? 'Home', isAntiques: id === 'antiques' };
 }
