@@ -3197,7 +3197,7 @@ export default function SettingsScreen() {
         <Pressable onPress={() => router.replace('/(tabs)' as any)} style={styles.homeBtn} hitSlop={8}>
           <MaterialIcons name="dashboard" size={16} color={Colors.textTertiary} />
         </Pressable>
-        <Text style={[styles.title, isThreadsFlip && { color: threads.cream }]}>Threads Flip · Settings</Text>
+        <Text style={[styles.title, isThreadsFlip && { color: threads.cream }]}>{isThreadsFlip ? 'Threads Flip · Settings' : 'Settings'}</Text>
         {loading ? <ActivityIndicator size="small" color={Colors.textTertiary} style={{ marginLeft: 'auto' }} /> : null}
       </View>
 
