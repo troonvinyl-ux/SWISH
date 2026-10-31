@@ -74,6 +74,9 @@ describe('Branded Expo build configuration', () => {
 
   test('creates a unique Master Admin native identity without a niche lock', () => {
     delete process.env.SWISH_NICHE;
+    // This is a native identity test, not an OTA config test. OTA jobs set this
+    // globally, so clear it to assert the installed app's branded slug.
+    delete process.env.SWISH_OTA_PUBLISH;
     process.env.SWISH_MASTER_ADMIN = '1';
     const config = configureApp({ config: BASE_CONFIG });
     expect(config.name).toBe('SWISH Master Admin');
