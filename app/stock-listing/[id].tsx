@@ -41,7 +41,7 @@ import { Item, getItem, updateItem } from '@/services/itemService';
 import { getItemListings, updateListingPrice, endListing, deleteListing, submitListingToMarketplace, updateListingStatus } from '@/services/listingService';
 import type { SubmitStep } from '@/services/listingService';
 import { FunctionsHttpError } from '@supabase/supabase-js';
-import { generateListing, saveListing } from '@/services/listingService';
+import { publishGeneratedListing } from '@/services/listingService';
 import type { SavedListing } from '@/services/listingService';
 import {
   CapturedImage,
@@ -2067,14 +2067,34 @@ export default function StockListingScreen() {
 
     const proceed = async () => {
       setGeneratingListing(true);
-      const { listing, error } = await generateListing(item.id, tenant.id, 'ebay');
-      if (error || !listing) { showAlert('Generation Failed', error ?? 'Could not generate listing.'); setGeneratingListing(false); return; }
-      const { listing: saved, error: saveErr } = await saveListing(tenant.id, item.id, listing, 'ebay',
-        (item.attributes?.ebay_category_id as string) ?? undefined);
+      setSubmittingId('one-tap');
+      setProgressTitle(item.canonicalTitle ?? 'New listing');
+      setProgressStep('verifying');
+      setProgressFailed(false);
+      setProgressVisible(true);
+      const result = await publishGeneratedListing(
+        item.id,
+        tenant.id,
+        'ebay',
+        (item.attributes?.ebay_category_id as string) ?? undefined,
+        step => setProgressStep(step),
+      );
       setGeneratingListing(false);
-      if (saveErr || !saved) { showAlert('Save Failed', saveErr ?? 'Could not save listing.'); return; }
-      setListings(prev => [saved, ...prev]);
-      showAlert('Listing Created', 'Draft saved. Open the Listing Editor to review before submitting.');
+      setSubmittingId(null);
+      setProgressVisible(false);
+      if (result.listing) {
+        setListings(prev => [result.listing!, ...prev.filter(existing => existing.id !== result.listing!.id)]);
+      }
+      if (result.success && result.listing) {
+        setItem(prev => prev ? { ...prev, status: 'listed' } : prev);
+        showAlert('Listed on eBay', `\u2713 ${result.listing.title} is live${result.externalListingId ? ` · #${result.externalListingId}` : ''}.${result.warnings.length ? `\\n\\nNotes: ${result.warnings.join(' · ')}` : ''}`);
+        return;
+      }
+      showAlert(
+        result.listing ? 'Draft Saved — Publication Needs Attention' : 'Listing Could Not Be Created',
+        result.error ?? 'The listing was not confirmed live on eBay. No automatic retry was made.',
+        result.listing ? [{ text: 'Open Saved Draft', onPress: () => router.push(`/ebay-listing-editor?id=${result.listing!.id}` as any) }, { text: 'OK', style: 'cancel' }] : [{ text: 'OK', style: 'cancel' }],
+      );
     };
 
     if (warnings.length > 0) {

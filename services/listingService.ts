@@ -709,3 +709,90 @@ export async function submitListingToMarketplace(
     externalListingId: ebayData.externalListingId,
   };
 }
+
+
+// ── One-tap shared listing pipeline ──────────────────────────────────────────
+// Generates the complete listing, saves it once, then publishes through the
+// existing verified eBay pipeline. A saved draft is returned on publish failure
+// so the user can retry without generating duplicate drafts.
+export interface OneTapListingResult {
+  listing: SavedListing | null;
+  success: boolean;
+  error: string | null;
+  warnings: string[];
+  externalListingId?: string;
+}
+
+export async function publishGeneratedListing(
+  itemId: string,
+  tenantId: string,
+  marketplaceId: string = 'ebay',
+  categoryId?: string,
+  onStep?: (step: SubmitStep) => void,
+): Promise<OneTapListingResult> {
+  const { listing: generated, error: generationError } = await generateListing(itemId, tenantId, marketplaceId);
+  if (generationError || !generated) {
+    return { listing: null, success: false, error: generationError ?? 'Listing generation failed.', warnings: [] };
+  }
+
+  const { listing: saved, error: saveError } = await saveListing(
+    tenantId, itemId, generated, marketplaceId, categoryId,
+  );
+  if (saveError || !saved) {
+    return { listing: null, success: false, error: saveError ?? 'Listing could not be saved.', warnings: [] };
+  }
+
+  const published = await submitListingToMarketplace(tenantId, saved.id, onStep);
+  if (!published.success) {
+    return {
+      listing: saved,
+      success: false,
+      error: published.error ?? 'eBay did not confirm publication. The saved draft is available to retry.',
+      warnings: published.warnings ?? [],
+    };
+  }
+
+  return {
+    listing: { ...saved, status: 'active', publishedAt: published.publishedAt, externalListingId: published.externalListingId },
+    success: true,
+    error: null,
+    warnings: published.warnings ?? [],
+    externalListingId: published.externalListingId,
+  };
+}
+
+// Bulk mode deliberately publishes sequentially: this avoids eBay rate spikes,
+// preserves per-item outcomes, and never retries an ambiguous publication.
+export async function publishGeneratedListings(
+  items: Array<{ itemId: string; tenantId: string; categoryId?: string }>,
+  onItemStep?: (itemId: string, step: SubmitStep) => void,
+): Promise<Array<OneTapListingResult & { itemId: string }>> {
+  const results: Array<OneTapListingResult & { itemId: string }> = [];
+  for (const item of items) {
+    const result = await publishGeneratedListing(
+      item.itemId, item.tenantId, 'ebay', item.categoryId,
+      step => onItemStep?.(item.itemId, step),
+    );
+    results.push({ itemId: item.itemId, ...result });
+  }
+  return results;
+}
+
+
+// Publish already-created drafts in a deliberate sequential batch. The existing
+// listing IDs are reused, so bulk publish cannot create duplicate draft records.
+export async function submitListingsInBulk(
+  tenantId: string,
+  listingIds: string[],
+  onItemStep?: (listingId: string, step: SubmitStep) => void,
+): Promise<Array<{ listingId: string; result: SubmitResult }>> {
+  const uniqueIds = [...new Set(listingIds.filter(id => typeof id === 'string' && id.trim()))];
+  const results: Array<{ listingId: string; result: SubmitResult }> = [];
+  for (const listingId of uniqueIds) {
+    const result = await submitListingToMarketplace(
+      tenantId, listingId, step => onItemStep?.(listingId, step),
+    );
+    results.push({ listingId, result });
+  }
+  return results;
+}

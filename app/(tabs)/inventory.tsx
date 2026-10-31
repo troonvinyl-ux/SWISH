@@ -7,10 +7,12 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { ItemImage } from '@/components';
 import { useApp } from '@/hooks/useApp';
+import { useAlert } from '@/template';
 import { useMasterInventory } from '@/hooks/useMasterInventory';
 import { NICHES, type NicheConfig } from '@/constants/niches';
 import { resolveProductionNiche } from '@/services/nicheRouting';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
+import { publishGeneratedListings, submitListingsInBulk } from '@/services/listingService';
 import type { InventoryTab, InventoryViewItem } from '@/services/inventoryViewService';
 import BulkReValueSheet from '@/components/feature/BulkReValueSheet';
 import BulkReIdentifyModal from '@/components/feature/BulkReIdentifyModal';
@@ -58,7 +60,8 @@ const InventoryCard = memo(function InventoryCard({ item, tab, config, onOpen, o
 });
 export default function MasterInventoryScreen() {
   const state = useMasterInventory(); const router = useRouter();
-  const { tenant, businessConfig } = useApp();
+  const { tenant, businessConfig } = useApp(); const { showAlert } = useAlert();
+  const [bulkListing, setBulkListing] = useState(false); const [singleListingId, setSingleListingId] = useState<string | null>(null);
   const [search, setSearch] = useState(''); const [filter, setFilter] = useState('');
   const [showReValue, setShowReValue] = useState(false); const [showReIdentify, setShowReIdentify] = useState(false);
   const [progress, setProgress] = useState<any>(null);
@@ -70,6 +73,56 @@ export default function MasterInventoryScreen() {
     return (!search.trim() || haystack.includes(search.trim().toLowerCase())) && (state.activeTab !== 'stock' || !filter || haystack.includes(filter));
   }), [state.views, state.activeTab, search, filter]);
   const closeBulk = () => { setShowReIdentify(false); setShowReValue(false); setProgress(null); void state.reload(); };
+  const runSingleListing = async (item: InventoryViewItem) => {
+    if (!tenant?.id || bulkListing || singleListingId) return;
+    setSingleListingId(item.id);
+    try {
+      const [result] = await publishGeneratedListings([{
+        itemId: item.id, tenantId: tenant.id,
+        categoryId: String(item.attributes?.ebay_category_id ?? '') || undefined,
+      }]);
+      if (result?.success) {
+        showAlert('Listed on eBay', `${item.canonical_title} is confirmed live${result.externalListingId ? ` · #${result.externalListingId}` : ''}.`);
+      } else {
+        showAlert(result?.listing ? 'Draft saved — not live yet' : 'Listing needs attention', result?.error ?? 'eBay did not confirm publication. Check the saved draft before retrying.');
+      }
+      await state.reload();
+    } catch (error: any) {
+      showAlert('Listing failed', error?.message ?? 'The listing could not be completed. Check eBay before retrying.');
+    } finally { setSingleListingId(null); }
+  };
+  const runBulkListing = () => {
+    if (!tenant?.id || bulkListing || data.length < 2) return;
+    const action = async () => {
+      setBulkListing(true);
+      try {
+        if (state.activeTab === 'stock') {
+          const results = await publishGeneratedListings(data.map(item => ({
+            itemId: item.id, tenantId: tenant.id,
+            categoryId: String(item.attributes?.ebay_category_id ?? '') || undefined,
+          })));
+          const live = results.filter(result => result.success).length;
+          const failed = results.length - live;
+          await state.reload();
+          showAlert('Bulk listing complete', `${live} of ${results.length} items confirmed live on eBay.${failed ? ` ${failed} need attention; no automatic retry was made.` : ''}`);
+        } else {
+          const drafts = data.filter(item => item.listing?.id);
+          const results = await submitListingsInBulk(tenant.id, drafts.map(item => item.listing!.id));
+          const live = results.filter(result => result.result.success).length;
+          const failed = results.length - live;
+          await state.reload();
+          showAlert('Bulk publishing complete', `${live} of ${results.length} drafts confirmed live on eBay.${failed ? ` ${failed} need attention; no automatic retry was made.` : ''}`);
+        }
+      } catch (error: any) {
+        showAlert('Bulk listing stopped', error?.message ?? 'The batch could not be completed. Check eBay before retrying.');
+      } finally { setBulkListing(false); }
+    };
+    showAlert(
+      state.activeTab === 'stock' ? 'List all visible stock?' : 'Publish all visible drafts?',
+      `SWISH will process ${data.length} items one at a time. Each result is checked before continuing. Failed or uncertain items will not be automatically retried.`,
+      [{ text: 'Cancel', style: 'cancel' }, { text: state.activeTab === 'stock' ? 'Confirm & List All' : 'Confirm & Publish All', onPress: action }],
+    );
+  };
   return <SafeAreaView edges={['top']} style={s.container}>
     <StatusBar style="light" />
     <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -82,6 +135,10 @@ export default function MasterInventoryScreen() {
           <Pressable onPress={() => setShowReValue(true)} style={s.hBtn} accessibilityLabel="Bulk revalue"><MaterialIcons name="travel-explore" size={20} color={config.color} /></Pressable>
           <Pressable onPress={() => setShowReIdentify(true)} style={s.hBtn} accessibilityLabel="Bulk reidentify"><MaterialIcons name="auto-awesome" size={20} color={Colors.accent} /></Pressable>
         </> : null}
+        {(state.activeTab === 'stock' || state.activeTab === 'draft') && data.length > 1 ? <Pressable onPress={runBulkListing} disabled={bulkListing} style={[s.bulkButton, { backgroundColor: config.color, opacity: bulkListing ? 0.6 : 1 }]} accessibilityLabel={state.activeTab === 'stock' ? 'Bulk list all visible stock' : 'Bulk publish all visible drafts'}>
+          {bulkListing ? <ActivityIndicator size="small" color={Colors.background} /> : <MaterialIcons name="playlist-add-check" size={17} color={Colors.background} />}
+          <Text style={s.bulkButtonText}>{bulkListing ? 'Listing…' : `List all ${data.length}`}</Text>
+        </Pressable> : null}
         <Pressable onPress={() => router.push('/(tabs)/scan' as any)} style={[s.hBtn, { backgroundColor: config.color }]} accessibilityLabel="Add inventory"><MaterialIcons name="add" size={22} color={Colors.background} /></Pressable>
       </View>
       <View style={s.rail}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.railContent}>
@@ -107,7 +164,7 @@ export default function MasterInventoryScreen() {
       {state.error ? <Text style={s.error}>{state.error}</Text> : null}
       <FlatList style={s.flex} data={data} keyExtractor={item => `${state.activeTab}-${item.id}-${item.listing?.id ?? ''}`} showsVerticalScrollIndicator={false} contentContainerStyle={s.list} refreshing={state.refreshing} onRefresh={state.refresh}
         ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
-        renderItem={({ item }) => <InventoryCard item={item} tab={state.activeTab} config={config} onOpen={() => router.push(`/stock-listing/${item.id}` as any)} onAction={() => state.activeTab === 'stock' ? router.push(`/create-listing?id=${item.id}` as any) : state.activeTab === 'draft' ? void state.submit(item) : state.end(item)} />}
+        renderItem={({ item }) => <InventoryCard item={item} tab={state.activeTab} config={config} onOpen={() => router.push(`/stock-listing/${item.id}` as any)} onAction={() => state.activeTab === 'stock' ? void runSingleListing(item) : state.activeTab === 'draft' ? void state.submit(item) : state.end(item)} />}
         ListEmptyComponent={<View style={s.empty}><MaterialIcons name={config.icon as any} size={40} color={config.color} /><Text style={s.emptyTitle}>{state.loading ? 'Loading inventory...' : `No ${state.activeTab === 'stock' ? config.terms.items.toLowerCase() + ' in stock' : state.activeTab + ' items'}`}</Text>
           <Text style={s.emptyText}>{search ? 'Try another search or filter.' : state.activeTab === 'stock' ? 'Capture an item to start preparing a listing.' : state.activeTab === 'draft' ? 'Tap List on an in-stock item to create a draft.' : state.activeTab === 'sold' ? 'Sold records appear after order synchronization.' : 'Submit a draft to publish it on eBay.'}</Text>
           {state.activeTab === 'stock' ? <Pressable onPress={() => router.push('/(tabs)/scan' as any)} style={[s.emptyButton, { backgroundColor: config.color }]}><Text style={s.buttonText}>Add {config.terms.item}</Text></Pressable> : state.activeTab === 'sold' ? <Pressable onPress={state.syncSold} style={[s.emptyButton, { backgroundColor: config.color }]}><Text style={s.buttonText}>{state.syncing ? 'Syncing...' : 'Sync from eBay'}</Text></Pressable> : null}
@@ -121,7 +178,7 @@ export default function MasterInventoryScreen() {
 }
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background }, flex: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, padding: Spacing.base, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder, flexWrap: 'wrap' }, headerIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.surface, borderRadius: Radius.md }, headerTitle: { fontSize: Typography.size.xl, fontWeight: Typography.weight.bold }, sub: { color: Colors.textTertiary, fontSize: Typography.size.xs, lineHeight: 18 }, hBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.md, backgroundColor: Colors.surface },
+  header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, padding: Spacing.base, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder, flexWrap: 'wrap' }, bulkButton: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: Spacing.md, borderRadius: Radius.md }, bulkButtonText: { color: Colors.background, fontSize: Typography.size.xs, fontWeight: Typography.weight.bold }, headerIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.surface, borderRadius: Radius.md }, headerTitle: { fontSize: Typography.size.xl, fontWeight: Typography.weight.bold }, sub: { color: Colors.textTertiary, fontSize: Typography.size.xs, lineHeight: 18 }, hBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.md, backgroundColor: Colors.surface },
   rail: { minHeight: 52, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder }, railContent: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, paddingHorizontal: Spacing.base, paddingVertical: Spacing.sm }, chip: { height: 40, borderRadius: Radius.md, borderWidth: 1, backgroundColor: Colors.surface, paddingHorizontal: Spacing.md, gap: Spacing.xs, flexDirection: 'row', alignItems: 'center' }, chipText: { fontSize: Typography.size.xs, fontWeight: Typography.weight.semibold }, searchWrap: { height: 48, margin: Spacing.base, marginVertical: Spacing.sm, paddingLeft: Spacing.sm, flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surface, borderRadius: Radius.md }, input: { flex: 1, padding: Spacing.sm, color: Colors.textPrimary, fontSize: Typography.size.base, includeFontPadding: false },
   banner: { marginHorizontal: Spacing.base, padding: Spacing.md, borderRadius: Radius.lg, backgroundColor: Colors.surfaceHighlight, flexDirection: 'row', gap: Spacing.md, alignItems: 'center' }, bannerTitle: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold }, info: { fontSize: Typography.size.xs, lineHeight: 18, color: Colors.textTertiary, padding: Spacing.sm, paddingHorizontal: Spacing.base }, error: { color: Colors.danger, padding: Spacing.base, fontSize: Typography.size.base }, list: { paddingHorizontal: Spacing.base, paddingTop: Spacing.sm, paddingBottom: Spacing.xl },
   syncError: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, padding: Spacing.base, backgroundColor: Colors.surface }, syncErrorText: { flex: 1, color: Colors.warning, fontSize: Typography.size.sm, lineHeight: 22 },
