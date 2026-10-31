@@ -1,5 +1,6 @@
 import { nicheToScannerRoute, getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 import { SPECIALIST_PROFILES } from '@/shared/specialistIntelligence';
+import { NICHES } from '@/constants/niches';
 import { SPECIALISTS } from '@/constants/specialists';
 
 describe('One-tap niche scanner routing', () => {
@@ -26,13 +27,17 @@ describe('One-tap niche scanner routing', () => {
 
   test('Antiques capture, AI profile and inventory specialist are connected', () => {
     expect(SPECIALISTS.antiques.captureRequirements.some(slot => slot.required)).toBe(true);
+    expect(SPECIALISTS.antiques.captureRequirements.map(slot => slot.id)).toEqual(expect.arrayContaining(['marks', 'scale']));
     expect(SPECIALIST_PROFILES.antiques.fields.length).toBeGreaterThanOrEqual(8);
+    expect(NICHES.antiques.keyAttributes).toContain('object_type');
     expect(getProductionNicheSpecialistIds('antiques')).toEqual(['antiques', 'books']);
   });
 
   test('Fossils capture, AI profile and inventory specialist are connected', () => {
     expect(SPECIALISTS.fossils.captureRequirements.some(slot => slot.required)).toBe(true);
+    expect(SPECIALISTS.fossils.captureRequirements.map(slot => slot.id)).toEqual(expect.arrayContaining(['scale', 'matrix', 'restoration', 'provenance']));
     expect(SPECIALIST_PROFILES.fossils.fields.length).toBeGreaterThanOrEqual(8);
+    expect(NICHES.fossils.keyAttributes).toContain('taxonomic_group');
     expect(getProductionNicheSpecialistIds('fossils')).toEqual(['fossils']);
   });
 });
