@@ -112,10 +112,10 @@ export default function LoginScreen() {
             <Text style={{ color: threads.muted, fontSize: 12, fontWeight: Typography.weight.bold, letterSpacing: 1.5 }}>THE CLOTHING RESELLER APP</Text>
           </View>
           <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 26 }}>
-            {(['checkroom', 'checkroom', 'style', 'shopping-bag'] as const).map((name, i) => <MaterialIcons key={i} name={name as any} size={24} color={threads.pink} />)}
+            {(['checkroom', 'shopping-bag', 'style', 'storefront'] as const).map((name, i) => <MaterialIcons key={i} name={name as any} size={24} color={threads.pink} />)}
           </View>
           <Text style={{ color: threads.cream, fontSize: 11, fontWeight: Typography.weight.bold, letterSpacing: 1, textAlign: 'center' }}>IDENTIFY · VALUE · LIST · FLIP · PROFIT</Text>
-          <Pressable onPress={() => { setMode('register'); setRegisterStep('email_password'); setShowWelcome(false); }} style={{ width: '100%', backgroundColor: '#F5C842', borderRadius: Radius.xl, paddingVertical: Spacing.lg, alignItems: 'center' }}>
+          <Pressable onPress={() => { setMode('register'); setRegisterStep('email_password'); setShowWelcome(false); }} style={{ width: '100%', backgroundColor: threads.pink, borderRadius: Radius.xl, paddingVertical: Spacing.lg, alignItems: 'center' }}>
             <Text style={{ color: threads.background, fontSize: Typography.size.base, fontWeight: Typography.weight.extrabold }}>Get Started →</Text>
           </Pressable>
           <Pressable onPress={() => { setMode('login'); setShowWelcome(false); }} hitSlop={10}>
