@@ -4,6 +4,8 @@ const { prepareNicheRoutes } = require('./scripts/prepare-niche-routes');
 
 module.exports = ({ config }) => {
   const selected = process.env.SWISH_NICHE;
+  const masterAdminBuild = process.env.SWISH_MASTER_ADMIN === '1';
+  if (masterAdminBuild && selected) throw new Error('SWISH_MASTER_ADMIN cannot be combined with SWISH_NICHE.');
   const niche = selected ? NICHE_BUILDS[selected] : null;
   if (selected && !niche) throw new Error(`Unsupported SWISH_NICHE "${selected}".`);
   const easProjectId = process.env.EXPO_PROJECT_ID || process.env.EAS_PROJECT_ID || config.extra?.eas?.projectId;
@@ -14,6 +16,17 @@ module.exports = ({ config }) => {
     extra: { ...(config.extra || {}), eas: { ...(config.extra?.eas || {}), projectId: easProjectId } },
   } : {};
   const baseConfig = Object.keys(otaConfig).length ? { ...config, ...otaConfig } : config;
+  if (masterAdminBuild) {
+    return {
+      ...baseConfig,
+      name: 'SWISH Master Admin',
+      slug: 'swish-master-admin',
+      scheme: 'swishmasteradmin',
+      ios: { ...config.ios, bundleIdentifier: 'com.swish.masteradmin' },
+      android: { ...config.android, package: 'com.swish.masteradmin' },
+      extra: { ...(otaConfig.extra || config.extra || {}), swishMasterAdminBuild: true },
+    };
+  }
   if (!niche) return baseConfig;
   // Prepare for every Expo consumer (prebuild, EAS, export, OTA), not just one workflow.
   const routeRoot = prepareNicheRoutes(selected);
