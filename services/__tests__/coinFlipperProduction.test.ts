@@ -49,6 +49,11 @@ jest.mock('expo-image-manipulator', () => ({
 
 jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
 
+jest.mock('@/services/photoQualityService', () => ({
+  inspectPhotoQuality: jest.fn(),
+  preflightPhotos: jest.fn().mockResolvedValue({ checks: [], error: null }),
+}));
+
 import { identifyItemWithAI, saveIdentifiedItem } from '@/services/aiIdentificationService';
 import { getNicheSpecialistIds, isSpecialistInNiche } from '@/constants/niches';
 
