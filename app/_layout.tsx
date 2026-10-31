@@ -190,7 +190,6 @@ export default function RootLayout() {
                 <Stack.Screen name="antique-flipper" />
                 <Stack.Screen name="antique-guides" />
                 <Stack.Screen name="antique-restoration" />
-                <Stack.Screen name="antique-more" />
                 <Stack.Screen name="subscription" />
                 {/* ── Niche entry routes — one per subscriber application ── */}
                 <Stack.Screen name="entry/coins" />
