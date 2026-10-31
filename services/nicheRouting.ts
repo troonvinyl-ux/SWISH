@@ -51,3 +51,17 @@ export function isRouteAllowedForBuild(pathname: string, fixedNiche: string | nu
   }
   return true;
 }
+
+
+/** Resolve the first authenticated destination. The unbranded owner installation
+ * is the private control centre; a branded niche APK remains in its own niche. */
+export function getAuthenticatedHomeRoute(options: {
+  isMasterAdmin: boolean;
+  fixedNicheId: string | null;
+  activeNicheId: string | null;
+  onboardingRequired: boolean;
+}): string {
+  if (options.isMasterAdmin && !options.fixedNicheId) return '/master-admin';
+  if (options.onboardingRequired) return '/onboarding';
+  return nicheToEntryRoute(options.fixedNicheId ?? options.activeNicheId) ?? '/niche-select';
+}
