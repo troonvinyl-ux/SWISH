@@ -3,7 +3,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { decryptCredentials, encryptCredentials } from '../_shared/credentialCrypto.ts';
 import { parseEbayListingStatus } from '../_shared/listingStatus.ts';
-import registry from '../../../niche-modules.json' with { type: 'json' };
+import registry from '../_shared/niche-modules.json' with { type: 'json' };
 const response = (data: unknown, status=200) => new Response(JSON.stringify(data), {status,headers:{...corsHeaders,'Content-Type':'application/json'}});
 Deno.serve(async req => {
   if(req.method==='OPTIONS') return new Response('ok',{headers:corsHeaders});
