@@ -522,12 +522,15 @@ const dm = StyleSheet.create({
 export default function OrdersScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, activeNicheId } = useApp();
+  const { tenant, activeNicheId, fixedNicheId } = useApp();
+  const effectiveNicheId = fixedNicheId ?? activeNicheId;
+  const isThreadsFlip = effectiveNicheId === 'clothing';
+  const threads = { background: '#0C080C', surface: '#160E16', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5', muted: '#9A7090' };
   // Guard the niche resolver so a stale/incompatible module export cannot crash the whole screen.
   const specialistIds: string[] = (() => {
     try {
       return typeof getProductionNicheSpecialistIds === 'function'
-        ? getProductionNicheSpecialistIds(activeNicheId)
+        ? getProductionNicheSpecialistIds(effectiveNicheId)
         : [];
     } catch (error) {
       console.error('[Orders] Failed to resolve active niche:', error);
@@ -775,17 +778,17 @@ export default function OrdersScreen() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <View style={s.container}>
+    <View testID={isThreadsFlip ? 'threads-flip-screen-15' : undefined} accessibilityLabel={isThreadsFlip ? 'Threads Flip screen 15 Sold items and orders' : undefined} style={[s.container, isThreadsFlip && { backgroundColor: threads.background }]}>
       <StatusBar style="light" />
 
       {/* Header */}
-      <View style={[s.header, { paddingTop: insets.top + Spacing.sm }]}>
+      <View style={[s.header, { paddingTop: insets.top + Spacing.sm }, isThreadsFlip && { backgroundColor: threads.surface, borderBottomColor: threads.border }]}>
         <Pressable onPress={() => router.back()} style={s.backBtn} hitSlop={8}>
           <MaterialIcons name="arrow-back" size={20} color={Colors.textSecondary} />
         </Pressable>
         <View style={s.flex}>
-          <Text style={s.title}>Orders</Text>
-          <Text style={s.subtitle}>{orders.length} orders · {fmt(stats.netRevenue)} net</Text>
+          <Text style={[s.title, isThreadsFlip && { color: threads.cream }]}>{isThreadsFlip ? 'Threads Flip · Orders' : 'Orders'}</Text>
+          <Text style={[s.subtitle, isThreadsFlip && { color: threads.muted }]}>{orders.length} orders · {fmt(stats.netRevenue)} net</Text>
           {loadError ? <Text style={{ color: Colors.danger, fontSize: 10 }} numberOfLines={2}>Orders error: {loadError}</Text> : null}
         </View>
         <Pressable
@@ -802,7 +805,7 @@ export default function OrdersScreen() {
       </View>
 
       {/* Stats strip */}
-      <View style={s.statsStrip}>
+      <View style={[s.statsStrip, isThreadsFlip && { backgroundColor: threads.surface, borderColor: threads.border }]}>
         {[
           { label: 'To Dispatch', value: stats.toDispatch, color: stats.toDispatch > 0 ? Colors.warning : Colors.textTertiary, icon: 'inbox',          filter: 'awaiting_dispatch' as FilterTab },
           { label: 'Dispatched',  value: stats.dispatched, color: Colors.primary,  icon: 'local-shipping', filter: 'dispatched' as FilterTab },

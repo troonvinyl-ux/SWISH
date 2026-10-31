@@ -38,7 +38,7 @@ export function nicheToScannerRoute(value: string | null | undefined): string {
     case 'coins': return '/coin-flipper?tab=capture';
     case 'motocross': return '/flipper-mx';
     case 'bicycles': return '/bike-flipper';
-    case 'clothing': return '/threads-flip';
+    case 'clothing': return '/threads-flip?tab=identify';
     case 'surplus_flip': return '/surplus-flip';
     default: return '/capture';
   }

@@ -56,7 +56,7 @@ describe('Experience source contracts (not device/render tests)',()=>{
     expect(ui).toContain('useManifestOpportunity()');expect(ui).toContain('workflow.save()');
     expect(ui).not.toContain('submitListingToMarketplace');expect(ui).toContain('Nothing is bought or published automatically.');
   });
-  test('account tab stays hidden outside Antique Flipper and becomes its More entry there',()=>expect(source('app/(tabs)/_layout.tsx')).toContain('href: nicheHome.isAntiques ? undefined : null'));
+  test('account tab stays hidden outside Antique Flipper and Threads Flip, where it becomes the More entry',()=>expect(source('app/(tabs)/_layout.tsx')).toContain('href: nicheHome.isAntiques || isThreadsFlip ? undefined : null'));
   test('all supplied branding files exist without creating a Tool product',()=>{
     const assets=['bike-flipper','mx-flipper','card-flipper','threads-flip','tool-flipper','antique-flipper','tech-flipper','beauty-flipper','fossil-flipper','coin-flipper'];
     assets.forEach(name=>expect(fs.existsSync(path.resolve(__dirname,`../../assets/images/brands/${name}.jpeg`))).toBe(true));

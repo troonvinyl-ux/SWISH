@@ -13,6 +13,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useRepricing } from '@/hooks/useRepricing';
 import { useAlert } from '@/template';
+import { useApp } from '@/hooks/useApp';
 import {
   RULE_TEMPLATES,
   REPRICE_STRATEGY_LABELS,
@@ -437,6 +438,9 @@ export default function RepricingScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { showAlert } = useAlert();
+  const { activeNicheId, fixedNicheId } = useApp();
+  const isThreadsFlip = (fixedNicheId ?? activeNicheId) === 'clothing';
+  const threads = { background: '#0C080C', surface: '#160E16', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5', muted: '#9A7090' };
   const [activeTab, setActiveTab] = useState<Tab>('stale');
   const [showAddRule, setShowAddRule] = useState(false);
 
@@ -484,11 +488,11 @@ export default function RepricingScreen() {
   const pendingSuggestions = Object.keys(suggestions).length;
 
   return (
-    <View style={styles.container}>
+    <View testID={isThreadsFlip ? 'threads-flip-screen-repricing' : undefined} accessibilityLabel={isThreadsFlip ? 'Threads Flip repricing tools' : undefined} style={[styles.container, isThreadsFlip && { backgroundColor: threads.background }]}>
       <StatusBar style="light" />
 
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + Spacing.base }]}>
+      <View style={[styles.header, { paddingTop: insets.top + Spacing.base }, isThreadsFlip && { backgroundColor: threads.surface, borderBottomColor: threads.border }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
           <MaterialIcons name="arrow-back" size={20} color={Colors.textSecondary} />
         </Pressable>
@@ -496,15 +500,15 @@ export default function RepricingScreen() {
           <MaterialIcons name="dashboard" size={16} color={Colors.textTertiary} />
         </Pressable>
         <View style={styles.flex}>
-          <Text style={styles.title}>Repricing Engine</Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.title, isThreadsFlip && { color: threads.cream }]}>{isThreadsFlip ? 'Threads Flip · Repricing' : 'Repricing Engine'}</Text>
+          <Text style={[styles.subtitle, isThreadsFlip && { color: threads.muted }]}>
             {staleCount} stale listing{staleCount !== 1 ? 's' : ''} · {activeRules.length} active rule{activeRules.length !== 1 ? 's' : ''}
           </Text>
         </View>
       </View>
 
       {/* Summary strip */}
-      <View style={styles.summaryStrip}>
+      <View style={[styles.summaryStrip, isThreadsFlip && { backgroundColor: threads.surface, borderColor: threads.border }]}>
         {[
           { label: 'Stale Listings', value: staleCount, color: staleCount > 5 ? Colors.warning : Colors.textPrimary },
           { label: 'AI Suggestions', value: pendingSuggestions, color: pendingSuggestions > 0 ? Colors.accent : Colors.textTertiary },
@@ -519,7 +523,7 @@ export default function RepricingScreen() {
       </View>
 
       {/* Tab bar */}
-      <View style={styles.tabBar}>
+      <View style={[styles.tabBar, isThreadsFlip && { backgroundColor: threads.surface, borderBottomColor: threads.border } ]}>
         {([
           { id: 'stale', label: 'Stale Listings', icon: 'access-time', count: staleCount },
           { id: 'rules', label: 'Rules', icon: 'rule', count: rules.length },
@@ -527,13 +531,13 @@ export default function RepricingScreen() {
           <Pressable
             key={t.id}
             onPress={() => setActiveTab(t.id)}
-            style={[styles.tab, activeTab === t.id && styles.tabActive]}
+            style={[styles.tab, activeTab === t.id && styles.tabActive, isThreadsFlip && activeTab === t.id && { backgroundColor: '#250014' }]}
           >
-            <MaterialIcons name={t.icon as any} size={15} color={activeTab === t.id ? Colors.primary : Colors.textTertiary} />
-            <Text style={[styles.tabText, activeTab === t.id && styles.tabTextActive]}>{t.label}</Text>
+            <MaterialIcons name={t.icon as any} size={15} color={activeTab === t.id ? (isThreadsFlip ? threads.pink : Colors.primary) : Colors.textTertiary} />
+            <Text style={[styles.tabText, activeTab === t.id && styles.tabTextActive, isThreadsFlip && activeTab === t.id && { color: threads.pink } ]}>{t.label}</Text>
             {t.count > 0 ? (
-              <View style={[styles.tabBadge, activeTab === t.id && styles.tabBadgeActive]}>
-                <Text style={[styles.tabBadgeText, activeTab === t.id && styles.tabBadgeTextActive]}>{t.count}</Text>
+              <View style={[styles.tabBadge, activeTab === t.id && styles.tabBadgeActive, isThreadsFlip && activeTab === t.id && { backgroundColor: threads.pink + '30' } ]}>
+                <Text style={[styles.tabBadgeText, activeTab === t.id && styles.tabBadgeTextActive, isThreadsFlip && activeTab === t.id && { color: threads.pink } ]}>{t.count}</Text>
               </View>
             ) : null}
           </Pressable>
@@ -541,12 +545,13 @@ export default function RepricingScreen() {
       </View>
 
       {loading ? (
-        <View style={styles.loading}><ActivityIndicator color={Colors.primary} size="large" /></View>
+        <View style={[styles.loading, isThreadsFlip && { backgroundColor: threads.background }]}><ActivityIndicator color={isThreadsFlip ? threads.pink : Colors.primary} size="large" /></View>
       ) : activeTab === 'stale' ? (
         <FlatList
+          style={isThreadsFlip ? { backgroundColor: threads.background } : undefined}
           data={staleListings}
           keyExtractor={l => l.id}
-          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 100 }]}
+          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 100 }, isThreadsFlip && { backgroundColor: threads.background } ]}
           showsVerticalScrollIndicator={false}
           ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
           renderItem={({ item }) => (
@@ -562,18 +567,18 @@ export default function RepricingScreen() {
             staleListings.length > 0 ? (
               <Pressable
                 onPress={() => staleListings.slice(0, 5).forEach(l => { if (!suggestions[l.id]) getAISuggestion(l); })}
-                style={({ pressed }) => [styles.bulkSuggestBtn, pressed && { opacity: 0.85 }]}
+                style={({ pressed }) => [styles.bulkSuggestBtn, isThreadsFlip && { backgroundColor: threads.pink }, pressed && { opacity: 0.85 }]}
               >
-                <MaterialIcons name="auto-awesome" size={16} color={Colors.background} />
-                <Text style={styles.bulkSuggestText}>Get AI Suggestions for All</Text>
+                <MaterialIcons name="auto-awesome" size={16} color={isThreadsFlip ? threads.background : Colors.background} />
+                <Text style={[styles.bulkSuggestText, isThreadsFlip && { color: threads.background }]}>Get AI Suggestions for All</Text>
               </Pressable>
             ) : null
           }
           ListEmptyComponent={
-            <View style={styles.empty}>
+            <View style={[styles.empty, isThreadsFlip && { backgroundColor: threads.surface, borderColor: threads.border }]}>
               <MaterialIcons name="check-circle" size={48} color={Colors.success} />
-              <Text style={styles.emptyTitle}>No Stale Listings</Text>
-              <Text style={styles.emptyText}>All your listings are fresh and active. Check back after 7 days.</Text>
+              <Text style={[styles.emptyTitle, isThreadsFlip && { color: threads.cream }]}>No Stale Listings</Text>
+              <Text style={[styles.emptyText, isThreadsFlip && { color: threads.muted }]}>All your listings are fresh and active. Check back after 7 days.</Text>
             </View>
           }
         />
@@ -584,10 +589,10 @@ export default function RepricingScreen() {
         >
           <Pressable
             onPress={() => setShowAddRule(true)}
-            style={({ pressed }) => [styles.addRuleBtn, pressed && { opacity: 0.85 }]}
+            style={({ pressed }) => [styles.addRuleBtn, isThreadsFlip && { backgroundColor: '#250014', borderColor: threads.pink }, pressed && { opacity: 0.85 }]}
           >
-            <MaterialIcons name="add" size={18} color={Colors.primary} />
-            <Text style={styles.addRuleBtnText}>Add Repricing Rule</Text>
+            <MaterialIcons name="add" size={18} color={isThreadsFlip ? threads.pink : Colors.primary} />
+            <Text style={[styles.addRuleBtnText, isThreadsFlip && { color: threads.pink }]}>Add Repricing Rule</Text>
           </Pressable>
 
           {rules.length === 0 ? (
@@ -612,9 +617,9 @@ export default function RepricingScreen() {
           )}
 
           {/* Info card */}
-          <View style={styles.infoCard}>
+          <View style={[styles.infoCard, isThreadsFlip && { backgroundColor: threads.surface, borderColor: threads.border }]}>
             <MaterialIcons name="info-outline" size={14} color={Colors.info} />
-            <Text style={styles.infoText}>
+            <Text style={[styles.infoText, isThreadsFlip && { color: threads.muted }]}>
               Repricing rules run against all active listings that match the trigger conditions.
               AI Smart Reprice uses OnSpace AI to analyse each listing individually.
               Floor prices are always respected — prices never drop below acquisition cost.

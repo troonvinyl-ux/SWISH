@@ -28,12 +28,13 @@ import { getAuthenticatedHomeRoute } from '@/services/nicheRouting';
 
 function AppRouter() {
   const { businessConfig, tenantLoading, tenantError, nichePreferencesLoading, activeNicheId, fixedNicheId, isMasterAdmin } = useApp();
+  const isThreadsFlip = (fixedNicheId ?? activeNicheId) === 'clothing';
 
   // Still loading tenant/config
   if (tenantLoading || nichePreferencesLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+      <View testID={isThreadsFlip ? 'threads-flip-screen-01' : undefined} style={{ flex: 1, backgroundColor: isThreadsFlip ? '#0C080C' : Colors.background, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color={isThreadsFlip ? '#E91E8C' : Colors.primary} />
       </View>
     );
   }

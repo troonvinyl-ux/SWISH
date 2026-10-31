@@ -28,6 +28,7 @@ export default function NicheHomeScreen() {
   // Build-time identity wins over persisted/account-selected state in branded APKs.
   const effectiveNicheId = fixedNicheId ?? activeNicheId;
   const product = resolveProductionNiche(effectiveNicheId);
+  const isThreadsFlip = product === 'clothing';
 
   // Show a brief spinner while AppContext is initialising
   if (tenantLoading && !tenant) {

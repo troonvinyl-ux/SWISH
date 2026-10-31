@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
+import SettingsScreen from '../settings';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth, authService } from '@/template';
@@ -13,8 +14,11 @@ export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { isMasterAdmin, activeNicheId, fixedNicheId } = useApp();
+  const isThreadsFlip = (fixedNicheId ?? activeNicheId) === 'clothing';
+  const threads = { background: '#0C080C', surface: '#160E16', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5', muted: '#9A7090' };
   const [signingOut, setSigningOut] = useState(false);
   if ((fixedNicheId ?? activeNicheId) === 'antiques') return <Redirect href={"/(tabs)/antique-more" as any} />;
+  if (isThreadsFlip) return <SettingsScreen embedded />;
   const owner = isMasterAdmin && isSwishMasterAdmin(user?.email);
 
   const signOut = async () => {
@@ -35,16 +39,16 @@ export default function AccountScreen() {
   };
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + Spacing.lg }]}>
-      <Text style={styles.eyebrow}>SWISH ACCOUNT</Text>
-      <Text style={styles.title}>Account & workspace</Text>
-      <Text style={styles.email}>{user?.email ?? 'Signed-in account'}</Text>
+    <View testID={isThreadsFlip ? "threads-flip-screen-account" : undefined} accessibilityLabel={isThreadsFlip ? "Threads Flip account and workspace" : undefined} style={[styles.screen, { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + Spacing.lg }, isThreadsFlip && { backgroundColor: threads.background }]}>
+      <Text style={[styles.eyebrow, isThreadsFlip && { color: threads.pink }]}>{isThreadsFlip ? 'THREADS FLIP · ACCOUNT' : 'SWISH ACCOUNT'}</Text>
+      <Text style={[styles.title, isThreadsFlip && { color: threads.cream }]}>Account & workspace</Text>
+      <Text style={[styles.email, isThreadsFlip && { color: threads.muted }]}>{user?.email ?? 'Signed-in account'}</Text>
 
-      <Pressable style={styles.action} onPress={() => router.push('/niche-select' as any)}>
-        <MaterialIcons name="apps" size={24} color={Colors.primary} />
+      <Pressable style={[styles.action, isThreadsFlip && { backgroundColor: threads.surface, borderColor: threads.border }]} onPress={() => router.push('/niche-select' as any)}>
+        <MaterialIcons name="apps" size={24} color={isThreadsFlip ? threads.pink : Colors.primary} />
         <View style={styles.copy}>
-          <Text style={styles.actionTitle}>Switch niche</Text>
-          <Text style={styles.description}>Open SWISH Verticals and choose a workspace.</Text>
+          <Text style={[styles.actionTitle, isThreadsFlip && { color: threads.cream }]}>Switch niche</Text>
+          <Text style={[styles.description, isThreadsFlip && { color: threads.muted }]}>Open SWISH Verticals and choose a workspace.</Text>
         </View>
         <MaterialIcons name="chevron-right" size={24} color={Colors.textTertiary} />
       </Pressable>
@@ -60,7 +64,7 @@ export default function AccountScreen() {
         </Pressable>
       ) : null}
 
-      <Pressable style={[styles.action, styles.signOut]} onPress={signOut} disabled={signingOut}>
+      <Pressable style={[styles.action, styles.signOut, isThreadsFlip && { backgroundColor: threads.surface, borderColor: threads.border }]} onPress={signOut} disabled={signingOut}>
         {signingOut ? <ActivityIndicator color={Colors.danger ?? '#D33'} /> : <MaterialIcons name="logout" size={24} color={Colors.danger ?? '#D33'} />}
         <View style={styles.copy}>
           <Text style={[styles.actionTitle, { color: Colors.danger ?? '#D33' }]}>{signingOut ? 'Signing out…' : 'Sign out'}</Text>

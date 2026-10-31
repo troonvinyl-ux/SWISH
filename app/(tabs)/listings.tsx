@@ -29,9 +29,11 @@ const EBAY_ROUTES = [
 export default function ListingsTabScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, activeNicheId } = useApp();
+  const { tenant, activeNicheId, fixedNicheId } = useApp();
 
-  const nicheId = (activeNicheId ?? '').toLowerCase();
+  const nicheId = (fixedNicheId ?? activeNicheId ?? '').toLowerCase();
+  const isThreadsFlip = nicheId === 'clothing';
+  const threads = { background: '#0C080C', surface: '#160E16', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5', muted: '#9A7090' };
   const accentColor =
     nicheId.includes('coin') ? '#F5C842' :
     nicheId === 'motocross' ? '#FF5500' :
@@ -39,21 +41,21 @@ export default function ListingsTabScreen() {
     nicheId === 'clothing' ? '#E91E8C' : Colors.primary;
 
   return (
-    <View style={s.container}>
+    <View testID={isThreadsFlip ? 'threads-flip-ebay-tools' : undefined} accessibilityLabel={isThreadsFlip ? 'Threads Flip eBay tools and shortcuts' : undefined} style={[s.container, isThreadsFlip && { backgroundColor: threads.background }]}>
       <StatusBar style="light" />
 
       {/* Header */}
-      <View style={[s.header, { paddingTop: insets.top + Spacing.base }]}>
-        <View style={[s.headerIcon, { backgroundColor: '#E53238' + '20' }]}>
-          <MaterialIcons name="storefront" size={18} color="#E53238" />
+      <View style={[s.header, { paddingTop: insets.top + Spacing.base }, isThreadsFlip && { backgroundColor: threads.surface, borderBottomColor: threads.border }]}>
+        <View style={[s.headerIcon, { backgroundColor: '#E53238' + '20' }, isThreadsFlip && { backgroundColor: threads.pink + '20' }]}>
+          <MaterialIcons name="storefront" size={18} color={isThreadsFlip ? threads.pink : '#E53238'} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[s.headerTitle, { color: '#E53238' }]}>eBay Management</Text>
-          <Text style={s.headerSub}>Orders · Messages · Analytics · Finances</Text>
+          <Text style={[s.headerTitle, { color: isThreadsFlip ? threads.pink : '#E53238' }]}>{isThreadsFlip ? 'Threads Flip · eBay' : 'eBay Management'}</Text>
+          <Text style={[s.headerSub, isThreadsFlip && { color: threads.muted }]}>{isThreadsFlip ? 'Threads Flip · Orders · Messages · Analytics · Finances' : 'Orders · Messages · Analytics · Finances'}</Text>
         </View>
         <Pressable
           onPress={() => router.push('/ebay-hub' as any)}
-          style={({ pressed }) => [s.hubBtn, pressed && { opacity: 0.85 }]}
+          style={({ pressed }) => [s.hubBtn, isThreadsFlip && { backgroundColor: threads.pink }, pressed && { opacity: 0.85 }]}
         >
           <MaterialIcons name="dashboard" size={14} color="#000" />
           <Text style={s.hubBtnText}>Hub</Text>
@@ -61,11 +63,11 @@ export default function ListingsTabScreen() {
       </View>
 
       {/* Info banner — direct users to Stock tab for listings */}
-      <View style={s.infoBanner}>
+      <View style={[s.infoBanner, isThreadsFlip && { backgroundColor: threads.surface, borderColor: threads.border }]}>
         <MaterialIcons name="info-outline" size={13} color={accentColor} />
         <View style={{ flex: 1 }}>
           <Text style={[s.infoBannerTitle, { color: accentColor }]}>Listings are now in the Stock tab</Text>
-          <Text style={s.infoBannerSub}>In Stock → Draft → Live → Sold, all in one place.</Text>
+          <Text style={[s.infoBannerSub, isThreadsFlip && { color: threads.muted }]}>In Stock → Draft → Live → Sold, all in one place.</Text>
         </View>
         <Pressable
           onPress={() => router.replace('/(tabs)/inventory' as any)}
@@ -76,7 +78,7 @@ export default function ListingsTabScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 100 }, isThreadsFlip && { backgroundColor: threads.background }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Quick-access grid */}
@@ -85,13 +87,13 @@ export default function ListingsTabScreen() {
             <Pressable
               key={route.route}
               onPress={() => router.push(route.route as any)}
-              style={({ pressed }) => [s.card, pressed && { opacity: 0.85 }]}
+              style={({ pressed }) => [s.card, isThreadsFlip && { backgroundColor: threads.surface, borderColor: threads.border }, pressed && { opacity: 0.85 }]}
             >
               <View style={[s.cardIcon, { backgroundColor: route.color + '18' }]}>
                 <MaterialIcons name={route.icon as any} size={22} color={route.color} />
               </View>
-              <Text style={s.cardLabel}>{route.label}</Text>
-              <Text style={s.cardSub} numberOfLines={1}>{route.sub}</Text>
+              <Text style={[s.cardLabel, isThreadsFlip && { color: threads.cream }]}>{route.label}</Text>
+              <Text style={[s.cardSub, isThreadsFlip && { color: threads.muted }]} numberOfLines={1}>{route.sub}</Text>
             </Pressable>
           ))}
         </View>
