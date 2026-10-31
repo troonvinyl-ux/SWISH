@@ -1,6 +1,7 @@
 // SWISH Master Admin — owner-only platform control centre.
-import React from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import * as Updates from 'expo-updates';
 import { Redirect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -16,6 +17,32 @@ export default function MasterAdminScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { activeNicheId, enabledNiches, setActiveNiche, isMasterAdmin, tenant, subscriptionTier } = useApp();
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+
+  const checkForAppUpdate = async () => {
+    if (checkingUpdate) return;
+    if (!Updates.isEnabled) {
+      Alert.alert('Updates not configured', 'This installed APK needs an OTA-enabled build before it can receive app-code updates. Once enabled, routine screen and logic changes can install without another APK.');
+      return;
+    }
+    setCheckingUpdate(true);
+    try {
+      const result = await Updates.checkForUpdateAsync();
+      if (!result.isAvailable) {
+        Alert.alert('SWISH is up to date', 'No compatible update is currently available for this app.');
+        return;
+      }
+      await Updates.fetchUpdateAsync();
+      Alert.alert('Update ready', 'The latest SWISH update has downloaded. Reload now to apply it?', [
+        { text: 'Later', style: 'cancel' },
+        { text: 'Update now', onPress: () => { void Updates.reloadAsync(); } },
+      ]);
+    } catch (error) {
+      Alert.alert('Update check failed', error instanceof Error ? error.message : 'Please try again later.');
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
 
   // Fail closed: never render owner tools for another account.
   if (!isSwishMasterAdmin(user?.email) || !isMasterAdmin) {
@@ -99,6 +126,15 @@ export default function MasterAdminScreen() {
           <InfoRow icon="security" title="Access model" value="Owner-only screen; sensitive actions require server-side authorization before they are enabled." />
         </View>
 
+        <Pressable accessibilityRole="button" onPress={checkForAppUpdate} disabled={checkingUpdate} style={styles.updateButton}>
+          <View style={styles.updateIcon}>{checkingUpdate ? <ActivityIndicator color={Colors.primary} /> : <MaterialIcons name="system-update" size={23} color={Colors.primary} />}</View>
+          <View style={{ flex: 1, gap: 3 }}>
+            <Text style={styles.updateTitle}>{checkingUpdate ? 'Checking for updates…' : 'Update SWISH'}</Text>
+            <Text style={styles.updateSubtitle}>Check, download and install the latest compatible app update</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={24} color={Colors.textPrimary} />
+        </Pressable>
+
         <Pressable accessibilityRole="button" onPress={() => router.push('/master-diagnostics' as any)} style={styles.diagnosticsButton}>
           <View style={styles.diagnosticsIcon}><MaterialIcons name="health-and-safety" size={24} color="#111111" /></View>
           <View style={{ flex: 1, gap: 3 }}>
@@ -164,6 +200,10 @@ const styles = StyleSheet.create({
   infoCopy: { flex: 1, gap: 3 },
   infoTitle: { color: Colors.textSecondary, fontSize: Typography.size.xs },
   infoValue: { color: Colors.textPrimary, fontSize: Typography.size.sm, lineHeight: 19 },
+  updateButton: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md, borderRadius: Radius.lg, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.primary + '88' },
+  updateIcon: { width: 42, height: 42, borderRadius: Radius.md, backgroundColor: Colors.primaryDim, alignItems: 'center', justifyContent: 'center' },
+  updateTitle: { color: Colors.textPrimary, fontSize: Typography.size.base, fontWeight: '900' },
+  updateSubtitle: { color: Colors.textSecondary, fontSize: Typography.size.xs, lineHeight: 17 },
   diagnosticsButton: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md, borderRadius: Radius.lg, backgroundColor: Colors.primary, borderWidth: 1, borderColor: Colors.primary },
   diagnosticsIcon: { width: 42, height: 42, borderRadius: Radius.md, backgroundColor: '#FFFFFF55', alignItems: 'center', justifyContent: 'center' },
   diagnosticsTitle: { color: '#111111', fontSize: Typography.size.base, fontWeight: '900' },
