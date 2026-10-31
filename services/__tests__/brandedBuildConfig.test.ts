@@ -85,6 +85,19 @@ describe('Branded Expo build configuration', () => {
     expect(config.plugins).toEqual(expect.arrayContaining([expect.arrayContaining(['expo-router', expect.objectContaining({ root: 'master-admin-app' })])]));
   });
 
+  test('uses the shared EAS project slug for Master Admin OTA while preserving native identity', () => {
+    delete process.env.SWISH_NICHE;
+    process.env.SWISH_MASTER_ADMIN = '1';
+    process.env.SWISH_OTA_PUBLISH = '1';
+    process.env.EXPO_PROJECT_ID = '00000000-0000-4000-8000-000000000001';
+    const config = configureApp({ config: BASE_CONFIG });
+    expect(config.slug).toBe('swish');
+    expect(config.android.package).toBe('com.swish.inventory');
+    expect(config.scheme).toBe('swishmasteradmin');
+    expect(config.updates.url).toBe('https://u.expo.dev/00000000-0000-4000-8000-000000000001');
+    expect(config.updates.requestHeaders['expo-channel-name']).toBe('production-default');
+  });
+
   test('rejects combining Master Admin identity with a niche lock', () => {
     process.env.SWISH_NICHE = 'coins';
     process.env.SWISH_MASTER_ADMIN = '1';
