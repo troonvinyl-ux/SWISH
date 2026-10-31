@@ -40,7 +40,6 @@ function TVBackHandlerProvider({ children }: { children: React.ReactNode }) {
 function TVBackHandlerEffect({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { fixedNicheId, activeNicheId } = useApp();
 
   useEffect(() => {
     if (!IS_TV) return;
@@ -64,7 +63,9 @@ function TVBackHandlerEffect({ children }: { children: React.ReactNode }) {
 function GlobalScanShortcut() {
   const router = useRouter();
   const pathname = usePathname();
-  const hidden = pathname.startsWith('/(tabs)') ||
+  const segments = useSegments();
+  const { fixedNicheId, activeNicheId } = useApp();
+  const hidden = segments[0] === '(tabs)' || pathname.startsWith('/(tabs)') ||
     pathname === '/login' || pathname === '/onboarding' ||
     pathname === '/capture' || pathname === '/(tabs)/scan' ||
     pathname.startsWith('/entry/');
