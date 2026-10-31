@@ -17,7 +17,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { useSubscription } from '@/hooks/useSubscription';
-import { resolveProductionNiche } from '@/services/nicheRouting';
+import { resolveProductionNiche, nicheToScannerRoute } from '@/services/nicheRouting';
 import { NICHE_MODULES } from '@/constants/niches';
 import { getSpecialistProfile } from '@/shared/specialistIntelligence';
 
@@ -284,9 +284,8 @@ export default function ScanScreen() {
   // The centre Scan tab is a one-tap action, not a second landing page.
   // Replace this route immediately with the active product's actual capture screen.
   useEffect(() => {
-    const destination = product === 'coins' ? '/coin-flipper?tab=capture' : config.route;
-    router.replace(destination as any);
-  }, [product, config.route, router]);
+    router.replace(nicheToScannerRoute(selectedNicheId) as any);
+  }, [selectedNicheId, router]);
 
   const handleOpenNiche = () => {
     // The Scan tab is an action, not a second landing page. Open the active
