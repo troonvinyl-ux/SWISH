@@ -30,6 +30,9 @@ import { getSupabaseClient } from '@/template';
 import { NICHES, NICHE_LIST, NicheId } from '@/constants/niches';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 
+const SettingsThemeContext = React.createContext(false);
+const THREADS_SETTINGS = { surface: '#160E16', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5', muted: '#9A7090' };
+
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -59,9 +62,10 @@ function tokenExpiryLabel(expiresAt?: string | null): string {
 // ── Section Header ─────────────────────────────────────────────────────────
 
 function SectionHead({ title }: { title: string }) {
+  const isThreadsFlip = React.useContext(SettingsThemeContext);
   return (
-    <View style={secStyles.wrap}>
-      <Text style={secStyles.title}>{title}</Text>
+    <View style={[secStyles.wrap, isThreadsFlip && { paddingTop: Spacing.lg }]}>
+      <Text style={[secStyles.title, isThreadsFlip && { color: THREADS_SETTINGS.pink }]}>{title}</Text>
     </View>
   );
 }
@@ -82,21 +86,23 @@ function SettingRow({
   onPress?: () => void; color?: string; danger?: boolean;
   rightSlot?: React.ReactNode;
 }) {
+  const isThreadsFlip = React.useContext(SettingsThemeContext);
+  const rowColor = isThreadsFlip ? THREADS_SETTINGS.pink : color;
   return (
     <Pressable
       onPress={onPress}
       disabled={!onPress}
-      style={({ pressed }) => [rowStyles.row, pressed && onPress && { backgroundColor: Colors.surfaceElevated }]}
+      style={({ pressed }) => [rowStyles.row, isThreadsFlip && { backgroundColor: THREADS_SETTINGS.surface }, pressed && onPress && { backgroundColor: isThreadsFlip ? '#241624' : Colors.surfaceElevated }]}
     >
-      <View style={[rowStyles.icon, { backgroundColor: (danger ? Colors.danger : color) + '20' }]}>
-        <MaterialIcons name={icon as any} size={18} color={danger ? Colors.danger : color} />
+      <View style={[rowStyles.icon, { backgroundColor: (danger ? Colors.danger : rowColor) + '20' }]}>
+        <MaterialIcons name={icon as any} size={18} color={danger ? Colors.danger : rowColor} />
       </View>
       <View style={rowStyles.flex}>
-        <Text style={[rowStyles.label, danger && { color: Colors.danger }]}>{label}</Text>
-        {desc ? <Text style={rowStyles.desc}>{desc}</Text> : null}
+        <Text style={[rowStyles.label, isThreadsFlip && { color: THREADS_SETTINGS.cream }, danger && { color: Colors.danger }]}>{label}</Text>
+        {desc ? <Text style={[rowStyles.desc, isThreadsFlip && { color: THREADS_SETTINGS.muted }]}>{desc}</Text> : null}
       </View>
       {rightSlot ? rightSlot : value ? (
-        <Text style={rowStyles.value} numberOfLines={1}>{value}</Text>
+        <Text style={[rowStyles.value, isThreadsFlip && { color: THREADS_SETTINGS.muted }]} numberOfLines={1}>{value}</Text>
       ) : null}
       {onPress ? <MaterialIcons name="chevron-right" size={16} color={Colors.textTertiary} /> : null}
     </Pressable>
@@ -117,7 +123,8 @@ const rowStyles = StyleSheet.create({
 // ── Card Group ─────────────────────────────────────────────────────────────
 
 function CardGroup({ children }: { children: React.ReactNode }) {
-  return <View style={cardStyles.group}>{children}</View>;
+  const isThreadsFlip = React.useContext(SettingsThemeContext);
+  return <View style={[cardStyles.group, isThreadsFlip && { backgroundColor: THREADS_SETTINGS.surface, borderColor: THREADS_SETTINGS.border }]}>{children}</View>;
 }
 const cardStyles = StyleSheet.create({
   group: {
@@ -128,7 +135,8 @@ const cardStyles = StyleSheet.create({
 });
 
 function Divider() {
-  return <View style={{ height: 1, backgroundColor: Colors.surfaceBorder, marginLeft: Spacing.base + 36 + Spacing.md }} />;
+  const isThreadsFlip = React.useContext(SettingsThemeContext);
+  return <View style={{ height: 1, backgroundColor: isThreadsFlip ? THREADS_SETTINGS.border : Colors.surfaceBorder, marginLeft: Spacing.base + 36 + Spacing.md }} />;
 }
 
 // ── eBay Business Policies Card ─────────────────────────────────────────────
@@ -3177,6 +3185,7 @@ export default function SettingsScreen() {
   }, [logout, showAlert, router]);
 
   return (
+    <SettingsThemeContext.Provider value={isThreadsFlip}>
     <View testID={isThreadsFlip ? "threads-flip-screen-16" : undefined} accessibilityLabel={isThreadsFlip ? "Threads Flip screen 16 More and settings" : undefined} style={[styles.container, isThreadsFlip && { backgroundColor: threads.background }]}>
       <StatusBar style="light" />
 
