@@ -99,6 +99,15 @@ export default function MasterAdminScreen() {
           <InfoRow icon="security" title="Access model" value="Owner-only screen; sensitive actions require server-side authorization before they are enabled." />
         </View>
 
+        <Pressable accessibilityRole="button" onPress={() => router.push('/master-diagnostics' as any)} style={styles.diagnosticsButton}>
+          <View style={styles.diagnosticsIcon}><MaterialIcons name="health-and-safety" size={24} color="#111111" /></View>
+          <View style={{ flex: 1, gap: 3 }}>
+            <Text style={styles.diagnosticsTitle}>Diagnostics Centre</Text>
+            <Text style={styles.diagnosticsSubtitle}>Run shared eBay create, modify and delete acceptance tests</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={24} color={Colors.textPrimary} />
+        </Pressable>
+
         <View style={styles.notice}>
           <MaterialIcons name="info-outline" size={18} color={Colors.primary} />
           <Text style={styles.noticeText}>This is the first admin slice: secure owner recognition, all-niche access and workspace switching. User management, live platform metrics, audit history and integration diagnostics need their own server-backed admin endpoints before they can be exposed here.</Text>
@@ -155,6 +164,10 @@ const styles = StyleSheet.create({
   infoCopy: { flex: 1, gap: 3 },
   infoTitle: { color: Colors.textSecondary, fontSize: Typography.size.xs },
   infoValue: { color: Colors.textPrimary, fontSize: Typography.size.sm, lineHeight: 19 },
+  diagnosticsButton: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md, borderRadius: Radius.lg, backgroundColor: Colors.primary, borderWidth: 1, borderColor: Colors.primary },
+  diagnosticsIcon: { width: 42, height: 42, borderRadius: Radius.md, backgroundColor: '#FFFFFF55', alignItems: 'center', justifyContent: 'center' },
+  diagnosticsTitle: { color: '#111111', fontSize: Typography.size.base, fontWeight: '900' },
+  diagnosticsSubtitle: { color: '#222222', fontSize: Typography.size.xs, lineHeight: 17 },
   notice: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, padding: Spacing.md, borderRadius: Radius.md, backgroundColor: Colors.surfaceHighlight },
   noticeText: { flex: 1, color: Colors.textSecondary, fontSize: Typography.size.xs, lineHeight: 18 },
 });

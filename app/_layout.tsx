@@ -158,6 +158,7 @@ export default function RootLayout() {
                 <Stack.Screen name="ebay-draft-sync-test" />
                 <Stack.Screen name="ebay-admin" />
                 <Stack.Screen name="master-admin" />
+                <Stack.Screen name="master-diagnostics" />
                 <Stack.Screen name="dispatch" />
                 <Stack.Screen name="tasks" />
                 <Stack.Screen name="stock-listing/[id]" />
