@@ -31,7 +31,7 @@ import {
   updateItemMedia,
 } from '@/services/aiIdentificationService';
 import { Image } from 'expo-image';
-import { getMarketValue, MarketValueResult } from '@/services/marketValueService';
+import { getMarketValue, type MarketValueResult } from '@/services/marketValueService';
 
 // ── Threads Flip design tokens ────────────────────────────────────────────────
 const TF = {
