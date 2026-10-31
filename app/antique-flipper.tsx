@@ -23,7 +23,18 @@ export default function AntiqueFlipperHome() {
   const router = useRouter();
   const { tenant } = useApp();
   const inventory = useInventory();
-  const openAction = (route: string) => router.push(route as any);
+  const openAction = (title: string, route: string) => {
+    const firstItem = inventory.items[0];
+    if (title === 'Create eBay Listing') {
+      router.push(firstItem ? (\`/create-listing?id=\${firstItem.id}\` as any) : ('/(tabs)/inventory' as any));
+      return;
+    }
+    if (title === 'Market Value') {
+      router.push(firstItem ? (\`/stock-listing/\${firstItem.id}\` as any) : ('/capture' as any));
+      return;
+    }
+    router.push(route as any);
+  };
   const openItem = (id: string) => router.push(`/stock-listing/${id}` as any);
 
   return <SafeAreaView edges={['top']} style={s.screen}>
@@ -48,19 +59,19 @@ export default function AntiqueFlipperHome() {
       {inventory.syncError ? <Text style={s.error}>Inventory could not refresh: {inventory.syncError}</Text> : null}
       <Text style={s.section}>YOUR ANTIQUE WORKSPACE</Text>
       <View style={s.actions}>
-        {ACTIONS.map((action, index) => <Pressable key={action.title} onPress={() => openAction(action.route)} style={({ pressed }) => [s.action, action.primary && s.primaryAction, pressed && s.pressed]}>
+        {ACTIONS.map((action, index) => <Pressable key={action.title} onPress={() => openAction(action.title, action.route)} style={({ pressed }) => [s.action, action.primary && s.primaryAction, pressed && s.pressed]}>
           <View style={[s.actionIcon, action.primary && s.primaryIcon]}><MaterialIcons name={action.icon as any} size={23} color={action.primary ? '#17120A' : GOLD} /></View>
           <View style={s.actionCopy}><Text style={[s.actionTitle, action.primary && s.primaryTitle]}>{action.title}</Text><Text style={[s.actionSubtitle, action.primary && s.primarySubtitle]}>{action.subtitle}</Text></View>
           <MaterialIcons name="chevron-right" size={23} color={action.primary ? '#17120A' : GOLD} />
         </Pressable>)}
       </View>
-      <View style={s.inventoryHeading}><Text style={s.section}>RECENT FINDS</Text><Pressable onPress={() => openAction('/(tabs)/inventory')}><Text style={s.viewAll}>VIEW ALL</Text></Pressable></View>
+      <View style={s.inventoryHeading}><Text style={s.section}>RECENT FINDS</Text><Pressable onPress={() => openAction('My Inventory', '/(tabs)/inventory')}><Text style={s.viewAll}>VIEW ALL</Text></Pressable></View>
       {inventory.items.slice(0,5).map(item => <Pressable key={item.id} onPress={() => openItem(item.id)} style={s.itemCard}>
         <View style={s.itemIcon}><MaterialIcons name="museum" size={22} color={GOLD}/></View>
         <View style={s.actionCopy}><Text style={s.itemTitle} numberOfLines={1}>{item.canonicalTitle}</Text><Text style={s.actionSubtitle}>{item.condition || 'Condition not assessed'} · {item.status}</Text></View>
         <Text style={s.itemPrice}>{item.expectedSellingPrice ? `£${Number(item.expectedSellingPrice).toFixed(0)}` : '—'}</Text>
       </Pressable>)}
-      {!inventory.loading && inventory.items.length===0 ? <View style={s.empty}><Text style={s.emptyTitle}>Your next discovery starts here</Text><Text style={s.actionSubtitle}>Scan an object to identify it, assess its condition and save it to your Antique Flipper inventory.</Text><Pressable onPress={() => openAction('/capture')} style={s.goldButton}><Text style={s.goldButtonText}>SCAN AN ANTIQUE  →</Text></Pressable></View> : null}
+      {!inventory.loading && inventory.items.length===0 ? <View style={s.empty}><Text style={s.emptyTitle}>Your next discovery starts here</Text><Text style={s.actionSubtitle}>Scan an object to identify it, assess its condition and save it to your Antique Flipper inventory.</Text><Pressable onPress={() => openAction('Scan & Identify', '/capture')} style={s.goldButton}><Text style={s.goldButtonText}>SCAN AN ANTIQUE  →</Text></Pressable></View> : null}
       <Text style={s.footer}>Powered by SWISH Intelligence Engine · {tenant?.name ?? 'Private workspace'}</Text>
     </ScrollView>
   </SafeAreaView>;
