@@ -1,6 +1,23 @@
 name: SWISH branded web production builds
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'components/**'
+      - 'constants/**'
+      - 'contexts/**'
+      - 'services/**'
+      - 'hooks/**'
+      - 'assets/**'
+      - 'niche-modules.json'
+      - 'scripts/**'
+      - 'app.config.js'
+      - 'eas.json'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/branded-web-builds.yml'
   push:
     branches: [main]
     paths:
