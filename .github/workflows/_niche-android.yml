@@ -13,6 +13,7 @@ jobs:
     timeout-minutes: 60
     env:
       SWISH_NICHE: ${{ inputs.niche }}
+      EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
