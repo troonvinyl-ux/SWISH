@@ -7,6 +7,8 @@ import { ManifestOpportunityProvider } from '@/contexts/ManifestOpportunityConte
 import { WatchedLotsProvider } from '@/contexts/WatchedLotsContext';
 import { Colors } from '@/constants/theme';
 import { NicheRouteBoundary } from '@/components/layout/NicheRouteBoundary';
+import { useApp } from '@/hooks/useApp';
+import { nicheToScannerRoute } from '@/services/nicheRouting';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useCallback } from 'react';
 import { Platform, BackHandler, Pressable, Text, View, StyleSheet } from 'react-native';
@@ -38,6 +40,7 @@ function TVBackHandlerProvider({ children }: { children: React.ReactNode }) {
 function TVBackHandlerEffect({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { fixedNicheId, activeNicheId } = useApp();
 
   useEffect(() => {
     if (!IS_TV) return;
@@ -70,7 +73,7 @@ function GlobalScanShortcut() {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Open niche scanner"
-      onPress={() => router.push('/(tabs)/scan' as any)}
+      onPress={() => router.push(nicheToScannerRoute(fixedNicheId ?? activeNicheId) as any)}
       style={({ pressed }) => [globalScanStyles.button, pressed && globalScanStyles.pressed]}
     >
       <MaterialIcons name="qr-code-scanner" size={22} color="#111111" />
