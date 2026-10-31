@@ -170,7 +170,7 @@ export default function TabLayout() {
         options={{ href: null }}
       />
       <Tabs.Screen name="antique-more" options={{ href: null }} />
-      <Tabs.Screen name="account" options={{ href: nicheHome.isAntiques ? undefined : null, tabBarIcon: ({ focused }) => (<View style={[styles.tabItem, focused && styles.tabItemActive, focused && isThreadsFlip && { backgroundColor: '#E91E8C20' }]}><MaterialIcons name="more-horiz" size={22} color={focused ? (isThreadsFlip ? threads.pink : Colors.primary) : Colors.textTertiary} /><TabLabel label="More" focused={focused} accentColor={isThreadsFlip ? threads.pink : Colors.primary} /></View>) }} />
+      <Tabs.Screen name="account" options={{ href: nicheHome.isAntiques || isThreadsFlip ? undefined : null, tabBarIcon: ({ focused }) => (<View style={[styles.tabItem, focused && styles.tabItemActive, focused && isThreadsFlip && { backgroundColor: '#E91E8C20' }]}><MaterialIcons name="more-horiz" size={22} color={focused ? (isThreadsFlip ? threads.pink : Colors.primary) : Colors.textTertiary} /><TabLabel label="More" focused={focused} accentColor={isThreadsFlip ? threads.pink : Colors.primary} /></View>) }} />
     </Tabs>
     <TVTabHint />
     </>
