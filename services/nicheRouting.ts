@@ -20,7 +20,7 @@ export function getProductionNicheSpecialistIds(value: string | null | undefined
   return [...new Set([...config.specialists, ...config.legacySpecialists])];
 }
 
-export function nicheToEntryRoute(value: string | null | undefined): ProductEntryRoute | null {
+export function nicheToAppSchemeUrl(value: string | null | undefined): string | null {\n  const niche = resolveProductionNiche(value);\n  return niche ? `${NICHE_MODULES[niche].scheme}://` : null;\n}\n\nexport function nicheToEntryRoute(value: string | null | undefined): ProductEntryRoute | null {
   const niche = resolveProductionNiche(value);
   return niche ? `/${NICHE_MODULES[niche].entry.replace(/\.tsx$/, '')}` as ProductEntryRoute : null;
 }
