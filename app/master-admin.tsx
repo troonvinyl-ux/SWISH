@@ -129,7 +129,7 @@ export default function MasterAdminScreen() {
           <Text style={styles.sectionMeta}>Owner view</Text>
         </View>
         <View style={styles.infoCard}>
-          <InfoRow icon="inventory-2" title="Current workspace" value={PRODUCTION_NICHES.find(n => n.id === activeNicheId)?.name ?? activeNicheId} />
+          <InfoRow icon="inventory-2" title="Last opened niche" value={PRODUCTION_NICHES.find(n => n.id === activeNicheId)?.name ?? activeNicheId} />
           <InfoRow icon="business" title="Business workspace" value={tenant?.name ?? 'Not loaded'} />
           <InfoRow icon="workspace-premium" title="Account tier" value={subscriptionTier ?? 'Lifetime entitlement for master account'} />
           <InfoRow icon="security" title="Access model" value="Owner-only screen; sensitive actions require server-side authorization before they are enabled." />
