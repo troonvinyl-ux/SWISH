@@ -33,7 +33,8 @@ module.exports = ({ config }) => {
       ...baseConfig,
       plugins: masterPlugins,
       name: 'SWISH Master Admin',
-      slug: 'swish-master-admin',
+      // EAS updates share the existing SWISH project slug; native package and scheme remain dedicated.
+      slug: process.env.SWISH_OTA_PUBLISH === '1' ? 'swish' : 'swish-master-admin',
       scheme: 'swishmasteradmin',
       ios: { ...baseConfig.ios, bundleIdentifier: baseConfig.ios?.bundleIdentifier ?? 'com.swish.inventory' },
       // Preserve the existing Master Admin package so this release upgrades
