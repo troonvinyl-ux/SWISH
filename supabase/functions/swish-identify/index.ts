@@ -21,7 +21,10 @@ const NUMISTA_API = 'https://api.numista.com/api/v3';
 
 type ObjectType = 'coin' | 'medal' | 'token' | 'jeton' | 'commemorative_piece' |
   'banknote' | 'jewellery' | 'motorcycle' | 'motorcycle_part' |
-  'garment' | 'footwear' | 'accessory' | 'replica_reproduction' | 'unknown';
+  'garment' | 'footwear' | 'accessory' | 'furniture' | 'ceramics' | 'porcelain' | 'pottery' |
+  'glassware' | 'silverware' | 'metalware' | 'clock' | 'watch' | 'painting' | 'print' |
+  'sculpture' | 'lighting' | 'book' | 'artwork' | 'decorative_arts' | 'collectable' |
+  'replica_reproduction' | 'unknown';
 
 const CONFIDENCE_TIER_CAPS: Record<string, number> = {
   observation_only: 0.25,
