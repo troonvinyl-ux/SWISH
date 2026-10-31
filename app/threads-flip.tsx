@@ -773,6 +773,7 @@ function ValueTab({ idResult, tenant, onIdentify }: { idResult: AIIdentification
     if (!idResult || !tenant?.id) {
       setMarketData(null);
       setError(null);
+      setLoading(false);
       return;
     }
     let current = true;
