@@ -165,6 +165,7 @@ export default function TabLayout() {
         name="insights"
         options={{ href: null }}
       />
+      <Tabs.Screen name="antique-more" options={{ href: null }} />
       <Tabs.Screen name="account" options={{ href: nicheHome.isAntiques ? undefined : null, tabBarIcon: ({ focused }) => (<View style={[styles.tabItem, focused && styles.tabItemActive]}><MaterialIcons name="more-horiz" size={22} color={focused ? Colors.primary : Colors.textTertiary} /><TabLabel label="More" focused={focused} /></View>) }} />
     </Tabs>
     <TVTabHint />
