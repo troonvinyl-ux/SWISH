@@ -1,0 +1,113 @@
+name: Sync SWISH niche web builds to SwishWeb
+
+on:
+  workflow_run:
+    workflows: ["SWISH branded web production builds"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: swish-web-repository-sync
+  cancel-in-progress: false
+
+jobs:
+  prepare-sync:
+    name: Transfer ten niche web exports
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check cross-repository permission
+        id: credentials
+        env:
+          SWISH_WEB_REPO_TOKEN: ${{ secrets.SWISH_WEB_REPO_TOKEN }}
+        run: |
+          if [ -n "$SWISH_WEB_REPO_TOKEN" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Web exports are ready, but transfer is paused. Add SWISH_WEB_REPO_TOKEN to SWISH repository Actions secrets with Contents read/write access to troonvinyl-ux/SwishWeb."
+          fi
+
+      - name: Download all ten niche exports
+        if: steps.credentials.outputs.ready == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.workflow_run.id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          pattern: swish-web-*
+          path: web-artifacts
+          merge-multiple: false
+
+      - name: Validate all ten exports and prepare destination tree
+        if: steps.credentials.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          niches=(coins motocross bicycles clothing surplus_flip antiques fossils trading_cards beauty tech)
+          for niche in "${niches[@]}"; do
+            test -s "web-artifacts/swish-web-$niche/index.html" || {
+              echo "::error::Missing index.html for $niche export"
+              exit 1
+            }
+          done
+
+      - name: Check out SwishWeb
+        if: steps.credentials.outputs.ready == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: troonvinyl-ux/SwishWeb
+          ref: main
+          token: ${{ secrets.SWISH_WEB_REPO_TOKEN }}
+          path: swish-web-repo
+
+      - name: Stage niche exports without touching application source
+        if: steps.credentials.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          niches=(coins motocross bicycles clothing surplus_flip antiques fossils trading_cards beauty tech)
+          for niche in "${niches[@]}"; do
+            destination="swish-web-repo/public/niche-apps/$niche"
+            mkdir -p "$destination"
+            find "$destination" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+            cp -a "web-artifacts/swish-web-$niche/." "$destination/"
+            test -s "$destination/index.html"
+          done
+
+      - name: Create update pull request in SwishWeb
+        if: steps.credentials.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.SWISH_WEB_REPO_TOKEN }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd swish-web-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          branch="automation/swish-niche-web-builds"
+          git fetch origin main
+          git checkout -B "$branch" origin/main
+          git add public/niche-apps
+          if git diff --cached --quiet; then
+            echo "No web export changes to transfer."
+            exit 0
+          fi
+          git commit -m "chore: update ten SWISH niche web exports"
+          git push --force-with-lease origin "$branch"
+          if gh pr view "$branch" --repo troonvinyl-ux/SwishWeb >/dev/null 2>&1; then
+            echo "Updated existing SwishWeb deployment PR."
+          else
+            gh pr create \
+              --repo troonvinyl-ux/SwishWeb \
+              --base main \
+              --head "$branch" \
+              --title "Update all ten SWISH niche web apps" \
+              --body "Automated static exports from SWISH commit $SOURCE_SHA. The ten niche apps are staged under public/niche-apps/ without replacing SwishWeb source files. Merge after the SwishWeb build checks pass."
+          fi
