@@ -26,11 +26,11 @@ export const NicheOverview = memo(function NicheOverview(_props: NicheOverviewPr
         {id ? <BrandArtwork nicheId={id}/> : <Text style={styles.title}>{activeNiche.name}</Text>}
         <Text style={styles.body}>Find the value in your next discovery. Scan it, check it, get it ready to sell.</Text>
         <Text style={styles.body}>{stats.activeTotal} active · {stats.soldCount} sold</Text>
-        <Pressable onPress={() => router.push('/(tabs)/scan')} style={({ pressed }) => [styles.button, { backgroundColor: activeNiche.color, opacity: pressed ? 0.8 : 1 }]}>
+        <Pressable onPress={() => router.push('/(tabs)/scan' as any)} style={({ pressed }) => [styles.button, { backgroundColor: activeNiche.color, opacity: pressed ? 0.8 : 1 }]}>
           <Text style={styles.buttonText}>{activeNiche.terms.scan}</Text>
         </Pressable>
         {syncError ? <Text style={styles.error}>{syncError}</Text> : null}
-        {profile ? <Pressable onPress={()=>router.push('/capture')} style={({pressed})=>[styles.card,{opacity:pressed?0.7:1}]}><MaterialIcons name="photo-camera" size={24} color={Colors.primary}/><Text style={styles.section}>Found something interesting?</Text><Text style={styles.body}>A few clear photos can help you work out what it is and whether it is worth buying.</Text></Pressable> : null}
+        {profile ? <Pressable onPress={()=>router.push('/capture' as any)} style={({pressed})=>[styles.card,{opacity:pressed?0.7:1}]}><MaterialIcons name="photo-camera" size={24} color={Colors.primary}/><Text style={styles.section}>Found something interesting?</Text><Text style={styles.body}>A few clear photos can help you work out what it is and whether it is worth buying.</Text></Pressable> : null}
         {id === 'trading_cards' ? <Pressable onPress={()=>router.push('/card-grading' as any)} style={({ pressed })=>[styles.card,{ opacity:pressed ? 0.7 : 1 }]}><MaterialIcons name="style" size={24} color={Colors.primary}/><Text style={styles.section}>Raw versus graded</Text><Text style={styles.body}>Is grading worth it? Compare possible sale prices and the cost of getting it graded. A professional grade is never guaranteed.</Text></Pressable> : null}
         <Pressable onPress={()=>router.push('/lot-opportunity' as any)} style={({ pressed })=>[styles.card,{ opacity:pressed ? 0.7 : 1 }]}><MaterialIcons name="account-tree" size={24} color={Colors.primary}/><Text style={styles.section}>Big lot. Worth the buy?</Text><Text style={styles.body}>Add the product list and bid. See your limit, possible profit and the best way to sell.</Text></Pressable>
         <Text style={styles.section}>Current inventory</Text>
