@@ -3077,7 +3077,7 @@ const nichStyles = StyleSheet.create({
 
 // ── Main Screen ────────────────────────────────────────────────────────────
 
-export default function SettingsScreen() {
+export default function SettingsScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { tenant, businessConfig, reloadBusinessConfig, triggerInventoryReload, activeNiche, activeNicheId, fixedNicheId, setActiveNiche } = useApp();
@@ -3191,13 +3191,9 @@ export default function SettingsScreen() {
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + Spacing.base }, isThreadsFlip && { backgroundColor: threads.surface, borderBottomColor: threads.border }]}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
-          <MaterialIcons name="arrow-back" size={20} color={Colors.textSecondary} />
-        </Pressable>
-        <Pressable onPress={() => router.replace('/(tabs)' as any)} style={styles.homeBtn} hitSlop={8}>
-          <MaterialIcons name="dashboard" size={16} color={Colors.textTertiary} />
-        </Pressable>
-        <Text style={[styles.title, isThreadsFlip && { color: threads.cream }]}>{isThreadsFlip ? 'Threads Flip · Settings' : 'Settings'}</Text>
+        {!embedded ? <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}><MaterialIcons name="arrow-back" size={20} color={Colors.textSecondary} /></Pressable> : null}
+        {!embedded ? <Pressable onPress={() => router.replace('/(tabs)' as any)} style={styles.homeBtn} hitSlop={8}><MaterialIcons name="dashboard" size={16} color={Colors.textTertiary} /></Pressable> : null}
+        <Text style={[styles.title, isThreadsFlip && { color: threads.cream }]}>{isThreadsFlip ? (embedded ? 'Threads Flip · More' : 'Threads Flip · Settings') : 'Settings'}</Text>
         {loading ? <ActivityIndicator size="small" color={Colors.textTertiary} style={{ marginLeft: 'auto' }} /> : null}
       </View>
 
