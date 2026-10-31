@@ -23,6 +23,7 @@ export default function MasterDashboardLayout() {
             <Stack screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: '#080B10' } }}>
               <Stack.Screen name="index" />
               <Stack.Screen name="control" />
+              <Stack.Screen name="shops" />
               <Stack.Screen name="login" />
             </Stack>
           </AppProvider>
