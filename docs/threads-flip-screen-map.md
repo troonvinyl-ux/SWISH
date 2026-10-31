@@ -6,24 +6,26 @@
 
 ## 16-screen parity checklist
 
-| ID | Mockup screen | Existing implementation / route | Required visual treatment |
+The reference is the **pink-and-black Threads Flip Neon Resale App Showcase**. Screen numbers below match the labels on that reference exactly; the separate sign-in form is an authentication state, not a numbered product screen.
+
+| ID | Reference screen | Route / state | Required visual and functional treatment |
 |---|---|---|---|
-| 01 | App entry / welcome shell | `app/index.tsx` → auth-aware app routing; `app/onboarding.tsx` for first-run setup | Branded entry/welcome state, garment-led hero artwork, black/cream canvas, pink action. This is not a separate native splash route today. |
-| 02 | Sign in / sign up | `app/login.tsx` | Shared auth behavior; currently shared SWISH login branding. A niche-branded login requires the selected niche to be available before authentication. |
-| 03 | Home dashboard | `app/threads-flip.tsx` → `HomeTab` | Fashion hero, wardrobe metrics, 2×3 tool grid, category strip, Pro banner |
-| 04 | Scan / capture | `IdentifyTab` in `app/threads-flip.tsx` | Numbered photo slots: label, full garment, detail/flaw; camera/library actions |
-| 05 | AI identification | Identify flow state in `IdentifyTab` | Branded processing state and visible specialist/AI progress |
-| 06 | Identification result | Identify flow state in `IdentifyTab` | Garment hero image, brand/type/era/size/material/colour facts, confidence |
-| 07 | Condition & authentication | Identify result details in `IdentifyTab` | Condition notes, damage evidence and LOW/MEDIUM/HIGH authentication risk |
-| 08 | Market value | `ValueTab` in `app/threads-flip.tsx` | Price range, sold-comparable evidence, fees/costs and net-profit panel; remove example-only values from live claims |
-| 09 | Save to inventory | Save action in `IdentifyTab` | Pink confirmation state, photo upload status, direct wardrobe/list action |
-| 10 | My wardrobe | Shared `/(tabs)/inventory` | Shared stock/draft/live/sold data and actions; clothing-specific filters and pink visual skin |
-| 11 | Create eBay listing | Shared listing creation flow | Garment-first listing editor; preserve shared listing service and eBay flow |
-| 12 | Category & item specifics | Shared eBay category/item-specific flow | Clothing attributes (department, style, outer shell/material, size, etc.) in pink/black cards |
-| 13 | Listing review | Shared listing review / preview flow | Garment image gallery, title, specifics, price, postage and publish validation |
-| 14 | Listings | Shared `/(tabs)/listings` | Clothing-only listings, status chips, thumbnail-led rows and pink actions |
-| 15 | Sold items & orders | Shared orders flow | Clothing order imagery, sale price, fees and fulfilment status |
-| 16 | More / settings | `app/settings.tsx` (with `app/(tabs)/account.tsx` as account entry) | Threads Flip identity, black canvas and pink header treatment; shared account, eBay, subscription and help controls |
+| 01 | Splash / Welcome | `app/login.tsx` welcome state | SWISHFLIP mark, garment-led Threads Flip hero artwork, clothing reseller tagline, category icons, Get Started and Sign In actions |
+| 02 | Home Dashboard | `HomeTab` in `app/threads-flip.tsx` | Clothing assistant hero, wardrobe metrics, 2×3 tool grid, category strip, Pro banner, four-item bottom navigation |
+| 03 | Scan / Capture | `IdentifyTab` capture state | Camera/library capture with four dedicated slots: Front, Back, Label, Detail; clear capture guidance |
+| 04 | Photo Checklist | `IdentifyTab` reviewingPhotos state | Four thumbnail rows, captured checks, retake actions, Continue to identification |
+| 05 | AI Identification | `IdentifyTab` identifying state | Branded scan/progress treatment and visible AI stages for photos, brand, label, category and specifics |
+| 06 | Item Identified | `IdentifyTab` idResult state | Garment title, image strip, brand/category/department/style/material/size, confidence and Continue |
+| 07 | Condition & Auth | `IdentifyTab` condition panel | Condition grade, authenticity risk, flaws and evidence notes |
+| 08 | Market Value | `ValueTab` in `app/threads-flip.tsx` | Clearly labelled illustrative sample until live sold evidence is available; value range, comps, costs and profit |
+| 09 | Save to Inventory | `IdentifyTab` savedItemId state | Item photo, title, category/size tags, estimated value, save confirmation and upload progress |
+| 10 | My Wardrobe | `/(tabs)/inventory` | Clothing-only stock/draft/live/sold data, search, filters, garment thumbnails and pink active states |
+| 11 | Create Listing | `app/create-listing.tsx` | eBay listing workflow using saved garment details/photos, title and description generation |
+| 12 | Category & Specifics | `app/create-listing.tsx` category/item-specific stage | Clothing category and required eBay aspects such as Department, Style, Outer Shell Material, Brand, Size and Colour |
+| 13 | Listing Review | `app/create-listing.tsx` review stage | Garment gallery, final title, price, postage, draft status, Edit and Publish actions |
+| 14 | My Listings | `/(tabs)/listings` | Clothing-only listing status tabs, thumbnail-led rows, selection and publish actions |
+| 15 | Sold Items & Orders | `app/orders.tsx` | Clothing order thumbnails, order reference, sale amount, fulfilment status and order tabs |
+| 16 | Settings / More | `app/settings.tsx` | eBay connection, AI & identification, pricing rules, listing templates, preferences, support and About |
 
 ## Existing in-app specialist tabs (additional numbered audit pages)
 
