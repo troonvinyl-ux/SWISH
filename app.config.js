@@ -35,8 +35,10 @@ module.exports = ({ config }) => {
       name: 'SWISH Master Admin',
       slug: 'swish-master-admin',
       scheme: 'swishmasteradmin',
-      ios: { ...baseConfig.ios, bundleIdentifier: 'com.swish.masteradmin' },
-      android: { ...baseConfig.android, package: 'com.swish.masteradmin' },
+      ios: { ...baseConfig.ios, bundleIdentifier: baseConfig.ios?.bundleIdentifier ?? 'com.swish.inventory' },
+      // Preserve the existing Master Admin package so this release upgrades
+      // the installed control-centre APK instead of creating a duplicate app.
+      android: { ...baseConfig.android, package: baseConfig.android?.package ?? 'com.swish.inventory' },
       extra: { ...(baseConfig.extra || {}), swishMasterAdminBuild: true },
     };
   }
