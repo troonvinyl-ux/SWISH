@@ -41,7 +41,7 @@ import { Item, getItem, updateItem } from '@/services/itemService';
 import { getItemListings, updateListingPrice, endListing, deleteListing, submitListingToMarketplace, updateListingStatus } from '@/services/listingService';
 import type { SubmitStep } from '@/services/listingService';
 import { FunctionsHttpError } from '@supabase/supabase-js';
-import { generateListing, saveListing, publishGeneratedListing } from '@/services/listingService';
+import { publishGeneratedListing } from '@/services/listingService';
 import type { SavedListing } from '@/services/listingService';
 import {
   CapturedImage,
