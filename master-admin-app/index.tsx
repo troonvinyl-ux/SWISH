@@ -10,7 +10,7 @@ function MasterAdminGate() {
   const { user } = useAuth();
   const { isMasterAdmin, tenantLoading, tenantError, reloadTenant } = useApp();
 
-  if (!user) return <Redirect href={"/login" as any} />;
+  if (!user) return null;
   if (!isSwishMasterAdmin(user.email) || !isMasterAdmin) {
     return (
       <View style={{ flex: 1, backgroundColor: Colors.background, justifyContent: 'center', padding: 28, gap: 14 }}>
