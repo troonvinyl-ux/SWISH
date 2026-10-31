@@ -73,31 +73,13 @@ jobs:
       - name: Compile lightweight Master Admin launcher APK
         working-directory: android
         run: ./gradlew assembleRelease --console=plain -Dorg.gradle.workers.max=2 -Dkotlin.compiler.execution.strategy=in-process
-      - name: Verify APK file and package contents
+      - name: Verify Master Admin APK identity and signature
         run: |
-          set -euo pipefail
-          echo "Locating the release APK produced by Gradle..."
-          find android/app/build/outputs -type f -name '*.apk' -print
-          mapfile -t APKS < <(find android/app/build/outputs/apk -type f -name '*.apk' | sort)
-          if [ "${#APKS[@]}" -eq 0 ]; then
-            echo "::error::Gradle completed but produced no APK under android/app/build/outputs/apk"
-            find android/app/build/outputs -maxdepth 6 -type f -print || true
-            exit 1
-          fi
-          if [ "${#APKS[@]}" -ne 1 ]; then
-            printf '::error::Expected exactly one release APK, found %s: %s\n' "${#APKS[@]}" "${APKS[*]}"
-            exit 1
-          fi
-          APK="${APKS[0]}"
-          test -s "$APK"
-          unzip -t "$APK"
-          unzip -Z1 "$APK" > /tmp/swish-apk-entries.txt
-          grep -qx 'AndroidManifest.xml' /tmp/swish-apk-entries.txt
-          grep -Eq '^classes([0-9]+)?\.dex$' /tmp/swish-apk-entries.txt
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          bash scripts/verify-master-admin-apk.sh "$APK"
           mkdir -p dist
           cp "$APK" dist/swish-master-admin.apk
           sha256sum dist/swish-master-admin.apk > dist/swish-master-admin.sha256
-          echo "Verified Master Admin launcher APK: $APK"
           ls -lh dist/swish-master-admin.apk
           cat dist/swish-master-admin.sha256
       - uses: actions/upload-artifact@v4
