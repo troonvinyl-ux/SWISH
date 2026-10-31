@@ -70,7 +70,7 @@ describe('Branded Expo build configuration', () => {
     expect(config.slug).toBe('swish-master-admin');
     expect(config.scheme).toBe('swishmasteradmin');
     expect(config.android.package).toBe('com.swish.inventory');
-    expect(config.ios.bundleIdentifier).toBe('com.swish.masteradmin');
+    expect(config.ios.bundleIdentifier).toBe('com.swish.inventory');
     expect(config.extra.swishMasterAdminBuild).toBe(true);
     expect(config.plugins).toEqual(expect.arrayContaining([expect.arrayContaining(['expo-router', expect.objectContaining({ root: 'master-admin-app' })])]));
   });
