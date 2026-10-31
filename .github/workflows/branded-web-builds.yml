@@ -35,7 +35,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        niche: [coins, motocross, bicycles, clothing, surplus_flip]
+        niche:
+          - coins
+          - motocross
+          - bicycles
+          - clothing
+          - surplus_flip
+          - antiques
+          - fossils
+          - trading_cards
+          - beauty
+          - tech
 
     steps:
       - name: Checkout
