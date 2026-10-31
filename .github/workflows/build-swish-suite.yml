@@ -90,32 +90,3 @@ jobs:
           unzip -t "$APK"
           unzip -Z1 "$APK" | grep -qx 'AndroidManifest.xml'
           unzip -Z1 "$APK" | grep -Eq '^classes([0-9]+)?\.dex$'
-          mkdir -p dist
-          cp "$APK" dist/swish-master-switch-admin.apk
-          sha256sum dist/swish-master-switch-admin.apk > dist/swish-master-switch-admin.sha256
-          echo "Verified Master Switch APK: $APK"
-          ls -lh dist/swish-master-switch-admin.apk
-          cat dist/swish-master-switch-admin.sha256
-      - uses: actions/upload-artifact@v4
-        with:
-          name: swish-master-switch-admin-apk
-          path: |
-            dist/swish-master-switch-admin.apk
-            dist/swish-master-switch-admin.sha256
-          if-no-files-found: error
-          retention-days: 14
-
-          mkdir -p dist
-          cp "$APK" dist/swish-master-switch-admin.apk
-          sha256sum dist/swish-master-switch-admin.apk > dist/swish-master-switch-admin.sha256
-          echo "Verified Master Switch APK: $APK"
-          ls -lh dist/swish-master-switch-admin.apk
-          cat dist/swish-master-switch-admin.sha256
-      - uses: actions/upload-artifact@v4
-        with:
-          name: swish-master-switch-admin-apk
-          path: |
-            dist/swish-master-switch-admin.apk
-            dist/swish-master-switch-admin.sha256
-          if-no-files-found: error
-          retention-days: 14
