@@ -1,6 +1,20 @@
-name: Build isolated SWISH niche APK
+name: Build isolated SWISH niche APKs
 on:
   push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'services/**'
+      - 'hooks/**'
+      - 'contexts/**'
+      - 'components/**'
+      - 'constants/**'
+      - 'niche-modules.json'
+      - 'app.config.js'
+      - 'scripts/**'
+      - '.github/workflows/_niche-android.yml'
+      - '.github/workflows/build-niche-apk.yml'
+  pull_request:
     branches: [main]
     paths:
       - 'app/**'
@@ -17,15 +31,20 @@ on:
   workflow_dispatch:
     inputs:
       niche:
-        description: Canonical branded application
+        description: Build one niche APK or all registered niche APKs
         required: true
         type: choice
-        default: clothing
-        options: [coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech]
+        default: all
+        options: [all, coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech]
 permissions:
   contents: read
 jobs:
   build-apk:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        niche: ${{ fromJSON((inputs.niche || 'all') == 'all' && '["coins","motocross","bicycles","clothing","surplus_flip","trading_cards","antiques","fossils","beauty","tech"]' || format('["{0}"]', inputs.niche)) }}
     uses: ./.github/workflows/_niche-android.yml
     with:
-      niche: ${{ inputs.niche || 'clothing' }}
+      niche: ${{ matrix.niche }}
