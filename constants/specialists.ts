@@ -300,6 +300,7 @@ export const SPECIALISTS: Record<SpecialistId, SpecialistConfig> = {
       { id: 'marks', label: 'Marks/Stamps', description: 'Maker marks, hallmarks, stamps', required: false },
       { id: 'damage', label: 'Damage/Wear', description: 'Any chips, cracks, restoration', required: false },
       { id: 'detail', label: 'Detail', description: 'Close-up of key features', required: false },
+      { id: 'scale', label: 'Scale / Dimensions', description: 'Include a ruler for measured size', required: false },
     ],
     capabilities: {
       identify: true, classify: true, research: true, authenticate: true,
@@ -777,7 +778,10 @@ export const SPECIALISTS: Record<SpecialistId, SpecialistConfig> = {
     captureRequirements: [
       { id: 'main', label: 'Main specimen', description: 'Clear full specimen photo', required: true },
       { id: 'detail', label: 'Detail', description: 'Close-up of identifying features', required: false },
-      { id: 'scale', label: 'Scale', description: 'Include a scale reference', required: false },
+      { id: 'scale', label: 'Scale', description: 'Include a ruler beside the specimen', required: false },
+      { id: 'matrix', label: 'Matrix / Reverse', description: 'Show the rock matrix, reverse and preparation', required: false },
+      { id: 'restoration', label: 'Restoration / Composite', description: 'Show repairs, reconstruction, glue or composite areas', required: false },
+      { id: 'provenance', label: 'Labels / Provenance', description: 'Capture specimen labels and collection records', required: false },
     ],
     capabilities: { identify: true, classify: true, research: true, authenticate: true, assessCondition: true, value: true, predictDemand: true, recommendDisposition: true, generateListing: true, validateListing: true, detectRisk: true },
     keyAttributes: ['taxonomic_group', 'species', 'anatomical_features', 'period', 'formation', 'locality', 'dimensions', 'matrix', 'restoration', 'provenance'],
