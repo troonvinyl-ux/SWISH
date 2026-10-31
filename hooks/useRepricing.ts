@@ -16,7 +16,7 @@ import {
 } from '@/services/repricingService';
 
 export function useRepricing() {
-  const { tenant } = useApp();
+  const { tenant, activeNicheId } = useApp();
   const [rules, setRules] = useState<RepricingRule[]>([]);
   const [staleListings, setStaleListings] = useState<StaleListingInfo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -28,14 +28,14 @@ export function useRepricing() {
     setLoading(true);
     const [rulesResult, staleResult] = await Promise.all([
       listRepricingRules(tenant.id),
-      getStaleListings(tenant.id, 7),
+      getStaleListings(tenant.id, 7, activeNicheId),
     ]);
     setRules(rulesResult.rules);
     setStaleListings(staleResult.listings);
     // Scan for exceptions in background
-    scanForStaleListingExceptions(tenant.id).catch(() => {});
+    scanForStaleListingExceptions(tenant.id, activeNicheId).catch(() => {});
     setLoading(false);
-  }, [tenant?.id]);
+  }, [tenant?.id, activeNicheId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -44,7 +44,7 @@ export function useRepricing() {
     const { rule, error } = await createRepricingRule(tenant.id, input);
     if (rule) setRules(prev => [rule, ...prev]);
     return { rule, error };
-  }, [tenant?.id]);
+  }, [tenant?.id, activeNicheId]);
 
   const toggleRule = useCallback(async (ruleId: string, isActive: boolean) => {
     const { error } = await toggleRepricingRule(ruleId, isActive);
@@ -61,7 +61,7 @@ export function useRepricing() {
   const getAISuggestion = useCallback(async (listing: StaleListingInfo) => {
     if (!tenant) return;
     setSuggestionLoading(prev => ({ ...prev, [listing.id]: true }));
-    const { suggestion, error } = await getAIRepriceSuggestion(listing.id, tenant.id);
+    const { suggestion, error } = await getAIRepriceSuggestion(listing.id, tenant.id, activeNicheId);
     setSuggestionLoading(prev => ({ ...prev, [listing.id]: false }));
     if (suggestion) {
       setSuggestions(prev => ({
@@ -79,7 +79,7 @@ export function useRepricing() {
   }, [tenant?.id]);
 
   const applyPrice = useCallback(async (listingId: string, newPrice: number) => {
-    const { error } = await applyReprice(listingId, newPrice);
+    const { error } = await applyReprice(listingId, newPrice, tenant?.id ?? '', activeNicheId);
     if (!error) {
       setStaleListings(prev => prev.map(l =>
         l.id === listingId ? { ...l, price: newPrice } : l
