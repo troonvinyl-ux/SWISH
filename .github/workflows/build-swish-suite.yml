@@ -12,11 +12,6 @@ on:
         required: true
         type: boolean
         default: true
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/build-swish-suite.yml'
-      - '.github/workflows/_niche-android.yml'
 permissions:
   contents: read
 jobs:
@@ -55,12 +50,19 @@ jobs:
       - name: Regression tests (reported separately; typecheck remains a hard gate)
         continue-on-error: true
         run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand
-      - name: Confirm full Master Switch and shopfront routes are present
+      - name: Confirm lightweight Master Admin route tree is present
         run: |
           test -f app/master-admin.tsx
-          test -f app/_layout.tsx
-          test -f 'app/(tabs)/_layout.tsx'
-      - name: Generate full Android project
+          test -f master-admin-app/_layout.tsx
+          test -f master-admin-app/index.tsx
+          test -f master-admin-app/login.tsx
+          test -f master-admin-app/master-admin.tsx
+          test -f app.config.js
+      - name: Generate dedicated Master Admin Android project
+        env:
+          SWISH_NICHE: ''
+          SWISH_MASTER_ADMIN: '1'
+          EXPO_NO_DOTENV: '1'
         run: npx expo prebuild --platform android --clean
       - uses: actions/cache@v4
         with:
@@ -69,7 +71,7 @@ jobs:
             ~/.gradle/wrapper
           key: ${{ runner.os }}-gradle-master-${{ hashFiles('android/**/*.gradle*', 'pnpm-lock.yaml', 'app.config.js') }}
           restore-keys: ${{ runner.os }}-gradle-
-      - name: Compile Master Switch admin APK
+      - name: Compile lightweight Master Admin launcher APK
         working-directory: android
         run: ./gradlew assembleRelease --console=plain -Dorg.gradle.workers.max=2 -Dkotlin.compiler.execution.strategy=in-process
       - name: Verify APK file and package contents
@@ -94,16 +96,16 @@ jobs:
           grep -qx 'AndroidManifest.xml' /tmp/swish-apk-entries.txt
           grep -Eq '^classes([0-9]+)?\.dex$' /tmp/swish-apk-entries.txt
           mkdir -p dist
-          cp "$APK" dist/swish-master-switch-admin.apk
-          sha256sum dist/swish-master-switch-admin.apk > dist/swish-master-switch-admin.sha256
-          echo "Verified Master Switch APK: $APK"
-          ls -lh dist/swish-master-switch-admin.apk
-          cat dist/swish-master-switch-admin.sha256
+          cp "$APK" dist/swish-master-admin.apk
+          sha256sum dist/swish-master-admin.apk > dist/swish-master-admin.sha256
+          echo "Verified Master Admin launcher APK: $APK"
+          ls -lh dist/swish-master-admin.apk
+          cat dist/swish-master-admin.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: swish-master-switch-admin-apk
+          name: swish-master-admin-launcher-apk
           path: |
-            dist/swish-master-switch-admin.apk
-            dist/swish-master-switch-admin.sha256
+            dist/swish-master-admin.apk
+            dist/swish-master-admin.sha256
           if-no-files-found: error
           retention-days: 14

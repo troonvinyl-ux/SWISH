@@ -9,7 +9,14 @@ on:
         default: true
   pull_request:
     paths:
+      - '.github/workflows/publish-swish-ota.yml'
+      - '.github/workflows/publish-ota-update.yml'
+      - '.github/workflows/build-swish-suite.yml'
       - 'app/master-admin.tsx'
+      - 'master-admin-app/**'
+      - 'app.config.js'
+      - 'components/layout/GlobalAccountControls.tsx'
+      - '.github/workflows/build-niche-apk.yml'
       - 'services/__tests__/**'
       - 'constants/niches.ts'
       - 'services/nicheRouting.ts'
@@ -18,6 +25,13 @@ on:
   push:
     branches: [main]
     paths:
+      - '.github/workflows/publish-swish-ota.yml'
+      - '.github/workflows/publish-ota-update.yml'
+      - '.github/workflows/build-swish-suite.yml'
+      - '.github/workflows/build-niche-apk.yml'
+      - 'components/layout/GlobalAccountControls.tsx'
+      - 'app.config.js'
+      - 'master-admin-app/**'
       - 'app/master-admin.tsx'
       - 'services/__tests__/**'
       - 'constants/niches.ts'
@@ -136,6 +150,38 @@ jobs:
         env:
           SWISH_NICHE: ${{ matrix.niche }}
         run: npx expo export --platform android --output-dir dist-ci-${{ matrix.niche }}
+
+  master-admin-shell-bundle:
+    name: Lightweight Master Admin shell bundle
+    runs-on: ubuntu-latest
+    env:
+      EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Validate Master Admin native identity and isolated route root
+        env:
+          SWISH_NICHE: ''
+          SWISH_MASTER_ADMIN: '1'
+          EXPO_NO_DOTENV: '1'
+        run: |
+          npx expo config --type public --json > /tmp/swish-master-admin-config.json
+          node -e "const c=require('/tmp/swish-master-admin-config.json'); if(c.android?.package!=='com.swish.inventory') throw Error('Master Admin must preserve its existing install identity'); if(!c.plugins?.some(p=>Array.isArray(p)&&p[0]==='expo-router'&&p[1]?.root==='master-admin-app')) throw Error('Master Admin route root not isolated');"
+      - name: Bundle lightweight Master Admin Android routes
+        env:
+          SWISH_NICHE: ''
+          SWISH_MASTER_ADMIN: '1'
+          EXPO_NO_DOTENV: '1'
+        run: npx expo export --platform android --output-dir dist-ci-master-admin
 
   external-integrations:
     name: Live integration checks (explicitly gated)

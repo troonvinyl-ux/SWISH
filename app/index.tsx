@@ -4,6 +4,7 @@
 //   Not logged in          → /login
 //   Logged in, loading     → spinner
 //   Logged in, no onboard  → /onboarding
+//   Logged in owner       → /master-admin (unbranded Master Admin installation)
 //   Logged in, onboarded   → /entry/<niche>  (each niche has its own entry route)
 //
 // The explicit /entry/<niche> redirect ensures that every authenticated subscriber
@@ -16,17 +17,17 @@
 //   motocross              → /entry/motocross
 //   bicycles / cycling     → /entry/bicycles
 //   clothing / fashion     → /entry/clothing
-//   general / unknown      → /entry/coins  (fallback; subscriber should be prompted to select)
+//   general / unknown      → /niche-select (never silently default to Coins)
 
 import { AuthRouter } from '@/template';
 import { Redirect } from 'expo-router';
 import { useApp } from '@/hooks/useApp';
 import { View, Text, Pressable, ActivityIndicator } from 'react-native';
 import { Colors } from '@/constants/theme';
-import { nicheToEntryRoute } from '@/services/nicheRouting';
+import { getAuthenticatedHomeRoute } from '@/services/nicheRouting';
 
 function AppRouter() {
-  const { businessConfig, tenantLoading, tenantError, nichePreferencesLoading, activeNicheId, fixedNicheId } = useApp();
+  const { businessConfig, tenantLoading, tenantError, nichePreferencesLoading, activeNicheId, fixedNicheId, isMasterAdmin } = useApp();
 
   // Still loading tenant/config
   if (tenantLoading || nichePreferencesLoading) {
@@ -39,22 +40,16 @@ function AppRouter() {
 
   if (tenantError) return <AccountLoadError />;
 
-  // businessConfig == null means first-time user who hasn't completed onboarding
-  // onboardingComplete false also triggers onboarding
-  if (businessConfig === null || businessConfig?.onboardingComplete === false) {
-    return <Redirect href={"/onboarding" as any} />;
-  }
-
-  // Fail closed: an unset/unknown niche must never silently open Coins.
-  // Ask the user to select a product until a registered niche is available.
-  // A branded APK's build-time product identity takes precedence over account
-  // preferences, including for the master administrator. Never route a branded
-  // installation into another niche.
-  const entryRoute = nicheToEntryRoute(fixedNicheId ?? activeNicheId);
-  if (!entryRoute) return <Redirect href={"/niche-select" as any} />;
-
-  // Route to the correct niche-specific entry point.
-  return <Redirect href={entryRoute as any} />;
+  // The unbranded installation is the private Master Admin app for the owner.
+  // Branded niche installations keep their fixed niche destination, even when
+  // the owner account is signed in, so Coin Flipper cannot capture the admin APK.
+  const destination = getAuthenticatedHomeRoute({
+    isMasterAdmin,
+    fixedNicheId,
+    activeNicheId,
+    onboardingRequired: businessConfig === null || businessConfig?.onboardingComplete === false,
+  });
+  return <Redirect href={destination as any} />;
 }
 
 function AccountLoadError() {

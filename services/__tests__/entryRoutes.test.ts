@@ -11,7 +11,7 @@
 // Run with: npx jest services/__tests__/entryRoutes.test.ts
 // (No native modules required — pure TypeScript logic tests.)
 
-import { nicheToEntryRoute, resolveProductionNiche } from '@/services/nicheRouting';
+import { getAuthenticatedHomeRoute, nicheToAppSchemeUrl, nicheToEntryRoute, resolveProductionNiche } from '@/services/nicheRouting';
 
 type NicheId =
   | 'coins' | 'trading_cards' | 'antiques' | 'bicycles' | 'motocross'
@@ -1655,5 +1655,66 @@ describe('SWISH-030 Issue 3: Android CI/CD Signing (Static Config Inspection)', 
     test('bicycles and clothing have different entry routes', () => {
       expect(nicheToEntryRoute('bicycles')).not.toBe(nicheToEntryRoute('clothing'));
     });
+  });
+});
+
+
+describe('Authenticated launch destination', () => {
+  test('owner on the unbranded Master Admin build opens the control centre, not Coins', () => {
+    expect(getAuthenticatedHomeRoute({
+      isMasterAdmin: true,
+      fixedNicheId: null,
+      activeNicheId: 'coins',
+      onboardingRequired: false,
+    })).toBe('/master-admin');
+  });
+
+  test('owner signed into a branded Coin Flipper build stays in that niche', () => {
+    expect(getAuthenticatedHomeRoute({
+      isMasterAdmin: true,
+      fixedNicheId: 'coins',
+      activeNicheId: 'coins',
+      onboardingRequired: false,
+    })).toBe('/entry/coins');
+  });
+
+  test('ordinary subscriber still opens their selected niche', () => {
+    expect(getAuthenticatedHomeRoute({
+      isMasterAdmin: false,
+      fixedNicheId: null,
+      activeNicheId: 'bicycles',
+      onboardingRequired: false,
+    })).toBe('/entry/bicycles');
+  });
+
+  test('ordinary new subscriber is sent to onboarding', () => {
+    expect(getAuthenticatedHomeRoute({
+      isMasterAdmin: false,
+      fixedNicheId: null,
+      activeNicheId: 'general',
+      onboardingRequired: true,
+    })).toBe('/onboarding');
+  });
+});
+
+
+describe('Separate niche app launch links', () => {
+  test.each([
+    ['coins', 'coinflipper://'],
+    ['motocross', 'flippermx://'],
+    ['bicycles', 'bikeflipper://'],
+    ['clothing', 'threadsflip://'],
+    ['trading_cards', 'cardflipper://'],
+    ['antiques', 'antiqueflipper://'],
+    ['fossils', 'fossilflipper://'],
+    ['beauty', 'beautyflipper://'],
+    ['tech', 'techflipper://'],
+    ['surplus_flip', 'surplusflip://'],
+  ])('%s launches its separately installed app', (niche, expected) => {
+    expect(nicheToAppSchemeUrl(niche)).toBe(expected);
+  });
+
+  test('unknown niche never creates an app launch URL', () => {
+    expect(nicheToAppSchemeUrl('not-a-real-niche')).toBeNull();
   });
 });

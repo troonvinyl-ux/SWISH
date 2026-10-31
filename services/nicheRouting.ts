@@ -20,6 +20,11 @@ export function getProductionNicheSpecialistIds(value: string | null | undefined
   return [...new Set([...config.specialists, ...config.legacySpecialists])];
 }
 
+export function nicheToAppSchemeUrl(value: string | null | undefined): string | null {
+  const niche = resolveProductionNiche(value);
+  return niche ? `${NICHE_MODULES[niche].scheme}://` : null;
+}
+
 export function nicheToEntryRoute(value: string | null | undefined): ProductEntryRoute | null {
   const niche = resolveProductionNiche(value);
   return niche ? `/${NICHE_MODULES[niche].entry.replace(/\.tsx$/, '')}` as ProductEntryRoute : null;
@@ -50,4 +55,18 @@ export function isRouteAllowedForBuild(pathname: string, fixedNiche: string | nu
     if (dedicated.includes(route) && id !== niche) return false;
   }
   return true;
+}
+
+
+/** Resolve the first authenticated destination. The unbranded owner installation
+ * is the private control centre; a branded niche APK remains in its own niche. */
+export function getAuthenticatedHomeRoute(options: {
+  isMasterAdmin: boolean;
+  fixedNicheId: string | null;
+  activeNicheId: string | null;
+  onboardingRequired: boolean;
+}): string {
+  if (options.isMasterAdmin && !options.fixedNicheId) return '/master-admin';
+  if (options.onboardingRequired) return '/onboarding';
+  return nicheToEntryRoute(options.fixedNicheId ?? options.activeNicheId) ?? '/niche-select';
 }

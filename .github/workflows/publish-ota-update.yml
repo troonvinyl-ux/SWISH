@@ -23,10 +23,15 @@ jobs:
       fail-fast: false
       max-parallel: 2
       matrix:
-        niche: [coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech]
+        niche: [master, coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech]
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
+      SWISH_NICHE: ${{ matrix.niche != 'master' && matrix.niche || '' }}
+      SWISH_MASTER_ADMIN: ${{ matrix.niche == 'master' && '1' || '0' }}
+      SWISH_OTA_PUBLISH: '1'
+      SWISH_CHANNEL: ${{ matrix.niche == 'master' && 'production-default' || format('production-{0}', matrix.niche) }}
+      EXPO_NO_DOTENV: "1"
     steps:
       - name: Skip safely until Expo credentials are configured
         if: ${{ env.EXPO_TOKEN == '' || env.EXPO_PROJECT_ID == '' }}
@@ -62,15 +67,9 @@ jobs:
 
       - name: Validate Expo OTA configuration
         if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
-        env:
-          SWISH_NICHE: ${{ matrix.niche }}
-          SWISH_OTA_PUBLISH: '1'
-          EXPO_NO_DOTENV: "1"
         run: |
-          # Request machine-readable JSON explicitly; the default Expo config
-          # output is JavaScript-like inspection text and cannot be JSON.parse'd.
           pnpm exec expo config --type public --json > /tmp/swish-expo-config.json
-          if ! node -e "const fs=require('fs'); const c=JSON.parse(fs.readFileSync('/tmp/swish-expo-config.json','utf8')); const expected='production-'+process.env.SWISH_NICHE; if (!c.updates?.url?.includes(process.env.EXPO_PROJECT_ID) || !c.runtimeVersion || c.updates?.requestHeaders?.['expo-channel-name'] !== expected) { console.error('OTA configuration missing expected project/runtime/channel'); process.exit(1); }"; then
+          if ! node -e "const fs=require('fs'); const c=JSON.parse(fs.readFileSync('/tmp/swish-expo-config.json','utf8')); const expected=process.env.SWISH_CHANNEL; if (!c.updates?.url?.includes(process.env.EXPO_PROJECT_ID) || !c.runtimeVersion || c.updates?.requestHeaders?.['expo-channel-name'] !== expected) { console.error('OTA configuration missing expected project/runtime/channel'); process.exit(1); }"; then
             echo "Expo config output (first 40 lines):"
             head -40 /tmp/swish-expo-config.json
             exit 1
@@ -78,14 +77,10 @@ jobs:
 
       - name: Ensure OTA branch and channel are linked
         if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
-        env:
-          SWISH_NICHE: ${{ matrix.niche }}
-          SWISH_OTA_PUBLISH: '1'
         run: |
-          BRANCH="production-${SWISH_NICHE}"
-          CHANNEL="$BRANCH"
+          BRANCH="$SWISH_CHANNEL"
+          CHANNEL="$SWISH_CHANNEL"
 
-          # Create branch/channel if missing; otherwise reuse the existing object.
           if ! npx eas-cli@latest branch:view "$BRANCH" --non-interactive >/dev/null 2>&1; then
             npx eas-cli@latest branch:create "$BRANCH" --non-interactive
           fi
@@ -94,12 +89,8 @@ jobs:
             npx eas-cli@latest channel:create "$CHANNEL" --non-interactive
           fi
 
-          # Ensure this channel serves the corresponding niche branch.
           npx eas-cli@latest channel:edit "$CHANNEL" --branch "$BRANCH" --non-interactive
 
-      - name: Publish niche-specific update
+      - name: Publish app-specific update
         if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
-        env:
-          SWISH_NICHE: ${{ matrix.niche }}
-          SWISH_OTA_PUBLISH: '1'
-        run: npx eas-cli@latest update --branch "production-${SWISH_NICHE}" --message "SWISH ${SWISH_NICHE} OTA update ${GITHUB_SHA}" --non-interactive
+        run: npx eas-cli@latest update --branch "$SWISH_CHANNEL" --message "SWISH $SWISH_CHANNEL OTA update $GITHUB_SHA" --non-interactive

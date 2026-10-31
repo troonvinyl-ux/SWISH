@@ -7,6 +7,7 @@ import { ManifestOpportunityProvider } from '@/contexts/ManifestOpportunityConte
 import { WatchedLotsProvider } from '@/contexts/WatchedLotsContext';
 import { Colors } from '@/constants/theme';
 import { NicheRouteBoundary } from '@/components/layout/NicheRouteBoundary';
+import { GlobalAccountControls } from '@/components/layout/GlobalAccountControls';
 import { useApp } from '@/hooks/useApp';
 import { nicheToScannerRoute } from '@/services/nicheRouting';
 import * as SplashScreen from 'expo-splash-screen';
@@ -209,6 +210,7 @@ export default function RootLayout() {
                 <Stack.Screen name="deep-id-lab" />
               </Stack>
               <GlobalScanShortcut />
+              <GlobalAccountControls />
               </View>
               </NicheRouteBoundary>
             </TVBackHandlerProvider>

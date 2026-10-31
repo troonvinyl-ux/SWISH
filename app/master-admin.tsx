@@ -1,6 +1,6 @@
 // SWISH Master Admin — owner-only platform control centre.
 import React, { useState } from 'react';
-import { Alert, View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { Alert, Linking, View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import * as Updates from 'expo-updates';
 import { Redirect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -9,7 +9,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/template';
 import { useApp } from '@/hooks/useApp';
 import { isSwishMasterAdmin } from '@/contexts/AppContext';
-import { PRODUCTION_NICHES } from '@/constants/niches';
+import { resolveProductionNiche } from '@/services/nicheRouting';
+import { PRODUCTION_NICHES, NICHE_MODULES } from '@/constants/niches';
 import { Colors, Typography, Spacing, Radius } from '@/constants/theme';
 
 export default function MasterAdminScreen() {
@@ -49,9 +50,23 @@ export default function MasterAdminScreen() {
     return <Redirect href="/" />;
   }
 
-  const switchNiche = (id: (typeof PRODUCTION_NICHES)[number]['id']) => {
-    setActiveNiche(id);
-    router.replace('/(tabs)' as any);
+  const switchNiche = async (id: (typeof PRODUCTION_NICHES)[number]['id']) => {
+    const nicheId = resolveProductionNiche(id);
+    const nicheModule = nicheId ? NICHE_MODULES[nicheId] : null;
+    const scheme = nicheModule?.scheme;
+    if (!nicheId || !nicheModule || !scheme) {
+      Alert.alert('App unavailable', 'This niche does not have a registered app launch link.');
+      return;
+    }
+    try {
+      await Linking.openURL(`${scheme}://`);
+      setActiveNiche(id);
+    } catch {
+      Alert.alert(
+        `${nicheModule.name} is not installed`,
+        `Install the ${nicheModule.name} APK on this device, then return here to launch it. The Master Admin app does not contain the niche workspace.`,
+      );
+    }
   };
 
   return (
@@ -59,16 +74,10 @@ export default function MasterAdminScreen() {
       <StatusBar style="light" />
       <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + Spacing.xl }]}>
         <View style={styles.header}>
-          <Pressable accessibilityLabel="Back" onPress={() => router.back()} style={styles.iconButton}>
-            <MaterialIcons name="arrow-back" size={22} color={Colors.textPrimary} />
-          </Pressable>
           <View style={styles.headerCopy}>
             <Text style={styles.eyebrow}>SWISH PLATFORM</Text>
             <Text style={styles.title}>Master Admin</Text>
             <Text style={styles.subtitle}>Owner control centre</Text>
-          </View>
-          <View style={styles.shield}>
-            <MaterialIcons name="admin-panel-settings" size={26} color={Colors.primary} />
           </View>
         </View>
 
@@ -85,7 +94,7 @@ export default function MasterAdminScreen() {
           <Text style={styles.sectionTitle}>Niche switcher</Text>
           <Text style={styles.sectionMeta}>{PRODUCTION_NICHES.length} registered niches</Text>
         </View>
-        <Text style={styles.helpText}>Choose a niche to open its existing SWISH workspace. Stock remains scoped to its own niche.</Text>
+        <Text style={styles.helpText}>Choose a niche to launch its separately installed SWISH app. Return here from a niche using the account menu. Each app keeps its own stock and workspace.</Text>
 
         <View style={styles.nicheList}>
           {PRODUCTION_NICHES.map(niche => {
@@ -108,7 +117,7 @@ export default function MasterAdminScreen() {
                   <Text style={styles.nicheStatus}>{enabled ? 'Premium access enabled' : 'Available to master account'}</Text>
                 </View>
                 {active
-                  ? <View style={[styles.activePill, { backgroundColor: niche.color }]}><Text style={styles.activePillText}>ACTIVE</Text></View>
+                  ? <View style={[styles.activePill, { backgroundColor: niche.color }]}><Text style={styles.activePillText} >LAST OPENED</Text></View>
                   : <MaterialIcons name="chevron-right" size={24} color={Colors.textTertiary} />}
               </Pressable>
             );
@@ -120,7 +129,7 @@ export default function MasterAdminScreen() {
           <Text style={styles.sectionMeta}>Owner view</Text>
         </View>
         <View style={styles.infoCard}>
-          <InfoRow icon="inventory-2" title="Current workspace" value={PRODUCTION_NICHES.find(n => n.id === activeNicheId)?.name ?? activeNicheId} />
+          <InfoRow icon="inventory-2" title="Last opened niche" value={PRODUCTION_NICHES.find(n => n.id === activeNicheId)?.name ?? activeNicheId} />
           <InfoRow icon="business" title="Business workspace" value={tenant?.name ?? 'Not loaded'} />
           <InfoRow icon="workspace-premium" title="Account tier" value={subscriptionTier ?? 'Lifetime entitlement for master account'} />
           <InfoRow icon="security" title="Access model" value="Owner-only screen; sensitive actions require server-side authorization before they are enabled." />
