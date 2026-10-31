@@ -88,7 +88,6 @@ jobs:
           APK="${APKS[0]}"
           test -s "$APK"
           unzip -t "$APK"
-          unzip -Z1 "$APK" | grep -qx 'AndroidManifest.xml'
           unzip -Z1 "$APK" > /tmp/swish-apk-entries.txt
           grep -qx 'AndroidManifest.xml' /tmp/swish-apk-entries.txt
           grep -Eq '^classes([0-9]+)?\.dex$' /tmp/swish-apk-entries.txt
