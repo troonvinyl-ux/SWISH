@@ -13,6 +13,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useRepricing } from '@/hooks/useRepricing';
 import { useAlert } from '@/template';
+import { useApp } from '@/hooks/useApp';
 import {
   RULE_TEMPLATES,
   REPRICE_STRATEGY_LABELS,
@@ -437,6 +438,9 @@ export default function RepricingScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { showAlert } = useAlert();
+  const { activeNicheId, fixedNicheId } = useApp();
+  const isThreadsFlip = (fixedNicheId ?? activeNicheId) === 'clothing';
+  const threads = { background: '#0C080C', surface: '#160E16', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5', muted: '#9A7090' };
   const [activeTab, setActiveTab] = useState<Tab>('stale');
   const [showAddRule, setShowAddRule] = useState(false);
 
@@ -484,11 +488,11 @@ export default function RepricingScreen() {
   const pendingSuggestions = Object.keys(suggestions).length;
 
   return (
-    <View style={styles.container}>
+    <View testID={isThreadsFlip ? 'threads-flip-screen-repricing' : undefined} accessibilityLabel={isThreadsFlip ? 'Threads Flip repricing tools' : undefined} style={[styles.container, isThreadsFlip && { backgroundColor: threads.background }]}>
       <StatusBar style="light" />
 
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + Spacing.base }]}>
+      <View style={[styles.header, { paddingTop: insets.top + Spacing.base }, isThreadsFlip && { backgroundColor: threads.surface, borderBottomColor: threads.border }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
           <MaterialIcons name="arrow-back" size={20} color={Colors.textSecondary} />
         </Pressable>
@@ -496,15 +500,15 @@ export default function RepricingScreen() {
           <MaterialIcons name="dashboard" size={16} color={Colors.textTertiary} />
         </Pressable>
         <View style={styles.flex}>
-          <Text style={styles.title}>Repricing Engine</Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.title, isThreadsFlip && { color: threads.cream }]}>Threads Flip · Repricing</Text>
+          <Text style={[styles.subtitle, isThreadsFlip && { color: threads.muted }]}>
             {staleCount} stale listing{staleCount !== 1 ? 's' : ''} · {activeRules.length} active rule{activeRules.length !== 1 ? 's' : ''}
           </Text>
         </View>
       </View>
 
       {/* Summary strip */}
-      <View style={styles.summaryStrip}>
+      <View style={[styles.summaryStrip, isThreadsFlip && { backgroundColor: threads.surface, borderColor: threads.border }]}>
         {[
           { label: 'Stale Listings', value: staleCount, color: staleCount > 5 ? Colors.warning : Colors.textPrimary },
           { label: 'AI Suggestions', value: pendingSuggestions, color: pendingSuggestions > 0 ? Colors.accent : Colors.textTertiary },
