@@ -4,7 +4,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
-import { isSpecialistAllowedForReprice } from '../_shared/repriceNicheAccess.ts';
+import { isSpecialistAllowedForReprice, REPRICE_NICHE_SPECIALISTS } from '../_shared/repriceNicheAccess.ts';
 
 interface RepriceRequest {
   listing_id: string;
@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
     // ── Parse request ─────────────────────────────────────────────────────────
     const body: RepriceRequest = await req.json();
     const { listing_id, tenant_id, niche_id } = body;
-    const allowedSpecialists = typeof niche_id === 'string' ? NICHE_SPECIALISTS[niche_id] : undefined;
+    const allowedSpecialists = typeof niche_id === 'string' ? REPRICE_NICHE_SPECIALISTS[niche_id] : undefined;
 
     if (!listing_id || !tenant_id || !allowedSpecialists?.length) {
       return new Response(JSON.stringify({ error: 'A valid listing, tenant and registered niche are required.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
