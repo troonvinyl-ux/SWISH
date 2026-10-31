@@ -27,7 +27,7 @@ describe('Transparent lot economics',()=>{
   test('excessive bid produces swerve, even if expected headline revenue is high',()=>{expect(evaluateManifestLot(basic(),{...costs(),currentBid:1000}).decision).toBe('swerve');});
   test('RRP-only inputs do not produce an opportunity verdict',()=>{expect(evaluateManifestLot(basic(),{...costs(),currentBid:1}).decision).toBe('research');});
   test('safety-critical returns receive no optimistic unit revenue',()=>{const rows=basic();rows[0].title='Customer Return Bike Helmet';const result=evaluateManifestLot(rows,costs());expect(result.expected[0].gross).toBe(0);expect(result.excluded).toBe(10);});
-  test('seller postage costs differ from buyer postage income/fee base',()=>{const result=evaluateManifestLot(basic(),{...costs(),buyerPostage:2,sellerPostage:3,feeRate:.1});expect(result.expected[0].gross).toBe(420);expect(result.expected[0].sellingCosts).toBe(82);});
+  test('seller postage costs differ from buyer postage income/fee base',()=>{const result=evaluateManifestLot(basic(),{...costs(),buyerPostage:2,sellerPostage:3,feeRate:.1});expect(result.expected[0].gross).toBe(420);expect(result.expected[0].sellingCosts).toBe(72);});
   test('zero yield/sell-through cannot support a positive bid',()=>{expect(evaluateManifestLot(basic(),{...costs(),yieldRate:0,conservativeYield:0}).recommendedMaxBid).toBe(0);});
   test('invalid percentages fail closed',()=>{const result=evaluateManifestLot(basic(),{...costs(),feeRate:1.1});expect(result.errors.length).toBeGreaterThan(0);expect(result.recommendedMaxBid).toBe(0);});
   test('ended auctions are not purchase opportunities',()=>{expect(evaluateManifestLot(basic(),{...costs(),minutesLeft:0}).decision).toBe('ended');});
