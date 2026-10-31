@@ -67,3 +67,18 @@ export function bestManifestProducts(lines: LotLine[]): LotLine[] {
   // Sorting for convenience is not a bestseller/demand claim.
   return [...lines].sort((a,b) => b.price * b.quantity - a.price * a.quantity);
 }
+
+
+/** Human-readable explanation of the saved base buying ceiling. */
+export function presentBaseLotVerdict(base: import('./lotBasePriceService').LotBasePrice) {
+  const variants = {
+    invalid: { title: 'Check the figures', message: 'Some amounts are invalid. Correct the figures before relying on this buying ceiling.', tone: 'warning' as const, icon: 'warning-amber' },
+    no_value: { title: 'No resale value established', message: 'The eligible resale estimate does not support a buying price.', tone: 'warning' as const, icon: 'block' },
+    no_room: { title: 'No room for a bid', message: 'Delivery and buying costs leave no positive hammer-price ceiling.', tone: 'warning' as const, icon: 'front-hand' },
+    needs_bid: { title: 'Enter the current bid', message: 'Your maximum hammer bid is a ceiling, not a suggested opening bid.', tone: 'neutral' as const, icon: 'gavel' },
+    within_limit: { title: 'Current bid is within the ceiling', message: 'The entered bid is within the calculated base maximum. Recheck fees, condition and live auction details.', tone: 'success' as const, icon: 'check-circle' },
+    above_limit: { title: 'Current bid is above the ceiling', message: 'The entered bid exceeds the calculated base maximum. Avoid increasing your bid on these figures.', tone: 'warning' as const, icon: 'trending-down' },
+  };
+  return { ...variants[base.status], maximumHammerBid: base.maximumHammerBid, maximumPurchasePrice: base.maximumPurchasePrice,
+    resaleCeiling: base.resaleCeiling, delivery: base.delivery, profitAtCurrentBid: base.profitAtCurrentBid };
+}
