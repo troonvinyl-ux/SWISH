@@ -94,7 +94,7 @@ export default function MasterAdminScreen() {
           <Text style={styles.sectionTitle}>Niche switcher</Text>
           <Text style={styles.sectionMeta}>{PRODUCTION_NICHES.length} registered niches</Text>
         </View>
-        <Text style={styles.helpText}>Choose a niche to open its existing SWISH workspace. Stock remains scoped to its own niche.</Text>
+        <Text style={styles.helpText}>Choose a niche to launch its separately installed SWISH app. Return here from a niche using the account menu. Each app keeps its own stock and workspace.</Text>
 
         <View style={styles.nicheList}>
           {PRODUCTION_NICHES.map(niche => {
