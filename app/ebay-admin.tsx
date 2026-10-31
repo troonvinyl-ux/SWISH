@@ -461,7 +461,7 @@ function CreateListingModal({
                       <ItemImage uri={item.media[0]} style={ml.itemThumb} contentFit="cover" />
                     ) : (
                       <View style={[ml.itemThumb, ml.itemThumbPlaceholder]}>
-                        <MaterialIcons name={isThreadsFlip ? 'checkroom' : 'toll'} size={18} color={isThreadsFlip ? '#E91E8C' : Colors.textTertiary} />
+                        <MaterialIcons name="toll" size={18} color={Colors.textTertiary} />
                       </View>
                     )}
                     <View style={{ flex: 1, gap: 3 }}>
@@ -1108,7 +1108,7 @@ function ListingRow({
             <ItemImage uri={item.itemMedia[0]} style={row.photo} contentFit="cover" transition={150} />
           ) : (
             <View style={row.photoPlaceholder}>
-              <MaterialIcons name="toll" size={18} color={Colors.textTertiary} />
+              <MaterialIcons name={isThreadsFlip ? 'checkroom' : 'toll'} size={18} color={isThreadsFlip ? '#E91E8C' : Colors.textTertiary} />
             </View>
           )}
           <View style={{ flex: 1, gap: 4 }}>
