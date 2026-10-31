@@ -1,11 +1,11 @@
 import React from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '@/template';
 import { isSwishMasterAdmin } from '@/contexts/AppContext';
-import { Colors, Spacing, Typography, Radius } from '@/constants/theme';
+import { Spacing, Typography, Radius } from '@/constants/theme';
 const GOLD='#D8AD52';
 export default function AntiqueMoreScreen(){const router=useRouter();const {user}=useAuth();
 const links=[
