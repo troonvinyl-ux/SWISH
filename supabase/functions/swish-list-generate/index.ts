@@ -322,9 +322,23 @@ function escapeListingHtml(value: unknown): string {
 
 // eBay-safe description layout: responsive, static HTML only. No external
 // website links, contact details, scripts, promotional banners or off-eBay CTAs.
-function buildEbayDescriptionHtml(listing: GeneratedListing): string {
+function buildEbayDescriptionHtml(listing: GeneratedListing, nicheId?: string): string {
   const description = escapeListingHtml(listing.description)
     .replace(/\r\n|\r|\n/g, '<br />');
+  // This is a restrained provider credit only: no URL, CTA, external logo,
+  // promotional offer, or direction away from eBay. eBay's links policy
+  // permits non-promotional third-party provider credits identifying the
+  // specific service provided, within its stated text/logo limits.
+  const nicheLabels: Record<string, string> = {
+    coins: 'COIN FLIP', antiques: 'ANTIQUE FLIP', fossils: 'FOSSIL FLIP',
+    motocross: 'MX FLIP', bicycles: 'BIKE FLIP', clothing: 'THREADS FLIP',
+    trading_cards: 'CARD FLIP', beauty: 'BEAUTY FLIP', tech: 'TECH FLIP',
+    surplus_flip: 'SURPLUS FLIP',
+  };
+  const nicheLabel = nicheLabels[nicheId ?? ''] ?? 'SWISH LISTING';
+  const providerCredit =
+    '<div style="margin-top:18px;padding:6px 10px;background:#202329;color:#f3c928;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:1.3;letter-spacing:0.5px;">' +
+    '<strong>' + nicheLabel + '</strong><span style="color:#ffffff;">&nbsp; | &nbsp;POWERED BY SWISHFLIP</span></div>';
   const specifics = Object.entries(listing.item_specifics ?? {})
     .filter(([name, value]) => String(name).trim() && String(value).trim())
     .slice(0, 20);
@@ -340,6 +354,7 @@ function buildEbayDescriptionHtml(listing: GeneratedListing): string {
     rows ? '<h3 style="font-size:15px;margin:18px 0 8px;">Item details</h3><table style="border-collapse:collapse;width:100%;"><tbody>' + rows + '</tbody></table>' : '',
     '<h3 style="font-size:15px;margin:18px 0 8px;">Please note</h3>',
     '<p style="margin:0;">Please examine all photographs carefully as they form part of the description. Any condition details or limitations known to the seller are described above. If you need further information, please ask before purchasing.</p>',
+    providerCredit,
     '</div>',
   ].join('');
 }
@@ -787,7 +802,7 @@ Return ONLY this exact JSON:
     }
     if (profile?.nicheId === 'beauty') safetyFlags.push('Seller must verify seal, expiry, recalls, ingredients, EAN and responsible-person requirements before publication; AI does not certify safety.');
     listing.safety_flags = safetyFlags;
-    listing.description = buildEbayDescriptionHtml(listing);
+    listing.description = buildEbayDescriptionHtml(listing, profile?.nicheId);
 
     console.log(`[swish-list-generate v2] Generated: "${listing.title}" @ £${listing.recommended_price} (priceBlocked=${priceGateBlocked} provisional=${provisional} specialist=${specialistId})`);
 
