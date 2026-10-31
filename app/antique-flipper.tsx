@@ -26,11 +26,11 @@ export default function AntiqueFlipperHome() {
   const openAction = (title: string, route: string) => {
     const firstItem = inventory.items[0];
     if (title === 'Create eBay Listing') {
-      router.push(firstItem ? (\`/create-listing?id=\${firstItem.id}\` as any) : ('/(tabs)/inventory' as any));
+      router.push(firstItem ? ('/create-listing?id=' + firstItem.id) as any : ('/(tabs)/inventory' as any));
       return;
     }
     if (title === 'Market Value') {
-      router.push(firstItem ? (\`/stock-listing/\${firstItem.id}\` as any) : ('/capture' as any));
+      router.push(firstItem ? ('/stock-listing/' + firstItem.id) as any : ('/capture' as any));
       return;
     }
     router.push(route as any);
