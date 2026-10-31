@@ -5,7 +5,9 @@ const { prepareNicheRoutes } = require('./scripts/prepare-niche-routes');
 module.exports = ({ config }) => {
   const selected = process.env.SWISH_NICHE;
   const niche = selected ? NICHE_BUILDS[selected] : null;
+  const masterAdminBuild = process.env.SWISH_MASTER_ADMIN === '1';
   if (selected && !niche) throw new Error(`Unsupported SWISH_NICHE "${selected}".`);
+  if (selected && masterAdminBuild) throw new Error('A build cannot be both a niche app and the Master Admin app.');
   const easProjectId = process.env.EXPO_PROJECT_ID || process.env.EAS_PROJECT_ID || config.extra?.eas?.projectId;
   const otaConfig = easProjectId ? {
     runtimeVersion: niche ? `${config.version || '1.0.0'}-${selected}-isolated-v1` : { policy: 'appVersion' },
@@ -14,6 +16,21 @@ module.exports = ({ config }) => {
     extra: { ...(config.extra || {}), eas: { ...(config.extra?.eas || {}), projectId: easProjectId } },
   } : {};
   const baseConfig = Object.keys(otaConfig).length ? { ...config, ...otaConfig } : config;
+
+  // The owner APK has its own native identity and is deliberately not a Coins build.
+  // This also prevents Android from treating it as an update/replacement for Coin Flipper.
+  if (masterAdminBuild) {
+    return {
+      ...baseConfig,
+      name: 'SWISH Master Admin',
+      slug: 'swish-master-admin',
+      scheme: 'swishmaster',
+      ios: { ...config.ios, bundleIdentifier: 'com.swish.masteradmin' },
+      android: { ...config.android, package: 'com.swish.masteradmin' },
+      extra: { ...(otaConfig.extra || config.extra || {}), swishMasterAdminBuild: true },
+    };
+  }
+
   if (!niche) return baseConfig;
   // Prepare for every Expo consumer (prebuild, EAS, export, OTA), not just one workflow.
   const routeRoot = prepareNicheRoutes(selected);
