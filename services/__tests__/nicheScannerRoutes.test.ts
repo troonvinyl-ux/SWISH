@@ -8,7 +8,7 @@ describe('One-tap niche scanner routing', () => {
     ['coins', '/coin-flipper?tab=capture'],
     ['motocross', '/flipper-mx'],
     ['bicycles', '/bike-flipper'],
-    ['clothing', '/threads-flip'],
+    ['clothing', '/threads-flip?tab=identify'],
     ['surplus_flip', '/surplus-flip'],
     ['trading_cards', '/capture'],
     ['antiques', '/capture'],
