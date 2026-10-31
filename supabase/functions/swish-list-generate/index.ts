@@ -314,6 +314,36 @@ function buildSafetyFlags(item: any, provisional: boolean, priceGateBlocked: boo
   return flags;
 }
 
+
+function escapeListingHtml(value: unknown): string {
+  return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// eBay-safe description layout: responsive, static HTML only. No external
+// website links, contact details, scripts, promotional banners or off-eBay CTAs.
+function buildEbayDescriptionHtml(listing: GeneratedListing): string {
+  const description = escapeListingHtml(listing.description)
+    .replace(/\r\n|\r|\n/g, '<br />');
+  const specifics = Object.entries(listing.item_specifics ?? {})
+    .filter(([name, value]) => String(name).trim() && String(value).trim())
+    .slice(0, 20);
+  const rows = specifics.map(([name, value]) =>
+    '<tr><td style="padding:8px;border:1px solid #dddddd;font-weight:bold;width:38%;">' +
+    escapeListingHtml(name) + '</td><td style="padding:8px;border:1px solid #dddddd;">' +
+    escapeListingHtml(value) + '</td></tr>'
+  ).join('');
+  return [
+    '<div style="font-family:Arial,Helvetica,sans-serif;color:#222222;font-size:14px;line-height:1.55;max-width:100%;">',
+    '<h2 style="font-size:18px;margin:0 0 12px;">Item description</h2>',
+    '<div style="padding:12px;border:1px solid #dddddd;">' + description + '</div>',
+    rows ? '<h3 style="font-size:15px;margin:18px 0 8px;">Item details</h3><table style="border-collapse:collapse;width:100%;"><tbody>' + rows + '</tbody></table>' : '',
+    '<h3 style="font-size:15px;margin:18px 0 8px;">Please note</h3>',
+    '<p style="margin:0;">Please examine all photographs carefully as they form part of the description. Any condition details or limitations known to the seller are described above. If you need further information, please ask before purchasing.</p>',
+    '</div>',
+  ].join('');
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -757,6 +787,7 @@ Return ONLY this exact JSON:
     }
     if (profile?.nicheId === 'beauty') safetyFlags.push('Seller must verify seal, expiry, recalls, ingredients, EAN and responsible-person requirements before publication; AI does not certify safety.');
     listing.safety_flags = safetyFlags;
+    listing.description = buildEbayDescriptionHtml(listing);
 
     console.log(`[swish-list-generate v2] Generated: "${listing.title}" @ £${listing.recommended_price} (priceBlocked=${priceGateBlocked} provisional=${provisional} specialist=${specialistId})`);
 
