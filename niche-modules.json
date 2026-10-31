@@ -1,15 +1,280 @@
 {
   "version": 1,
   "products": {
-    "coins": { "id": "coins", "name": "Coin Flipper", "slug": "swish-coin-flipper", "scheme": "coinflipper", "androidPackage": "com.swish.coinflipper", "iosBundleIdentifier": "com.swish.coinflipper", "entry": "entry/coins.tsx", "home": "coin-flipper.tsx", "aliases": ["coins_uk", "coins_world", "coins_currency", "numismatic", "coin_flipper", "coin-flipper", "banknotes", "gold", "silver", "islamic_silver", "ancient_artefacts", "jewellery_precious_metals"], "specialists": ["coins", "islamic_silver", "banknotes", "gold", "silver", "jewellery_precious_metals", "ancient_artefacts"], "legacySpecialists": ["coins_uk", "coins_world", "coins_currency", "numismatic"], "defaultSpecialist": "coins", "dedicatedRoutes": ["coin-flipper.tsx", "keen-on-coins.tsx", "islamic-batch.tsx", "silver-batch.tsx", "coin-flipper", "deep-id-lab.tsx"] },
-    "motocross": { "id": "motocross", "name": "Flipper MX", "slug": "swish-flipper-mx", "scheme": "flippermx", "androidPackage": "com.swish.flippermx", "iosBundleIdentifier": "com.swish.flippermx", "entry": "entry/motocross.tsx", "home": "flipper-mx.tsx", "aliases": ["mx", "flipper_mx", "flipper-mx"], "specialists": ["motocross"], "legacySpecialists": ["mx"], "defaultSpecialist": "motocross", "dedicatedRoutes": ["flipper-mx.tsx", "mx-acquisition.tsx"] },
-    "bicycles": { "id": "bicycles", "name": "Bike Flipper", "slug": "swish-bike-flipper", "scheme": "bikeflipper", "androidPackage": "com.swish.bikeflipper", "iosBundleIdentifier": "com.swish.bikeflipper", "entry": "entry/bicycles.tsx", "home": "bike-flipper.tsx", "aliases": ["cycling", "bikes", "bike_flipper", "bike-flipper"], "specialists": ["bicycles"], "legacySpecialists": ["bikes", "cycling"], "defaultSpecialist": "bicycles", "dedicatedRoutes": ["bike-flipper.tsx"] },
-    "clothing": { "id": "clothing", "name": "Threads Flip", "slug": "swish-threads-flip", "scheme": "threadsflip", "androidPackage": "com.swish.threadsflip", "iosBundleIdentifier": "com.swish.threadsflip", "entry": "entry/clothing.tsx", "home": "threads-flip.tsx", "aliases": ["fashion", "trainers_sneakers", "trainers", "threads", "threads-flip", "threads_flip", "clothing_specialist"], "specialists": ["clothing", "trainers_sneakers"], "legacySpecialists": ["clothing_specialist", "threads", "threads_flip"], "defaultSpecialist": "clothing", "dedicatedRoutes": ["threads-flip.tsx"] },
-    "trading_cards": { "id": "trading_cards", "name": "Card Flipper", "slug": "swish-card-flipper", "scheme": "cardflipper", "androidPackage": "com.swish.cardflipper", "iosBundleIdentifier": "com.swish.cardflipper", "entry": "entry/cards.tsx", "home": null, "aliases": ["pokemon_cards", "cards", "card_flipper"], "specialists": ["pokemon_cards", "trading_cards"], "legacySpecialists": ["cards"], "defaultSpecialist": "pokemon_cards", "dedicatedRoutes": ["card-grading.tsx"] },
-    "antiques": { "id": "antiques", "name": "Antique Flipper", "slug": "swish-antique-flipper", "scheme": "antiqueflipper", "androidPackage": "com.swish.antiqueflipper", "iosBundleIdentifier": "com.swish.antiqueflipper", "entry": "entry/antiques.tsx", "home": null, "aliases": ["antique_flipper", "books"], "specialists": ["antiques", "books"], "legacySpecialists": [], "defaultSpecialist": "antiques", "dedicatedRoutes": [] },
-    "fossils": { "id": "fossils", "name": "Fossil Flipper", "slug": "swish-fossil-flipper", "scheme": "fossilflipper", "androidPackage": "com.swish.fossilflipper", "iosBundleIdentifier": "com.swish.fossilflipper", "entry": "entry/fossils.tsx", "home": null, "aliases": ["fossil_flipper"], "specialists": ["fossils"], "legacySpecialists": [], "defaultSpecialist": "fossils", "dedicatedRoutes": [] },
-    "beauty": { "id": "beauty", "name": "Beauty Flipper", "slug": "swish-beauty-flipper", "scheme": "beautyflipper", "androidPackage": "com.swish.beautyflipper", "iosBundleIdentifier": "com.swish.beautyflipper", "entry": "entry/beauty.tsx", "home": null, "aliases": ["beauty_flipper"], "specialists": ["beauty"], "legacySpecialists": [], "defaultSpecialist": "beauty", "dedicatedRoutes": [] },
-    "tech": { "id": "tech", "name": "Tech Flipper", "slug": "swish-tech-flipper", "scheme": "techflipper", "androidPackage": "com.swish.techflipper", "iosBundleIdentifier": "com.swish.techflipper", "entry": "entry/tech.tsx", "home": null, "aliases": ["technology", "tech_flipper", "retro_games", "retro_consoles"], "specialists": ["tech", "retro_games", "retro_consoles"], "legacySpecialists": [], "defaultSpecialist": "tech", "dedicatedRoutes": [] },
-    "surplus_flip": { "id": "surplus_flip", "name": "Surplus Flip", "slug": "swish-surplus-flip", "scheme": "surplusflip", "androidPackage": "com.swish.surplusflip", "iosBundleIdentifier": "com.swish.surplusflip", "entry": "entry/surplus-flip.tsx", "home": "surplus-flip.tsx", "aliases": ["surplus-flip", "catalog_flip", "catalog_surplus", "surplus_trader"], "specialists": ["surplus_trader"], "legacySpecialists": ["surplus_flip"], "defaultSpecialist": "surplus_trader", "dedicatedRoutes": ["surplus-flip.tsx"] }
+    "coins": {
+      "id": "coins",
+      "name": "Coin Flipper",
+      "slug": "swish-coin-flipper",
+      "scheme": "coinflipper",
+      "androidPackage": "com.swish.coinflipper",
+      "iosBundleIdentifier": "com.swish.coinflipper",
+      "entry": "entry/coins.tsx",
+      "home": "coin-flipper.tsx",
+      "aliases": [
+        "coins_uk",
+        "coins_world",
+        "coins_currency",
+        "numismatic",
+        "coin_flipper",
+        "coin-flipper",
+        "banknotes",
+        "gold",
+        "silver",
+        "islamic_silver",
+        "ancient_artefacts",
+        "jewellery_precious_metals"
+      ],
+      "specialists": [
+        "coins",
+        "islamic_silver",
+        "banknotes",
+        "gold",
+        "silver",
+        "jewellery_precious_metals",
+        "ancient_artefacts"
+      ],
+      "legacySpecialists": [
+        "coins_uk",
+        "coins_world",
+        "coins_currency",
+        "numismatic"
+      ],
+      "defaultSpecialist": "coins",
+      "dedicatedRoutes": [
+        "coin-flipper.tsx",
+        "keen-on-coins.tsx",
+        "islamic-batch.tsx",
+        "silver-batch.tsx",
+        "coin-flipper",
+        "deep-id-lab.tsx"
+      ]
+    },
+    "motocross": {
+      "id": "motocross",
+      "name": "Flipper MX",
+      "slug": "swish-flipper-mx",
+      "scheme": "flippermx",
+      "androidPackage": "com.swish.flippermx",
+      "iosBundleIdentifier": "com.swish.flippermx",
+      "entry": "entry/motocross.tsx",
+      "home": "flipper-mx.tsx",
+      "aliases": [
+        "mx",
+        "flipper_mx",
+        "flipper-mx"
+      ],
+      "specialists": [
+        "motocross"
+      ],
+      "legacySpecialists": [
+        "mx"
+      ],
+      "defaultSpecialist": "motocross",
+      "dedicatedRoutes": [
+        "flipper-mx.tsx",
+        "mx-acquisition.tsx"
+      ]
+    },
+    "bicycles": {
+      "id": "bicycles",
+      "name": "Bike Flipper",
+      "slug": "swish-bike-flipper",
+      "scheme": "bikeflipper",
+      "androidPackage": "com.swish.bikeflipper",
+      "iosBundleIdentifier": "com.swish.bikeflipper",
+      "entry": "entry/bicycles.tsx",
+      "home": "bike-flipper.tsx",
+      "aliases": [
+        "cycling",
+        "bikes",
+        "bike_flipper",
+        "bike-flipper"
+      ],
+      "specialists": [
+        "bicycles"
+      ],
+      "legacySpecialists": [
+        "bikes",
+        "cycling"
+      ],
+      "defaultSpecialist": "bicycles",
+      "dedicatedRoutes": [
+        "bike-flipper.tsx"
+      ]
+    },
+    "clothing": {
+      "id": "clothing",
+      "name": "Threads Flip",
+      "slug": "swish-threads-flip",
+      "scheme": "threadsflip",
+      "androidPackage": "com.swish.threadsflip",
+      "iosBundleIdentifier": "com.swish.threadsflip",
+      "entry": "entry/clothing.tsx",
+      "home": "threads-flip.tsx",
+      "aliases": [
+        "fashion",
+        "trainers_sneakers",
+        "trainers",
+        "threads",
+        "threads-flip",
+        "threads_flip",
+        "clothing_specialist"
+      ],
+      "specialists": [
+        "clothing",
+        "trainers_sneakers"
+      ],
+      "legacySpecialists": [
+        "clothing_specialist",
+        "threads",
+        "threads_flip"
+      ],
+      "defaultSpecialist": "clothing",
+      "dedicatedRoutes": [
+        "threads-flip.tsx"
+      ]
+    },
+    "trading_cards": {
+      "id": "trading_cards",
+      "name": "Card Flipper",
+      "slug": "swish-card-flipper",
+      "scheme": "cardflipper",
+      "androidPackage": "com.swish.cardflipper",
+      "iosBundleIdentifier": "com.swish.cardflipper",
+      "entry": "entry/cards.tsx",
+      "home": null,
+      "aliases": [
+        "pokemon_cards",
+        "cards",
+        "card_flipper"
+      ],
+      "specialists": [
+        "pokemon_cards",
+        "trading_cards"
+      ],
+      "legacySpecialists": [
+        "cards"
+      ],
+      "defaultSpecialist": "pokemon_cards",
+      "dedicatedRoutes": [
+        "card-grading.tsx"
+      ]
+    },
+    "antiques": {
+      "id": "antiques",
+      "name": "Antique Flipper",
+      "slug": "swish-antique-flipper",
+      "scheme": "antiqueflipper",
+      "androidPackage": "com.swish.antiqueflipper",
+      "iosBundleIdentifier": "com.swish.antiqueflipper",
+      "entry": "entry/antiques.tsx",
+      "home": "antique-flipper.tsx",
+      "aliases": [
+        "antique_flipper",
+        "books"
+      ],
+      "specialists": [
+        "antiques",
+        "books"
+      ],
+      "legacySpecialists": [],
+      "defaultSpecialist": "antiques",
+      "dedicatedRoutes": [
+        "antique-flipper.tsx",
+        "antique-guides.tsx",
+        "antique-restoration.tsx",
+        "(tabs)/antique-more.tsx",
+        "antique-condition.tsx",
+        "antique-value.tsx"
+      ]
+    },
+    "fossils": {
+      "id": "fossils",
+      "name": "Fossil Flipper",
+      "slug": "swish-fossil-flipper",
+      "scheme": "fossilflipper",
+      "androidPackage": "com.swish.fossilflipper",
+      "iosBundleIdentifier": "com.swish.fossilflipper",
+      "entry": "entry/fossils.tsx",
+      "home": null,
+      "aliases": [
+        "fossil_flipper"
+      ],
+      "specialists": [
+        "fossils"
+      ],
+      "legacySpecialists": [],
+      "defaultSpecialist": "fossils",
+      "dedicatedRoutes": []
+    },
+    "beauty": {
+      "id": "beauty",
+      "name": "Beauty Flipper",
+      "slug": "swish-beauty-flipper",
+      "scheme": "beautyflipper",
+      "androidPackage": "com.swish.beautyflipper",
+      "iosBundleIdentifier": "com.swish.beautyflipper",
+      "entry": "entry/beauty.tsx",
+      "home": null,
+      "aliases": [
+        "beauty_flipper"
+      ],
+      "specialists": [
+        "beauty"
+      ],
+      "legacySpecialists": [],
+      "defaultSpecialist": "beauty",
+      "dedicatedRoutes": []
+    },
+    "tech": {
+      "id": "tech",
+      "name": "Tech Flipper",
+      "slug": "swish-tech-flipper",
+      "scheme": "techflipper",
+      "androidPackage": "com.swish.techflipper",
+      "iosBundleIdentifier": "com.swish.techflipper",
+      "entry": "entry/tech.tsx",
+      "home": null,
+      "aliases": [
+        "technology",
+        "tech_flipper",
+        "retro_games",
+        "retro_consoles"
+      ],
+      "specialists": [
+        "tech",
+        "retro_games",
+        "retro_consoles"
+      ],
+      "legacySpecialists": [],
+      "defaultSpecialist": "tech",
+      "dedicatedRoutes": []
+    },
+    "surplus_flip": {
+      "id": "surplus_flip",
+      "name": "Surplus Flip",
+      "slug": "swish-surplus-flip",
+      "scheme": "surplusflip",
+      "androidPackage": "com.swish.surplusflip",
+      "iosBundleIdentifier": "com.swish.surplusflip",
+      "entry": "entry/surplus-flip.tsx",
+      "home": "surplus-flip.tsx",
+      "aliases": [
+        "surplus-flip",
+        "catalog_flip",
+        "catalog_surplus",
+        "surplus_trader"
+      ],
+      "specialists": [
+        "surplus_trader"
+      ],
+      "legacySpecialists": [
+        "surplus_flip"
+      ],
+      "defaultSpecialist": "surplus_trader",
+      "dedicatedRoutes": [
+        "surplus-flip.tsx"
+      ]
+    }
   }
 }

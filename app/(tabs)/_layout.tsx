@@ -20,14 +20,14 @@ function useNicheHomeTab() {
   const { activeNicheId, fixedNicheId } = useApp();
   const id = resolveProductionNiche(fixedNicheId ?? activeNicheId) ?? '';
   if (id === 'coins') {
-    return { icon: 'toll' as const, label: 'Coins' };
+    return { icon: 'toll' as const, label: 'Coins', isAntiques: false };
   }
-  if (id === 'motocross') return { icon: 'two-wheeler' as const, label: 'MX' };
-  if (id === 'bicycles') return { icon: 'pedal-bike' as const, label: 'Bikes' };
-  if (id === 'clothing') return { icon: 'checkroom' as const, label: 'Fashion' };
-  if (id === 'surplus_flip') return { icon: 'inventory-2' as const, label: 'Surplus' };
+  if (id === 'motocross') return { icon: 'two-wheeler' as const, label: 'MX', isAntiques: false };
+  if (id === 'bicycles') return { icon: 'pedal-bike' as const, label: 'Bikes', isAntiques: false };
+  if (id === 'clothing') return { icon: 'checkroom' as const, label: 'Fashion', isAntiques: false };
+  if (id === 'surplus_flip') return { icon: 'inventory-2' as const, label: 'Surplus', isAntiques: false };
   const config = id ? NICHES[id] : null;
-  return { icon: (config?.icon ?? 'dashboard') as React.ComponentProps<typeof MaterialIcons>['name'], label: config?.shortName ?? 'Home' };
+  return { icon: (config?.icon ?? 'dashboard') as React.ComponentProps<typeof MaterialIcons>['name'], label: config?.shortName ?? 'Home', isAntiques: id === 'antiques' };
 }
 
 // ── Live listings count ───────────────────────────────────────────────────────
@@ -137,7 +137,7 @@ export default function TabLayout() {
                   </View>
                 ) : null}
               </View>
-              <TabLabel label="Stock" focused={focused} />
+              <TabLabel label={nicheHome.isAntiques ? "Inventory" : "Stock"} focused={focused} />
             </View>
           ),
         }}
@@ -149,8 +149,8 @@ export default function TabLayout() {
         options={{
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.tabItem, focused && styles.tabItemActive]}>
-              <MaterialIcons name="storefront" size={22} color={color} />
-              <TabLabel label="eBay" focused={focused} />
+              <MaterialIcons name="storefront" size={22} color={nicheHome.isAntiques ? (focused ? Colors.primary : Colors.textTertiary) : color} />
+              <TabLabel label={nicheHome.isAntiques ? "Listings" : "eBay"} focused={focused} />
             </View>
           ),
         }}
@@ -165,7 +165,8 @@ export default function TabLayout() {
         name="insights"
         options={{ href: null }}
       />
-      <Tabs.Screen name="account" options={{ href: null }} />
+      <Tabs.Screen name="antique-more" options={{ href: null }} />
+      <Tabs.Screen name="account" options={{ href: nicheHome.isAntiques ? undefined : null, tabBarIcon: ({ focused }) => (<View style={[styles.tabItem, focused && styles.tabItemActive]}><MaterialIcons name="more-horiz" size={22} color={focused ? Colors.primary : Colors.textTertiary} /><TabLabel label="More" focused={focused} /></View>) }} />
     </Tabs>
     <TVTabHint />
     </>
