@@ -12,6 +12,15 @@ on:
         required: true
         type: boolean
         default: true
+  pull_request:
+    paths:
+      - 'services/marketplaceService.ts'
+      - 'services/marketplaceAdapter.ts'
+      - 'services/marketplaceReadiness.ts'
+      - 'services/__tests__/marketplaceFoundation.test.ts'
+      - 'supabase/migrations/*marketplace_financial_events.sql'
+      - 'docs/MULTI_MARKETPLACE_FOUNDATION.md'
+      - '.github/workflows/build-swish-suite.yml'
   push:
     branches: [main]
     paths:
@@ -20,6 +29,35 @@ on:
 permissions:
   contents: read
 jobs:
+  validate-marketplace-foundation:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install locked dependencies
+        run: bash scripts/install-dependencies.sh
+      - name: TypeScript validation
+        run: npx tsc --noEmit
+      - name: Marketplace foundation regression tests
+        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/marketplaceFoundation.test.ts
+      - name: Check additive finance migration safety markers
+        run: |
+          set -euo pipefail
+          migration="$(find supabase/migrations -maxdepth 1 -name '*marketplace_financial_events.sql' -print -quit)"
+          test -n "$migration"
+          grep -q 'enable row level security' "$migration"
+          grep -q 'swish_user_tenant_ids' "$migration"
+          grep -q 'unique (tenant_id, marketplace_id, external_transaction_id)' "$migration"
+          grep -q 'grant all on public.marketplace_financial_events to service_role' "$migration"
+
   niche-apks:
     if: ${{ github.event_name == 'push' || inputs.include_all_niches }}
     strategy:
