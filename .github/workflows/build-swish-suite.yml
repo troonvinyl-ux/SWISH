@@ -71,7 +71,7 @@ jobs:
             ~/.gradle/wrapper
           key: ${{ runner.os }}-gradle-master-${{ hashFiles('android/**/*.gradle*', 'pnpm-lock.yaml', 'app.config.js') }}
           restore-keys: ${{ runner.os }}-gradle-
-      - name: Compile Master Switch admin APK
+      - name: Compile lightweight Master Admin launcher APK
         working-directory: android
         run: ./gradlew assembleRelease --console=plain -Dorg.gradle.workers.max=2 -Dkotlin.compiler.execution.strategy=in-process
       - name: Verify APK file and package contents
@@ -96,16 +96,16 @@ jobs:
           grep -qx 'AndroidManifest.xml' /tmp/swish-apk-entries.txt
           grep -Eq '^classes([0-9]+)?\.dex$' /tmp/swish-apk-entries.txt
           mkdir -p dist
-          cp "$APK" dist/swish-master-switch-admin.apk
-          sha256sum dist/swish-master-switch-admin.apk > dist/swish-master-switch-admin.sha256
-          echo "Verified Master Switch APK: $APK"
-          ls -lh dist/swish-master-switch-admin.apk
-          cat dist/swish-master-switch-admin.sha256
+          cp "$APK" dist/swish-master-admin.apk
+          sha256sum dist/swish-master-admin.apk > dist/swish-master-admin.sha256
+          echo "Verified Master Admin launcher APK: $APK"
+          ls -lh dist/swish-master-admin.apk
+          cat dist/swish-master-admin.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: swish-master-switch-admin-apk
+          name: swish-master-admin-launcher-apk
           path: |
-            dist/swish-master-switch-admin.apk
-            dist/swish-master-switch-admin.sha256
+            dist/swish-master-admin.apk
+            dist/swish-master-admin.sha256
           if-no-files-found: error
           retention-days: 14
