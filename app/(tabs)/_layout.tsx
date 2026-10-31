@@ -137,7 +137,7 @@ export default function TabLayout() {
                   </View>
                 ) : null}
               </View>
-              <TabLabel label="Stock" focused={focused} />
+              <TabLabel label={nicheHome.isAntiques ? "Inventory" : "Stock"} focused={focused} />
             </View>
           ),
         }}
@@ -149,8 +149,8 @@ export default function TabLayout() {
         options={{
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.tabItem, focused && styles.tabItemActive]}>
-              <MaterialIcons name="storefront" size={22} color={color} />
-              <TabLabel label="eBay" focused={focused} />
+              <MaterialIcons name="storefront" size={22} color={nicheHome.isAntiques ? (focused ? Colors.primary : Colors.textTertiary) : color} />
+              <TabLabel label={nicheHome.isAntiques ? "Listings" : "eBay"} focused={focused} />
             </View>
           ),
         }}
