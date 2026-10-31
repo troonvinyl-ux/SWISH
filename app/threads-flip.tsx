@@ -82,10 +82,10 @@ const TOP_BRANDS = ["Levi's", 'Nike', 'Carhartt', 'Ralph Lauren', 'Stone Island'
 const CLOTHING_CATEGORY_IMAGES: Record<string, string> = {
   vintage: 'https://images.pexels.com/photos/32734335/pexels-photo-32734335.jpeg?auto=compress&cs=tinysrgb&w=600',
   designer: 'https://images.pexels.com/photos/3927390/pexels-photo-3927390.jpeg?auto=compress&cs=tinysrgb&w=600',
-  streetwear: 'https://images.pexels.com/photos/11757389/pexels-photo-11757389.jpeg?auto=compress&cs=tinysrgb&w=600',
+  streetwear: 'https://images.pexels.com/photos/29790060/pexels-photo-29790060.jpeg?auto=compress&cs=tinysrgb&w=600',
   high_street: 'https://images.pexels.com/photos/3927390/pexels-photo-3927390.jpeg?auto=compress&cs=tinysrgb&w=600',
   sustainable: 'https://images.pexels.com/photos/32734335/pexels-photo-32734335.jpeg?auto=compress&cs=tinysrgb&w=600',
-  trainers: 'https://images.pexels.com/photos/18380045/pexels-photo-18380045.jpeg?auto=compress&cs=tinysrgb&w=600',
+  trainers: 'https://images.pexels.com/photos/31078822/pexels-photo-31078822.jpeg?auto=compress&cs=tinysrgb&w=600',
   accessories: 'https://images.pexels.com/photos/31078822/pexels-photo-31078822.jpeg?auto=compress&cs=tinysrgb&w=600',
   sportswear: 'https://images.pexels.com/photos/29790060/pexels-photo-29790060.jpeg?auto=compress&cs=tinysrgb&w=600',
 };
@@ -742,7 +742,7 @@ const id = StyleSheet.create({
   photoGuidePanel: { backgroundColor: TF.surface, borderWidth: 1, borderColor: TF.border, borderRadius: Radius.xl, padding: Spacing.md, gap: Spacing.sm },
   photoGuideTitle: { fontSize: 9, color: TF.pink, fontWeight: Typography.weight.extrabold, letterSpacing: 1 },
   photoGuideGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  photoGuideCard: { width: '48%', minHeight: 62, flexDirection: 'row', alignItems: 'flex-start', gap: 7, padding: 8, borderRadius: Radius.md, backgroundColor: TF.surfaceHigh },
+  photoGuideCard: { width: '47%', minHeight: 62, flexDirection: 'row', alignItems: 'flex-start', gap: 7, padding: 8, borderRadius: Radius.md, backgroundColor: TF.surfaceHigh },
   photoGuideIcon: { width: 28, height: 28, borderRadius: Radius.sm, backgroundColor: TF.pinkDim, alignItems: 'center', justifyContent: 'center' },
   photoGuideLabel: { fontSize: 10, color: TF.cream, fontWeight: Typography.weight.bold },
   photoGuideCopy: { fontSize: 8, color: TF.textSub, lineHeight: 12 },
