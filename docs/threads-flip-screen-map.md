@@ -59,10 +59,11 @@ These routes are not substitutes for any of the 16 numbered screens. They must b
 
 - [x] Existing Threads Flip brand artwork is used on the screen 01 welcome splash.
 - [x] Screen 02 home hero uses the latest clothing/trainer inventory photo when available, with a branded fallback for empty wardrobes.
-- [ ] Add separate editorial apparel photography for the screen 02 home hero and category tiles (vintage, designer, streetwear, trainers and accessories).
-- [ ] Add clear brand-label, care-label, size-label and garment-detail photo examples for the capture guidance.
-- [ ] Add neutral garment thumbnails for empty/demo states; never imply demo prices are real market evidence.
-- [ ] Standardise 3:4 garment imagery and square category tiles; avoid embedded brand logos unless licensed.
+- [x] Add editorial apparel photography to the screen 02 empty-wardrobe hero and category tiles (vintage, designer, streetwear, high street, sustainable, trainers, accessories and sportswear).
+- [x] Add on-screen photo guidance for full garment, brand/size label, care label, and detail/flaw capture.
+- [x] Use unbranded editorial images for the category strip; actual inventory photos continue to take priority in the home hero.
+- [ ] Add locally bundled neutral garment thumbnails for offline/empty states; the current editorial images are remotely hosted and therefore require connectivity.
+- [x] Standardise category photography into consistent cropped image tiles; inventory garment imagery remains 3:4 where supplied.
 
 The capture flow now has four functional photo slots and a separate checklist screen. The additional product/category photography remains a pre-merge visual asset task.
 
@@ -78,3 +79,15 @@ The shared repricing service must receive the effective niche ID for every read 
 ## Authentication branding
 
 The shared login route remains shared across all niches. Threads Flip branding is conditional on the effective niche being `clothing`; all other niche builds retain the SWISH mark and Commerce Intelligence Platform tagline.
+
+
+## Editorial image credits and licensing
+
+The home/category editorial photography is served from Pexels' image CDN and each source page is marked Free / Free to use. These are illustrative category images only; they are not item records, condition evidence, or market comparables. The app must continue to prioritise a tenant's own latest inventory photo in the home hero.
+
+- Vintage / sustainable: Vero Lova — [Pexels photo 32734335](https://www.pexels.com/photo/vintage-accessories-and-clothing-flat-lay-32734335/)
+- Designer / high street: cottonbro studio — [Pexels photo 3927390](https://www.pexels.com/photo/flat-lay-of-clothing-and-accessories-3927390/)
+- Streetwear / sportswear: Pricelens Lo Yaa — [Pexels photo 29790060](https://www.pexels.com/photo/urban-streetwear-style-with-sneakers-and-hat-29790060/)
+- Trainers / accessories: hello aesthe — [Pexels photo 31078822](https://www.pexels.com/photo/stylish-essentials-flat-lay-with-sneakers-31078822/)
+
+The category image URLs use Pexels' CDN resize parameters to keep mobile payloads smaller. Before a release, confirm that the CDN images load on both native and web builds and retain a local fallback for offline use.
