@@ -3072,7 +3072,9 @@ const nichStyles = StyleSheet.create({
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, businessConfig, reloadBusinessConfig, triggerInventoryReload, activeNiche, activeNicheId, setActiveNiche } = useApp();
+  const { tenant, businessConfig, reloadBusinessConfig, triggerInventoryReload, activeNiche, activeNicheId, fixedNicheId, setActiveNiche } = useApp();
+  const isThreadsFlip = (fixedNicheId ?? activeNicheId) === 'clothing';
+  const threads = { background: '#0C080C', surface: '#160E16', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5', muted: '#9A7090' };
   const { logout, user } = useAuth();
   const { showAlert } = useAlert();
 
@@ -3175,23 +3177,23 @@ export default function SettingsScreen() {
   }, [logout, showAlert, router]);
 
   return (
-    <View style={styles.container}>
+    <View testID={isThreadsFlip ? "threads-flip-screen-16" : undefined} accessibilityLabel={isThreadsFlip ? "Threads Flip screen 16 More and settings" : undefined} style={[styles.container, isThreadsFlip && { backgroundColor: threads.background }]}>
       <StatusBar style="light" />
 
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + Spacing.base }]}>
+      <View style={[styles.header, { paddingTop: insets.top + Spacing.base }, isThreadsFlip && { backgroundColor: threads.surface, borderBottomColor: threads.border }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
           <MaterialIcons name="arrow-back" size={20} color={Colors.textSecondary} />
         </Pressable>
         <Pressable onPress={() => router.replace('/(tabs)' as any)} style={styles.homeBtn} hitSlop={8}>
           <MaterialIcons name="dashboard" size={16} color={Colors.textTertiary} />
         </Pressable>
-        <Text style={styles.title}>Settings</Text>
+        <Text style={[styles.title, isThreadsFlip && { color: threads.cream }]}>Threads Flip · Settings</Text>
         {loading ? <ActivityIndicator size="small" color={Colors.textTertiary} style={{ marginLeft: 'auto' }} /> : null}
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 48 }]}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 48 }, isThreadsFlip && { backgroundColor: threads.background }]}
         showsVerticalScrollIndicator={false}
       >
         {/* ── Niche / Vertical ──────────────────────────────────────────── */}
