@@ -468,10 +468,10 @@ async function searchZeno(
       searchUrl, totalFound: rawCandidates.length,
     };
   } catch (e: any) {
-    console.error(`[swish-islamic-identify] Zeno search error for "${query}": ${e.message}`);
+    console.error('[swish-islamic-identify] Zeno search is temporarily unavailable.');
     return {
       available: false, query, candidates: [], searchUrl,
-      error: `Network error: ${e.message}`, totalFound: 0,
+      error: 'Zeno search is temporarily unavailable.', totalFound: 0,
     };
   }
 }
@@ -528,9 +528,9 @@ async function searchNumistaIslamicSilver(
   // the supplied Numista type independently and keep it visible in the results.
   const referenceText = String(physicalData?.notes ?? '');
   const referenceMatch =
-    referenceText.match(/\\bN\\s*#\\s*(\\d{1,9})\\b/i) ??
-    referenceText.match(/numista\\.com\\/(?:catalogue\\/index\\.php\\?r=)?(\\d{1,9})/i) ??
-    referenceText.match(/\\bnumista\\s*(?:type\\s*)?(?:id\\s*[:#=]?\\s*)(\\d{1,9})\\b/i);
+    referenceText.match(/\bN\s*#\s*(\d{1,9})\b/i) ??
+    referenceText.match(/numista\.com\/(?:catalogue\/index\.php\?r=)?(\d{1,9})/i) ??
+    referenceText.match(/\bnumista\s*(?:type\s*)?(?:id\s*[:#=]?\s*)(\d{1,9})\b/i);
   const suppliedReferenceId = referenceMatch ? Number(referenceMatch[1]) : null;
   const queries = [
     primaryQuery,
@@ -571,7 +571,7 @@ async function searchNumistaIslamicSilver(
           firstError ||= `Numista direct lookup for N#${suppliedReferenceId} returned HTTP ${directResp.status}`;
         }
       } catch (e: any) {
-        firstError ||= `Numista direct lookup failed: ${e.message}`;
+        firstError ||= 'Numista direct lookup failed.';
       }
     }
 
@@ -614,7 +614,7 @@ async function searchNumistaIslamicSilver(
     const scoredCandidates = [...candidateMap.values()].map(t => scoreNumistaIslamic(t, aiOutput, physicalData)).sort((a, b) => b.matchScore - a.matchScore);
     const directCandidate = suppliedReferenceId ? scoredCandidates.find(candidate => candidate.typeId === suppliedReferenceId) : undefined;
     const candidates = directCandidate ? [directCandidate, ...scoredCandidates.filter(candidate => candidate.typeId !== suppliedReferenceId)] : scoredCandidates;
-    return { available: successfulQueries > 0, query, candidates: candidates.slice(0, 12), error: `Numista error: ${e.message}`, totalFound: candidateMap.size };
+    return { available: successfulQueries > 0, query, candidates: candidates.slice(0, 12), error: 'Numista search is temporarily unavailable.', totalFound: candidateMap.size };
   }
 }
 
@@ -1365,9 +1365,10 @@ Deno.serve(async (req: Request) => {
 
     let aiResp = await requestIdentification(false);
     if (!aiResp.ok) {
-      const errText = await aiResp.text();
+      const providerStatus = aiResp.status;
+      console.error('[swish-islamic-identify] AI provider request failed.', providerStatus);
       return new Response(
-        JSON.stringify({ error: `OnSpace AI error: ${errText}` }),
+        JSON.stringify({ error: 'The identification service is temporarily unavailable.' }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
@@ -1380,9 +1381,10 @@ Deno.serve(async (req: Request) => {
       console.warn('[swish-islamic-identify] AI output truncated; retrying with compact JSON');
       aiResp = await requestIdentification(true);
       if (!aiResp.ok) {
-        const errText = await aiResp.text();
+        const providerStatus = aiResp.status;
+        console.error('[swish-islamic-identify] Compact AI retry failed.', providerStatus);
         return new Response(
-          JSON.stringify({ error: `OnSpace AI retry error: ${errText}` }),
+          JSON.stringify({ error: 'The identification service is temporarily unavailable.' }),
           { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
       }
@@ -1707,9 +1709,9 @@ Deno.serve(async (req: Request) => {
     );
   } catch (err: any) {
     const accessError=nicheAccessResponse(err);if(accessError) return accessError;
-    console.error('[swish-islamic-identify] Error:', err);
+    console.error('[swish-islamic-identify] Identification request failed.');
     return new Response(
-      JSON.stringify({ error: err.message ?? 'Internal error' }),
+      JSON.stringify({ error: 'Unable to complete Islamic coin identification.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }

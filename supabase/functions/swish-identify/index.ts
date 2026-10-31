@@ -15,7 +15,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { requirePaidNiche,nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
 import { canonicalSpecialist, specialistNiche, profileForSpecialist } from '../_shared/specialistRegistry.ts';
-import { normalizeSpecialistAnalysis, specialistOutputInstructions, recordValue, textList } from '../../../shared/specialistIntelligence.ts';
+import { normalizeSpecialistAnalysis, specialistOutputInstructions, recordValue, textList } from '../_shared/specialistIntelligence.ts';
 
 const NUMISTA_API = 'https://api.numista.com/api/v3';
 
@@ -1428,7 +1428,8 @@ async function checkStripeSubscription(userId: string, userEmail: string, nicheI
       const linkedUserId = sub.metadata?.user_id;
       if (linkedUserId && linkedUserId !== userId) continue;
       if (sub.status !== 'active' && sub.status !== 'trialing') continue;
-      const subscribedNiche = String(sub.metadata?.niche_id ?? 'coins').toLowerCase();
+      let subscribedNiche = String(sub.metadata?.niche_id ?? 'coins').toLowerCase();
+      if (subscribedNiche === 'surplus_trader') subscribedNiche = 'surplus_flip';
       if (subscribedNiche !== nicheId) continue;
       for (const item of sub.items?.data ?? []) {
         if (item.price?.product === STRIPE_PRODUCT_ID) return true;

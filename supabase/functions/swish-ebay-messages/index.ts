@@ -98,7 +98,7 @@ async function getEbayAccessToken(
 
   let creds: any;
   try { creds = await decryptCredentials(conn.credential_ref); } catch (e: any) {
-    return { error: `eBay credentials are corrupted: ${e.message}. Please re-connect eBay in Marketplaces.` };
+    return { error: 'Unable to read eBay connection securely. Please reconnect eBay in Marketplaces.' };
   }
   if (!creds.accessToken) {
     return { error: 'No eBay access token found. Please re-authorise eBay in Marketplaces.' };
@@ -192,13 +192,13 @@ async function handleSyncMessages(
     });
     responseXml = await resp.text();
   } catch (e: any) {
-    return jsonResponse({ error: `Network error reaching eBay: ${e.message}` }, 503);
+    return jsonResponse({ error: 'Unable to complete the eBay messages request.' }, 503);
   }
 
   const ack = parseAck(responseXml);
   if (ack === 'Failure') {
     const errMsg = responseXml.match(/<LongMessage>([\s\S]*?)<\/LongMessage>/)?.[1] ?? 'eBay API error';
-    return jsonResponse({ error: errMsg }, 400);
+    return jsonResponse({ error: 'eBay could not complete the messages request. Please retry.' }, 502);
   }
 
   const msgMatches = Array.from(responseXml.matchAll(/<MessageSummary>([\s\S]*?)<\/MessageSummary>/g));

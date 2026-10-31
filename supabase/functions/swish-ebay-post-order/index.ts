@@ -88,7 +88,7 @@ async function getAccessToken(
 
   let creds: any;
   try { creds = await decryptCredentials(conn.credential_ref); }
-  catch (e: any) { return { error: `eBay credentials corrupted: ${e.message}. Re-connect eBay.` }; }
+  catch { console.error('[SWISH Security] eBay credential decryption failed for fulfilment connector.'); return { error: 'Unable to read eBay connection securely. Please reconnect eBay.' }; }
 
   if (!creds.accessToken) return { error: 'No eBay access token. Re-authorise eBay in Marketplaces.' };
 
@@ -802,7 +802,7 @@ Deno.serve(async (req: Request) => {
 
     return jsonResponse({ error: `Unknown route: ${route}` }, 400);
   } catch (err: any) {
-    console.error(`[SWISH Dispatch] Unhandled error (route=${route}): ${err.message}`);
-    return jsonResponse({ error: err.message ?? 'Internal error' }, 500);
+    console.error(`[SWISH Dispatch] Request failed (route=${route}).`);
+    return jsonResponse({ error: 'Unable to complete the eBay fulfilment request.' }, 500);
   }
 });

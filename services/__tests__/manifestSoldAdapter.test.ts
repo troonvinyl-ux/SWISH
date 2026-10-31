@@ -1,4 +1,4 @@
-import { fetchManifestSoldComparisons } from '@/supabase/functions/_shared/manifestSoldComparisons';
+import { fetchManifestSoldComparisons } from '../../supabase/functions/_shared/manifestSoldComparisons';
 const response=(data:unknown,status=200)=>({ok:status>=200&&status<300,status,json:async()=>data});
 describe('Sold-only eBay adapter with mocked provider responses, not live approval tests',()=>{
   const previous=global.fetch;

@@ -16,7 +16,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
-import registry from '../../../niche-modules.json' with { type: 'json' };
+import registry from '../_shared/niche-modules.json' with { type: 'json' };
 import { corsHeaders } from '../_shared/cors.ts';
 
 
