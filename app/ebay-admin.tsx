@@ -147,7 +147,7 @@ async function refreshAllEbayImages(
   // Phase 2: Download images permanently via edge function (server-side, no CORS issues)
   try {
     const { data: dlData } = await supabase.functions.invoke('swish-image-download', {
-      body: { tenantId, fixTitles: true },
+      body: { tenantId, itemIds: targets.map(t => t.item_id), fixTitles: true },
     });
     const downloaded = dlData?.imagesDownloaded ?? 0;
     const failed = dlData?.imagesFailed ?? 0;
