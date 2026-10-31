@@ -183,7 +183,9 @@
         "antique-flipper.tsx",
         "antique-guides.tsx",
         "antique-restoration.tsx",
-        "(tabs)/antique-more.tsx"
+        "(tabs)/antique-more.tsx",
+        "antique-condition.tsx",
+        "antique-value.tsx"
       ]
     },
     "fossils": {
