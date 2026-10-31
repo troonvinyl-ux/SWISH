@@ -49,9 +49,20 @@ export default function MasterAdminScreen() {
     return <Redirect href="/" />;
   }
 
-  const switchNiche = (id: (typeof PRODUCTION_NICHES)[number]['id']) => {
-    setActiveNiche(id);
-    router.replace('/(tabs)' as any);
+  const switchNiche = async (id: (typeof PRODUCTION_NICHES)[number]['id']) => {
+    const scheme = NICHE_MODULES[id]?.scheme;
+    if (!scheme) {
+      Alert.alert('App unavailable', 'This niche does not have a registered app launch link.');
+      return;
+    }
+    try {
+      await Linking.openURL(`${scheme}://`);
+    } catch {
+      Alert.alert(
+        `${NICHE_MODULES[id].name} is not installed`,
+        `Install the ${NICHE_MODULES[id].name} APK on this device, then return here to launch it. The Master Admin app does not contain the niche workspace.`,
+      );
+    }
   };
 
   return (
