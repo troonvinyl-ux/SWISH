@@ -23,6 +23,7 @@ describe('Branded Expo build configuration', () => {
   const originalMasterAdmin = process.env.SWISH_MASTER_ADMIN;
   const originalExpoProjectId = process.env.EXPO_PROJECT_ID;
   const originalEasProjectId = process.env.EAS_PROJECT_ID;
+  const originalOtaPublish = process.env.SWISH_OTA_PUBLISH;
 
   afterEach(() => {
     if (originalMasterAdmin === undefined) delete process.env.SWISH_MASTER_ADMIN;
@@ -35,15 +36,19 @@ describe('Branded Expo build configuration', () => {
 
     if (originalEasProjectId === undefined) delete process.env.EAS_PROJECT_ID;
     else process.env.EAS_PROJECT_ID = originalEasProjectId;
+
+    if (originalOtaPublish === undefined) delete process.env.SWISH_OTA_PUBLISH;
+    else process.env.SWISH_OTA_PUBLISH = originalOtaPublish;
   });
 
   test('keeps the existing OnSpace app identity when no branded profile is selected', () => {
     delete process.env.SWISH_NICHE;
     delete process.env.SWISH_MASTER_ADMIN;
-    // The OTA workflow injects this variable globally. Keep this identity test
+    // The OTA workflow injects these variables globally. Keep this identity test
     // independent of deployment configuration so it tests the true base case.
     delete process.env.EXPO_PROJECT_ID;
     delete process.env.EAS_PROJECT_ID;
+    delete process.env.SWISH_OTA_PUBLISH;
     expect(configureApp({ config: BASE_CONFIG })).toBe(BASE_CONFIG);
   });
 
@@ -51,6 +56,9 @@ describe('Branded Expo build configuration', () => {
     '%s has its own name, slug, deep link, and package ID',
     (nicheId, expected) => {
       delete process.env.SWISH_MASTER_ADMIN;
+      // This assertion covers native branded build identity. OTA publishing
+      // deliberately reuses the shared EAS project slug and is tested separately.
+      delete process.env.SWISH_OTA_PUBLISH;
       process.env.SWISH_NICHE = nicheId;
       const config = configureApp({ config: BASE_CONFIG });
       expect(config.name).toBe(expected[0]);
