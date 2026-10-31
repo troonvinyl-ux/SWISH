@@ -94,7 +94,8 @@ jobs:
       - name: Export static web application
         env:
           SWISH_NICHE: ${{ matrix.niche }}
-        run: pnpm exec expo export --platform web --output-dir dist/web --base-url /niche-apps/${{ matrix.niche }}
+          SWISH_WEB_BASE_URL: /niche-apps/${{ matrix.niche }}
+        run: pnpm exec expo export --platform web --output-dir dist/web
 
       - name: Upload web build artifact
         uses: actions/upload-artifact@v4
