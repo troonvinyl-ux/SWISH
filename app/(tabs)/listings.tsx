@@ -41,7 +41,7 @@ export default function ListingsTabScreen() {
     nicheId === 'clothing' ? '#E91E8C' : Colors.primary;
 
   return (
-    <View testID={isThreadsFlip ? 'threads-flip-screen-14' : undefined} accessibilityLabel={isThreadsFlip ? 'Threads Flip screen 14 Listings and eBay tools' : undefined} style={[s.container, isThreadsFlip && { backgroundColor: threads.background }]}>
+    <View testID={isThreadsFlip ? 'threads-flip-ebay-tools' : undefined} accessibilityLabel={isThreadsFlip ? 'Threads Flip eBay tools and shortcuts' : undefined} style={[s.container, isThreadsFlip && { backgroundColor: threads.background }]}>
       <StatusBar style="light" />
 
       {/* Header */}
