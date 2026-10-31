@@ -1209,7 +1209,7 @@ export default function CreateListingScreen() {
   const hasExistingListing = existingListings.length > 0;
 
   return (
-    <View testID={isThreadsFlip ? `threads-flip-screen-${stage === 'analyse' ? '11' : stage === 'specifics' ? '12' : '13'}` : undefined} accessibilityLabel={isThreadsFlip ? `Threads Flip listing stage ${stage}` : undefined} style={[s.container, isThreadsFlip && { backgroundColor: threads.background }]}>
+    <View testID={isThreadsFlip ? `threads-flip-screen-${stage === 'analyse' ? '11' : (stage === 'category' || stage === 'specifics') ? '12' : '13'}` : undefined} accessibilityLabel={isThreadsFlip ? `Threads Flip listing stage ${stage}` : undefined} style={[s.container, isThreadsFlip && { backgroundColor: threads.background }]}>
       <StatusBar style="light" />
 
       {/* Header */}
