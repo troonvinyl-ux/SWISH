@@ -35,7 +35,7 @@ jobs:
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Web exports are ready, but transfer is paused. Add SWISH_WEB_REPO_TOKEN to SWISH repository Actions secrets with Contents read/write access to troonvinyl-ux/SwishWeb."
+            echo "::notice::Web exports are ready, but transfer is paused. Add SWISH_WEB_REPO_TOKEN to SWISH repository Actions secrets with Contents read/write and Pull requests read/write access to troonvinyl-ux/SwishWeb."
           fi
 
       - name: Download all ten niche exports
