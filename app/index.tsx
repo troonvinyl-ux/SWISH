@@ -5,7 +5,7 @@
 //   Logged in, loading     → spinner
 //   Logged in, no onboard  → /onboarding
 //   Logged in owner       → /master-admin (unbranded Master Admin installation)
-  Logged in, onboarded   → /entry/<niche>  (each niche has its own entry route)
+//   Logged in, onboarded   → /entry/<niche>  (each niche has its own entry route)
 //
 // The explicit /entry/<niche> redirect ensures that every authenticated subscriber
 // lands in their correct niche shell. The /(tabs) screen is the destination AFTER
