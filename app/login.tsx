@@ -21,6 +21,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useAuth, useAlert } from '@/template';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
+import { getBrandArtwork } from '@/constants/brandArtwork';
 import { useApp } from '@/hooks/useApp';
 
 type AuthMode = 'login' | 'register';
@@ -35,6 +36,7 @@ export default function LoginScreen() {
   const { showAlert } = useAlert();
   const router = useRouter();
 
+  const [showWelcome, setShowWelcome] = useState(isThreadsFlip);
   const [mode, setMode] = useState<AuthMode>('login');
   const [registerStep, setRegisterStep] = useState<RegisterStep>('email_password');
 
@@ -98,8 +100,34 @@ export default function LoginScreen() {
     if (!error) showAlert('New code sent', `Check ${email} for your new 4-digit code.`);
   }, [email, sendOTP, showAlert]);
 
+  if (isThreadsFlip && showWelcome) {
+    return (
+      <View testID="threads-flip-screen-01" accessibilityLabel="Threads Flip screen 01 splash and welcome" style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom, backgroundColor: threads.background }]}>
+        <StatusBar style="light" />
+        <ScrollView contentContainerStyle={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xl, gap: Spacing.lg }}>
+          <Text style={{ color: threads.cream, fontSize: 13, fontWeight: Typography.weight.extrabold, letterSpacing: 3 }}>SWISHFLIP</Text>
+          <Image source={getBrandArtwork('clothing')!} contentFit="contain" style={{ width: '100%', height: 250 }} />
+          <View style={{ alignItems: 'center', gap: 5 }}>
+            <Text style={{ color: threads.cream, fontSize: 34, fontWeight: Typography.weight.extrabold, letterSpacing: 1 }}>THREADS <Text style={{ color: threads.pink }}>FLIP</Text></Text>
+            <Text style={{ color: threads.muted, fontSize: 12, fontWeight: Typography.weight.bold, letterSpacing: 1.5 }}>THE CLOTHING RESELLER APP</Text>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 26 }}>
+            {(['checkroom', 'checkroom', 'style', 'shopping-bag'] as const).map((name, i) => <MaterialIcons key={i} name={name as any} size={24} color={threads.pink} />)}
+          </View>
+          <Text style={{ color: threads.cream, fontSize: 11, fontWeight: Typography.weight.bold, letterSpacing: 1, textAlign: 'center' }}>IDENTIFY · VALUE · LIST · FLIP · PROFIT</Text>
+          <Pressable onPress={() => { setMode('register'); setRegisterStep('email_password'); setShowWelcome(false); }} style={{ width: '100%', backgroundColor: '#F5C842', borderRadius: Radius.xl, paddingVertical: Spacing.lg, alignItems: 'center' }}>
+            <Text style={{ color: threads.background, fontSize: Typography.size.base, fontWeight: Typography.weight.extrabold }}>Get Started →</Text>
+          </Pressable>
+          <Pressable onPress={() => { setMode('login'); setShowWelcome(false); }} hitSlop={10}>
+            <Text style={{ color: threads.cream, fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold }}>Sign In</Text>
+          </Pressable>
+        </ScrollView>
+      </View>
+    );
+  }
+
   return (
-    <View testID={isThreadsFlip ? 'threads-flip-screen-02' : undefined} style={[styles.container, { paddingTop: insets.top }, isThreadsFlip && { backgroundColor: threads.background }]}>
+    <View testID={isThreadsFlip ? 'threads-flip-auth' : undefined} style={[styles.container, { paddingTop: insets.top }, isThreadsFlip && { backgroundColor: threads.background }]}>
       <StatusBar style="light" />
       <KeyboardAvoidingView
         style={styles.flex}
