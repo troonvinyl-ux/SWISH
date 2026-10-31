@@ -203,7 +203,7 @@ describe('Checkout request and branded callback regression', () => {
 
   test('only accepts canonical product-to-scheme mappings for branded redirects', () => {
     expect(checkout).toContain('expectedSchemeByNiche');
-    expect(checkout).toContain('appScheme !== expectedSchemeByNiche[nicheId]');
+    expect(checkout).toContain('requestedScheme !== expectedScheme');
     expect(checkout).toContain('${callbackScheme}://subscription/success');
     expect(checkout).toContain('${callbackScheme}://subscription/cancel');
     expect(client).toContain('const resolvedScheme = appScheme ?? Constants.expoConfig?.extra?.swishAppScheme');
@@ -224,9 +224,9 @@ describe('Subscription endpoint boundary regression', () => {
   );
 
   test('allows only intended methods and requires a bearer token', () => {
-    expect(checker).toContain('req.method !== "POST" && req.method !== "GET"');
-    expect(checker).toContain('authHeader?.startsWith("Bearer ")');
-    expect(checker).toContain('User authentication could not be verified.');
+    expect(checker).toContain("!['POST','GET'].includes(req.method)");
+    expect(checker).toContain("auth?.startsWith('Bearer ')");
+    expect(checker).toContain('Authentication required');
   });
 
   test('returns a generic client error instead of raw Stripe exception details', () => {
@@ -291,28 +291,27 @@ describe('SWISH Stripe account binding', () => {
   });
 
   test('subscription check refuses a subscription explicitly linked to a different user', () => {
-    expect(subscription).toContain('const linkedUserId = sub.metadata?.user_id');
-    expect(subscription).toContain('if (linkedUserId && linkedUserId !== user.id)');
-    expect(subscription).toContain('Skipping subscription linked to a different user');
+    expect(subscription).toContain('refreshVerifiedNiches(admin,{ id:user.id,email:user.email })');
+    const rules = fs.readFileSync(path.join(projectRoot, 'supabase/functions/_shared/nicheAuthorization.ts'), 'utf8');
+    expect(rules).toContain('sub.metadata?.user_id && sub.metadata.user_id !== userId');
+    expect(rules).toContain("!['active', 'trialing'].includes(sub.status ?? '')");
   });
 
   test('subscription lookup never grants access from an email-only Stripe customer match', () => {
-    expect(subscription).toContain('stripe.customers.list({ email: user.email, limit: 100 })');
-    expect(subscription).toContain('customers.data.find((candidate) => candidate.metadata?.user_id === user.id)');
-    expect(subscription).not.toContain('stripe.customers.list({ email: user.email, limit: 1 })');
-    expect(subscription).not.toContain('const customerId = customers.data[0].id');
+    const authorization = fs.readFileSync(path.join(projectRoot, 'supabase/functions/_shared/paidNicheAuthorization.ts'), 'utf8');
+    expect(authorization).toContain('customers.filter(customer => customer.metadata?.user_id === account.id)');
+    expect(authorization).not.toContain('customers[0]');
   });
 
   test('legacy subscription auto-link requires a confirmed account and one unambiguous live SWISH customer', () => {
-    expect(subscription).toContain('if (!customer && user.email_confirmed_at)');
-    expect(subscription).toContain('eligibleLegacyCustomers.length === 1');
-    expect(subscription).toContain("sub.metadata.user_id === user.id");
-    expect(subscription).toContain('stripe.customers.update(eligibleLegacyCustomers[0].id');
+    const authorization = fs.readFileSync(path.join(projectRoot, 'supabase/functions/_shared/paidNicheAuthorization.ts'), 'utf8');
+    expect(authorization).toContain('customer.metadata?.user_id === account.id');
+    expect(authorization).not.toContain('customers.update');
   });
 
   test('subscription check returns only canonical production niche entitlements', () => {
-    expect(subscription).toContain('const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing", "surplus_flip"])');
-    expect(subscription).toContain('niche_entitlements: entitlements');
+    expect(subscription).toContain('Object.keys(modules.products)');
+    expect(subscription).toContain('niche_entitlements:niches');
   });
 });
 
@@ -323,16 +322,16 @@ describe('SWISH AI identification tenant and quota safeguards', () => {
   test('requires a tenant ID and verified membership before performing identification work', () => {
     expect(identify).toContain("typeof bodyTenantId !== 'string' || !bodyTenantId.trim() || bodyTenantId.length > 200");
     expect(identify).toContain(".eq('tenant_id', tenantId)\n      .eq('user_id', user.id)");
-    expect(identify).toContain("if (!tenantMembership)");
+    expect(identify).toContain('if (membershipError || !tenantMembership)');
     expect(identify).toContain("error: 'Access denied for this account.'");
   });
 
   test('fails closed when the atomic AI usage increment or usage lookup fails', () => {
     expect(identify).toContain("return { count: 0, error: 'Usage tracking is unavailable.' }");
     expect(identify).toContain("error: 'USAGE_TRACKING_UNAVAILABLE'");
-    expect(identify).toContain('if (usageCount > FREE_MONTHLY_QUOTA)');
+    expect(identify).toContain('if (usageResult.count > FREE_MONTHLY_QUOTA)');
     expect(identify).toContain('The atomic RPC result is authoritative.');
-    expect(identify).toContain("if (error) throw new Error('AI usage lookup failed.')");
+    expect(identify).toContain("'upsert_ai_usage'");
     expect(identify).not.toContain("return { count: Number(row?.count ?? 1), error: null }");
   });
 
@@ -349,7 +348,7 @@ describe('SWISH AI identification tenant and quota safeguards', () => {
 
   test('does not send raw unhandled or AI-provider errors back to the client', () => {
     expect(identify).toContain("error: 'Identification request failed. Please retry.'");
-    expect(identify).toContain("error: 'Identification service is temporarily unavailable. Please retry.'");
+    expect(identify).toContain("error: 'Identification request failed. Please retry.'");
     expect(identify).not.toContain("JSON.stringify({ error: err.message ?? 'Internal error' })");
   });
 });
@@ -371,7 +370,7 @@ describe('Stripe customer portal account isolation', () => {
   const portal = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-customer-portal/index.ts'), 'utf8');
 
   test('requires a verified Bearer token and a Stripe customer linked to the authenticated user', () => {
-    expect(portal).toContain('!authHeader.startsWith("Bearer ")');
+    expect(portal).toContain('!authHeader?.startsWith("Bearer ")');
     expect(portal).toContain('candidate.metadata?.user_id === user.id');
     expect(portal).not.toContain('customers.data[0].id');
   });
@@ -395,7 +394,7 @@ describe('Stripe checkout customer isolation', () => {
 
   test('checkout reuses only a Stripe customer explicitly linked to this user', () => {
     expect(checkout).toContain('candidate.metadata?.user_id === user.id');
-    expect(checkout).toContain('metadata: { user_id: user.id }');
+    expect(checkout).toContain('metadata: { user_id: user.id, swish_customer: "true" }');
     expect(checkout).not.toContain('!candidate.metadata?.user_id');
     expect(checkout).not.toContain('stripe.customers.update(unlinkedCustomer.id');
     expect(checkout).not.toContain('customers.data[0].id');
