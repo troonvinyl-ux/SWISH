@@ -47,8 +47,7 @@ jobs:
         run: bash scripts/install-dependencies.sh
       - name: Typecheck
         run: npx tsc --noEmit
-      - name: Regression tests (reported separately; typecheck remains a hard gate)
-        continue-on-error: true
+      - name: Regression tests (mandatory release gate)
         run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand
       - name: Confirm lightweight Master Admin route tree is present
         run: |
