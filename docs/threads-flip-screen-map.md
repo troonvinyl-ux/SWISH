@@ -62,7 +62,7 @@ These routes are not substitutes for any of the 16 numbered screens. They must b
 - [x] Add editorial apparel photography to the screen 02 empty-wardrobe hero and category tiles (vintage, designer, streetwear, high street, sustainable, trainers, accessories and sportswear).
 - [x] Add on-screen photo guidance for full garment, brand/size label, care label, and detail/flaw capture.
 - [x] Use unbranded editorial images for the category strip; actual inventory photos continue to take priority in the home hero.
-- [ ] Add locally bundled neutral garment thumbnails for offline/empty states; the current editorial images are remotely hosted and therefore require connectivity.
+- [x] Add a built-in local icon fallback for failed/offline editorial image loads; the inventory hero and category tiles never remain as broken-image placeholders.
 - [x] Standardise category photography into consistent cropped image tiles; inventory garment imagery remains 3:4 where supplied.
 
 The capture flow now has four functional photo slots, a separate checklist screen and a dedicated four-part photography guide. Editorial category photography is implemented; local offline fallbacks and actual runtime screenshot sign-off remain open.
@@ -90,4 +90,4 @@ The home/category editorial photography is served from Pexels' image CDN and eac
 - Streetwear / sportswear: Pricelens Lo Yaa — [Pexels photo 29790060](https://www.pexels.com/photo/urban-streetwear-style-with-sneakers-and-hat-29790060/)
 - Trainers / accessories: hello aesthe — [Pexels photo 31078822](https://www.pexels.com/photo/stylish-essentials-flat-lay-with-sneakers-31078822/)
 
-The category image URLs use Pexels' CDN resize parameters to keep mobile payloads smaller. Before a release, confirm that the CDN images load on both native and web builds and retain a local fallback for offline use.
+The category image URLs use Pexels' CDN resize parameters to keep mobile payloads smaller. A built-in icon fallback appears if the remote image cannot load. Before a release, confirm image loading on both native and web builds and decide whether a bundled offline photo pack is warranted.
