@@ -3,7 +3,7 @@ import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Colors, Spacing, Typography, Radius } from '@/constants/theme';
+import { Spacing, Typography, Radius } from '@/constants/theme';
 const GOLD='#D8AD52';
 const TIPS=[
 ['visibility','Document before touching','Photograph all sides, marks, damage and existing repairs. Record dimensions and any known history before cleaning or dismantling.'],
