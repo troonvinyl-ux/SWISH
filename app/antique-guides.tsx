@@ -3,7 +3,7 @@ import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Colors, Spacing, Typography, Radius } from '@/constants/theme';
+import { Spacing, Typography, Radius } from '@/constants/theme';
 const GOLD='#D8AD52';
 const GUIDES=[
 ['history','Periods & styles','Georgian, Victorian, Edwardian, Art Nouveau, Art Deco and later design movements. Treat style as a clue, not proof of manufacturing date.'],
