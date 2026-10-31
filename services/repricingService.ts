@@ -4,6 +4,7 @@
 import { getSupabaseClient } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { SavedListing } from './listingService';
+import { getProductionNicheSpecialistIds } from './nicheRouting';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -188,8 +189,14 @@ export async function deleteRepricingRule(ruleId: string): Promise<{ error: stri
 
 export async function getStaleListings(
   tenantId: string,
-  staleDays = 7
+  staleDays = 7,
+  nicheId: string
 ): Promise<{ listings: StaleListingInfo[]; error: string | null }> {
+  // Fail closed: an unknown/missing niche must never expose tenant-wide inventory.
+  const specialistIds = getProductionNicheSpecialistIds(nicheId);
+  if (specialistIds.length === 0) {
+    return { listings: [], error: `No registered specialists for niche: ${nicheId || 'unknown'}` };
+  }
   const supabase = getSupabaseClient();
   const staleDate = new Date(Date.now() - staleDays * 24 * 60 * 60 * 1000).toISOString();
 
@@ -197,9 +204,10 @@ export async function getStaleListings(
     .from('listings')
     .select(`
       *,
-      items (canonical_title, specialist_id, status)
+      items!inner (canonical_title, specialist_id, status)
     `)
     .eq('tenant_id', tenantId)
+    .in('items.specialist_id', specialistIds)
     .in('status', ['active', 'published', 'draft'])
     .lt('updated_at', staleDate)
     .order('updated_at', { ascending: true })
@@ -244,9 +252,22 @@ export async function getStaleListings(
 
 export async function getAIRepriceSuggestion(
   listingId: string,
-  tenantId: string
+  tenantId: string,
+  nicheId: string
 ): Promise<{ suggestion: Omit<RepriceSuggestion, 'itemTitle' | 'daysListed' | 'views' | 'watchers'> | null; error: string | null }> {
+  const specialistIds = getProductionNicheSpecialistIds(nicheId);
+  if (specialistIds.length === 0) return { suggestion: null, error: `No registered specialists for niche: ${nicheId || 'unknown'}` };
   const supabase = getSupabaseClient();
+  // Guard the action as well as the list: callers cannot request repricing for another niche's listing.
+  const { data: ownedListing, error: ownershipError } = await supabase
+    .from('listings')
+    .select('id, tenant_id, items!inner(specialist_id)')
+    .eq('id', listingId)
+    .eq('tenant_id', tenantId)
+    .in('items.specialist_id', specialistIds)
+    .maybeSingle();
+  if (ownershipError) return { suggestion: null, error: ownershipError.message };
+  if (!ownedListing) return { suggestion: null, error: 'Listing does not belong to the active niche.' };
 
   const { data, error } = await supabase.functions.invoke('swish-reprice', {
     body: { listing_id: listingId, tenant_id: tenantId },
@@ -292,9 +313,22 @@ export async function getAIRepriceSuggestion(
 
 export async function applyReprice(
   listingId: string,
-  newPrice: number
+  newPrice: number,
+  tenantId: string,
+  nicheId: string
 ): Promise<{ error: string | null }> {
+  const specialistIds = getProductionNicheSpecialistIds(nicheId);
+  if (specialistIds.length === 0) return { error: `No registered specialists for niche: ${nicheId || 'unknown'}` };
   const supabase = getSupabaseClient();
+  const { data: ownedListing, error: ownershipError } = await supabase
+    .from('listings')
+    .select('id, items!inner(specialist_id)')
+    .eq('id', listingId)
+    .eq('tenant_id', tenantId)
+    .in('items.specialist_id', specialistIds)
+    .maybeSingle();
+  if (ownershipError) return { error: ownershipError.message };
+  if (!ownedListing) return { error: 'Listing does not belong to the active niche.' };
   const { error } = await supabase
     .from('listings')
     .update({
@@ -307,9 +341,9 @@ export async function applyReprice(
 
 // ── Scan & create exceptions for stale listings ───────────────────────────────
 
-export async function scanForStaleListingExceptions(tenantId: string): Promise<void> {
+export async function scanForStaleListingExceptions(tenantId: string, nicheId: string): Promise<void> {
   const supabase = getSupabaseClient();
-  const { listings } = await getStaleListings(tenantId, 7);
+  const { listings } = await getStaleListings(tenantId, 7, nicheId);
   if (listings.length === 0) return;
 
   // Check if repricing exception already exists
