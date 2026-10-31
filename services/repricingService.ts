@@ -270,7 +270,7 @@ export async function getAIRepriceSuggestion(
   if (!ownedListing) return { suggestion: null, error: 'Listing does not belong to the active niche.' };
 
   const { data, error } = await supabase.functions.invoke('swish-reprice', {
-    body: { listing_id: listingId, tenant_id: tenantId },
+    body: { listing_id: listingId, tenant_id: tenantId, niche_id: nicheId },
   });
 
   if (error) {
