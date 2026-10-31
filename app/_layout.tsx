@@ -64,8 +64,10 @@ function TVBackHandlerEffect({ children }: { children: React.ReactNode }) {
 function GlobalAdminShortcut() {
   const router = useRouter();
   const pathname = usePathname();
+  const segments = useSegments();
   const { isMasterAdmin } = useApp();
   const isMasterAdminBuild = Constants.expoConfig?.extra?.swishMasterAdminBuild === true;
+  const inTabs = segments[0] === '(tabs)';
   const hidden = pathname === '/master-admin' || pathname === '/login' || pathname === '/onboarding';
   if (!isMasterAdminBuild || !isMasterAdmin || hidden) return null;
   return (
@@ -73,7 +75,7 @@ function GlobalAdminShortcut() {
       accessibilityRole="button"
       accessibilityLabel="Return to Master Admin dashboard"
       onPress={() => router.replace('/master-admin' as any)}
-      style={({ pressed }) => [globalAdminStyles.button, pressed && globalAdminStyles.pressed]}
+      style={({ pressed }) => [globalAdminStyles.button, inTabs && globalAdminStyles.inTabs, pressed && globalAdminStyles.pressed]}
     >
       <MaterialIcons name="admin-panel-settings" size={21} color="#111111" />
       <Text style={globalAdminStyles.label}>ADMIN</Text>
@@ -125,6 +127,7 @@ const globalAdminStyles = StyleSheet.create({
     shadowRadius: 8,
   },
   label: { color: '#111111', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+  inTabs: { bottom: 88 },
   pressed: { opacity: 0.82, transform: [{ scale: 0.97 }] },
 });
 
