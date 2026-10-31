@@ -96,7 +96,7 @@ jobs:
             exit 1
           fi
           if [ "${#APKS[@]}" -ne 1 ]; then
-            printf '::error::Expected exactly one release APK, found %s: %s\\n' "${#APKS[@]}" "${APKS[*]}"
+            printf '::error::Expected exactly one release APK, found %s: %s\n' "${#APKS[@]}" "${APKS[*]}"
             exit 1
           fi
           APK="${APKS[0]}"
@@ -104,7 +104,7 @@ jobs:
           unzip -t "$APK"
           unzip -Z1 "$APK" > /tmp/swish-apk-entries.txt
           grep -qx 'AndroidManifest.xml' /tmp/swish-apk-entries.txt
-          grep -Eq '^classes([0-9]+)?\\.dex$' /tmp/swish-apk-entries.txt
+          grep -Eq '^classes([0-9]+)?\.dex$' /tmp/swish-apk-entries.txt
           mkdir -p dist
           cp "$APK" dist/swish-master-switch-admin.apk
           sha256sum dist/swish-master-switch-admin.apk > dist/swish-master-switch-admin.sha256
