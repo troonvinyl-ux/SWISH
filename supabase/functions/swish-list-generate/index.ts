@@ -19,7 +19,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { profileForSpecialist } from '../_shared/specialistRegistry.ts';
-import { mappedSpecialistSpecifics, evaluateSpecialistSafety } from '../../../shared/specialistIntelligence.ts';
+import { mappedSpecialistSpecifics, evaluateSpecialistSafety } from '../_shared/specialistIntelligence.ts';
 
 interface ListingRequest {
   item_id: string;
