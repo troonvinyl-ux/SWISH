@@ -12,11 +12,6 @@ on:
         required: true
         type: boolean
         default: true
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/build-swish-suite.yml'
-      - '.github/workflows/_niche-android.yml'
 permissions:
   contents: read
 jobs:
