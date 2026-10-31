@@ -1,14 +1,8 @@
 import { createContext, useState, useEffect, useMemo, type ReactNode, type Dispatch, type SetStateAction } from 'react';
 import { useAuth } from '@/template';
 import { useApp } from '@/hooks/useApp';
-import { DEFAULT_LOT_ASSUMPTIONS, type LotLine, type LotAssumptions } from '@/services/lotEconomicsService';
-export interface ManifestSession {
-  name: string; key: string; lines: LotLine[]; assumptions: LotAssumptions; warnings: string[];
-  strategy: 'individual' | 'grouped' | 'whole'; paidHammer: string; acquisitionId: string | null;
-  itemIds: string[]; listingIds: string[];
-}
-export const emptyManifestSession = (): ManifestSession => ({ name: '', key: '', lines: [], assumptions: { ...DEFAULT_LOT_ASSUMPTIONS },
-  warnings: [], strategy: 'grouped', paidHammer: '', acquisitionId: null, itemIds: [], listingIds: [] });
+import { emptyManifestSession, type ManifestSession } from '@/services/manifestSessionService';
+export { emptyManifestSession, type ManifestSession } from '@/services/manifestSessionService';
 interface ManifestOpportunityContextValue { scope: string; draft: ManifestSession; setDraft: Dispatch<SetStateAction<ManifestSession>> }
 export const ManifestOpportunityContext = createContext<ManifestOpportunityContextValue | undefined>(undefined);
 export function ManifestOpportunityProvider({ children }: { children: ReactNode }) {

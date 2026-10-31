@@ -28,6 +28,18 @@ function mockQuery(data:unknown,error:unknown=null){
   return query;
 }
 describe('Persistent watched manifests, separate from inventory',()=>{
+  test('optional auction link is preserved with the manifest and restored',()=>{
+    const original=session();original.auctionUrl='https://jobalots.com/auctions/pallet?lot=123';
+    const snapshot=createWatchedLotSnapshot(scope,original);
+    const decoded=decodeWatchedLotSnapshot(JSON.stringify(snapshot),scope,key);
+    expect(decoded.draft.auctionUrl).toBe(original.auctionUrl);
+    expect(restoreWatchedLotSession(decoded).auctionUrl).toBe(original.auctionUrl);
+  });
+  test('old snapshots without an auction link still open; unsafe links fail before saving',()=>{
+    const snapshot=createWatchedLotSnapshot(scope,session());delete snapshot.draft.auctionUrl;
+    expect(restoreWatchedLotSession(decodeWatchedLotSnapshot(JSON.stringify(snapshot),scope,key)).auctionUrl).toBe('');
+    expect(()=>createWatchedLotSnapshot(scope,{...session(),auctionUrl:'javascript:alert(1)'})).toThrow();
+  });
   test('round trip retains every manifest field, assumptions and exact saved base valuation',()=>{
     const original=session();original.assumptions.currentBid=100;original.assumptions.inbound=100;
     original.lines[0].packSize=5;original.lines[0].specifics=[{name:'Brand',value:'Example'}];
@@ -91,6 +103,7 @@ describe('Cloud watch operations',()=>{
     expect(client.from).toHaveBeenCalledWith('watched_lots');
     expect(query.upsert).toHaveBeenCalledWith(expect.objectContaining({user_id:scope.userId,niche_id:scope.nicheId}),{onConflict:'user_id,tenant_id,niche_id,manifest_key'});
     expect(query.upsert.mock.calls[0][0]).not.toHaveProperty('lines');
+    expect(query.upsert.mock.calls[0][0].auction_url).toBeNull();
     expect(upload.mock.calls[0][2]).toEqual({contentType:'application/json',upsert:false});
     expect(upload.mock.invocationCallOrder[0]).toBeLessThan(query.upsert.mock.invocationCallOrder[0]);
   });

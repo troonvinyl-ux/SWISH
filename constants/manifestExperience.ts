@@ -1,11 +1,12 @@
 import type { LotAssumptions } from '@/services/lotEconomicsService';
-export type ManifestPhase = 'choosing' | 'reading' | 'checking' | 'planning' | 'saving' | 'categories';
+export type ManifestPhase = 'choosing' | 'reading' | 'checking' | 'planning' | 'saving' | 'categories' | 'watching';
 export const MANIFEST_PHASES: Record<ManifestPhase, { title: string; detail: string; icon: string }> = {
   choosing: { title: 'Bring on your manifest…', detail: 'Choose the list that came with your lot.', icon: 'upload-file' },
   reading: { title: 'Fetching your manifest…', detail: 'Opening your file and reading the products.', icon: 'description' },
   checking: { title: 'Checking your manifest…', detail: 'Counting products and spotting details to double-check.', icon: 'fact-check' },
   planning: { title: 'Finding the best way to sell…', detail: 'Comparing singles, packs and the whole lot. A little magic, a lot of maths.', icon: 'auto-awesome' },
   saving: { title: 'Getting your lot ready…', detail: 'Saving your purchase and preparing listings for your review.', icon: 'inventory-2' },
+  watching: { title: 'Keeping this one for later…', detail: 'Saving your list and buying ceiling. Nothing is being purchased.', icon: 'bookmark' },
   categories: { title: 'Finding its place on eBay…', detail: 'Checking where this product belongs and what buyers need to know.', icon: 'storefront' },
 };
 export const LOT_STEPS = ['Add your list', 'Tell us the bid', 'See your plan'] as const;

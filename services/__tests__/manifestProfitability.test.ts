@@ -133,14 +133,15 @@ describe('Suggested bid is not a binary claim of profitability', () => {
 });
 
 describe('Budget-free shared workspace contracts (not device tests)', () => {
-  test('UI no longer asks for budget and explains costs and break-even', () => {
+  test('simple UI stays budget-free and distinguishes buying ceilings from take-home profit', () => {
     const ui = fs.readFileSync(path.resolve(__dirname, '../../components/feature/ManifestOpportunityWorkspace.tsx'), 'utf8');
     expect(ui).not.toContain('draft.assumptions.budget');
     expect(ui).not.toContain('Total spending limit');
     expect(ui).not.toContain('Profit you want');
-    expect(ui).toContain('Suggested maximum bid');
-    expect(ui).toContain('Break-even bid');
-    expect(ui).toContain('evaluation.labourCost');
+    expect(ui).toContain('simpleAdvice.suggestedBid');
+    expect(ui).toContain('evaluation.base.maximumHammerBid');
+    expect(ui).toContain('not take-home profit');
+    expect(ui).not.toContain('Break-even bid');
   });
   test('optional target stays available without reintroducing a budget field', () => {
     const fields = LOT_COST_GROUPS.flatMap(group => group.fields.map(field => field.key));

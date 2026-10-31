@@ -5,19 +5,20 @@ import { resolveProductionNiche } from './nicheRouting';
 import { DEFAULT_LOT_ASSUMPTIONS, evaluateManifestLot, type LotLine } from './lotEconomicsService';
 import { emptyManifestSession, type ManifestSession } from './manifestSessionService';
 import type { LotBasePrice } from './lotBasePriceService';
+import { normaliseAuctionUrl } from './auctionLinkService';
 
 export interface WatchedLotScope { userId: string; tenantId: string; nicheId: string }
 export interface WatchedLot {
   id: string; user_id: string; tenant_id: string; niche_id: string; manifest_key: string; name: string;
   product_count: number; unit_count: number; base_valuation: LotBasePrice; engine_version: string;
-  snapshot_path: string; created_at: string; updated_at: string;
+  snapshot_path: string; created_at: string; updated_at: string; auction_url?: string | null;
 }
-export type WatchedManifestDraft = Pick<ManifestSession, 'name' | 'key' | 'lines' | 'assumptions' | 'warnings' | 'strategy'>;
+export type WatchedManifestDraft = Pick<ManifestSession, 'name' | 'key' | 'lines' | 'assumptions' | 'warnings' | 'strategy'> & { auctionUrl?: string }; 
 export interface WatchedLotSnapshot {
   version: number; scope: WatchedLotScope; savedAt: string; engineVersion: string;
   draft: WatchedManifestDraft; base: LotBasePrice;
 }
-const fields = 'id,user_id,tenant_id,niche_id,manifest_key,name,product_count,unit_count,base_valuation,engine_version,snapshot_path,created_at,updated_at';
+const fields = 'id,user_id,tenant_id,niche_id,manifest_key,name,product_count,unit_count,base_valuation,engine_version,snapshot_path,created_at,updated_at,auction_url';
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const manifestKey = /^[a-f0-9]{64}$/;
 const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -57,6 +58,8 @@ function validateDraft(value: unknown): asserts value is WatchedManifestDraft {
     || !stringArray(value.warnings) || !['individual','grouped','whole'].includes(String(value.strategy)) || !isObject(value.assumptions)) {
     throw new Error('Check your list before saving it to watched lots.');
   }
+  if (value.auctionUrl !== undefined && typeof value.auctionUrl !== 'string') throw new Error('Check your auction-page link.');
+  normaliseAuctionUrl(value.auctionUrl as string | undefined);
   const assumptions = value.assumptions;
   for (const key of Object.keys(DEFAULT_LOT_ASSUMPTIONS)) {
     const number = assumptions[key];
@@ -79,7 +82,7 @@ export function createWatchedLotSnapshot(scope: WatchedLotScope, session: Manife
   // Explicit allowlist excludes actual paid prices, inventory and listing IDs.
   const { budget: _legacyBudget, ...assumptions } = session.assumptions;
   const draft: WatchedManifestDraft = { name: session.name.trim().slice(0,200), key: session.key, lines: session.lines,
-    assumptions, warnings: session.warnings, strategy: session.strategy };
+    assumptions, warnings: session.warnings, strategy: session.strategy, auctionUrl: normaliseAuctionUrl(session.auctionUrl) };
   validateDraft(draft);
   const evaluation = evaluateManifestLot(draft.lines, draft.assumptions);
   return JSON.parse(JSON.stringify({ version: WATCHED_LOT_SNAPSHOT_VERSION, scope, savedAt,
@@ -105,12 +108,12 @@ export function decodeWatchedLotSnapshot(text: string, scope: WatchedLotScope, k
   validateDraft(value.draft);
   if (value.draft.key !== key) throw new Error('This saved plan does not match the selected lot.');
   // Strip unexpected purchase fields even if an older/tampered payload includes them.
-  const { name, lines, assumptions, warnings, strategy } = value.draft;
+  const { name, lines, assumptions, warnings, strategy, auctionUrl } = value.draft;
   return { version: value.version, scope, savedAt: value.savedAt, engineVersion: value.engineVersion,
-    base: value.base, draft: { name, key, lines, assumptions, warnings, strategy } };
+    base: value.base, draft: { name, key, lines, assumptions, warnings, strategy, auctionUrl: normaliseAuctionUrl(auctionUrl) } };
 }
 export function restoreWatchedLotSession(snapshot: WatchedLotSnapshot): ManifestSession {
-  return { ...emptyManifestSession(), ...snapshot.draft, restoredWatchAt: snapshot.savedAt, watchedBidNeedsRefresh: true };
+  return { ...emptyManifestSession(), ...snapshot.draft, auctionUrl: normaliseAuctionUrl(snapshot.draft.auctionUrl), restoredWatchAt: snapshot.savedAt, watchedBidNeedsRefresh: true };
 }
 export async function listWatchedLots(scope: WatchedLotScope, offset = 0): Promise<{ rows: WatchedLot[]; hasMore: boolean }> {
   validateWatchedLotScope(scope);
@@ -134,7 +137,7 @@ export async function saveWatchedLot(scope: WatchedLotScope, session: ManifestSe
   const { data, error } = await client.from('watched_lots').upsert({ user_id:scope.userId,tenant_id:scope.tenantId,niche_id:scope.nicheId,
     manifest_key:snapshot.draft.key,name:snapshot.draft.name,product_count:snapshot.draft.lines.length,
     unit_count:snapshot.draft.lines.reduce((total,line)=>total+line.quantity,0),base_valuation:snapshot.base,
-    engine_version:snapshot.engineVersion,snapshot_path:path,updated_at:snapshot.savedAt },
+    engine_version:snapshot.engineVersion,snapshot_path:path,updated_at:snapshot.savedAt,auction_url:snapshot.draft.auctionUrl || null },
     { onConflict:'user_id,tenant_id,niche_id,manifest_key' }).select(fields).single();
   if (error || !data) throw new Error('Saving is not confirmed. Retry this same lot to avoid a duplicate.');
   const row = data as WatchedLot;
@@ -159,6 +162,7 @@ export async function openWatchedLot(scope: WatchedLotScope, id: string): Promis
   if (!response.ok) throw new Error('Your saved manifest could not download. Try again.');
   const text = await response.text();
   const snapshot = decodeWatchedLotSnapshot(text,scope,row.manifest_key);
+  if (normaliseAuctionUrl(row.auction_url) !== normaliseAuctionUrl(snapshot.draft.auctionUrl)) throw new Error('The saved auction link and list do not match. Refresh your shortlist.');
   // Metadata and file must be the same revision; no hidden recalculation of the saved ceiling.
   if (JSON.stringify(snapshot.base) !== JSON.stringify(row.base_valuation)) {
     const same = Object.keys(snapshot.base).every(key => snapshot.base[key as keyof LotBasePrice] === row.base_valuation[key as keyof LotBasePrice]);
