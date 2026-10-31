@@ -992,7 +992,7 @@ function SellTab() {
         </View>
       </View>
       {[
-        { icon: 'receipt-long', label: 'My Listings', sub: 'Active and draft eBay listings', color: '#E53238', route: '/(tabs)/listings' as any },
+        { icon: 'receipt-long', label: 'My Listings', sub: 'Drafts, live and ended clothing listings', color: '#E53238', route: '/ebay-admin' as any },
         { icon: 'checkroom', label: 'My Wardrobe', sub: 'All clothing items in inventory', color: TF.pink, route: '/(tabs)/inventory' as any },
         { icon: 'local-shipping', label: 'Orders', sub: 'Manage and dispatch orders', color: Colors.info, route: '/orders' as any },
         { icon: 'storefront', label: 'eBay Hub', sub: 'Messages, finances, returns', color: '#E53238', route: '/ebay-hub' as any },
