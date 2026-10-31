@@ -1,6 +1,6 @@
 // SWISH Master Admin — owner-only platform control centre.
 import React, { useState } from 'react';
-import { Alert, View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { Alert, Linking, View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import * as Updates from 'expo-updates';
 import { Redirect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -9,14 +9,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/template';
 import { useApp } from '@/hooks/useApp';
 import { isSwishMasterAdmin } from '@/contexts/AppContext';
-import { PRODUCTION_NICHES } from '@/constants/niches';
+import { PRODUCTION_NICHES, NICHE_MODULES } from '@/constants/niches';
 import { Colors, Typography, Spacing, Radius } from '@/constants/theme';
 
 export default function MasterAdminScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { activeNicheId, enabledNiches, setActiveNiche, isMasterAdmin, tenant, subscriptionTier } = useApp();
+  const { activeNicheId, enabledNiches, isMasterAdmin, tenant, subscriptionTier } = useApp();
   const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   const checkForAppUpdate = async () => {
