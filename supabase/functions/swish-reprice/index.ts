@@ -33,19 +33,15 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed.' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
 
   try {
     const apiKey = Deno.env.get('ONSPACE_AI_API_KEY');
     const baseUrl = Deno.env.get('ONSPACE_AI_BASE_URL');
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-
-    if (!apiKey || !baseUrl) {
-      return new Response(
-        JSON.stringify({ error: 'OnSpace AI not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
 
     // ── Auth + Tenant Security (HARDENED) ────────────────────────────────────
     const authHeader = req.headers.get('Authorization');
@@ -66,7 +62,10 @@ Deno.serve(async (req) => {
     }
 
     // ── Parse request ─────────────────────────────────────────────────────────
-    const body: RepriceRequest = await req.json();
+    let body: RepriceRequest;
+    try { body = await req.json(); } catch {
+      return new Response(JSON.stringify({ error: 'Invalid request body.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     const { listing_id, tenant_id, niche_id } = body;
     const allowedSpecialists = typeof niche_id === 'string' ? REPRICE_NICHE_SPECIALISTS[niche_id] : undefined;
 
@@ -139,6 +138,10 @@ Deno.serve(async (req) => {
     }
     if (body.action && body.action !== 'suggest') {
       return new Response(JSON.stringify({ error: 'Unsupported repricing action.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    if (!apiKey || !baseUrl) {
+      return new Response(JSON.stringify({ error: 'Repricing service is temporarily unavailable.' }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     // Calculate days listed
