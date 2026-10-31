@@ -1,4 +1,5 @@
 import React from 'react';
+import { View } from 'react-native';
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AlertProvider, AuthProvider } from '@/template';
@@ -13,8 +14,10 @@ export default function MasterAdminRootLayout() {
       <SafeAreaProvider>
         <AuthProvider>
           <AppProvider>
-            <Stack screenOptions={{ headerShown: false }} />
-            <GlobalAccountControls />
+            <View style={{ flex: 1 }}>
+              <Stack screenOptions={{ headerShown: false }} />
+              <GlobalAccountControls />
+            </View>
           </AppProvider>
         </AuthProvider>
       </SafeAreaProvider>
