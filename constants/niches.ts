@@ -165,8 +165,8 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     tagline: 'Identify, value and sell antiques & collectibles',
     description: 'AI-powered antique identification and valuation for dealers, pickers, and collectors across ceramics, furniture, silver, jewellery, art, and decorative arts.',
     icon: 'museum',
-    color: '#D97706',
-    accentColor: '#B45309',
+    color: '#D8AD52',
+    accentColor: '#9C742E',
     specialists: NICHE_MODULES.antiques.specialists as SpecialistId[],
     defaultSpecialist: 'antiques',
     terms: {
