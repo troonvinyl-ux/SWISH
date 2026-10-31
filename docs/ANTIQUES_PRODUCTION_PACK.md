@@ -32,7 +32,7 @@ Deliver Antique Flipper as a specialist experience on the existing SWISH engine.
 | 13 | Review Listing | Create Listing review stage | Review and save draft / submit through existing lifecycle |
 | 14 | Listings | Inventory lifecycle tabs and existing eBay hub | Niche-scoped listing status and eBay management |
 | 15 | Sold Items & Orders | Inventory sold tab + existing `orders` | Existing sold item and order records |
-| 16 | More / Settings | `app/antique-more.tsx` | Antique settings, eBay connection, price decay, guides and owner diagnostics |
+| 16 | More / Settings | `app/(tabs)/antique-more.tsx` | Antique settings, eBay connection, price decay, guides and owner diagnostics |
 
 The create-listing stages and capture/identification stages are intentionally implemented using the existing shared workflows rather than duplicating them into separate one-off screens.
 
