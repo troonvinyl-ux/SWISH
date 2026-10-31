@@ -65,7 +65,7 @@ These routes are not substitutes for any of the 16 numbered screens. They must b
 - [ ] Add locally bundled neutral garment thumbnails for offline/empty states; the current editorial images are remotely hosted and therefore require connectivity.
 - [x] Standardise category photography into consistent cropped image tiles; inventory garment imagery remains 3:4 where supplied.
 
-The capture flow now has four functional photo slots and a separate checklist screen. The additional product/category photography remains a pre-merge visual asset task.
+The capture flow now has four functional photo slots, a separate checklist screen and a dedicated four-part photography guide. Editorial category photography is implemented; local offline fallbacks and actual runtime screenshot sign-off remain open.
 
 ## Known issue found during code inspection
 
