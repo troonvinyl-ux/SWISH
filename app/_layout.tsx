@@ -4,6 +4,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AlertProvider, AuthProvider } from '@/template';
 import { AppProvider } from '@/contexts/AppContext';
 import { ManifestOpportunityProvider } from '@/contexts/ManifestOpportunityContext';
+import { WatchedLotsProvider } from '@/contexts/WatchedLotsContext';
+import { Colors } from '@/constants/theme';
 import { NicheRouteBoundary } from '@/components/layout/NicheRouteBoundary';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useCallback } from 'react';
@@ -81,6 +83,7 @@ export default function RootLayout() {
         <AuthProvider>
           <AppProvider>
             <ManifestOpportunityProvider>
+            <WatchedLotsProvider>
             <TVBackHandlerProvider>
               <NicheRouteBoundary>
               <Stack screenOptions={{ headerShown: false }}>
@@ -89,6 +92,7 @@ export default function RootLayout() {
                 <Stack.Screen name="login" />
                 <Stack.Screen name="onboarding" />
                 <Stack.Screen name="lot-opportunity" />
+                <Stack.Screen name="watched-lots" options={{ headerShown: true, title: 'Watched lots', headerStyle: { backgroundColor: Colors.surface }, headerTintColor: Colors.textPrimary, headerShadowVisible: false }} />
                 <Stack.Screen name="item/[id]" />
                 <Stack.Screen name="acquisition/[id]" />
                 <Stack.Screen name="opportunities" />
@@ -144,6 +148,7 @@ export default function RootLayout() {
               </Stack>
               </NicheRouteBoundary>
             </TVBackHandlerProvider>
+            </WatchedLotsProvider>
             </ManifestOpportunityProvider>
           </AppProvider>
         </AuthProvider>

@@ -10,7 +10,7 @@ Decomposing collections, pallets and job lots is a core capability in every SWIS
 - Scientific/rounded or invalid-checksum EANs are omitted from listings; collisions between different manifest rows are flagged. No missing digits invented.
 - Editable expected/conservative product prices; explicit RRP-derived assumptions; ungraded-return and conflicting-specification warnings.
 - Current hammer bid, bid count, remaining minutes and actual next-bid increment inputs. Competition never inflates intrinsic value. No auction bids are placed and no auction feed is implied.
-- Expected/conservative profit, all-in ROI, selling costs, break-even and maximum hammer ceilings, with Research / Potential opportunity / Swerve / Ended states.
+- Expected/conservative profit, all-in ROI, selling costs, break-even and suggested maximum hammer ceilings, with Research / Potential opportunity / Caution / Swerve / Ended states. Personal budgets are not used in analysis or bid ceilings. A positive usual estimate alongside a cautious loss is labelled risk, not falsely described as no possible profit.
 - Units per identical-SKU pack, explicit pack prices or a labelled discount, residual individual units, and an optional user-entered whole-lot sale price. Different SKU variants are never silently merged. Arbitrary cross-SKU curated bundles are not yet supported.
 - Deterministic title/description and eBay draft proposals, on-demand existing eBay category suggestions, required item-specific inputs, preserved brand/attributes and missing-field checks. No AI is needed for this analysis and no new paid API was introduced.
 - Purchased-lot save is an atomic `swish_import_manifest_lot` RPC on the existing acquisitions/items/listings tables. It retains membership and paid-niche RLS, uses a tenant+niche+SHA-256 manifest lock, and reopens existing records on retry rather than creating duplicates.
@@ -20,13 +20,21 @@ Decomposing collections, pallets and job lots is a core capability in every SWIS
 - Shared category-response normalization retains both native `localizedAspectName` and existing taxonomy `name/required` fields, avoiding lost mandatory specifics.
 - Navigation retains an in-memory, account/tenant/niche-scoped analysis. It does not make AI/market calls on ordinary navigation. Analysis is not durable across closing/reloading the app until a purchased lot is saved. Large lists use FlatList; file/XLSX loading is deferred until requested.
 
-## Calculation contract
+## Current base maximum (`manifest-lot-v3`)
+The primary buying ceiling now uses eligible manifest retail value × 40% ÷ 2.25, less inbound delivery. Entered buyer premium and non-recoverable auction tax further reduce the hammer allowance. Buyer-paid outgoing postage is excluded from this fixed base rule. Budgets, optional profit preferences, time and bid activity never change it.
+The base is distinct from a lower manual next-bid suggestion and the extra-cost cautious guide below. A zero cautious result no longer overwrites a positive base ceiling. A current bid is optional for revealing the base; no auction monitoring, bidding or win prediction is implemented.
+See `MANIFEST_BASE_MAXIMUM.md` for the exact formula, rounding, examples, test coverage and outstanding device checks.
+
+## Separate extra-cost calculation contract
 Let N be scenario resale proceeds after marketplace fees, seller postage and packaging. Let F be inbound delivery + holding + repairs + contingency + labour on every manifest unit, including excluded/damaged goods. Let M=(1+buyer premium)*(1+non-recoverable auction VAT).
 
 - All-in deployment = hammer*M + F.
 - Profit after valued labour = N - all-in deployment.
 - ROI = profit / all-in deployment, where non-zero.
-- Maximum hammer = floor-to-pennies(max(0, (min(N-minimum profit, N/(1+minimum ROI), all-in budget)-F)/M)).
+- Suggested maximum hammer = floor-to-pennies(max(0, (min(N-optional minimum profit, N/(1+profit cushion))-F)/M)). No personal budget is used, including legacy saved budget values.
+- Break-even hammer = floor-to-pennies(max(0, (N-F)/M)); a zero result can mean costs already consume recovery, not that the stock is worthless.
+- New analyses default to no minimum cash profit requirement and a labelled 50% return cushion for the suggested bid. Optional cushion settings never change the actual scenario profit.
+- `manifest-lot-v3` snapshots record both the fixed base result and the budget-independent extra-cost calculation. A loss in the usual estimate produces Swerve; usual profit with a cautious loss or a next bid above the cushion produces Caution. RRP-only values remain explicitly provisional.
 - The recommended ceiling uses the best conservative exit. Asking/RRP scenarios are not sold transactions. Recovery and sell-through are user assumptions, not learned probabilities. Unsold residual stock is assigned no revenue in the selected scenario; no future sale is promised.
 - VAT is an effective user-entered non-recoverable auction charge, not a complete tax calculation. Sales VAT, insurance and unusual marketplace fees must be included in entered costs/rates. Default 15% + £0.40 is an illustrative fee assumption, not a current category-specific eBay quote.
 
@@ -35,7 +43,7 @@ The reproducible condensed example has **9 product rows, 25 manifest units and �
 
 All products are customer returns with no usable grade. Rounded barcodes repeat across unrelated products; these cannot be used as reliable product identities. The action-camera resolution and drill-bit count conflict between title and description. The returned helmet is excluded from unit/pack resale estimates until competent safety/provenance verification. Heated/electrical products require actual safety/function checks; no therapeutic or CE claim is verified by the manifest.
 
-No current bid, bid count or remaining time was supplied. A live-auction verdict therefore cannot honestly be claimed. With the illustrative default prices/yields/postage/labour, the unit/pack scenario has **no positive recommended hammer ceiling**. Adjusting assumptions is not market verification: investigate actual prices, fees, item condition and seller checkout terms before bidding.
+No current bid, bid count or remaining time was supplied. A live-auction verdict therefore cannot honestly be claimed. With the illustrative extra-cost yields/labour, a cautious scenario can still have **no positive recommended hammer ceiling**, separately from the retail-based base maximum. New product prices start at 40% of retail and seller-postage expense defaults to zero because the buyer pays outgoing postage. Adjusting assumptions is not market verification: investigate actual prices, fees, item condition and seller checkout terms before bidding.
 
 ## Research used
 - Jobalots terms: https://jobalots.com/en/policies/terms-of-service?currency=gbp — B2B/as-is RAW returns; supplier descriptions/images and quantities have limitations; bids bind buyers; actual proxy increments/checkout charges must be checked.
