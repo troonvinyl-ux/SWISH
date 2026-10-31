@@ -143,7 +143,7 @@ describe('SWISH eBay finance scope refresh coordination', () => {
     expect(finance).toContain('needsRefresh || (needsFinanceScopeRefresh && hasRefreshCredentials)');
   });
 
-  test('scope-restricted sync refresh clears the finance-scope marker', () => {
+  test('no-scope sync refresh preserves the existing broad finance consent', () => {
     expect(sync).toContain('Omit scope: preserve the full consented permissions');
     expect(sync).toContain('financeScopeRefreshedAt: new Date().toISOString()');
     expect(sync).not.toContain("scope: 'https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.fulfillment https://api.ebay.com/oauth/api_scope/sell.account'");
