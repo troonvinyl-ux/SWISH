@@ -9,6 +9,9 @@ on:
         default: true
   pull_request:
     paths:
+      - '.github/workflows/publish-swish-ota.yml'
+      - '.github/workflows/publish-ota-update.yml'
+      - '.github/workflows/build-swish-suite.yml'
       - 'app/master-admin.tsx'
       - 'master-admin-app/**'
       - 'app.config.js'
@@ -22,6 +25,13 @@ on:
   push:
     branches: [main]
     paths:
+      - '.github/workflows/publish-swish-ota.yml'
+      - '.github/workflows/publish-ota-update.yml'
+      - '.github/workflows/build-swish-suite.yml'
+      - '.github/workflows/build-niche-apk.yml'
+      - 'components/layout/GlobalAccountControls.tsx'
+      - 'app.config.js'
+      - 'master-admin-app/**'
       - 'app/master-admin.tsx'
       - 'services/__tests__/**'
       - 'constants/niches.ts'
@@ -144,6 +154,8 @@ jobs:
   master-admin-shell-bundle:
     name: Lightweight Master Admin shell bundle
     runs-on: ubuntu-latest
+    env:
+      EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -160,7 +172,7 @@ jobs:
         env:
           SWISH_MASTER_ADMIN: '1'
         run: |
-          npx expo config --type public > /tmp/swish-master-admin-config.json
+          npx expo config --type public --json > /tmp/swish-master-admin-config.json
           node -e "const c=require('/tmp/swish-master-admin-config.json'); if(c.android?.package!=='com.swish.masteradmin') throw Error('Wrong Master Admin package'); if(!c.plugins?.some(p=>Array.isArray(p)&&p[0]==='expo-router'&&p[1]?.root==='master-admin-app')) throw Error('Master Admin route root not isolated');"
       - name: Bundle lightweight Master Admin Android routes
         env:
