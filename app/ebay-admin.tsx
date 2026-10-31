@@ -1743,7 +1743,7 @@ export default function EbayAdminScreen() {
     } finally {
       setImageRefreshing(false);
     }
-  }, [tenant, imageRefreshing, showAlert]);
+  }, [tenant, nicheId, imageRefreshing, showAlert]);
 
   // ── Import orders ──────────────────────────────────────────────────────────
 
