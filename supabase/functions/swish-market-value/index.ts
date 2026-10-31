@@ -48,6 +48,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { decryptCredentials, encryptCredentials } from '../_shared/credentialCrypto.ts';
 import { specialistNiche, profileForSpecialist } from '../_shared/specialistRegistry.ts';
+import { requirePaidNiche, nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
+import { fetchManifestSoldComparisons } from '../_shared/manifestSoldComparisons.ts';
 
 const EBAY_TOKEN_URL      = 'https://api.ebay.com/identity/v1/oauth2/token';
 const EBAY_BROWSE_BASE    = 'https://api.ebay.com/buy/browse/v1';
@@ -66,7 +68,7 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 // ── Auth ──────────────────────────────────────────────────────────────────────
 async function verifyTenantAccess(
   supabase: ReturnType<typeof adminClient>, authHeader: string | null, tenantId: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: false; error: string } | { ok: true; account: { id: string; email?: string } }> {
   if (!authHeader) return { ok: false, error: 'Authentication required.' };
   const token = authHeader.replace('Bearer ', '').trim();
   if (!token || token === Deno.env.get('SUPABASE_ANON_KEY')) return { ok: false, error: 'Authentication required.' };
@@ -76,7 +78,7 @@ async function verifyTenantAccess(
     if (error || !user) return { ok: false, error: 'Invalid authentication token.' };
     const { data: member } = await supabase.from('tenant_memberships').select('id').eq('tenant_id', tenantId).eq('user_id', user.id).maybeSingle();
     if (!member) return { ok: false, error: 'Access denied.' };
-    return { ok: true };
+    return { ok: true, account: { id: user.id, email: user.email ?? undefined } };
   } catch { return { ok: false, error: 'Authentication could not be verified.' }; }
 }
 
@@ -1147,6 +1149,14 @@ Deno.serve(async (req: Request) => {
   const sec = await verifyTenantAccess(supabase, authHeader, tenantId);
   if (!sec.ok) return jsonResponse({ error: sec.error }, authHeader ? 403 : 401);
 
+  if (body.route === 'manifest_sold_comparisons') {
+    try {
+      await requirePaidNiche(supabase, sec.account, tenantId, body.nicheId);
+    } catch (error) {
+      return nicheAccessResponse(error) ?? jsonResponse({ error: 'Subscription verification failed.' }, 500);
+    }
+  }
+
   const cleanTitle = sanitiseTitle(title);
   console.log(`[SWISH Market v7] title="${cleanTitle}" specialist=${specialistId}`);
 
@@ -1155,6 +1165,18 @@ Deno.serve(async (req: Request) => {
   if (!creds) {
     return jsonResponse({ error: 'eBay is not connected. Connect eBay in Marketplaces to enable market valuation.' }, 400);
   }
+  if (body.route === 'manifest_sold_comparisons') {
+    const sold = await fetchManifestSoldComparisons(creds.clientId, creds.clientSecret, title.trim());
+    return jsonResponse({
+      source: 'ebay_marketplace_insights',
+      status: sold.status,
+      query: title.trim(),
+      checkedAt: sold.checkedAt,
+      items: sold.items,
+      message: sold.message,
+    });
+  }
+
   console.log(`[SWISH Market v7] Token: expires=${creds.expiresAt} hasAnalyticsScope=${creds.hasAnalyticsScope}`);
 
   // ── Item ownership and niche isolation ─────────────────────────────────────
