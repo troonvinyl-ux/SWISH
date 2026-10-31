@@ -64,6 +64,7 @@ function isValidImageUrl(url: string): boolean {
  */
 async function refreshAllEbayImages(
   tenantId: string,
+  specialistIds: string[],
   onProgress: (p: ImageRefreshProgress) => void,
 ): Promise<void> {
   const supabase = getSupabaseClient();
@@ -71,8 +72,9 @@ async function refreshAllEbayImages(
   // Find all listings with external eBay IDs
   const { data: listingRows } = await supabase
     .from('listings')
-    .select('id, item_id, external_listing_id')
+    .select('id, item_id, external_listing_id, items!inner(specialist_id)')
     .eq('tenant_id', tenantId)
+    .in('items.specialist_id', specialistIds)
     .not('external_listing_id', 'is', null)
     .neq('external_listing_id', '');
 
@@ -1735,7 +1737,7 @@ export default function EbayAdminScreen() {
     setImageRefreshing(true);
     setImageProgress({ current: 0, total: 0, updated: 0, failed: 0, done: false });
     try {
-      await refreshAllEbayImages(tenant.id, p => setImageProgress(p));
+      await refreshAllEbayImages(tenant.id, getProductionNicheSpecialistIds(nicheId), p => setImageProgress(p));
     } catch (e: any) {
       showAlert('Image Refresh Failed', e?.message ?? 'Unknown error');
     } finally {
