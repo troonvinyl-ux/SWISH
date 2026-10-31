@@ -175,7 +175,7 @@ jobs:
           EXPO_NO_DOTENV: '1'
         run: |
           npx expo config --type public --json > /tmp/swish-master-admin-config.json
-          node -e "const c=require('/tmp/swish-master-admin-config.json'); if(c.android?.package!=='com.swish.masteradmin') throw Error('Wrong Master Admin package'); if(!c.plugins?.some(p=>Array.isArray(p)&&p[0]==='expo-router'&&p[1]?.root==='master-admin-app')) throw Error('Master Admin route root not isolated');"
+          node -e "const c=require('/tmp/swish-master-admin-config.json'); if(c.android?.package!=='com.swish.inventory') throw Error('Master Admin must preserve its existing install identity'); if(!c.plugins?.some(p=>Array.isArray(p)&&p[0]==='expo-router'&&p[1]?.root==='master-admin-app')) throw Error('Master Admin route root not isolated');"
       - name: Bundle lightweight Master Admin Android routes
         env:
           SWISH_NICHE: ''
