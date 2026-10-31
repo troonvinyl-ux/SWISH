@@ -85,10 +85,17 @@ export default function MasterDiagnosticsScreen() {
     const result = await submitListingToMarketplace(tenant.id, created.listing.id);
     if (!result.success || !result.externalListingId) {
       // A timeout can mean eBay accepted the listing but the response was lost.
-      // Keep the local record for reconciliation; never delete an unknown outcome.
+      // Keep unknown outcomes for reconciliation; clean up definite preflight failures.
       const { data: uncertain } = await getSupabaseClient().from('listings').select('*').eq('id', created.listing.id).eq('tenant_id', tenant.id).maybeSingle();
-      if (uncertain) setListing({ ...created.listing, status: uncertain.status ?? 'pending', externalListingId: uncertain.external_listing_id ?? undefined });
-      return fail('create', (result.error ?? 'eBay did not confirm a live listing ID.') + ' The test record was retained because the marketplace outcome may be unknown. Reconcile eBay before retrying.');
+      const reason = result.error ?? 'eBay did not confirm a live listing ID.';
+      const outcomeUnknown = /timeout|timed out|unknown outcome|not yet confirmed|reconcile/i.test(reason);
+      if (outcomeUnknown) {
+        if (uncertain) setListing({ ...created.listing, status: uncertain.status ?? 'pending', externalListingId: uncertain.external_listing_id ?? undefined });
+        return fail('create', reason + ' The test record was retained because the marketplace outcome may be unknown. Reconcile eBay before retrying.');
+      }
+      await deleteListing(created.listing.id, tenant.id);
+      setListing(null);
+      return fail('create', reason + ' No listing was confirmed; the local test draft was removed.');
     }
     const { data: persisted, error } = await getSupabaseClient().from('listings').select('id,status,external_listing_id,title,price').eq('id', created.listing.id).eq('tenant_id', tenant.id).maybeSingle();
     if (error || !persisted || !['active','live'].includes(String(persisted.status).toLowerCase()) || !persisted.external_listing_id || persisted.title !== title || Number(persisted.price) !== price) {
@@ -143,8 +150,10 @@ export default function MasterDiagnosticsScreen() {
     if (ended.error) return fail('delete', 'eBay end failed. The test record has been retained for reconciliation: ' + ended.error);
     const removed = await deleteListing(listing.id, tenant.id);
     if (removed.error) return fail('delete', 'eBay listing ended, but SWISH test record cleanup failed: ' + removed.error);
+    const { data: remaining, error: verifyDeleteError } = await getSupabaseClient().from('listings').select('id').eq('id', listing.id).eq('tenant_id', tenant.id).maybeSingle();
+    if (verifyDeleteError || remaining) return fail('delete', 'eBay listing was ended, but SWISH could not confirm removal of its test record.');
     setCheck('delete', 'passed'); setListing(null); setExternalId('');
-    setMessage('DELETE passed: eBay confirmed the listing was ended and the SWISH test listing record was removed. The inventory item remains untouched.');
+    setMessage('DELETE passed: eBay confirmed the listing was ended and SWISH confirmed its test record was removed. The inventory item remains untouched.');
     setBusy(false);
   };
 
@@ -192,7 +201,7 @@ export default function MasterDiagnosticsScreen() {
           <Pressable disabled={busy || !listing || checks.create !== 'passed' || checks.modify === 'passed'} onPress={() => void modifyTestListing()} style={[styles.action, styles.actionAlt, (busy || !listing || checks.create !== 'passed' || checks.modify === 'passed') && styles.disabled]}>
             <MaterialIcons name="edit" size={19} color="#111"/><Text style={styles.actionText}>Modify eBay listing</Text>
           </Pressable>
-          <Pressable disabled={busy || !listing || checks.modify !== 'passed'} onPress={() => void deleteTestListing()} style={[styles.action, styles.actionDanger, (busy || !listing || checks.modify !== 'passed') && styles.disabled]}>
+          <Pressable disabled={busy || !listing || !externalId} onPress={() => void deleteTestListing()} style={[styles.action, styles.actionDanger, (busy || !listing || !externalId) && styles.disabled]}>
             <MaterialIcons name="delete-forever" size={19} color="#111"/><Text style={styles.actionText}>End & delete test listing</Text>
           </Pressable>
           <Pressable disabled={busy} onPress={reset} style={styles.secondary}><MaterialIcons name="restart-alt" size={17} color={Colors.primary}/><Text style={styles.secondaryText}>Reset test results</Text></Pressable>
