@@ -22,8 +22,11 @@ module.exports = ({ config }) => {
     return name === 'expo-router' ? ['expo-router', { ...(Array.isArray(plugin) ? plugin[1] : {}), root: routeRoot }] : plugin;
   });
   if (!plugins.some(plugin => (Array.isArray(plugin) ? plugin[0] : plugin) === 'expo-router')) plugins.push(['expo-router', { root: routeRoot }]);
+  const webBaseUrl = process.env.SWISH_WEB_BASE_URL;
   return {
-    ...baseConfig, plugins, name: niche.name,
+    ...baseConfig,
+    ...(webBaseUrl ? { experiments: { ...(baseConfig.experiments || {}), baseUrl: webBaseUrl } } : {}),
+    plugins, name: niche.name,
     slug: process.env.SWISH_OTA_PUBLISH === '1' ? 'swish' : niche.slug,
     scheme: niche.scheme,
     ios: { ...config.ios, bundleIdentifier: niche.iosBundleIdentifier },
