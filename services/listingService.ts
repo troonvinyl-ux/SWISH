@@ -777,3 +777,22 @@ export async function publishGeneratedListings(
   }
   return results;
 }
+
+
+// Publish already-created drafts in a deliberate sequential batch. The existing
+// listing IDs are reused, so bulk publish cannot create duplicate draft records.
+export async function submitListingsInBulk(
+  tenantId: string,
+  listingIds: string[],
+  onItemStep?: (listingId: string, step: SubmitStep) => void,
+): Promise<Array<{ listingId: string; result: SubmitResult }>> {
+  const uniqueIds = [...new Set(listingIds.filter(id => typeof id === 'string' && id.trim()))];
+  const results: Array<{ listingId: string; result: SubmitResult }> = [];
+  for (const listingId of uniqueIds) {
+    const result = await submitListingToMarketplace(
+      tenantId, listingId, step => onItemStep?.(listingId, step),
+    );
+    results.push({ listingId, result });
+  }
+  return results;
+}
