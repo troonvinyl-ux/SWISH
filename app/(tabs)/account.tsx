@@ -13,8 +13,8 @@ export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { isMasterAdmin, activeNicheId, fixedNicheId } = useApp();
-  if ((fixedNicheId ?? activeNicheId) === 'antiques') return <Redirect href="/antique-more" />;
   const [signingOut, setSigningOut] = useState(false);
+  if ((fixedNicheId ?? activeNicheId) === 'antiques') return <Redirect href="/antique-more" />;
   const owner = isMasterAdmin && isSwishMasterAdmin(user?.email);
 
   const signOut = async () => {
