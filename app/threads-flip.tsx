@@ -393,7 +393,7 @@ function IdentifyTab({
     if (identifying) return (
       <View testID="threads-flip-screen-05" accessibilityLabel="Threads Flip screen 05 AI identification" style={{ flex: 1, padding: Spacing.base, justifyContent: 'center', gap: Spacing.lg }}>
         <View style={id.processingHero}><View style={id.processingRing}><MaterialIcons name="checkroom" size={42} color={TF.pink} /></View><Text style={id.resultTitle}>Identifying Item…</Text><Text style={id.heroSub}>{processingStatus || 'Analysing your garment photos'}</Text></View>
-        {['Analysing photos…', 'Identifying brand…', 'Reading label…', 'Determining category…', 'Finding item specifics…'].map((step, index) => <View key={step} style={id.aiRow}><MaterialIcons name={index < 4 ? 'check-circle' : 'radio-button-unchecked'} size={16} color={index < 4 ? TF.success : TF.pink} /><Text style={id.aiText}>{step}</Text></View>)}
+        {['Analysing photos…', 'Identifying brand…', 'Reading label…', 'Determining category…', 'Finding item specifics…'].map((step, index) => <View key={step} style={id.aiRow}><MaterialIcons name={index === 0 ? 'radio-button-checked' : 'radio-button-unchecked'} size={16} color={index === 0 ? TF.pink : TF.textMuted} /><Text style={id.aiText}>{step}</Text></View>)}
       </View>
     );
     if (reviewingPhotos) return (
