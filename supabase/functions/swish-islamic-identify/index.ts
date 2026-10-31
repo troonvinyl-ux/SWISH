@@ -530,7 +530,7 @@ async function searchNumistaIslamicSilver(
   const referenceMatch =
     referenceText.match(/\bN\s*#\s*(\d{1,9})\b/i) ??
     referenceText.match(/numista\.com\/(?:catalogue\/index\.php\?r=)?(\d{1,9})/i) ??
-    referenceText.match(/\\bnumista\\s*(?:type\\s*)?(?:id\\s*[:#=]?\\s*)(\\d{1,9})\\b/i);
+    referenceText.match(/\bnumista\s*(?:type\s*)?(?:id\s*[:#=]?\s*)(\d{1,9})\b/i);
   const suppliedReferenceId = referenceMatch ? Number(referenceMatch[1]) : null;
   const queries = [
     primaryQuery,
