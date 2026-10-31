@@ -14,7 +14,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
-import registry from '../../../niche-modules.json' with { type: 'json' };
+import registry from '../_shared/niche-modules.json' with { type: 'json' };
 import { corsHeaders } from '../_shared/cors.ts';
 
 const EBAY_TRADING_API_URL   = 'https://api.ebay.com/ws/api.dll';
