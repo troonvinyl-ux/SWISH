@@ -201,8 +201,7 @@ async function handleDispatch(
         quantity: li.quantity ?? 1,
       }));
     } else {
-      const errText = await orderResp.text().catch(() => '');
-      console.log(`[SWISH Dispatch] eBay order fetch ${orderResp.status}: ${errText.slice(0, 200)}`);
+      console.warn(`[SWISH Dispatch] eBay order lookup returned HTTP ${orderResp.status}.`);
       // If 404, the order may not be a Managed Payments order — fall through to local-only
       if (orderResp.status === 404) {
         console.warn(`[SWISH Dispatch] eBay order ${ebayOrderId} not found via Fulfillment API — local update only`);
@@ -270,19 +269,7 @@ async function handleDispatch(
       console.log(`[SWISH Dispatch] eBay fulfillment 204 (success, no content) for order ${ebayOrderId}`);
     } else {
       // FAILURE: eBay rejected the fulfillment — parse the error
-      let parsedError = `eBay Fulfillment API returned ${fulfillResp.status}`;
-      try {
-        const errData = JSON.parse(responseText);
-        const errors: any[] = errData.errors ?? [];
-        if (errors.length > 0) {
-          const messages = errors.map(e => e.message ?? e.longMessage ?? e.errorId ?? 'unknown error');
-          parsedError = `eBay rejected dispatch (HTTP ${fulfillResp.status}).`;
-        } else if (errData.message) {
-          parsedError = `eBay rejected dispatch (HTTP ${fulfillResp.status}).`;
-        }
-      } catch {
-        parsedError = `eBay Fulfillment API error (HTTP ${fulfillResp.status}).`;
-      }
+      const parsedError = `eBay rejected dispatch (HTTP ${fulfillResp.status}).`;
 
       ebayFulfillmentError = parsedError;
 
@@ -423,7 +410,7 @@ async function handleGetShipping(
       },
     );
     if (!resp.ok) {
-      const errText = await resp.text().catch(() => '');
+      await resp.text().catch(() => '');
       return jsonResponse({ error: `eBay shipping lookup failed (HTTP ${resp.status}).` }, resp.status >= 500 ? 503 : 400);
     }
     const data = await resp.json();
