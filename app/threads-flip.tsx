@@ -1176,7 +1176,7 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
           <MaterialIcons name="checkroom" size={16} color={TF.pink} />
         </Pressable>
       </View>
-      <View style={main.tabBar}>
+      {activeTab !== 'home' ? <View style={main.tabBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={main.tabBarContent}>
           {TABS.map(tab => {
             const active = activeTab === tab.id;
@@ -1190,7 +1190,7 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
             );
           })}
         </ScrollView>
-      </View>
+      </View> : null}
       <View style={{ flex: 1 }}>
         {activeTab === 'home' ? <HomeTab isPremium={isPremium} onTabSelect={handleTabSelect} onUpgrade={() => setShowPaywall(true)} tenant={tenant} /> : null}
         {activeTab === 'identify' ? (
