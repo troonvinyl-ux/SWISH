@@ -61,7 +61,7 @@ const InventoryCard = memo(function InventoryCard({ item, tab, config, onOpen, o
 export default function MasterInventoryScreen() {
   const state = useMasterInventory(); const router = useRouter();
   const { tenant, businessConfig } = useApp(); const { showAlert } = useAlert();
-  const [bulkListing, setBulkListing] = useState(false);
+  const [bulkListing, setBulkListing] = useState(false); const [singleListingId, setSingleListingId] = useState<string | null>(null);
   const [search, setSearch] = useState(''); const [filter, setFilter] = useState('');
   const [showReValue, setShowReValue] = useState(false); const [showReIdentify, setShowReIdentify] = useState(false);
   const [progress, setProgress] = useState<any>(null);
@@ -73,6 +73,24 @@ export default function MasterInventoryScreen() {
     return (!search.trim() || haystack.includes(search.trim().toLowerCase())) && (state.activeTab !== 'stock' || !filter || haystack.includes(filter));
   }), [state.views, state.activeTab, search, filter]);
   const closeBulk = () => { setShowReIdentify(false); setShowReValue(false); setProgress(null); void state.reload(); };
+  const runSingleListing = async (item: InventoryViewItem) => {
+    if (!tenant?.id || bulkListing || singleListingId) return;
+    setSingleListingId(item.id);
+    try {
+      const [result] = await publishGeneratedListings([{
+        itemId: item.id, tenantId: tenant.id,
+        categoryId: String(item.attributes?.ebay_category_id ?? '') || undefined,
+      }]);
+      if (result?.success) {
+        showAlert('Listed on eBay', `${item.canonical_title} is confirmed live${result.externalListingId ? ` · #${result.externalListingId}` : ''}.`);
+      } else {
+        showAlert(result?.listing ? 'Draft saved — not live yet' : 'Listing needs attention', result?.error ?? 'eBay did not confirm publication. Check the saved draft before retrying.');
+      }
+      await state.reload();
+    } catch (error: any) {
+      showAlert('Listing failed', error?.message ?? 'The listing could not be completed. Check eBay before retrying.');
+    } finally { setSingleListingId(null); }
+  };
   const runBulkListing = () => {
     if (!tenant?.id || bulkListing || data.length < 2) return;
     const action = async () => {
@@ -146,7 +164,7 @@ export default function MasterInventoryScreen() {
       {state.error ? <Text style={s.error}>{state.error}</Text> : null}
       <FlatList style={s.flex} data={data} keyExtractor={item => `${state.activeTab}-${item.id}-${item.listing?.id ?? ''}`} showsVerticalScrollIndicator={false} contentContainerStyle={s.list} refreshing={state.refreshing} onRefresh={state.refresh}
         ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
-        renderItem={({ item }) => <InventoryCard item={item} tab={state.activeTab} config={config} onOpen={() => router.push(`/stock-listing/${item.id}` as any)} onAction={() => state.activeTab === 'stock' ? router.push(`/create-listing?id=${item.id}` as any) : state.activeTab === 'draft' ? void state.submit(item) : state.end(item)} />}
+        renderItem={({ item }) => <InventoryCard item={item} tab={state.activeTab} config={config} onOpen={() => router.push(`/stock-listing/${item.id}` as any)} onAction={() => state.activeTab === 'stock' ? void runSingleListing(item) : state.activeTab === 'draft' ? void state.submit(item) : state.end(item)} />}
         ListEmptyComponent={<View style={s.empty}><MaterialIcons name={config.icon as any} size={40} color={config.color} /><Text style={s.emptyTitle}>{state.loading ? 'Loading inventory...' : `No ${state.activeTab === 'stock' ? config.terms.items.toLowerCase() + ' in stock' : state.activeTab + ' items'}`}</Text>
           <Text style={s.emptyText}>{search ? 'Try another search or filter.' : state.activeTab === 'stock' ? 'Capture an item to start preparing a listing.' : state.activeTab === 'draft' ? 'Tap List on an in-stock item to create a draft.' : state.activeTab === 'sold' ? 'Sold records appear after order synchronization.' : 'Submit a draft to publish it on eBay.'}</Text>
           {state.activeTab === 'stock' ? <Pressable onPress={() => router.push('/(tabs)/scan' as any)} style={[s.emptyButton, { backgroundColor: config.color }]}><Text style={s.buttonText}>Add {config.terms.item}</Text></Pressable> : state.activeTab === 'sold' ? <Pressable onPress={state.syncSold} style={[s.emptyButton, { backgroundColor: config.color }]}><Text style={s.buttonText}>{state.syncing ? 'Syncing...' : 'Sync from eBay'}</Text></Pressable> : null}
