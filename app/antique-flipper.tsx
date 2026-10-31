@@ -6,7 +6,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useApp } from '@/hooks/useApp';
 import { useInventory } from '@/hooks/useInventory';
-import { Colors, Spacing, Typography, Radius } from '@/constants/theme';
+import { Spacing, Typography, Radius } from '@/constants/theme';
 import { BrandArtwork } from '@/components/feature/BrandArtwork';
 
 const GOLD = '#D8AD52';
