@@ -114,6 +114,9 @@ Deno.serve(async (req) => {
     // Applying a repricing change is authorised and bounded on the server. Never
     // trust the client-side niche preflight as the write boundary.
     if (body.action === 'apply') {
+      if (!['active', 'published', 'draft'].includes(String(listing.status ?? '').toLowerCase())) {
+        return new Response(JSON.stringify({ error: 'Only active, published or draft listings can be repriced.' }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
       const newPrice = Number(body.new_price);
       if (!Number.isFinite(newPrice) || newPrice <= 0) {
         return new Response(JSON.stringify({ error: 'A valid positive price is required.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
