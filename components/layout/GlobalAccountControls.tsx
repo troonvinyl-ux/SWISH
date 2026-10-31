@@ -33,7 +33,7 @@ export function GlobalAccountControls() {
   const hidden = !user || pathname === '/login' || pathname.startsWith('/onboarding');
   if (hidden) return null;
 
-  const owner = isMasterAdmin && isSwishMasterAdmin(user.email);
+  const owner = isMasterAdmin && isSwishMasterAdmin(user?.email);
 
   const signOut = async () => {
     if (operationLoading) return;
@@ -91,7 +91,7 @@ export function GlobalAccountControls() {
             <View style={styles.heading}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.title}>SWISH account</Text>
-                <Text style={styles.email}>{user.email}</Text>
+                <Text style={styles.email}>{user?.email ?? 'Signed-in account'}</Text>
               </View>
               <Pressable accessibilityLabel="Close account menu" onPress={() => setVisible(false)} style={styles.close}>
                 <MaterialIcons name="close" size={21} color={Colors.textSecondary} />
