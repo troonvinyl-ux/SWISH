@@ -60,6 +60,22 @@ export function useGenericCapture() {
     } catch(e:any) { if(current.current===scope) setError(e?.message ?? 'Photo capture failed.'); }
     finally { lock.current=false; if(current.current===scope) { setBusy(false); setPhase(''); } }
   },[scope,slots,ready,visible.savedId]);
+  const addCapturedPhoto=useCallback(async (slotId:string, selected:{uri:string;width?:number;height?:number})=>{
+    const slot=slots.find(item=>item.id===slotId);
+    if(!slot || !selected.uri || !ready || visible.savedId || lock.current) return;
+    lock.current=true;
+    try {
+      if(selected.width && selected.height && Math.min(selected.width,selected.height)<320) throw new Error('This photo has too little detail. Move closer and try again.');
+      const photoQuality=await inspectPhotoQuality(selected.uri);
+      const image=await retainCaptureImage({ ...selected,photoQuality,slotId,slotLabel:slot.label });
+      if(current.current===scope) { setAllowPhotoWarnings(false); setDraft(previous=>({ ...previous,images:[...previous.images.filter(item=>item.slotId!==slotId),image],result:null })); }
+    } catch(e:any) { if(current.current===scope) setError(e?.message ?? 'Could not keep this photograph.'); }
+    finally { lock.current=false; }
+  },[slots,ready,visible.savedId,scope]);
+  const removeCapturedPhoto=useCallback((slotId:string)=>{
+    if(busy || visible.savedId) return;
+    setDraft(previous=>({ ...previous,images:previous.images.filter(image=>image.slotId!==slotId),result:null }));
+  },[busy,visible.savedId]);
   const identify=useCallback(async ()=>{
     if(!tenant || lock.current || !ready || !visible.images.length || visible.savedId) return;
     lock.current=true; setBusy(true); setPhase('Analysing specialist evidence'); setError(null);
@@ -109,5 +125,5 @@ export function useGenericCapture() {
     finally { lock.current=false; if(current.current===scope) { setBusy(false); setPhase(''); } }
   },[tenant?.id,visible,scope,reviewedResult,triggerInventoryReload]);
   const reset=useCallback(()=>{ if(busy) return; const clear=()=>{ setDraft(emptyDraft(activeNiche.defaultSpecialist));setError(null);setAllowPhotoWarnings(false); }; if(visible.savedId) clear(); else showAlert('Discard capture draft?', 'Unsaved identification and selected photos will be removed from this draft. No inventory records are deleted.', [{ text:'Keep draft',style:'cancel' },{ text:'Discard draft',style:'destructive',onPress:clear }]); },[busy,activeNiche.defaultSpecialist,visible.savedId,showAlert]);
-  return { allowPhotoWarnings,setAllowPhotoWarnings,activeNiche,profile,slots,images:visible.images,result:visible.result,busy:busy || !ready,savedId:visible.savedId,error,phase,answers:visible.answers,mode:visible.mode,specialistId,capture,identify,save,reset,answer,correctTitle,changeMode,changeSpecialist };
+  return { allowPhotoWarnings,setAllowPhotoWarnings,activeNiche,profile,slots,images:visible.images,addCapturedPhoto,removeCapturedPhoto,result:visible.result,busy:busy || !ready,savedId:visible.savedId,error,phase,answers:visible.answers,mode:visible.mode,specialistId,capture,identify,save,reset,answer,correctTitle,changeMode,changeSpecialist };
 }
