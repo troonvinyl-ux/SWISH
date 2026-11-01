@@ -125,14 +125,20 @@ async function getEbayAccessToken(
       if (data.access_token) {
         const newExpiry = new Date(Date.now() + (data.expires_in ?? 7200) * 1000).toISOString();
         const updatedRef = await encryptCredentials({ ...creds, accessToken: data.access_token, expiresAt: newExpiry });
-        await supabase.from('marketplace_connectors')
+        const { data: persistedConnector, error: persistError } = await supabase.from('marketplace_connectors')
           .update({ credential_ref: updatedRef, access_token_expires_at: newExpiry, updated_at: new Date().toISOString() })
-          .eq('tenant_id', tenantId).eq('marketplace_id', 'ebay');
+          .eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').eq('credential_ref', conn.credential_ref).select('id').maybeSingle();
+        if (persistError || !persistedConnector) {
+          throw new Error('Refreshed eBay credentials could not be persisted securely.');
+        }
         creds = { ...creds, accessToken: data.access_token, expiresAt: newExpiry };
       }
     } catch (e: any) {
-      console.log(`[SWISH] Token refresh failed for messages: ${e.message}`);
-      // Continue with existing token — it may still be valid
+      // A failed credential write must fail closed; never use a token that was not persisted.
+      if (e instanceof Error && e.message === 'Refreshed eBay credentials could not be persisted securely.') throw e;
+      // Do not log raw exception text, which may contain provider response details.
+      console.warn('[SWISH] eBay token refresh failed for messages; retry or reconnect if expired.');
+      // For transient refresh-service failures, the existing token may still be valid.
     }
   }
 

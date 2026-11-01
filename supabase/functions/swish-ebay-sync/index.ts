@@ -102,14 +102,19 @@ async function getValidToken(supabase: ReturnType<typeof adminClient>, tenantId:
       const { accessToken, expiresAt: newExp } = await refreshToken(creds.clientId, creds.clientSecret, creds.refreshToken);
       const updatedCredentials = { ...creds, accessToken, expiresAt: newExp, financeScopeRefreshedAt: new Date().toISOString() };
       const updatedRef = await encryptCredentials(updatedCredentials);
-      const { error: tokenSaveError } = await supabase.from('marketplace_connectors').update({
+      const { data: persistedConnector, error: tokenSaveError } = await supabase.from('marketplace_connectors').update({
         credential_ref: updatedRef, access_token_expires_at: newExp,
         status: 'connected', last_error: null, updated_at: new Date().toISOString(),
-      }).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay');
-      if (tokenSaveError) throw new Error('Refreshed token could not be saved securely');
+      }).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').eq('credential_ref', conn.credential_ref).select('id').maybeSingle();
+      if (tokenSaveError || !persistedConnector) throw new Error('REFRESH_PERSIST_CONFLICT');
       creds = updatedCredentials;
       console.log('[EbaySync] Token refreshed successfully');
     } catch (e: any) {
+      // A compare-and-swap miss means another request may have refreshed the connector.
+      // Do not mark that newer valid state as requiring reauthorisation.
+      if (e instanceof Error && e.message === 'REFRESH_PERSIST_CONFLICT') {
+        throw new Error('RETRY: eBay credentials changed during refresh. Please retry.');
+      }
       await supabase.from('marketplace_connectors').update({ status: 'requires_reauth', last_error: 'Token refresh failed', updated_at: new Date().toISOString() })
         .eq('tenant_id', tenantId).eq('marketplace_id', 'ebay');
       throw new Error(`REQUIRES_REAUTH: Token refresh failed: ${e.message}`);
