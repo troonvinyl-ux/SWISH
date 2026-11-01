@@ -4,10 +4,14 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
+import { isSpecialistAllowedForReprice, REPRICE_NICHE_SPECIALISTS } from '../_shared/repriceNicheAccess.ts';
 
 interface RepriceRequest {
   listing_id: string;
   tenant_id: string;
+  niche_id: string;
+  action?: 'suggest' | 'apply';
+  new_price?: number;
 }
 
 interface RepriceResult {
@@ -29,19 +33,15 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed.' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
 
   try {
     const apiKey = Deno.env.get('ONSPACE_AI_API_KEY');
     const baseUrl = Deno.env.get('ONSPACE_AI_BASE_URL');
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-
-    if (!apiKey || !baseUrl) {
-      return new Response(
-        JSON.stringify({ error: 'OnSpace AI not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
 
     // ── Auth + Tenant Security (HARDENED) ────────────────────────────────────
     const authHeader = req.headers.get('Authorization');
@@ -62,11 +62,15 @@ Deno.serve(async (req) => {
     }
 
     // ── Parse request ─────────────────────────────────────────────────────────
-    const body: RepriceRequest = await req.json();
-    const { listing_id, tenant_id } = body;
+    let body: RepriceRequest;
+    try { body = await req.json(); } catch {
+      return new Response(JSON.stringify({ error: 'Invalid request body.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const { listing_id, tenant_id, niche_id } = body;
+    const allowedSpecialists = typeof niche_id === 'string' ? REPRICE_NICHE_SPECIALISTS[niche_id] : undefined;
 
-    if (!listing_id || !tenant_id) {
-      return new Response(JSON.stringify({ error: 'listing_id and tenant_id are required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    if (!listing_id || !tenant_id || !allowedSpecialists?.length) {
+      return new Response(JSON.stringify({ error: 'A valid listing, tenant and registered niche are required.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     // Verify the authenticated user is a member of the requested tenant
@@ -96,10 +100,48 @@ Deno.serve(async (req) => {
       );
     }
 
-    const item = listing.items;
+    const item = Array.isArray(listing.items) ? listing.items[0] : listing.items;
+    if (!isSpecialistAllowedForReprice(niche_id, item?.specialist_id)) {
+      console.warn('[SWISH Security] swish-reprice denied listing outside requested niche.');
+      return new Response(JSON.stringify({ error: 'Listing is not available in the requested niche.' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
     const currentPrice = Number(listing.price ?? 0);
     const floorPrice = Number(listing.floor_price ?? 0) || Number(item?.acquired_cost ?? 0) * 1.1;
     const ceilingPrice = Number(listing.ceiling_price ?? 0) || Number(item?.valuation_high ?? currentPrice * 1.5);
+
+    // Apply repricing only after server-side tenant and niche checks. The client-side
+    // preflight is for UX, not an authorization boundary.
+    if (body.action === 'apply') {
+      if (!['active', 'published', 'draft'].includes(String(listing.status ?? '').toLowerCase())) {
+        return new Response(JSON.stringify({ error: 'Only active, published or draft listings can be repriced.' }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const newPrice = Number(body.new_price);
+      if (!Number.isFinite(newPrice) || newPrice <= 0) {
+        return new Response(JSON.stringify({ error: 'A valid positive price is required.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      if (newPrice < floorPrice || newPrice > ceilingPrice) {
+        return new Response(JSON.stringify({ error: 'The requested price is outside the permitted floor and ceiling.' }), { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const { data: updatedListing, error: updateError } = await supabaseAdmin
+        .from('listings')
+        .update({ price: Math.round(newPrice * 100) / 100, updated_at: new Date().toISOString() })
+        .eq('id', listing_id)
+        .eq('tenant_id', tenant_id)
+        .select('id')
+        .maybeSingle();
+      if (updateError || !updatedListing) {
+        console.error('[SWISH Reprice] Server-side price update failed.');
+        return new Response(JSON.stringify({ error: 'Unable to apply this price change. Please reload and retry.' }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ success: true, listing_id, price: Math.round(newPrice * 100) / 100 }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    if (body.action && body.action !== 'suggest') {
+      return new Response(JSON.stringify({ error: 'Unsupported repricing action.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    if (!apiKey || !baseUrl) {
+      return new Response(JSON.stringify({ error: 'Repricing service is temporarily unavailable.' }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
     // Calculate days listed
     const listedDate = listing.published_at ?? listing.created_at;

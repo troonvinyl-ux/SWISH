@@ -270,7 +270,7 @@ export async function getAIRepriceSuggestion(
   if (!ownedListing) return { suggestion: null, error: 'Listing does not belong to the active niche.' };
 
   const { data, error } = await supabase.functions.invoke('swish-reprice', {
-    body: { listing_id: listingId, tenant_id: tenantId },
+    body: { listing_id: listingId, tenant_id: tenantId, niche_id: nicheId },
   });
 
   if (error) {
@@ -329,14 +329,21 @@ export async function applyReprice(
     .maybeSingle();
   if (ownershipError) return { error: ownershipError.message };
   if (!ownedListing) return { error: 'Listing does not belong to the active niche.' };
-  const { error } = await supabase
-    .from('listings')
-    .update({
-      price: newPrice,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', listingId);
-  return { error: error?.message ?? null };
+  const { data, error } = await supabase.functions.invoke('swish-reprice', {
+    body: { listing_id: listingId, tenant_id: tenantId, niche_id: nicheId, action: 'apply', new_price: newPrice },
+  });
+  if (error) {
+    if (error instanceof FunctionsHttpError) {
+      try {
+        const status = error.context?.status ?? 500;
+        return { error: status === 403 ? 'This listing is not available in the active niche.' : 'Unable to apply this price change. Please reload and retry.' };
+      } catch {
+        return { error: 'Unable to apply this price change. Please reload and retry.' };
+      }
+    }
+    return { error: 'Unable to apply this price change. Please reload and retry.' };
+  }
+  return { error: data?.success ? null : 'The server did not confirm the price update.' };
 }
 
 // ── Scan & create exceptions for stale listings ───────────────────────────────
