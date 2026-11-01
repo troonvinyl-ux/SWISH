@@ -58,7 +58,7 @@
           "id": "S1-05",
           "title": "Reconcile open PRs, branches and current main before implementation",
           "status": "IN PROGRESS",
-          "evidence": "Reconciled after PRs #67, #68, #69, #70, #71 and #72 merged. Current main: 6e7c9d6ced94dd7e03f48dce10aa63cb02e6cfcc. PRs #33, #40, #56 and #59 were closed as superseded after their targeted changes were ported to current main. Remaining open legacy PRs: #41, #49, #51 and #52; none has been merged, and each still requires a separate current-main audit before any integration."
+          "evidence": "Reconciled after PRs #67–#75. Current main: 035439c8fe50fce18be224c854e163d2bdc6bf4c. PR #74 merged the durable niche-snapshot read path into eBay Hub metrics; PR #75 registered Production Control in the isolated Master Admin route tree. PRs #33, #40, #51, #56 and #59 were closed as superseded after targeted changes were ported. Remaining open legacy PRs: #41 (old Master Dashboard APK), #49 (production-pack documentation), #52 (multi-marketplace foundation); all remain unmerged pending separate review."
         }
       ]
     },
@@ -305,6 +305,10 @@
     {
       "date": "2026-11-01",
       "change": "Merged PR #70 (b799685) for mandatory Android regression gates, safe OTA release-note handling and Master Admin APK identity verification; merged PR #71 (1ea2776) for safe eBay Post-Order errors; merged PR #72 (6e7c9d6) for durable niche/specialist/category attribution in the existing sales ledger. Closed stale PRs #33, #40, #56 and #59 as superseded after targeted reimplementation; no stale branch was merged or force-pushed. Remaining open legacy PRs #41, #49, #51 and #52 remain under review."
+    },
+    {
+      "date": "2026-11-01",
+      "change": "Merged PR #74 (3f6f1a0): eBay Hub now prefers durable sale-time niche attribution with a guarded legacy fallback and has labels/specialist fallbacks for all ten niches. Merged PR #75 (035439c): registered the owner-only Production Control route inside the isolated Master Admin APK route tree. Master Admin readiness, niche-routing and all ten web export checks passed; no APK was built. Remaining open legacy PRs are #41, #49 and #52; #51 was closed as superseded."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"
