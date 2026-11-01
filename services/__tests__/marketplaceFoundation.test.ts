@@ -84,8 +84,7 @@ describe('normalized marketplace financial ledger migration', () => {
 
   it('restricts client access to tenant-scoped reads and service-role writes', () => {
     expect(migration).toContain('alter table public.marketplace_financial_events enable row level security');
-    expect(migration).toContain('tm.tenant_id = marketplace_financial_events.tenant_id');
-    expect(migration).toContain('tm.user_id = auth.uid()');
+    expect(migration).toContain('marketplace_financial_events.tenant_id in (select public.swish_user_tenant_ids())');
     expect(migration).toContain('revoke all on public.marketplace_financial_events from public, anon, authenticated');
     expect(migration).toContain('grant select on public.marketplace_financial_events to authenticated');
     expect(migration).toContain('grant all on public.marketplace_financial_events to service_role');
