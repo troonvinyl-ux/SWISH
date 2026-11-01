@@ -4,6 +4,8 @@ import {
   getMarketplaceImplementationStatus,
   isMarketplaceProductionReady,
 } from '@/services/marketplaceReadiness';
+const root = path.resolve(__dirname, '../..');
+
 import {
   marketplaceFinancialEventKey,
   supportsMarketplaceOperation,
@@ -66,7 +68,6 @@ describe('marketplace adapter contract helpers', () => {
 });
 
 describe('normalized marketplace financial ledger migration', () => {
-  const root = path.resolve(__dirname, '../..');
   const migration = fs.readFileSync(
     path.join(root, 'supabase/migrations/20261101232000_marketplace_financial_events.sql'),
     'utf8',
