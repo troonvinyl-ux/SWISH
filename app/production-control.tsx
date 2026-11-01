@@ -20,7 +20,7 @@ const AMBER = '#F2B84B';
 type Task = { id: string; title: string; status: string; evidence?: string };
 type Stage = { id: string; name: string; status: string; goal: string; tasks: Task[] };
 type Register = { programme: string; stages: Stage[]; knownReleaseRisks: string[]; nicheCertification: { source: string; requiredAreas: string[] } };
-type Pull = { number: number; title: string; html_url: string; state: string; draft: boolean; mergeable: boolean | null; head: { ref: string; sha: string }; base: { ref: string; sha: string }; updated_at: string; user: { login: string }; body?: string };
+type Pull = { number: number; title: string; html_url: string; state: string; draft: boolean; mergeable: boolean | null; head: { ref: string; sha: string }; base: { ref: string; sha: string }; updated_at: string; user: { login: string }; body?: string; behindBy?: number; checkTotal?: number; checkPassed?: number; checkFailed?: number; checkPending?: number };
 type Run = { id: number; name: string; display_title: string; html_url: string; status: string; conclusion: string | null; head_branch: string; head_sha: string; created_at: string };
 type Niche = { id: string; name: string; entry?: string; specialists?: string[]; defaultSpecialist?: string };
 type Snapshot = { register: Register | null; niches: Niche[]; pulls: Pull[]; runs: Run[]; mainSha: string; refreshedAt: string; errors: string[] };
@@ -151,7 +151,7 @@ export default function ProductionControlScreen() {
       <Section title="PULL REQUEST CONTROL" subtitle="Live GitHub PR list · stale-base and mergeability warnings">
         {snapshot.pulls.length===0?<Text style={styles.body}>No open pull requests returned, or GitHub API is unavailable.</Text>:snapshot.pulls.map(p=>{const a=prAssessment(p);return <Pressable key={p.number} onPress={()=>open(p.html_url)} style={styles.prCard}>
           <View style={styles.prTop}><Text style={styles.prNumber}>#{p.number}</Text><Pill label={a.label} tone={a.tone}/></View>
-          <Text style={styles.prTitle}>{p.title}</Text><Text style={styles.muted}>{p.head.ref} → {p.base.ref} · updated {new Date(p.updated_at).toLocaleDateString()}</Text>
+          <Text style={styles.prTitle}>{p.title}</Text><Text style={styles.muted}>{p.head.ref} → {p.base.ref} · {p.behindBy === undefined ? 'base comparison unavailable' : p.behindBy + ' commits behind main'} · checks {p.checkPassed ?? 0}/{p.checkTotal ?? 0} passed · updated {new Date(p.updated_at).toLocaleDateString()}</Text>
           <Text style={styles.prLink}>Open pull request ↗</Text>
         </Pressable>;})}
         <Text style={styles.warningText}>Important: a changed base SHA is a warning to recheck, not proof of a stale branch. Before merge, compare the PR head against current main and rerun required checks. This dashboard does not merge PRs automatically.</Text>
