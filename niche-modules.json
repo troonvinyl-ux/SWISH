@@ -185,7 +185,8 @@
         "antique-restoration.tsx",
         "(tabs)/antique-more.tsx",
         "antique-condition.tsx",
-        "antique-value.tsx"
+        "antique-value.tsx",
+        "antique-capture.tsx"
       ]
     },
     "fossils": {
