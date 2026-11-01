@@ -23,7 +23,13 @@ type Register = { programme: string; stages: Stage[]; knownReleaseRisks: string[
 type Pull = { number: number; title: string; html_url: string; state: string; draft: boolean; mergeable: boolean | null; head: { ref: string; sha: string }; base: { ref: string; sha: string }; updated_at: string; user: { login: string }; body?: string; behindBy?: number; checkTotal?: number; checkPassed?: number; checkFailed?: number; checkPending?: number };
 type Run = { id: number; name: string; display_title: string; html_url: string; status: string; conclusion: string | null; head_branch: string; head_sha: string; created_at: string };
 type Niche = { id: string; name: string; entry?: string; specialists?: string[]; defaultSpecialist?: string };
-type Snapshot = { register: Register | null; niches: Niche[]; pulls: Pull[]; runs: Run[]; mainSha: string; refreshedAt: string; errors: string[] };
+type Snapshot = { register: Register | null; niches: Niche[]; pulls: Pull[]; openPullCount: number; runs: Run[]; mainSha: string; refreshedAt: string; errors: string[] };
+
+// Public GitHub REST is unauthenticated in the client (60 requests/hour). Cache a refresh briefly and enrich only the eight newest PRs.
+let cachedSnapshot: Snapshot | null = null;
+let cachedSnapshotAt = 0;
+const SNAPSHOT_CACHE_MS = 60_000;
+const PR_DETAIL_LIMIT = 8;
 
 const STAGES = [
   ['S1','Full architectural audit'],['S2','Foundation architecture and registry'],['S3','Foundation 1 — SWISH Core'],['S4','Foundation 2 — Standard resale workflow'],['S5','Foundation 3 — Niche specialisation'],['S6','Foundations 4–6 — Optional specialist capabilities'],['S7','Full production verification']
@@ -44,11 +50,16 @@ export default function ProductionControlScreen() {
   const { user } = useAuth();
   const { isMasterAdmin } = useApp();
   const insets = useSafeAreaInsets();
-  const [snapshot,setSnapshot] = useState<Snapshot>({register:null,niches:[],pulls:[],runs:[],mainSha:'',refreshedAt:'',errors:[]});
+  const [snapshot,setSnapshot] = useState<Snapshot>({register:null,niches:[],pulls:[],openPullCount:0,runs:[],mainSha:'',refreshedAt:'',errors:[]});
   const [loading,setLoading] = useState(true);
   const [expanded,setExpanded] = useState<string>('S1');
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (force = false) => {
+    if (!force && cachedSnapshot && Date.now() - cachedSnapshotAt < SNAPSHOT_CACHE_MS) {
+      setSnapshot(cachedSnapshot);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const errors: string[] = [];
     const settled = await Promise.allSettled([
@@ -67,7 +78,7 @@ export default function ProductionControlScreen() {
     const register = value<Register>(0);
     const modules = value<{products:Record<string,Niche>}>(1);
     const rawPulls = value<Pull[]>(2) ?? [];
-    const pulls = await Promise.all(rawPulls.slice(0,20).map(async (p) => {
+    const pulls = await Promise.all(rawPulls.slice(0,PR_DETAIL_LIMIT).map(async (p) => {
       const [comparison, checks] = await Promise.allSettled([
         getJson<{behind_by:number}>(API + '/repos/' + OWNER_REPO + '/compare/main...' + p.head.sha),
         getJson<{check_runs:Array<{status:string;conclusion:string|null}>}>(API + '/repos/' + OWNER_REPO + '/commits/' + p.head.sha + '/check-runs?per_page=100')
@@ -83,7 +94,10 @@ export default function ProductionControlScreen() {
     }));
     const runs = value<{workflow_runs:Run[]}>(3);
     const main = value<{sha:string}>(4);
-    setSnapshot({register,niches:Object.values(modules?.products ?? {}),pulls,runs:runs?.workflow_runs ?? [],mainSha:main?.sha ?? '',refreshedAt:new Date().toISOString(),errors});
+    const nextSnapshot: Snapshot = {register,niches:Object.values(modules?.products ?? {}),pulls,openPullCount:rawPulls.length,runs:runs?.workflow_runs ?? [],mainSha:main?.sha ?? '',refreshedAt:new Date().toISOString(),errors};
+    cachedSnapshot = nextSnapshot;
+    cachedSnapshotAt = Date.now();
+    setSnapshot(nextSnapshot);
     setLoading(false);
   },[]);
 
@@ -114,14 +128,14 @@ export default function ProductionControlScreen() {
 
   return <View style={styles.screen}>
     <StatusBar style="light" />
-    <ScrollView contentContainerStyle={[styles.content,{paddingTop:insets.top+Spacing.lg,paddingBottom:insets.bottom+36}]} refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={GOLD}/>}>
+    <ScrollView contentContainerStyle={[styles.content,{paddingTop:insets.top+Spacing.lg,paddingBottom:insets.bottom+36}]} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => { void refresh(true); }} tintColor={GOLD}/>}>
       <View style={styles.topline}>
         <View style={{flex:1}}>
           <Text style={styles.eyebrow}>SWISH / OWNER OPERATIONS</Text>
           <Text style={styles.title}>Production Control</Text>
           <Text style={styles.subtitle}>One source of truth. Evidence before green.</Text>
         </View>
-        <Pressable onPress={refresh} style={styles.refresh}><MaterialIcons name="refresh" size={23} color={GOLD}/></Pressable>
+        <Pressable onPress={() => { void refresh(true); }} style={styles.refresh}><MaterialIcons name="refresh" size={23} color={GOLD}/></Pressable>
       </View>
 
       <View style={styles.hero}>
@@ -129,7 +143,7 @@ export default function ProductionControlScreen() {
         <View style={styles.metrics}>
           <Metric label="VERIFIED TASKS" value={String(verified)} detail={`of ${allTasks.length} registered`}/>
           <Metric label="CURRENT STAGE" value={currentStage?.id ?? '—'} detail={currentStage?.name ?? 'No active stage'}/>
-          <Metric label="OPEN PULL REQUESTS" value={String(snapshot.pulls.length)} detail={`${readyPulls} mergeable flag`}/>
+          <Metric label="OPEN PULL REQUESTS" value={String(snapshot.openPullCount)} detail={`Enriching latest ${snapshot.pulls.length}; ${readyPulls} mergeable`}/>
           <Metric label="FAILED RECENT RUNS" value={String(failedRuns)} detail="Latest 20 workflow runs"/>
         </View>
         <View style={styles.progressTrack}><View style={[styles.progressFill,{width:`${readiness}%`} as any]}/></View>
@@ -171,7 +185,7 @@ export default function ProductionControlScreen() {
         <Text style={styles.muted}>Niche registration is not evidence of niche production readiness. Each product must pass the full certification matrix in the master register.</Text>
       </Section>
 
-      <Section title="PULL REQUEST CONTROL" subtitle="Live GitHub PR list · stale-base and mergeability warnings">
+      <Section title="PULL REQUEST CONTROL" subtitle={`Latest ${snapshot.pulls.length} of ${snapshot.openPullCount} open PRs · stale-base and mergeability warnings`}>
         {snapshot.pulls.length===0?<Text style={styles.body}>No open pull requests returned, or GitHub API is unavailable.</Text>:snapshot.pulls.map(p=>{const a=prAssessment(p);return <Pressable key={p.number} onPress={()=>open(p.html_url)} style={styles.prCard}>
           <View style={styles.prTop}><Text style={styles.prNumber}>#{p.number}</Text><Pill label={a.label} tone={a.tone}/></View>
           <Text style={styles.prTitle}>{p.title}</Text><Text style={styles.muted}>{p.head.ref} → {p.base.ref} · {p.behindBy === undefined ? 'base comparison unavailable' : p.behindBy + ' commits behind main'} · checks {p.checkPassed ?? 0}/{p.checkTotal ?? 0} passed · updated {new Date(p.updated_at).toLocaleDateString()}</Text>
