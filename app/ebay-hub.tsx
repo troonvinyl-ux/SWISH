@@ -466,6 +466,11 @@ function useNicheHubStyle(activeNicheId: string | null | undefined) {
     else if (['bicycles', 'cycling', 'bikes', 'bike_flipper'].includes(id)) niche = 'bicycles';
     else if (['clothing', 'fashion', 'trainers_sneakers', 'trainers', 'threads_flip'].includes(id)) niche = 'clothing';
     else if (['surplus_flip', 'surplus-flip', 'catalog_flip', 'catalog_surplus', 'surplus_trader'].includes(id)) niche = 'surplus_flip';
+    else if (['trading_cards', 'cards', 'card_flipper'].includes(id)) niche = 'trading_cards';
+    else if (['antiques', 'antique', 'antique_flipper'].includes(id)) niche = 'antiques';
+    else if (['fossils', 'fossil'].includes(id)) niche = 'fossils';
+    else if (['beauty', 'beauty_flipper'].includes(id)) niche = 'beauty';
+    else if (['tech', 'tech_flipper'].includes(id)) niche = 'tech';
   }
 
   // Always provide the strict product boundary even if a helper export is
@@ -477,6 +482,11 @@ function useNicheHubStyle(activeNicheId: string | null | undefined) {
     else if (niche === 'bicycles') specialistIds = ['bicycles'];
     else if (niche === 'clothing') specialistIds = ['clothing', 'trainers_sneakers'];
     else if (niche === 'surplus_flip') specialistIds = ['surplus_trader'];
+    else if (niche === 'trading_cards') specialistIds = ['pokemon_cards', 'trading_cards'];
+    else if (niche === 'antiques') specialistIds = ['antiques', 'books'];
+    else if (niche === 'fossils') specialistIds = ['fossils'];
+    else if (niche === 'beauty') specialistIds = ['beauty'];
+    else if (niche === 'tech') specialistIds = ['tech', 'retro_games', 'retro_consoles'];
   }
 
   if (niche === 'motocross') return { nicheId: niche, accent: '#FF5500', icon: 'two-wheeler' as const, label: 'MX', specialistIds };
@@ -484,7 +494,12 @@ function useNicheHubStyle(activeNicheId: string | null | undefined) {
   if (niche === 'clothing') return { nicheId: niche, accent: '#E91E8C', icon: 'checkroom' as const, label: 'Fashion', specialistIds };
   if (niche === 'surplus_flip') return { nicheId: niche, accent: '#14B8A6', icon: 'inventory-2' as const, label: 'Surplus', specialistIds };
   if (niche === 'coins') return { nicheId: niche, accent: Colors.primary, icon: 'toll' as const, label: 'Coins', specialistIds };
-  return { nicheId: null, accent: Colors.primary, icon: 'toll' as const, label: 'Select niche', specialistIds: [] as string[] };
+  if (niche === 'trading_cards') return { nicheId: niche, accent: '#8B5CF6', icon: 'style' as const, label: 'Cards', specialistIds };
+  if (niche === 'antiques') return { nicheId: niche, accent: '#B08D57', icon: 'museum' as const, label: 'Antiques', specialistIds };
+  if (niche === 'fossils') return { nicheId: niche, accent: '#A3A3A3', icon: 'science' as const, label: 'Fossils', specialistIds };
+  if (niche === 'beauty') return { nicheId: niche, accent: '#E91E8C', icon: 'face' as const, label: 'Beauty', specialistIds };
+  if (niche === 'tech') return { nicheId: niche, accent: '#38BDF8', icon: 'devices' as const, label: 'Tech', specialistIds };
+  return { nicheId: niche, accent: Colors.primary, icon: 'toll' as const, label: 'Select niche', specialistIds: [] as string[] };
 }
 
 function EbayHubScreenContent() {
