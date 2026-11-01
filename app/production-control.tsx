@@ -88,7 +88,7 @@ export default function ProductionControlScreen() {
   },[]);
 
   useEffect(() => { void refresh(); },[refresh]);
-  if (!isSwishMasterAdmin(user?.email) || !isMasterAdmin) return <Redirect href="/master-admin" />;
+  if (!isSwishMasterAdmin(user?.email) || !isMasterAdmin) return <Redirect href={"/master-admin" as any} />;
 
   const stages = snapshot.register?.stages ?? [];
   const taskCounts = stages.flatMap(s=>s.tasks).reduce((a,t)=>{a[t.status]=(a[t.status]??0)+1;return a;},{} as Record<string,number>);
