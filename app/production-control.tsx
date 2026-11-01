@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Redirect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -77,7 +77,7 @@ export default function ProductionControlScreen() {
   if (!isSwishMasterAdmin(user?.email) || !isMasterAdmin) return <Redirect href="/master-admin" />;
 
   const stages = snapshot.register?.stages ?? [];
-  const taskCounts = useMemo(() => stages.flatMap(s=>s.tasks).reduce((a,t)=>{a[t.status]=(a[t.status]??0)+1;return a;},{} as Record<string,number>),[stages]);
+  const taskCounts = stages.flatMap(s=>s.tasks).reduce((a,t)=>{a[t.status]=(a[t.status]??0)+1;return a;},{} as Record<string,number>);
   const allTasks = stages.flatMap(s=>s.tasks);
   const verified = taskCounts['VERIFIED'] ?? 0;
   const readiness = allTasks.length ? Math.round(verified / allTasks.length * 100) : 0;
