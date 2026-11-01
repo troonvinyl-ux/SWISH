@@ -46,7 +46,7 @@
           "id": "S1-03",
           "title": "Audit every registered niche for real functionality and isolation",
           "status": "IN PROGRESS",
-          "evidence": "niche-modules.json; constants/niches.ts"
+          "evidence": "PR #85 merged as 00aa203. All ten canonical entry routes, configured home routes and 18 dedicated route paths were checked against the app route tree. Corrected the Coins `coin-flipper` route filename to `coin-flipper.tsx` so exact-path filtering excludes it from other branded builds. Added `services/__tests__/nicheRouteRegistryIntegrity.test.ts`; all 25 checks passed. Remaining full niche workflow, prompt, attributes, inventory, web and runtime audits are still in progress."
         },
         {
           "id": "S1-04",
@@ -317,6 +317,10 @@
     {
       "date": "2026-11-01",
       "change": "Merged PR #78 (63a832a): marketplace recommendations now require both a verified production implementation and a connected publish-capable connector; unsupported Etsy/Amazon automated capabilities are disabled. Merged PR #82 (ac6961c) with 25/25 checks: added normalized credential-free marketplace adapter contracts, operation-capability helpers, idempotency keys and architecture documentation without a schema migration or changes to eBay flows. Audited and closed PRs #81 and #83: their proposed normalized finance ledger table was not approved for rollout; PR #81 also had a root-scope regression test defect that failed 848-test regression gate. Closed stale PR #52 and superseded #41/#49/#51; the production-pack standard document is already on main. Current main ac6961c2528a66ba0e53ae4f84aa54e09bd179bd; no open PRs remain."
+    },
+    {
+      "date": "2026-11-01",
+      "change": "Merged PR #85 (00aa203) after 25/25 checks passed. Fixed a niche-isolation defect in niche-modules.json: Coins listed `coin-flipper` without `.tsx`, while the route preparation script filters exact file paths. Corrected and deduplicated the route entry; added registry integrity tests for all ten niche entry routes, declared homes and dedicated routes. No UI, database, auth, eBay, OTA or native release changes."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"
