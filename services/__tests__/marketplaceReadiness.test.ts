@@ -10,6 +10,7 @@ describe('marketplace implementation truth', () => {
   test('only eBay is represented as a production integration', () => {
     expect(isMarketplaceProductionReady('ebay')).toBe(true);
     expect(getMarketplaceImplementationStatus('ebay')).toBe('production');
+    expect(getMarketplaceStatusLabel('ebay')).toBe('Production integration');
     for (const id of ['amazon', 'vinted', 'etsy', 'depop', 'shopify', 'whatnot']) {
       expect(isMarketplaceProductionReady(id)).toBe(false);
       expect(getMarketplaceImplementationStatus(id)).toBe('planned');
