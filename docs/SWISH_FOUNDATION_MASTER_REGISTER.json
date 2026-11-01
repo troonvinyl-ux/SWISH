@@ -15,59 +15,260 @@
     "stalePullRequestsMustBeRechecked": true,
     "productionRequiresDeviceAndDeploymentEvidence": true
   },
-  "statuses": ["NOT STARTED", "IN PROGRESS", "IMPLEMENTED", "TESTING", "VERIFIED", "BLOCKED"],
+  "statuses": [
+    "NOT STARTED",
+    "IN PROGRESS",
+    "IMPLEMENTED",
+    "TESTING",
+    "VERIFIED",
+    "BLOCKED"
+  ],
   "stages": [
-    {"id":"S1","name":"Full architectural audit","status":"IN PROGRESS","goal":"Establish an evidence-based map of current architecture, shared services, niche modules, security boundaries and release blockers.","tasks":[
-      {"id":"S1-01","title":"Map app entry points, routes and build identities","status":"IMPLEMENTED","evidence":"docs/SWISH_ENGINEERING_HANDOVER.md; niche-modules.json"},
-      {"id":"S1-02","title":"Map shared services, hooks, backend functions and database dependencies","status":"IN PROGRESS","evidence":"docs/SWISH_ENGINEERING_HANDOVER.md; docs/SWISH_PRODUCT_DESIGN_ROADMAP.md"},
-      {"id":"S1-03","title":"Audit every registered niche for real functionality and isolation","status":"IN PROGRESS","evidence":"niche-modules.json; constants/niches.ts"},
-      {"id":"S1-04","title":"Record security, entitlement, eBay, finance, sync and release blockers","status":"IMPLEMENTED","evidence":"docs/SWISH_ENGINEERING_HANDOVER.md"},
-      {"id":"S1-05","title":"Reconcile open PRs, branches and current main before implementation","status":"IN PROGRESS","evidence":"Live GitHub data shown in SWISH Control"}
-    ]},
-    {"id":"S2","name":"Implement foundation architecture and registry","status":"NOT STARTED","goal":"Make existing architecture boundaries explicit and enforceable without creating duplicate registries or services.","tasks":[
-      {"id":"S2-01","title":"Define shared core/module boundaries against existing code","status":"NOT STARTED"},
-      {"id":"S2-02","title":"Extend existing niche-modules.json as the canonical module registry","status":"NOT STARTED"},
-      {"id":"S2-03","title":"Define typed contracts and dependency rules for niche extensions","status":"NOT STARTED"},
-      {"id":"S2-04","title":"Add architecture and cross-niche regression tests","status":"NOT STARTED"}
-    ]},
-    {"id":"S3","name":"Foundation 1 — SWISH Core","status":"NOT STARTED","goal":"Complete shared authentication, tenancy, storage, AI, capture, inventory, eBay, lifecycle, pricing, notifications and navigation foundations.","tasks":[
-      {"id":"S3-01","title":"Verify shared auth, tenant and server-side entitlement enforcement","status":"NOT STARTED"},
-      {"id":"S3-02","title":"Verify shared storage, image capture and AI service contracts","status":"NOT STARTED"},
-      {"id":"S3-03","title":"Verify shared inventory and lifecycle services","status":"NOT STARTED"},
-      {"id":"S3-04","title":"Verify secure eBay OAuth, listing, orders, messages and sync flows","status":"NOT STARTED"},
-      {"id":"S3-05","title":"Verify pricing, fees, profit, notifications and settings foundations","status":"NOT STARTED"}
-    ]},
-    {"id":"S4","name":"Foundation 2 — Standard resale workflow","status":"NOT STARTED","goal":"Deliver one complete, repeatable scan-to-sale workflow for every supported niche.","tasks":[
-      {"id":"S4-01","title":"Scan, identify, confidence and evidence","status":"NOT STARTED"},
-      {"id":"S4-02","title":"Condition, valuation and acquisition decision","status":"NOT STARTED"},
-      {"id":"S4-03","title":"Costs, margin, inventory and listing draft","status":"NOT STARTED"},
-      {"id":"S4-04","title":"eBay category, item specifics, edit, save and publish","status":"NOT STARTED"},
-      {"id":"S4-05","title":"Sales, fees, order reconciliation and profit","status":"NOT STARTED"}
-    ]},
-    {"id":"S5","name":"Foundation 3 — Niche specialisation","status":"NOT STARTED","goal":"Make each niche a distinct specialist configuration over shared foundations, with strict data and entitlement isolation.","tasks":[
-      {"id":"S5-01","title":"Validate specialist IDs, prompts and capture requirements per niche","status":"NOT STARTED"},
-      {"id":"S5-02","title":"Validate niche attributes, condition and measurements","status":"NOT STARTED"},
-      {"id":"S5-03","title":"Validate valuation sources, category mappings and listing templates","status":"NOT STARTED"},
-      {"id":"S5-04","title":"Verify niche inventory, routes, permissions and branding isolation","status":"NOT STARTED"}
-    ]},
-    {"id":"S6","name":"Foundations 4–6 — Optional specialist capabilities","status":"NOT STARTED","goal":"Add advanced intelligence, specialist business tools and unique niche engines only where justified by the niche.","tasks":[
-      {"id":"S6-01","title":"Select advanced intelligence capabilities by niche","status":"NOT STARTED"},
-      {"id":"S6-02","title":"Select specialist business tools by niche","status":"NOT STARTED"},
-      {"id":"S6-03","title":"Implement unique niche engines only where required","status":"NOT STARTED"},
-      {"id":"S6-04","title":"Test optional modules cannot contaminate unrelated niches","status":"NOT STARTED"}
-    ]},
-    {"id":"S7","name":"Full production verification","status":"NOT STARTED","goal":"Certify supported niches through automated, security, web, native, deployment and real-device evidence.","tasks":[
-      {"id":"S7-01","title":"Run full type, lint, unit, integration and regression suites","status":"NOT STARTED"},
-      {"id":"S7-02","title":"Verify tenant, niche, entitlement and credential security","status":"NOT STARTED"},
-      {"id":"S7-03","title":"Verify web parity and production deployment","status":"NOT STARTED"},
-      {"id":"S7-04","title":"Build and inspect release APKs only at release milestones","status":"NOT STARTED"},
-      {"id":"S7-05","title":"Complete real-device, live integration and operational acceptance","status":"NOT STARTED"},
-      {"id":"S7-06","title":"Close all critical/high defects and publish evidence-backed release verdict","status":"NOT STARTED"}
-    ]}
+    {
+      "id": "S1",
+      "name": "Full architectural audit",
+      "status": "IN PROGRESS",
+      "goal": "Establish an evidence-based map of current architecture, shared services, niche modules, security boundaries and release blockers.",
+      "tasks": [
+        {
+          "id": "S1-01",
+          "title": "Map app entry points, routes and build identities",
+          "status": "IMPLEMENTED",
+          "evidence": "docs/SWISH_ENGINEERING_HANDOVER.md; niche-modules.json"
+        },
+        {
+          "id": "S1-02",
+          "title": "Map shared services, hooks, backend functions and database dependencies",
+          "status": "IN PROGRESS",
+          "evidence": "docs/SWISH_ENGINEERING_HANDOVER.md; docs/SWISH_PRODUCT_DESIGN_ROADMAP.md"
+        },
+        {
+          "id": "S1-03",
+          "title": "Audit every registered niche for real functionality and isolation",
+          "status": "IN PROGRESS",
+          "evidence": "niche-modules.json; constants/niches.ts"
+        },
+        {
+          "id": "S1-04",
+          "title": "Record security, entitlement, eBay, finance, sync and release blockers",
+          "status": "IMPLEMENTED",
+          "evidence": "docs/SWISH_ENGINEERING_HANDOVER.md"
+        },
+        {
+          "id": "S1-05",
+          "title": "Reconcile open PRs, branches and current main before implementation",
+          "status": "IN PROGRESS",
+          "evidence": "Live GitHub data shown in SWISH Control"
+        }
+      ]
+    },
+    {
+      "id": "S2",
+      "name": "Implement foundation architecture and registry",
+      "status": "NOT STARTED",
+      "goal": "Make existing architecture boundaries explicit and enforceable without creating duplicate registries or services.",
+      "tasks": [
+        {
+          "id": "S2-01",
+          "title": "Define shared core/module boundaries against existing code",
+          "status": "NOT STARTED"
+        },
+        {
+          "id": "S2-02",
+          "title": "Extend existing niche-modules.json as the canonical module registry",
+          "status": "NOT STARTED"
+        },
+        {
+          "id": "S2-03",
+          "title": "Define typed contracts and dependency rules for niche extensions",
+          "status": "NOT STARTED"
+        },
+        {
+          "id": "S2-04",
+          "title": "Add architecture and cross-niche regression tests",
+          "status": "NOT STARTED"
+        }
+      ]
+    },
+    {
+      "id": "S3",
+      "name": "Foundation 1 — SWISH Core",
+      "status": "NOT STARTED",
+      "goal": "Complete shared authentication, tenancy, storage, AI, capture, inventory, eBay, lifecycle, pricing, notifications and navigation foundations.",
+      "tasks": [
+        {
+          "id": "S3-01",
+          "title": "Verify shared auth, tenant and server-side entitlement enforcement",
+          "status": "NOT STARTED"
+        },
+        {
+          "id": "S3-02",
+          "title": "Verify shared storage, image capture and AI service contracts",
+          "status": "NOT STARTED"
+        },
+        {
+          "id": "S3-03",
+          "title": "Verify shared inventory and lifecycle services",
+          "status": "NOT STARTED"
+        },
+        {
+          "id": "S3-04",
+          "title": "Verify secure eBay OAuth, listing, orders, messages and sync flows",
+          "status": "NOT STARTED"
+        },
+        {
+          "id": "S3-05",
+          "title": "Verify pricing, fees, profit, notifications and settings foundations",
+          "status": "NOT STARTED"
+        }
+      ]
+    },
+    {
+      "id": "S4",
+      "name": "Foundation 2 — Standard resale workflow",
+      "status": "NOT STARTED",
+      "goal": "Deliver one complete, repeatable scan-to-sale workflow for every supported niche.",
+      "tasks": [
+        {
+          "id": "S4-01",
+          "title": "Scan, identify, confidence and evidence",
+          "status": "NOT STARTED"
+        },
+        {
+          "id": "S4-02",
+          "title": "Condition, valuation and acquisition decision",
+          "status": "NOT STARTED"
+        },
+        {
+          "id": "S4-03",
+          "title": "Costs, margin, inventory and listing draft",
+          "status": "NOT STARTED"
+        },
+        {
+          "id": "S4-04",
+          "title": "eBay category, item specifics, edit, save and publish",
+          "status": "NOT STARTED"
+        },
+        {
+          "id": "S4-05",
+          "title": "Sales, fees, order reconciliation and profit",
+          "status": "NOT STARTED"
+        }
+      ]
+    },
+    {
+      "id": "S5",
+      "name": "Foundation 3 — Niche specialisation",
+      "status": "NOT STARTED",
+      "goal": "Make each niche a distinct specialist configuration over shared foundations, with strict data and entitlement isolation.",
+      "tasks": [
+        {
+          "id": "S5-01",
+          "title": "Validate specialist IDs, prompts and capture requirements per niche",
+          "status": "NOT STARTED"
+        },
+        {
+          "id": "S5-02",
+          "title": "Validate niche attributes, condition and measurements",
+          "status": "NOT STARTED"
+        },
+        {
+          "id": "S5-03",
+          "title": "Validate valuation sources, category mappings and listing templates",
+          "status": "NOT STARTED"
+        },
+        {
+          "id": "S5-04",
+          "title": "Verify niche inventory, routes, permissions and branding isolation",
+          "status": "NOT STARTED"
+        }
+      ]
+    },
+    {
+      "id": "S6",
+      "name": "Foundations 4–6 — Optional specialist capabilities",
+      "status": "NOT STARTED",
+      "goal": "Add advanced intelligence, specialist business tools and unique niche engines only where justified by the niche.",
+      "tasks": [
+        {
+          "id": "S6-01",
+          "title": "Select advanced intelligence capabilities by niche",
+          "status": "NOT STARTED"
+        },
+        {
+          "id": "S6-02",
+          "title": "Select specialist business tools by niche",
+          "status": "NOT STARTED"
+        },
+        {
+          "id": "S6-03",
+          "title": "Implement unique niche engines only where required",
+          "status": "NOT STARTED"
+        },
+        {
+          "id": "S6-04",
+          "title": "Test optional modules cannot contaminate unrelated niches",
+          "status": "NOT STARTED"
+        }
+      ]
+    },
+    {
+      "id": "S7",
+      "name": "Full production verification",
+      "status": "NOT STARTED",
+      "goal": "Certify supported niches through automated, security, web, native, deployment and real-device evidence.",
+      "tasks": [
+        {
+          "id": "S7-01",
+          "title": "Run full type, lint, unit, integration and regression suites",
+          "status": "NOT STARTED"
+        },
+        {
+          "id": "S7-02",
+          "title": "Verify tenant, niche, entitlement and credential security",
+          "status": "NOT STARTED"
+        },
+        {
+          "id": "S7-03",
+          "title": "Verify web parity and production deployment",
+          "status": "NOT STARTED"
+        },
+        {
+          "id": "S7-04",
+          "title": "Build and inspect release APKs only at release milestones",
+          "status": "NOT STARTED"
+        },
+        {
+          "id": "S7-05",
+          "title": "Complete real-device, live integration and operational acceptance",
+          "status": "NOT STARTED"
+        },
+        {
+          "id": "S7-06",
+          "title": "Close all critical/high defects and publish evidence-backed release verdict",
+          "status": "NOT STARTED"
+        }
+      ]
+    }
   ],
   "nicheCertification": {
     "source": "niche-modules.json",
-    "requiredAreas": ["brand-and-routes","scanner-and-identification","confidence-and-evidence","condition","valuation","inventory-isolation","listing-generation","category-and-item-specifics","ebay-publish-and-sync","orders-and-finance","web-parity","native-device","security-and-entitlements","regression-tests"]
+    "requiredAreas": [
+      "brand-and-routes",
+      "scanner-and-identification",
+      "confidence-and-evidence",
+      "condition",
+      "valuation",
+      "inventory-isolation",
+      "listing-generation",
+      "category-and-item-specifics",
+      "ebay-publish-and-sync",
+      "orders-and-finance",
+      "web-parity",
+      "native-device",
+      "security-and-entitlements",
+      "regression-tests"
+    ]
   },
   "mergePolicy": {
     "requiredChecksMustPass": true,
@@ -89,6 +290,10 @@
     "Real APK/device launches, signing, web parity, deployment and external CI billing constraints require evidence."
   ],
   "changeLog": [
-    {"date":"2026-11-01","change":"Created initial evidence-based control register from the seven-stage master directive and existing repository handover."}
-  ]
+    {
+      "date": "2026-11-01",
+      "change": "Created initial evidence-based control register from the seven-stage master directive and existing repository handover."
+    }
+  ],
+  "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"
 }
