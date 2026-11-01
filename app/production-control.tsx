@@ -23,8 +23,9 @@ type Register = { programme: string; stages: Stage[]; knownReleaseRisks: string[
 type Pull = { number: number; title: string; html_url: string; state: string; draft: boolean; mergeable: boolean | null; head: { ref: string; sha: string }; base: { ref: string; sha: string }; updated_at: string; user: { login: string }; body?: string; behindBy?: number; checkTotal?: number; checkPassed?: number; checkFailed?: number; checkPending?: number };
 type Run = { id: number; name: string; display_title: string; html_url: string; status: string; conclusion: string | null; head_branch: string; head_sha: string; created_at: string };
 type WorkflowJob = { id: number; name: string; status: string; conclusion: string | null; steps?: Array<{name:string;status:string;conclusion:string|null}> };
+type WorkflowArtifact = { id:number; name:string; size_in_bytes:number; expired:boolean; created_at:string; expires_at:string };
 type Niche = { id: string; name: string; entry?: string; specialists?: string[]; defaultSpecialist?: string };
-type Snapshot = { register: Register | null; niches: Niche[]; pulls: Pull[]; openPullCount: number; runs: Run[]; webBuildRun: Run | null; webBuildJobs: WorkflowJob[]; routingRun: Run | null; routingJobs: WorkflowJob[]; mainSha: string; refreshedAt: string; errors: string[] };
+type Snapshot = { register: Register | null; niches: Niche[]; pulls: Pull[]; openPullCount: number; runs: Run[]; webBuildRun: Run | null; webBuildJobs: WorkflowJob[]; routingRun: Run | null; routingJobs: WorkflowJob[]; webBuildArtifacts: WorkflowArtifact[]; mainSha: string; refreshedAt: string; errors: string[] };
 
 // Public GitHub REST is unauthenticated in the client (60 requests/hour). Cache a refresh briefly and enrich only the eight newest PRs.
 let cachedSnapshot: Snapshot | null = null;
@@ -51,7 +52,7 @@ export default function ProductionControlScreen() {
   const { user } = useAuth();
   const { isMasterAdmin } = useApp();
   const insets = useSafeAreaInsets();
-  const [snapshot,setSnapshot] = useState<Snapshot>({register:null,niches:[],pulls:[],openPullCount:0,runs:[],webBuildRun:null,webBuildJobs:[],routingRun:null,routingJobs:[],mainSha:'',refreshedAt:'',errors:[]});
+  const [snapshot,setSnapshot] = useState<Snapshot>({register:null,niches:[],pulls:[],openPullCount:0,runs:[],webBuildRun:null,webBuildJobs:[],routingRun:null,routingJobs:[],webBuildArtifacts:[],mainSha:'',refreshedAt:'',errors:[]});
   const [loading,setLoading] = useState(true);
   const [expanded,setExpanded] = useState<string>('S1');
 
@@ -99,11 +100,14 @@ export default function ProductionControlScreen() {
     const webBuildRun = latestRuns.find(r => /SWISH branded web production builds/i.test(r.name)) ?? null;
     const routingRun = latestRuns.find(r => /SWISH niche routing and branded config/i.test(r.name)) ?? null;
     let webBuildJobs: WorkflowJob[] = [];
+    let webBuildArtifacts: WorkflowArtifact[] = [];
     let routingJobs: WorkflowJob[] = [];
     if (webBuildRun) {
       try {
         const jobPayload = await getJson<{jobs:WorkflowJob[]}>(API + '/repos/' + OWNER_REPO + '/actions/runs/' + webBuildRun.id + '/jobs?per_page=100');
         webBuildJobs = jobPayload.jobs ?? [];
+        const artifactPayload = await getJson<{artifacts:WorkflowArtifact[]}>(API + '/repos/' + OWNER_REPO + '/actions/runs/' + webBuildRun.id + '/artifacts?per_page=100');
+        webBuildArtifacts = artifactPayload.artifacts ?? [];
       } catch (error) {
         errors.push('Latest ten-niche web build job details unavailable: ' + String(error));
       }
@@ -116,7 +120,7 @@ export default function ProductionControlScreen() {
         errors.push('Latest routing, regression and authorization evidence unavailable: ' + String(error));
       }
     }
-    const nextSnapshot: Snapshot = {register,niches:Object.values(modules?.products ?? {}),pulls,openPullCount:rawPulls.length,runs:latestRuns,webBuildRun,webBuildJobs,routingRun,routingJobs,mainSha:main?.sha ?? '',refreshedAt:new Date().toISOString(),errors};
+    const nextSnapshot: Snapshot = {register,niches:Object.values(modules?.products ?? {}),pulls,openPullCount:rawPulls.length,runs:latestRuns,webBuildRun,webBuildJobs,routingRun,routingJobs,webBuildArtifacts,mainSha:main?.sha ?? '',refreshedAt:new Date().toISOString(),errors};
     cachedSnapshot = nextSnapshot;
     cachedSnapshotAt = Date.now();
     setSnapshot(nextSnapshot);
@@ -220,10 +224,12 @@ export default function ProductionControlScreen() {
         {snapshot.webBuildRun ? <View style={styles.nextCard}>
           <View style={styles.prTop}><Text style={styles.taskTitle}>{snapshot.webBuildRun.display_title || snapshot.webBuildRun.name}</Text><Pill label={snapshot.webBuildRun.status==='completed'?(snapshot.webBuildRun.conclusion ?? 'COMPLETED').toUpperCase():snapshot.webBuildRun.status.toUpperCase()} tone={snapshot.webBuildRun.conclusion==='success'?'good':snapshot.webBuildRun.conclusion==='failure'?'bad':'warn'}/></View>
           <View style={styles.metrics}>
+            <Metric label="BUILD ARTEFACTS CONFIRMED" value={String(snapshot.webBuildArtifacts.filter(a=>!a.expired).length)} detail={`${snapshot.webBuildArtifacts.filter(a=>a.expired).length} expired artefacts`}/>
             <Metric label="EXPORT JOBS PASSED" value={String(snapshot.webBuildJobs.filter(j=>j.status==='completed' && j.conclusion==='success').length)} detail={`of ${snapshot.webBuildJobs.length} reported jobs`}/>
             <Metric label="FAILED JOBS" value={String(snapshot.webBuildJobs.filter(j=>j.status==='completed' && j.conclusion!=='success' && j.conclusion!=='skipped' && j.conclusion!=='neutral').length)} detail="Completed with an error"/>
             <Metric label="PENDING JOBS" value={String(snapshot.webBuildJobs.filter(j=>j.status!=='completed').length)} detail="Still running or queued"/>
           </View>
+          {snapshot.webBuildArtifacts.length>0 ? <View style={{gap:5}}><Text style={styles.taskTitle}>GitHub-confirmed artefacts</Text>{snapshot.webBuildArtifacts.map(a=><View key={a.id} style={styles.runRow}><View style={{flex:1}}><Text style={styles.taskTitle}>{a.name}</Text><Text style={styles.muted}>{(a.size_in_bytes/1024/1024).toFixed(1)} MB · expires {new Date(a.expires_at).toLocaleDateString()}</Text></View><Pill label={a.expired?'EXPIRED':'AVAILABLE'} tone={a.expired?'bad':'good'}/></View>)}</View> : <Text style={styles.body}>No downloadable build artefacts are currently confirmed for this run.</Text>}
           {snapshot.webBuildJobs.length===0 ? <Text style={styles.body}>GitHub has not returned job details for this run. No build result is inferred.</Text> : snapshot.webBuildJobs.map(j=>{
             const artifact=j.steps?.find(s=>/upload web build artifact/i.test(s.name));
             const passed=j.status==='completed' && j.conclusion==='success';
