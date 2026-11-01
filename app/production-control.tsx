@@ -127,6 +127,11 @@ export default function ProductionControlScreen() {
         </View>
       </Section>
 
+      <Pressable onPress={()=>open('https://github.com/'+OWNER_REPO+'/blob/main/docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md')} style={styles.directiveLink}>
+        <MaterialIcons name="description" size={18} color={GOLD}/>
+        <Text style={styles.directiveLinkText}>Open the canonical builder directive ↗</Text>
+      </Pressable>
+
       <Section title="PROGRAMME STAGES" subtitle="Open a stage to inspect its acceptance tasks">
         {STAGES.map(([id,name])=>{
           const stage=stages.find(s=>s.id===id);
@@ -185,7 +190,7 @@ const styles=StyleSheet.create({
   hero:{backgroundColor:'#121B27',borderColor:'#334253',borderWidth:1,borderRadius:22,padding:18,gap:16},heroRow:{flexDirection:'row',justifyContent:'space-between',alignItems:'center'},heroEyebrow:{fontSize:9,color:GOLD,fontWeight:'900',letterSpacing:1.5},heroTitle:{fontSize:22,color:'#F5F7FA',fontWeight:'900',marginTop:4},
   metrics:{flexDirection:'row',flexWrap:'wrap',gap:10},metric:{backgroundColor:'#1B2735',borderRadius:13,padding:12,minWidth:Platform.OS==='web'?190:'46%',flexGrow:1,gap:4},metricLabel:{fontSize:9,color:'#9EADBD',fontWeight:'800',letterSpacing:1},metricValue:{fontSize:25,color:'#F6F7FA',fontWeight:'900'},metricDetail:{fontSize:10,color:'#9EADBD'},
   progressTrack:{height:8,borderRadius:8,backgroundColor:'#2C3948',overflow:'hidden'},progressFill:{height:8,borderRadius:8,backgroundColor:GREEN},progressNote:{color:'#AAB5C2',fontSize:11,lineHeight:17},
-  section:{gap:10},sectionHeading:{gap:3},sectionTitle:{fontSize:15,color:'#F1F4F8',fontWeight:'900',letterSpacing:.5},sectionSubtitle:{fontSize:10,color:'#8593A4'},
+  directiveLink:{flexDirection:'row',alignItems:'center',justifyContent:'center',gap:8,padding:13,borderRadius:12,borderWidth:1,borderColor:'#6D592A',backgroundColor:'#211C13'},directiveLinkText:{color:GOLD,fontSize:11,fontWeight:'900'},\n  section:{gap:10},sectionHeading:{gap:3},sectionTitle:{fontSize:15,color:'#F1F4F8',fontWeight:'900',letterSpacing:.5},sectionSubtitle:{fontSize:10,color:'#8593A4'},
   nextCard:{backgroundColor:'#151F2B',borderRadius:16,borderWidth:1,borderColor:'#3A4655',padding:16,gap:10},nextTitle:{fontSize:19,color:'#F5F7FA',fontWeight:'900'},body:{fontSize:12,color:'#B9C4D0',lineHeight:18},nextTask:{flexDirection:'row',gap:5,alignItems:'flex-start'},
   stageCard:{backgroundColor:'#121A25',borderRadius:14,borderWidth:1,borderColor:'#293545',overflow:'hidden'},stageHead:{padding:13,flexDirection:'row',alignItems:'center',gap:10},stageIndex:{width:35,height:35,borderRadius:10,backgroundColor:'#2B2619',alignItems:'center',justifyContent:'center'},stageIndexText:{color:GOLD,fontWeight:'900',fontSize:11},stageTitle:{color:'#F0F3F7',fontSize:12,fontWeight:'800'},muted:{color:'#8593A4',fontSize:10,marginTop:3},taskList:{paddingHorizontal:13,paddingBottom:10,gap:10},taskRow:{paddingTop:10,borderTopWidth:1,borderTopColor:'#283443',flexDirection:'row',alignItems:'center',gap:8},taskTitle:{color:'#E6EBF1',fontSize:11,fontWeight:'700',lineHeight:16},
   pill:{borderRadius:20,borderWidth:1,paddingHorizontal:8,paddingVertical:4,alignSelf:'flex-start'},pillText:{fontSize:8,fontWeight:'900',letterSpacing:.4},
