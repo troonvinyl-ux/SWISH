@@ -692,3 +692,41 @@ describe('Tenant-scoped eBay sync writes', () => {
     expect(source).toContain(".eq('id', existingItem.id).eq('tenant_id', tenantId)");
   });
 });
+
+
+describe('eBay credential refresh compare-and-swap guards', () => {
+  const refreshPaths = [
+    'supabase/functions/swish-ebay-finances/index.ts',
+    'supabase/functions/swish-ebay-list/index.ts',
+    'supabase/functions/swish-ebay-messages/index.ts',
+    'supabase/functions/swish-ebay-orders/index.ts',
+    'supabase/functions/swish-ebay-post-order/index.ts',
+    'supabase/functions/swish-ebay-sync/index.ts',
+  ];
+
+  test.each(refreshPaths)('%s only persists refreshed credentials against the version it read', (relativePath) => {
+    const source = fs.readFileSync(path.join(projectRoot, relativePath), 'utf8');
+    expect(source).toContain(".eq('credential_ref', conn.credential_ref)");
+    expect(source).toContain(".select('id')");
+    expect(source).toContain('.maybeSingle()');
+  });
+
+  test('all non-sync refresh paths fail closed when refreshed credentials are not persisted', () => {
+    for (const relativePath of refreshPaths.filter((p) => !p.endsWith('swish-ebay-sync/index.ts'))) {
+      const source = fs.readFileSync(path.join(projectRoot, relativePath), 'utf8');
+      expect(source).toContain('Refreshed eBay credentials could not be persisted securely.');
+    }
+  });
+
+  test('sync retries after a concurrent refresh instead of marking the connector for reauthorisation', () => {
+    const source = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-ebay-sync/index.ts'), 'utf8');
+    expect(source).toContain('RETRY: eBay credentials changed during refresh. Please retry.');
+    expect(source).toContain('Do not mark that newer valid state as requiring reauthorisation.');
+  });
+
+  test('messages refresh failures do not log raw exception text', () => {
+    const source = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-ebay-messages/index.ts'), 'utf8');
+    expect(source).toContain('Do not log raw exception text');
+    expect(source).not.toContain('Token refresh failed for messages: ${e.message}');
+  });
+});
