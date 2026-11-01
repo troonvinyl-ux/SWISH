@@ -126,7 +126,7 @@ async function getToken(
       .select('id')
       .maybeSingle();
 
-    if (updateError || !persistedConnector) return { error: 'eBay token refreshed but could not be saved securely. Please retry.' };
+    if (updateError || !persistedConnector) return { error: 'Refreshed eBay credentials could not be persisted securely. Please retry.' };
     return { accessToken: data.access_token };
   }
 
