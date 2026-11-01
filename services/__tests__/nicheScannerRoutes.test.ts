@@ -11,7 +11,7 @@ describe('One-tap niche scanner routing', () => {
     ['clothing', '/threads-flip?tab=identify'],
     ['surplus_flip', '/surplus-flip'],
     ['trading_cards', '/capture'],
-    ['antiques', '/capture'],
+    ['antiques', '/antique-capture'],
     ['fossils', '/capture'],
     ['beauty', '/capture'],
     ['tech', '/capture'],
