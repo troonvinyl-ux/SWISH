@@ -66,7 +66,21 @@ export default function ProductionControlScreen() {
     };
     const register = value<Register>(0);
     const modules = value<{products:Record<string,Niche>}>(1);
-    const pulls = value<Pull[]>(2) ?? [];
+    const rawPulls = value<Pull[]>(2) ?? [];
+    const pulls = await Promise.all(rawPulls.slice(0,20).map(async (p) => {
+      const [comparison, checks] = await Promise.allSettled([
+        getJson<{behind_by:number}>(API + '/repos/' + OWNER_REPO + '/compare/main...' + p.head.sha),
+        getJson<{check_runs:Array<{status:string;conclusion:string|null}>}>(API + '/repos/' + OWNER_REPO + '/commits/' + p.head.sha + '/check-runs?per_page=100')
+      ]);
+      const compareData = comparison.status === 'fulfilled' ? comparison.value : null;
+      const checkData = checks.status === 'fulfilled' ? checks.value.check_runs : [];
+      if (comparison.status === 'rejected') errors.push('PR #' + p.number + ' comparison unavailable: ' + String(comparison.reason));
+      if (checks.status === 'rejected') errors.push('PR #' + p.number + ' checks unavailable: ' + String(checks.reason));
+      return {...p, behindBy:compareData?.behind_by, checkTotal:checkData.length,
+        checkPassed:checkData.filter(x=>x.status==='completed' && x.conclusion==='success').length,
+        checkFailed:checkData.filter(x=>x.status==='completed' && x.conclusion!=='success' && x.conclusion!=='skipped' && x.conclusion!=='neutral').length,
+        checkPending:checkData.filter(x=>x.status!=='completed').length};
+    }));
     const runs = value<{workflow_runs:Run[]}>(3);
     const main = value<{sha:string}>(4);
     setSnapshot({register,niches:Object.values(modules?.products ?? {}),pulls,runs:runs?.workflow_runs ?? [],mainSha:main?.sha ?? '',refreshedAt:new Date().toISOString(),errors});
@@ -89,9 +103,13 @@ export default function ProductionControlScreen() {
   const taskTone = (status:string) => status==='VERIFIED'?'good':status==='BLOCKED'?'bad':status==='TESTING'?'warn':status==='IN PROGRESS'?'warn':'muted';
   const prAssessment = (p:Pull) => {
     if (p.mergeable === false) return {label:'CONFLICT / NOT MERGEABLE',tone:'bad' as const};
-    if (p.base.sha && snapshot.mainSha && p.base.sha !== snapshot.mainSha) return {label:'BASE MOVED — RECHECK',tone:'warn' as const};
-    if (p.draft) return {label:'DRAFT',tone:'muted' as const};
-    return {label:'CHECKS REQUIRED',tone:'warn' as const};
+    if ((p.behindBy ?? 0) > 0) return {label:'BEHIND MAIN — UPDATE & RETEST',tone:'bad' as const};
+    if ((p.checkFailed ?? 0) > 0) return {label:'CHECKS FAILING',tone:'bad' as const};
+    if ((p.checkPending ?? 0) > 0) return {label:'CHECKS RUNNING',tone:'warn' as const};
+    if (!p.checkTotal) return {label:'CHECKS NOT REPORTED',tone:'warn' as const};
+    if (p.draft) return {label:'DRAFT — NOT READY',tone:'muted' as const};
+    if (p.checkPassed === p.checkTotal && p.mergeable === true) return {label:'CHECKS PASS — REVIEW REQUIRED',tone:'good' as const};
+    return {label:'RECHECK REQUIRED',tone:'warn' as const};
   };
 
   return <View style={styles.screen}>
@@ -190,7 +208,8 @@ const styles=StyleSheet.create({
   hero:{backgroundColor:'#121B27',borderColor:'#334253',borderWidth:1,borderRadius:22,padding:18,gap:16},heroRow:{flexDirection:'row',justifyContent:'space-between',alignItems:'center'},heroEyebrow:{fontSize:9,color:GOLD,fontWeight:'900',letterSpacing:1.5},heroTitle:{fontSize:22,color:'#F5F7FA',fontWeight:'900',marginTop:4},
   metrics:{flexDirection:'row',flexWrap:'wrap',gap:10},metric:{backgroundColor:'#1B2735',borderRadius:13,padding:12,minWidth:Platform.OS==='web'?190:'46%',flexGrow:1,gap:4},metricLabel:{fontSize:9,color:'#9EADBD',fontWeight:'800',letterSpacing:1},metricValue:{fontSize:25,color:'#F6F7FA',fontWeight:'900'},metricDetail:{fontSize:10,color:'#9EADBD'},
   progressTrack:{height:8,borderRadius:8,backgroundColor:'#2C3948',overflow:'hidden'},progressFill:{height:8,borderRadius:8,backgroundColor:GREEN},progressNote:{color:'#AAB5C2',fontSize:11,lineHeight:17},
-  directiveLink:{flexDirection:'row',alignItems:'center',justifyContent:'center',gap:8,padding:13,borderRadius:12,borderWidth:1,borderColor:'#6D592A',backgroundColor:'#211C13'},directiveLinkText:{color:GOLD,fontSize:11,fontWeight:'900'},\n  section:{gap:10},sectionHeading:{gap:3},sectionTitle:{fontSize:15,color:'#F1F4F8',fontWeight:'900',letterSpacing:.5},sectionSubtitle:{fontSize:10,color:'#8593A4'},
+  directiveLink:{flexDirection:'row',alignItems:'center',justifyContent:'center',gap:8,padding:13,borderRadius:12,borderWidth:1,borderColor:'#6D592A',backgroundColor:'#211C13'},directiveLinkText:{color:GOLD,fontSize:11,fontWeight:'900'},
+  section:{gap:10},sectionHeading:{gap:3},sectionTitle:{fontSize:15,color:'#F1F4F8',fontWeight:'900',letterSpacing:.5},sectionSubtitle:{fontSize:10,color:'#8593A4'},
   nextCard:{backgroundColor:'#151F2B',borderRadius:16,borderWidth:1,borderColor:'#3A4655',padding:16,gap:10},nextTitle:{fontSize:19,color:'#F5F7FA',fontWeight:'900'},body:{fontSize:12,color:'#B9C4D0',lineHeight:18},nextTask:{flexDirection:'row',gap:5,alignItems:'flex-start'},
   stageCard:{backgroundColor:'#121A25',borderRadius:14,borderWidth:1,borderColor:'#293545',overflow:'hidden'},stageHead:{padding:13,flexDirection:'row',alignItems:'center',gap:10},stageIndex:{width:35,height:35,borderRadius:10,backgroundColor:'#2B2619',alignItems:'center',justifyContent:'center'},stageIndexText:{color:GOLD,fontWeight:'900',fontSize:11},stageTitle:{color:'#F0F3F7',fontSize:12,fontWeight:'800'},muted:{color:'#8593A4',fontSize:10,marginTop:3},taskList:{paddingHorizontal:13,paddingBottom:10,gap:10},taskRow:{paddingTop:10,borderTopWidth:1,borderTopColor:'#283443',flexDirection:'row',alignItems:'center',gap:8},taskTitle:{color:'#E6EBF1',fontSize:11,fontWeight:'700',lineHeight:16},
   pill:{borderRadius:20,borderWidth:1,paddingHorizontal:8,paddingVertical:4,alignSelf:'flex-start'},pillText:{fontSize:8,fontWeight:'900',letterSpacing:.4},
