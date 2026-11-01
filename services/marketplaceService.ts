@@ -11,6 +11,7 @@
 // by actual credential/permission availability at runtime.
 
 import { getSupabaseClient } from '@/template';
+import { isMarketplaceProductionReady } from '@/services/marketplaceReadiness';
 
 // ── Marketplace Definitions ────────────────────────────────────────────────────
 
@@ -91,10 +92,10 @@ export const MARKETPLACE_DEFINITIONS: Record<MarketplaceId, MarketplaceDefinitio
     bestFor: ['Vintage clothing', 'Jewellery', 'Antiques', 'Curiosities', 'Art'],
     authType: 'oauth2',
     capabilities: {
-      list: true, publish: true, reprice: true, readOrders: true, fulfil: true,
+      list: false, publish: false, reprice: false, readOrders: false, fulfil: false,
       buy: false, bid: false, makeOffer: false, searchOpportunities: false,
     },
-    requiredPermissions: ['listings_r', 'listings_w', 'transactions_r', 'transactions_w'],
+    requiredPermissions: ['Etsy Open API access and approved OAuth scopes'],
     partnerApprovalRequired: false,
     apiDocsUrl: 'https://developers.etsy.com/documentation',
   },
@@ -110,10 +111,10 @@ export const MARKETPLACE_DEFINITIONS: Record<MarketplaceId, MarketplaceDefinitio
     bestFor: ['Books', 'Media', 'New items', 'Branded goods'],
     authType: 'oauth2',
     capabilities: {
-      list: true, publish: true, reprice: true, readOrders: true, fulfil: true,
+      list: false, publish: false, reprice: false, readOrders: false, fulfil: false,
       buy: false, bid: false, makeOffer: false, searchOpportunities: false,
     },
-    requiredPermissions: ['SellerId', 'AmazonSellerCentral'],
+    requiredPermissions: ['Amazon Seller Central registration, SP-API app authorization and required role approval'],
     partnerApprovalRequired: true,
     apiDocsUrl: 'https://developer-docs.amazon.com/sp-api/',
   },
@@ -396,7 +397,9 @@ export function recommendMarketplaces(
       const estimatedFee = expectedSellingPrice * feeRate;
       const estimatedNetRevenue = expectedSellingPrice - estimatedFee;
       const connector = connectorMap.get(marketplaceId);
-      const available = connector?.status === 'connected' && (connector?.canPublish ?? false);
+      const available = isMarketplaceProductionReady(marketplaceId)
+        && connector?.status === 'connected'
+        && (connector?.canPublish ?? false);
 
       let rationale = def.bestFor.join(', ');
 
