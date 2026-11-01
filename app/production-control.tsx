@@ -24,7 +24,7 @@ type Pull = { number: number; title: string; html_url: string; state: string; dr
 type Run = { id: number; name: string; display_title: string; html_url: string; status: string; conclusion: string | null; head_branch: string; head_sha: string; created_at: string };
 type WorkflowJob = { id: number; name: string; status: string; conclusion: string | null; steps?: Array<{name:string;status:string;conclusion:string|null}> };
 type Niche = { id: string; name: string; entry?: string; specialists?: string[]; defaultSpecialist?: string };
-type Snapshot = { register: Register | null; niches: Niche[]; pulls: Pull[]; openPullCount: number; runs: Run[]; webBuildRun: Run | null; webBuildJobs: WorkflowJob[]; mainSha: string; refreshedAt: string; errors: string[] };
+type Snapshot = { register: Register | null; niches: Niche[]; pulls: Pull[]; openPullCount: number; runs: Run[]; webBuildRun: Run | null; webBuildJobs: WorkflowJob[]; routingRun: Run | null; routingJobs: WorkflowJob[]; mainSha: string; refreshedAt: string; errors: string[] };
 
 // Public GitHub REST is unauthenticated in the client (60 requests/hour). Cache a refresh briefly and enrich only the eight newest PRs.
 let cachedSnapshot: Snapshot | null = null;
@@ -51,7 +51,7 @@ export default function ProductionControlScreen() {
   const { user } = useAuth();
   const { isMasterAdmin } = useApp();
   const insets = useSafeAreaInsets();
-  const [snapshot,setSnapshot] = useState<Snapshot>({register:null,niches:[],pulls:[],openPullCount:0,runs:[],webBuildRun:null,webBuildJobs:[],mainSha:'',refreshedAt:'',errors:[]});
+  const [snapshot,setSnapshot] = useState<Snapshot>({register:null,niches:[],pulls:[],openPullCount:0,runs:[],webBuildRun:null,webBuildJobs:[],routingRun:null,routingJobs:[],mainSha:'',refreshedAt:'',errors:[]});
   const [loading,setLoading] = useState(true);
   const [expanded,setExpanded] = useState<string>('S1');
 
@@ -97,7 +97,9 @@ export default function ProductionControlScreen() {
     const main = value<{sha:string}>(4);
     const latestRuns = runs?.workflow_runs ?? [];
     const webBuildRun = latestRuns.find(r => /SWISH branded web production builds/i.test(r.name)) ?? null;
+    const routingRun = latestRuns.find(r => /SWISH niche routing and branded config/i.test(r.name)) ?? null;
     let webBuildJobs: WorkflowJob[] = [];
+    let routingJobs: WorkflowJob[] = [];
     if (webBuildRun) {
       try {
         const jobPayload = await getJson<{jobs:WorkflowJob[]}>(API + '/repos/' + OWNER_REPO + '/actions/runs/' + webBuildRun.id + '/jobs?per_page=100');
@@ -106,7 +108,15 @@ export default function ProductionControlScreen() {
         errors.push('Latest ten-niche web build job details unavailable: ' + String(error));
       }
     }
-    const nextSnapshot: Snapshot = {register,niches:Object.values(modules?.products ?? {}),pulls,openPullCount:rawPulls.length,runs:latestRuns,webBuildRun,webBuildJobs,mainSha:main?.sha ?? '',refreshedAt:new Date().toISOString(),errors};
+    if (routingRun) {
+      try {
+        const jobPayload = await getJson<{jobs:WorkflowJob[]}>(API + '/repos/' + OWNER_REPO + '/actions/runs/' + routingRun.id + '/jobs?per_page=100');
+        routingJobs = jobPayload.jobs ?? [];
+      } catch (error) {
+        errors.push('Latest routing, regression and authorization evidence unavailable: ' + String(error));
+      }
+    }
+    const nextSnapshot: Snapshot = {register,niches:Object.values(modules?.products ?? {}),pulls,openPullCount:rawPulls.length,runs:latestRuns,webBuildRun,webBuildJobs,routingRun,routingJobs,mainSha:main?.sha ?? '',refreshedAt:new Date().toISOString(),errors};
     cachedSnapshot = nextSnapshot;
     cachedSnapshotAt = Date.now();
     setSnapshot(nextSnapshot);
@@ -226,6 +236,35 @@ export default function ProductionControlScreen() {
           <Text style={styles.warningText}>A successful static export proves the web bundle built and its workflow artifact uploaded. It does not prove live deployment, authentication, tenant isolation, eBay transactions or real-device acceptance.</Text>
           <Pressable onPress={()=>open(snapshot.webBuildRun!.html_url)} style={styles.externalLink}><Text style={styles.externalLinkText}>Inspect source workflow and logs ↗</Text></Pressable>
         </View> : <Text style={styles.body}>No branded ten-niche web production workflow was found in the latest 20 GitHub runs.</Text>}
+      </Section>
+
+      <Section title="REGRESSION, SECURITY & NATIVE EVIDENCE" subtitle="Live step results from the latest niche-routing validation workflow">
+        {snapshot.routingRun ? <View style={styles.nextCard}>
+          <View style={styles.prTop}><Text style={styles.taskTitle}>{snapshot.routingRun.display_title || snapshot.routingRun.name}</Text><Pill label={snapshot.routingRun.status==='completed'?(snapshot.routingRun.conclusion ?? 'COMPLETED').toUpperCase():snapshot.routingRun.status.toUpperCase()} tone={snapshot.routingRun.conclusion==='success'?'good':snapshot.routingRun.conclusion==='failure'?'bad':'warn'}/></View>
+          {snapshot.routingJobs.map(job=>{
+            const checks=[
+              {label:'Full regression suite',match:/complete regression suite/i},
+              {label:'Server authorization boundary tests',match:/shared server authorization boundaries/i},
+              {label:'Android production JavaScript bundle',match:/bundle android production javascript/i},
+              {label:'Ten Expo branded configurations',match:/validate all ten expo branded configurations/i}
+            ];
+            return <View key={job.id} style={{gap:8}}>
+              <Text style={styles.muted}>{job.name}</Text>
+              {checks.map(check=>{
+                const step=job.steps?.find(s=>check.match.test(s.name));
+                const done=step?.status==='completed';
+                const success=done && step?.conclusion==='success';
+                const failed=done && !success && step?.conclusion!=='skipped' && step?.conclusion!=='neutral';
+                return <View key={check.label} style={styles.runRow}>
+                  <View style={{flex:1}}><Text style={styles.taskTitle}>{check.label}</Text><Text style={styles.muted}>{step ? (success?'Completed successfully':failed?'Completed with failure':step.status==='in_progress'?'Currently running':'Waiting') : 'No matching step reported by workflow'}</Text></View>
+                  <Pill label={success?'PASSED':failed?'FAILED':step?.status==='in_progress'?'RUNNING':'PENDING'} tone={success?'good':failed?'bad':'warn'}/>
+                </View>;
+              })}
+            </View>;
+          })}
+          <Text style={styles.warningText}>These are workflow-step results, not a substitute for a full penetration test, live authorization review, installed-device acceptance or app-store/release verification.</Text>
+          <Pressable onPress={()=>open(snapshot.routingRun!.html_url)} style={styles.externalLink}><Text style={styles.externalLinkText}>Inspect regression and authorization workflow ↗</Text></Pressable>
+        </View> : <Text style={styles.body}>No niche-routing validation workflow was found in the latest 20 GitHub runs.</Text>}
       </Section>
 
       <Section title="CI / RELEASE SIGNALS" subtitle="Latest GitHub Actions workflow runs">
