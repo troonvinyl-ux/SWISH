@@ -58,7 +58,7 @@
           "id": "S1-05",
           "title": "Reconcile open PRs, branches and current main before implementation",
           "status": "IN PROGRESS",
-          "evidence": "Live GitHub data shown in SWISH Control"
+          "evidence": "Reconciled after PRs #67, #68 and #69 merged. Current main: 0ef4dccb30c629dd07a850075efc7d64b68c2988. PRs #70 and #71 remain open pending current-main CI. Legacy PR #33 and #59 were not merged; their targeted credential-refresh, repricing-isolation and release-safety fixes were reimplemented on fresh branches. Remaining stale branches stay unmerged until separately reviewed."
         }
       ]
     },
@@ -293,6 +293,14 @@
     {
       "date": "2026-11-01",
       "change": "Created initial evidence-based control register from the seven-stage master directive and existing repository handover."
+    },
+    {
+      "date": "2026-11-01",
+      "change": "Post-#64 open-PR reconciliation against main (d519ff6): PR #64 merged as 9fbcce1 with 25 checks passed. Eight remaining open PR branches are stale/diverged and must not be merged without targeted review and fresh validation: #59 (21 ahead/107 behind), #56 (1/113), #52 (9/214), #51 (9/214), #49 (1/220), #41 (39/328), #40 (4/329), #33 (16/522). #59 is the highest-priority production-readiness repair, but its 12-file change set needs conflict-aware rebase/reimplementation and full CI before merge. #56 overlaps #59 on branded build config and is likely superseded; #52, #51, #41, #40 and #33 require dependency and current-main review before any integration. No stale branch was merged or force-pushed."
+    },
+    {
+      "date": "2026-11-01",
+      "change": "Production Control API refresh hardening merged as #67 (7ed2bad). eBay credential refresh compare-and-swap protections merged as #68 (bca027b). Server-side niche repricing authorization and guarded price application merged as #69 (0ef4dcc). Fresh PRs #70 (OTA/Android release safety) and #71 (Post-Order safe errors) are awaiting CI; no stale PR #33 or #59 branch was merged."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"
