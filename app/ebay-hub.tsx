@@ -80,7 +80,12 @@ function emptyEbayMetrics(): EbayMetrics {
   };
 }
 
-async function loadEbayMetrics(tenantId: string, specialistIds?: string[]): Promise<EbayMetrics> {
+function isMissingNicheHistoryColumn(error: any): boolean {
+  const message = String(error?.message ?? '');
+  return error?.code === '42703' || error?.code === 'PGRST204' || /niche_id.*(does not exist|schema cache)|column .*niche_id.*does not exist/i.test(message);
+}
+
+async function loadEbayMetrics(tenantId: string, specialistIds?: string[], nicheId?: string | null): Promise<EbayMetrics> {
   const supabase = getSupabaseClient();
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
@@ -103,15 +108,29 @@ async function loadEbayMetrics(tenantId: string, specialistIds?: string[]): Prom
     listingQuery = listingQuery.in('items.specialist_id', specialistIds) as any;
   }
 
-  const salesQuery = (fromDate: string) => {
+  const salesQuery = async (fromDate: string) => {
+    // Prefer the durable sale-time niche snapshot. Older installations can run
+    // before the additive migration is applied, so fall back to the existing
+    // item-specialist join only when the new column is genuinely unavailable.
+    if (nicheId) {
+      const nicheResult = await supabase
+        .from('sales')
+        .select('sale_price, net_revenue, niche_id')
+        .eq('tenant_id', tenantId)
+        .eq('marketplace_id', 'ebay')
+        .eq('niche_id', nicheId)
+        .gte('sold_at', fromDate);
+      if (!nicheResult.error || !isMissingNicheHistoryColumn(nicheResult.error)) return nicheResult;
+    }
+
     let query = supabase
       .from('sales')
-      .select(specialistIds ? 'sale_price, net_revenue, items!inner(specialist_id)' : 'sale_price, net_revenue')
+      .select(specialistIds?.length ? 'sale_price, net_revenue, items!inner(specialist_id)' : 'sale_price, net_revenue')
       .eq('tenant_id', tenantId)
       .eq('marketplace_id', 'ebay')
       .gte('sold_at', fromDate);
-    if (specialistIds) query = query.in('items.specialist_id', specialistIds) as any;
-    return query;
+    if (specialistIds?.length) query = query.in('items.specialist_id', specialistIds) as any;
+    return await query;
   };
 
   let ordersQuery = supabase
@@ -447,6 +466,11 @@ function useNicheHubStyle(activeNicheId: string | null | undefined) {
     else if (['bicycles', 'cycling', 'bikes', 'bike_flipper'].includes(id)) niche = 'bicycles';
     else if (['clothing', 'fashion', 'trainers_sneakers', 'trainers', 'threads_flip'].includes(id)) niche = 'clothing';
     else if (['surplus_flip', 'surplus-flip', 'catalog_flip', 'catalog_surplus', 'surplus_trader'].includes(id)) niche = 'surplus_flip';
+    else if (['trading_cards', 'cards', 'card_flipper'].includes(id)) niche = 'trading_cards';
+    else if (['antiques', 'antique', 'antique_flipper'].includes(id)) niche = 'antiques';
+    else if (['fossils', 'fossil'].includes(id)) niche = 'fossils';
+    else if (['beauty', 'beauty_flipper'].includes(id)) niche = 'beauty';
+    else if (['tech', 'tech_flipper'].includes(id)) niche = 'tech';
   }
 
   // Always provide the strict product boundary even if a helper export is
@@ -458,14 +482,24 @@ function useNicheHubStyle(activeNicheId: string | null | undefined) {
     else if (niche === 'bicycles') specialistIds = ['bicycles'];
     else if (niche === 'clothing') specialistIds = ['clothing', 'trainers_sneakers'];
     else if (niche === 'surplus_flip') specialistIds = ['surplus_trader'];
+    else if (niche === 'trading_cards') specialistIds = ['pokemon_cards', 'trading_cards'];
+    else if (niche === 'antiques') specialistIds = ['antiques', 'books'];
+    else if (niche === 'fossils') specialistIds = ['fossils'];
+    else if (niche === 'beauty') specialistIds = ['beauty'];
+    else if (niche === 'tech') specialistIds = ['tech', 'retro_games', 'retro_consoles'];
   }
 
-  if (niche === 'motocross') return { accent: '#FF5500', icon: 'two-wheeler' as const, label: 'MX', specialistIds };
-  if (niche === 'bicycles') return { accent: '#6ED020', icon: 'pedal-bike' as const, label: 'Bikes', specialistIds };
-  if (niche === 'clothing') return { accent: '#E91E8C', icon: 'checkroom' as const, label: 'Fashion', specialistIds };
-  if (niche === 'surplus_flip') return { accent: '#14B8A6', icon: 'inventory-2' as const, label: 'Surplus', specialistIds };
-  if (niche === 'coins') return { accent: Colors.primary, icon: 'toll' as const, label: 'Coins', specialistIds };
-  return { accent: Colors.primary, icon: 'toll' as const, label: 'Select niche', specialistIds: [] as string[] };
+  if (niche === 'motocross') return { nicheId: niche, accent: '#FF5500', icon: 'two-wheeler' as const, label: 'MX', specialistIds };
+  if (niche === 'bicycles') return { nicheId: niche, accent: '#6ED020', icon: 'pedal-bike' as const, label: 'Bikes', specialistIds };
+  if (niche === 'clothing') return { nicheId: niche, accent: '#E91E8C', icon: 'checkroom' as const, label: 'Fashion', specialistIds };
+  if (niche === 'surplus_flip') return { nicheId: niche, accent: '#14B8A6', icon: 'inventory-2' as const, label: 'Surplus', specialistIds };
+  if (niche === 'coins') return { nicheId: niche, accent: Colors.primary, icon: 'toll' as const, label: 'Coins', specialistIds };
+  if (niche === 'trading_cards') return { nicheId: niche, accent: '#8B5CF6', icon: 'style' as const, label: 'Cards', specialistIds };
+  if (niche === 'antiques') return { nicheId: niche, accent: '#B08D57', icon: 'museum' as const, label: 'Antiques', specialistIds };
+  if (niche === 'fossils') return { nicheId: niche, accent: '#A3A3A3', icon: 'science' as const, label: 'Fossils', specialistIds };
+  if (niche === 'beauty') return { nicheId: niche, accent: '#E91E8C', icon: 'face' as const, label: 'Beauty', specialistIds };
+  if (niche === 'tech') return { nicheId: niche, accent: '#38BDF8', icon: 'devices' as const, label: 'Tech', specialistIds };
+  return { nicheId: niche, accent: Colors.primary, icon: 'toll' as const, label: 'Select niche', specialistIds: [] as string[] };
 }
 
 function EbayHubScreenContent() {
@@ -514,7 +548,7 @@ function EbayHubScreenContent() {
     }
     try {
       const specialistIds = specialistIdsKey ? specialistIdsKey.split('|') : [];
-      const m = await loadEbayMetrics(tenant.id, specialistIds);
+      const m = await loadEbayMetrics(tenant.id, specialistIds, nicheStyle.nicheId);
       setMetrics(m);
     } catch (e: any) {
       // Keep the hub usable even if a metrics query fails; do not leave a blank screen.
@@ -524,7 +558,7 @@ function EbayHubScreenContent() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [tenant?.id, showAlert, specialistIdsKey]);
+  }, [tenant?.id, showAlert, specialistIdsKey, nicheStyle.nicheId]);
 
   // ── Silent token refresh ──────────────────────────────────────────────────
   const handleTokenRefresh = useCallback(async () => {
@@ -535,14 +569,15 @@ function EbayHubScreenContent() {
         body: { tenantId: tenant.id, mode: 'refresh_token_only' },
       });
       if (error || !data?.success) router.push('/marketplaces' as any);
-      const m = await loadEbayMetrics(tenant.id, nicheStyle.specialistIds);
+      const specialistIds = specialistIdsKey ? specialistIdsKey.split('|') : [];
+      const m = await loadEbayMetrics(tenant.id, specialistIds, nicheStyle.nicheId);
       setMetrics(m);
     } catch {
       router.push('/marketplaces' as any);
     } finally {
       setTokenRefreshing(false);
     }
-  }, [tenant?.id, tokenRefreshing, supabase, router, load, nicheStyle.specialistIds]);
+  }, [tenant?.id, tokenRefreshing, supabase, router, specialistIdsKey, nicheStyle.nicheId]);
 
   // ── Sync with eBay ────────────────────────────────────────────────────────
   const handleHubSync = useCallback(async () => {
