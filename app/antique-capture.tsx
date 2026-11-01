@@ -86,7 +86,7 @@ export default function AntiqueCaptureScreen() {
         </View>
         <View style={s.livePill}><View style={s.liveDot}/><Text style={s.liveText}>{activeImage ? 'CAPTURED VIEW' : 'LIVE CAMERA'}</Text></View>
         <View style={s.anglePill}><Text style={s.angleText}>{selectedSlot?.label ?? 'Object view'}</Text></View>
-        {activeImage ? <Pressable onPress={() => setActiveSlot(selectedSlot.id)} style={s.retake}><MaterialIcons name="refresh" size={17} color="#FFFFFF"/><Text style={s.retakeText}>RETAKE THIS ANGLE</Text></Pressable> : null}
+        {activeImage ? <Pressable onPress={() => { capture.removeCapturedPhoto(selectedSlot.id); setCameraReady(false); }} style={s.retake}><MaterialIcons name="refresh" size={17} color="#FFFFFF"/><Text style={s.retakeText}>RETAKE THIS ANGLE</Text></Pressable> : null}
       </View>
 
       <View style={s.instruction}><Text style={s.instructionTitle}>Take clear photos from multiple angles</Text><Text style={s.instructionSub}>{complete} of {capture.slots.length} views captured · {selectedSlot?.description ?? 'Show the whole object clearly'}</Text></View>
