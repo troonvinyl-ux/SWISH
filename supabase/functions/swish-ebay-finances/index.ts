@@ -116,13 +116,17 @@ async function getToken(
       financeScopeRefreshedAt: new Date().toISOString(),
     };
     const encryptedRef = await encryptCredentials(nextCredentials);
-    const { error: updateError } = await supabase
+    const { data: persistedConnector, error: updateError } = await supabase
       .from('marketplace_connectors')
       .update({ credential_ref: encryptedRef, access_token_expires_at: nextExpiry, updated_at: new Date().toISOString() })
       .eq('tenant_id', tenantId)
-      .eq('marketplace_id', 'ebay');
+      .eq('marketplace_id', 'ebay')
+      // Compare-and-swap prevents a stale refresh from overwriting newer credentials.
+      .eq('credential_ref', conn.credential_ref)
+      .select('id')
+      .maybeSingle();
 
-    if (updateError) return { error: 'eBay token refreshed but could not be saved securely. Please retry.' };
+    if (updateError || !persistedConnector) return { error: 'eBay token refreshed but could not be saved securely. Please retry.' };
     return { accessToken: data.access_token };
   }
 
