@@ -37,14 +37,7 @@ drop policy if exists marketplace_financial_events_read_member on public.marketp
 create policy marketplace_financial_events_read_member
   on public.marketplace_financial_events
   for select to authenticated
-  using (
-    exists (
-      select 1
-      from public.tenant_memberships tm
-      where tm.tenant_id = marketplace_financial_events.tenant_id
-        and tm.user_id = auth.uid()
-    )
-  );
+  using (marketplace_financial_events.tenant_id in (select public.swish_user_tenant_ids()));
 
 -- Authenticated tenant members can read their own ledger. Only trusted server
 -- functions can write events; no client insert/update/delete grants.
