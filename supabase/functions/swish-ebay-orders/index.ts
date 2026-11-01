@@ -484,7 +484,7 @@ async function importTradingOrders(
   supabase: ReturnType<typeof adminClient>,
   tenantId: string,
   tradingOrders: TradingOrder[],
-  listingByEbayId: Map<string, { listingId: string; itemId: string; price: number; shippingCost: number }>,
+  listingByEbayId: Map<string, ListingMatch>,
   existingOrderIds: Set<string>,
 ): Promise<{ imported: number; skipped: number; errors: string[] }> {
   let imported = 0, skipped = 0;
