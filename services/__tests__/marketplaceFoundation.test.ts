@@ -4,13 +4,13 @@ import {
   getMarketplaceImplementationStatus,
   isMarketplaceProductionReady,
 } from '@/services/marketplaceReadiness';
-const root = path.resolve(__dirname, '../..');
-
 import {
   marketplaceFinancialEventKey,
   supportsMarketplaceOperation,
   type MarketplaceCapabilities,
 } from '@/services/marketplaceAdapter';
+
+const root = path.resolve(__dirname, '../..');
 
 describe('marketplace implementation readiness', () => {
   it('recognises eBay as the existing production integration', () => {
