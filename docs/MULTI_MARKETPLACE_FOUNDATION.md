@@ -50,3 +50,7 @@ This foundation does not claim that Amazon, Vinted, Etsy, Depop, Shopify,
 Whatnot or Facebook Marketplace is connected or capable of automated publishing.
 It does not modify the eBay OAuth or listing architecture and does not create a
 second inventory, orders, tenants or authentication system.
+
+
+## Migration safety
+The normalized financial ledger is an additive table with tenant-scoped read RLS. Client roles receive SELECT only; writes are reserved for trusted server functions. Existing eBay finance tables and flows remain the source of truth until a separately reviewed dual-write, backfill and reconciliation release. The migration intentionally does not add an order foreign key, so it does not couple this foundation to any specific order-table schema.
