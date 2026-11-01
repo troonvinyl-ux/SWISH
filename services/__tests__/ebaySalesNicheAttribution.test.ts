@@ -3,10 +3,17 @@ import * as path from 'path';
 import { nicheForSpecialist } from '../../supabase/functions/_shared/nicheAttribution';
 
 const root = path.resolve(__dirname, '../..');
-const registry = JSON.parse(fs.readFileSync(path.join(root, 'niche-modules.json'), 'utf8'));
+const registry = JSON.parse(fs.readFileSync(path.join(root, 'supabase/functions/_shared/niche-modules.json'), 'utf8'));
+const rootRegistry = JSON.parse(fs.readFileSync(path.join(root, 'niche-modules.json'), 'utf8'));
 const products = registry.products as Record<string, { specialists: string[]; legacySpecialists: string[] }>;
 
 describe('durable eBay sales niche attribution', () => {
+  test('the server registry specialist lists match the root product registry', () => {
+    for (const [nicheId, product] of Object.entries(products)) {
+      expect(product.specialists).toEqual(rootRegistry.products[nicheId].specialists);
+    }
+  });
+
   test('every canonical specialist maps to its registered niche', () => {
     for (const [nicheId, product] of Object.entries(products)) {
       for (const specialistId of product.specialists) {
