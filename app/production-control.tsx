@@ -54,8 +54,8 @@ export default function ProductionControlScreen() {
   const [loading,setLoading] = useState(true);
   const [expanded,setExpanded] = useState<string>('S1');
 
-  const refresh = useCallback(async () => {
-    if (cachedSnapshot && Date.now() - cachedSnapshotAt < SNAPSHOT_CACHE_MS) {
+  const refresh = useCallback(async (force = false) => {
+    if (!force && cachedSnapshot && Date.now() - cachedSnapshotAt < SNAPSHOT_CACHE_MS) {
       setSnapshot(cachedSnapshot);
       setLoading(false);
       return;
@@ -128,14 +128,14 @@ export default function ProductionControlScreen() {
 
   return <View style={styles.screen}>
     <StatusBar style="light" />
-    <ScrollView contentContainerStyle={[styles.content,{paddingTop:insets.top+Spacing.lg,paddingBottom:insets.bottom+36}]} refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={GOLD}/>}>
+    <ScrollView contentContainerStyle={[styles.content,{paddingTop:insets.top+Spacing.lg,paddingBottom:insets.bottom+36}]} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => { void refresh(true); }} tintColor={GOLD}/>}>
       <View style={styles.topline}>
         <View style={{flex:1}}>
           <Text style={styles.eyebrow}>SWISH / OWNER OPERATIONS</Text>
           <Text style={styles.title}>Production Control</Text>
           <Text style={styles.subtitle}>One source of truth. Evidence before green.</Text>
         </View>
-        <Pressable onPress={refresh} style={styles.refresh}><MaterialIcons name="refresh" size={23} color={GOLD}/></Pressable>
+        <Pressable onPress={() => { void refresh(true); }} style={styles.refresh}><MaterialIcons name="refresh" size={23} color={GOLD}/></Pressable>
       </View>
 
       <View style={styles.hero}>
