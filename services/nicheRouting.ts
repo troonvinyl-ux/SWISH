@@ -40,6 +40,7 @@ export function nicheToScannerRoute(value: string | null | undefined): string {
     case 'bicycles': return '/bike-flipper';
     case 'clothing': return '/threads-flip?tab=identify';
     case 'surplus_flip': return '/surplus-flip';
+    case 'antiques': return '/antique-capture';
     default: return '/capture';
   }
 }

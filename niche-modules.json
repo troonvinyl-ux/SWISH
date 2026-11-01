@@ -170,14 +170,15 @@
       "entry": "entry/antiques.tsx",
       "home": "antique-flipper.tsx",
       "aliases": [
-        "antique_flipper",
-        "books"
+        "antique_flipper"
       ],
       "specialists": [
         "antiques",
         "books"
       ],
-      "legacySpecialists": [],
+      "legacySpecialists": [
+        "books"
+      ],
       "defaultSpecialist": "antiques",
       "dedicatedRoutes": [
         "antique-flipper.tsx",
@@ -185,7 +186,8 @@
         "antique-restoration.tsx",
         "(tabs)/antique-more.tsx",
         "antique-condition.tsx",
-        "antique-value.tsx"
+        "antique-value.tsx",
+        "antique-capture.tsx"
       ]
     },
     "fossils": {
