@@ -58,7 +58,7 @@
           "id": "S1-05",
           "title": "Reconcile open PRs, branches and current main before implementation",
           "status": "IN PROGRESS",
-          "evidence": "Reconciled after PRs #67–#75. Current main: 035439c8fe50fce18be224c854e163d2bdc6bf4c. PR #74 merged the durable niche-snapshot read path into eBay Hub metrics; PR #75 registered Production Control in the isolated Master Admin route tree. PRs #33, #40, #51, #56 and #59 were closed as superseded after targeted changes were ported. Remaining open legacy PRs: #41 (old Master Dashboard APK), #49 (production-pack documentation), #52 (multi-marketplace foundation); all remain unmerged pending separate review."
+          "evidence": "Reconciled after PRs #67–#76. Current main: 698834eff91b5784eeb9d142b1cd2603191ffb20. PR #74 merged the durable niche-snapshot read path into eBay Hub metrics; PR #75 registered Production Control in the isolated Master Admin route tree. PRs #33, #40, #41, #51, #56 and #59 were closed as superseded after targeted changes were ported or replaced. Remaining open legacy PRs: #49 (production-pack documentation) and #52 (multi-marketplace foundation); both remain unmerged pending separate review."
         }
       ]
     },
@@ -309,6 +309,10 @@
     {
       "date": "2026-11-01",
       "change": "Merged PR #74 (3f6f1a0): eBay Hub now prefers durable sale-time niche attribution with a guarded legacy fallback and has labels/specialist fallbacks for all ten niches. Merged PR #75 (035439c): registered the owner-only Production Control route inside the isolated Master Admin APK route tree. Master Admin readiness, niche-routing and all ten web export checks passed; no APK was built. Remaining open legacy PRs are #41, #49 and #52; #51 was closed as superseded."
+    },
+    {
+      "date": "2026-11-01",
+      "change": "Closed PR #41 as superseded by the current isolated Master Admin shell and Production Control route (#75). Reusable manifest progress, photo-quality diagnostics and brand artwork changes already exist on main; its Islamic Numista regex fix is also already present. Remaining open legacy PRs are #49 and #52."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"
