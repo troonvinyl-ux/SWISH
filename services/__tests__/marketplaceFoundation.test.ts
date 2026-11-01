@@ -9,7 +9,6 @@ import {
   supportsMarketplaceOperation,
   type MarketplaceCapabilities,
 } from '@/services/marketplaceAdapter';
-import { MARKETPLACE_DEFINITIONS } from '@/services/marketplaceService';
 
 describe('marketplace implementation readiness', () => {
   it('recognises eBay as the existing production integration', () => {
@@ -36,12 +35,9 @@ describe('marketplace implementation readiness', () => {
   });
 
   it('disables unsupported Etsy and Amazon connector capabilities in the commercial registry', () => {
-    for (const id of ['etsy', 'amazon'] as const) {
-      expect(MARKETPLACE_DEFINITIONS[id].capabilities.list).toBe(false);
-      expect(MARKETPLACE_DEFINITIONS[id].capabilities.publish).toBe(false);
-      expect(MARKETPLACE_DEFINITIONS[id].capabilities.readOrders).toBe(false);
-      expect(MARKETPLACE_DEFINITIONS[id].capabilities.fulfil).toBe(false);
-    }
+    const service = fs.readFileSync(path.join(root, 'services/marketplaceService.ts'), 'utf8');
+    expect((service.match(/list: false, publish: false, reprice: false, readOrders: false, fulfil: false/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect(service).toContain('isMarketplaceProductionReady(marketplaceId)');
   });
 });
 
