@@ -1,0 +1,40 @@
+name: Production Readiness Register
+
+on:
+  pull_request:
+    paths:
+      - 'docs/SWISH_FOUNDATION_MASTER_REGISTER.json'
+      - 'docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md'
+      - 'niche-modules.json'
+      - 'scripts/validate-production-register.mjs'
+      - '.github/workflows/production-readiness-register.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/SWISH_FOUNDATION_MASTER_REGISTER.json'
+      - 'docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md'
+      - 'niche-modules.json'
+      - 'scripts/validate-production-register.mjs'
+      - '.github/workflows/production-readiness-register.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-readiness-register-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-register:
+    name: Validate evidence and niche registry
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Validate production register
+        run: node scripts/validate-production-register.mjs
