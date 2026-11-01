@@ -29,7 +29,7 @@ export function getMarketplaceImplementationStatus(marketplaceId: string): Marke
 
 export function getMarketplaceStatusLabel(marketplaceId: string): string {
   const status = getMarketplaceImplementationStatus(marketplaceId);
-  if (status === 'production') return 'Connected integration';
+  if (status === 'production') return 'Production integration';
   if (status === 'assisted') return 'Assisted workflow';
   return 'Integration planned';
 }
