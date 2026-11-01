@@ -153,6 +153,15 @@ export default function MasterAdminScreen() {
           <MaterialIcons name="chevron-right" size={24} color={Colors.textPrimary} />
         </Pressable>
 
+        <Pressable accessibilityRole="button" onPress={() => router.push('/production-control' as any)} style={styles.controlButton}>
+          <View style={styles.controlIcon}><MaterialIcons name="track-changes" size={24} color="#111111" /></View>
+          <View style={{ flex: 1, gap: 3 }}>
+            <Text style={styles.controlTitle}>SWISH Production Control</Text>
+            <Text style={styles.controlSubtitle}>Seven-stage programme, niche readiness, live pull requests and CI blockers</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={24} color="#111111" />
+        </Pressable>
+
         <View style={styles.notice}>
           <MaterialIcons name="info-outline" size={18} color={Colors.primary} />
           <Text style={styles.noticeText}>This is the first admin slice: secure owner recognition, all-niche access and workspace switching. User management, live platform metrics, audit history and integration diagnostics need their own server-backed admin endpoints before they can be exposed here.</Text>
@@ -214,6 +223,10 @@ const styles = StyleSheet.create({
   updateTitle: { color: Colors.textPrimary, fontSize: Typography.size.base, fontWeight: '900' },
   updateSubtitle: { color: Colors.textSecondary, fontSize: Typography.size.xs, lineHeight: 17 },
   diagnosticsButton: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md, borderRadius: Radius.lg, backgroundColor: Colors.primary, borderWidth: 1, borderColor: Colors.primary },
+  controlButton: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md, borderRadius: Radius.lg, backgroundColor: '#E6B83F', borderWidth: 1, borderColor: '#E6B83F' },
+  controlIcon: { width: 42, height: 42, borderRadius: Radius.md, backgroundColor: '#FFFFFF66', alignItems: 'center', justifyContent: 'center' },
+  controlTitle: { color: '#111111', fontSize: Typography.size.base, fontWeight: '900' },
+  controlSubtitle: { color: '#292929', fontSize: Typography.size.xs, lineHeight: 17 },
   diagnosticsIcon: { width: 42, height: 42, borderRadius: Radius.md, backgroundColor: '#FFFFFF55', alignItems: 'center', justifyContent: 'center' },
   diagnosticsTitle: { color: '#111111', fontSize: Typography.size.base, fontWeight: '900' },
   diagnosticsSubtitle: { color: '#222222', fontSize: Typography.size.xs, lineHeight: 17 },
