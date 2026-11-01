@@ -28,7 +28,7 @@ describe('canonical niche route registry integrity', () => {
   });
 
   test('every configured product home exists when one is declared', () => {
-    for (const [nicheId, module] of Object.entries(registry)) {
+    for (const module of Object.values(registry)) {
       if (module.home) {
         expect(fs.existsSync(path.join(repoRoot, 'app', module.home))).toBe(true);
       }
