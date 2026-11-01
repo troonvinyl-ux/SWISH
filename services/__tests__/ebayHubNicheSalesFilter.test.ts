@@ -21,4 +21,16 @@ describe('eBay Hub durable niche sales filtering', () => {
     expect(source).toContain('if (!nicheResult.error || !isMissingNicheHistoryColumn(nicheResult.error)) return nicheResult;');
     expect(source).toContain("if (specialistIds?.length) query = query.in('items.specialist_id', specialistIds)");
   });
+
+  test('the eBay Hub resolves and labels all ten registered niches', () => {
+    for (const nicheId of ['coins', 'motocross', 'bicycles', 'clothing', 'surplus_flip', 'trading_cards', 'antiques', 'fossils', 'beauty', 'tech']) {
+      expect(source).toContain(`niche === '${nicheId}'`);
+    }
+    expect(source).toContain("label: 'Cards'");
+    expect(source).toContain("label: 'Antiques'");
+    expect(source).toContain("label: 'Fossils'");
+    expect(source).toContain("label: 'Beauty'");
+    expect(source).toContain("label: 'Tech'");
+    expect(source).toContain('return { nicheId: niche, accent: Colors.primary');
+  });
 });
