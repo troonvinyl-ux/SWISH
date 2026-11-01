@@ -12,14 +12,14 @@ const registry = JSON.parse(
 
 describe('canonical niche route registry integrity', () => {
   test('every registered niche entry route exists in the app route tree', () => {
-    for (const [nicheId, module] of Object.entries(registry)) {
+    for (const module of Object.values(registry)) {
       expect(fs.existsSync(path.join(repoRoot, 'app', module.entry))).toBe(true);
       expect(module.entry.startsWith('entry/')).toBe(true);
     }
   });
 
   test('every dedicated route uses its exact .tsx file path and exists', () => {
-    for (const [nicheId, module] of Object.entries(registry)) {
+    for (const module of Object.values(registry)) {
       for (const route of module.dedicatedRoutes) {
         expect(route.endsWith('.tsx')).toBe(true);
         expect(fs.existsSync(path.join(repoRoot, 'app', route))).toBe(true);
