@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "coins",
   "name": "Coin Flipper",
   "specialistIds": [
@@ -11,9 +11,25 @@
     "jewellery_precious_metals",
     "ancient_artefacts"
   ],
+  "legacySpecialistIds": [
+    "coins_uk",
+    "coins_world",
+    "coins_currency",
+    "numismatic"
+  ],
+  "defaultSpecialistId": "coins",
   "androidPackage": "com.swish.coinflipper",
+  "iosBundleIdentifier": "com.swish.coinflipper",
   "entryRoute": "/entry/coins",
-  "responsibilities": "Coin identification, numismatic attributes, coin valuation rules, coin-specific prompts and coin theme.",
+  "scannerRoute": "/coin-flipper?tab=capture",
+  "dedicatedRoutes": [
+    "coin-flipper.tsx",
+    "keen-on-coins.tsx",
+    "islamic-batch.tsx",
+    "silver-batch.tsx",
+    "deep-id-lab.tsx"
+  ],
+  "responsibilities": "Coin and numismatic identification, authenticity evidence, grade, metal analysis, catalogue references and valuation.",
   "sharedCapabilities": [
     "auth",
     "tenant-and-subscription",
@@ -23,5 +39,12 @@
     "learning-and-prediction",
     "reusable-ui-primitives"
   ],
-  "isolationStatus": "migration-started-not-yet-bundle-isolated"
+  "isolationModel": "shared-core-with-registered-niche-configuration",
+  "verification": {
+    "registrySource": "niche-modules.json",
+    "specialistOwnership": "canonical-specialist-and-legacy-aliases",
+    "runtimeBoundary": "separate-branded-entry-and-build-identity",
+    "dataBoundary": "tenant-and-niche-scoped-authorization-required",
+    "status": "audited-contract; end-to-end runtime isolation still requires live verification"
+  }
 }
