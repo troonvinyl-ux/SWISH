@@ -47,6 +47,12 @@ No new model/provider/AI request. Unknown AI source metadata now stays `unknown`
 
 Marketplace send/publish success is not fabricated. Message send timeouts require checking eBay before retry. Full provider message parsing/pagination/body retrieval and production 400/499 diagnosis still require provider acceptance. A source repair is not proof that eBay permissions/keyset/remote service are working.
 
+## eBay message pagination follow-up
+
+The existing `swish-ebay-messages` sync previously requested only page 1 of `GetMyMessages` and could silently omit older messages when the mailbox returned multiple pages. The source now reads the reported page count, fetches pages sequentially (maximum 10 × 50 summaries per invocation), and exposes `pagesFetched`, `pagesTotal`, `truncated` and explicit partial-sync errors. If a later page fails, already received messages are retained and the response reports incomplete rather than success. The inbox now surfaces partial results and reloads saved messages when some were imported. XML request construction, namespace-tolerant page parsing, page caps and invalid page rejection have five focused Jest tests.
+
+This is source implementation only. It does not verify the eBay Trading API response shape, seller permissions, message body retrieval (still unavailable in this summary route), remote send acknowledgements or the deployed OnSpace Cloud function revision. A mailbox exceeding ten pages needs a narrower date-range retrieval path; the function reports this condition rather than claiming complete sync.
+
 ## Security changes
 
 All item mutations through updateItem now reject missing tenant scope. Atomic transitions are invoker/RLS scoped, and actor metadata is determined from the session, not a client supplied automation label. Marketplace-only status requires retained external-ID evidence. Message flags are tenant scoped and update only on confirmed persistence. Provider message ingestion cannot be invoked by client roles. Credentials remain server-only; no keys were requested or exposed.
