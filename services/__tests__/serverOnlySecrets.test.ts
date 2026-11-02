@@ -819,3 +819,18 @@ describe('eBay listing internal-call authorization', () => {
     expect(listing).toContain('if (auth.userId)');
   });
 });
+
+
+describe('eBay end lifecycle reconciliation', () => {
+  const listing = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-ebay-list/index.ts'), 'utf8');
+  const start = listing.indexOf("if (route === 'end')");
+  const end = listing.indexOf('// ── Route: revise', start);
+  const endRoute = listing.slice(start, end);
+
+  test('confirmed eBay end uses the atomic lifecycle RPC rather than a direct item status write', () => {
+    expect(endRoute).toContain("rpc('swish_transition_item'");
+    expect(endRoute).toContain("p_status: 'identified'");
+    expect(endRoute).toContain('transitioned !== true');
+    expect(endRoute).not.toMatch(/\.from\('items'\)[\s\S]{0,120}\.update\(\{\s*status:\s*'identified'/);
+  });
+});

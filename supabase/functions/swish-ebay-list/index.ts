@@ -1911,12 +1911,15 @@ async function handleRequest(req: Request): Promise<Response> {
       .update({ status: 'ended', ended_at: now, updated_at: now })
       .eq('id', ownedListing.id)
       .eq('tenant_id', tenantId);
-    const { error: itemUpdateError } = await supabase.from('items')
-      .update({ status: 'identified', updated_at: now })
-      .eq('id', ownedItem.id)
-      .eq('tenant_id', tenantId);
+    const { data: transitioned, error: itemUpdateError } = await supabase.rpc('swish_transition_item', {
+      p_tenant_id: tenantId,
+      p_item_id: ownedItem.id,
+      p_status: 'identified',
+      p_notes: `eBay listing ended: ${savedExternalListingId}`,
+      p_marketplace: 'ebay',
+    });
 
-    if (listingUpdateError || itemUpdateError) {
+    if (listingUpdateError || itemUpdateError || transitioned !== true) {
       console.error(`[SWISH end] eBay listing ended but local state update failed (tenant scoped): listingError=${listingUpdateError?.message ?? 'none'} itemError=${itemUpdateError?.message ?? 'none'}`);
       return jsonResponse({
         success: true,
