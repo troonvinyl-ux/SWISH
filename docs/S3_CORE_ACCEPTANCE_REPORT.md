@@ -53,6 +53,14 @@ The existing `swish-ebay-messages` sync previously requested only page 1 of `Get
 
 This is source implementation only. It does not verify the eBay Trading API response shape, seller permissions, message body retrieval (still unavailable in this summary route), remote send acknowledgements or the deployed OnSpace Cloud function revision. A mailbox exceeding ten pages needs a narrower date-range retrieval path; the function reports this condition rather than claiming complete sync.
 
+## eBay UK fee and postage model follow-up
+
+The canonical profit engine is now version `v1.3`. Its prior generic 2025-era 12.8% + £0.30 estimate did not represent the current UK business-seller schedule. The revised model uses the official eBay UK business fee table (last updated 30 September 2026): category-specific rates for supported specialist families, the 0.35% regulatory operating fee, £0.30 per order up to £10 / £0.40 above £10, and published high-value tiers for coins, jewellery, watches, retro consoles and trainers. UK private sellers can be modelled separately (no domestic final-value/regulatory fee; 3% for international delivery). Business international fee rates remain explicit inputs because destination changes the rate. Exact fees from eBay Finances bypass estimates.
+
+Buyer-paid postage is now separate from seller postage and included in both the fee base and revenue. Estimated fees correctly make the overall profit result `isEstimate=true`. Eight focused tests cover the UK business default, low-order fixed fee, coin tier, niche rates, trainer threshold, private domestic/international, exact fee override and versioning.
+
+Source: https://www.ebay.co.uk/help/selling/fees-credits-invoices/store-selling-fees?id=4809. This remains an estimate: seller shop terms, account performance surcharges, fee VAT treatment, promoted listings, listing upgrades, taxes, destination-specific international rates and actual category leaf selection can change fees. No live seller account fee schedule was queried; the eBay Finances API remains the actual-fee source of truth.
+
 ## Security changes
 
 All item mutations through updateItem now reject missing tenant scope. Atomic transitions are invoker/RLS scoped, and actor metadata is determined from the session, not a client supplied automation label. Marketplace-only status requires retained external-ID evidence. Message flags are tenant scoped and update only on confirmed persistence. Provider message ingestion cannot be invoked by client roles. Credentials remain server-only; no keys were requested or exposed.
