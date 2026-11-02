@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth, getSupabaseClient } from '@/template';
 import { useApp } from '@/hooks/useApp';
 import { isSwishMasterAdmin } from '@/contexts/AppContext';
-import { updateListingTitle, updateListingPrice, updateListingDescription, endListing, type SavedListing } from '@/services/listingService';
+import { updateListingTitle, updateListingPrice, updateListingDescription, type SavedListing } from '@/services/listingService';
 import { Colors, Spacing, Radius, Typography } from '@/constants/theme';
 
 const TARGET_TITLE = "REISS Men's Khaki Hooded Parka Jacket";
@@ -101,7 +101,7 @@ export default function ReissEbayTestConsole() {
       title: title.trim(), description: description.trim(), price: parsedPrice,
       categoryId: attrs.ebay_category_id ?? attrs._ebay_category_id,
       condition: item.condition ?? '', conditionDescription: item.condition_notes ?? '',
-      listingType: 'FixedPriceItem', quantity: item.quantity ?? 1, sku: item.inventory_id ?? '',
+      listingType: 'FixedPriceItem', quantity: item.quantity ?? 1, sku: '',
       itemSpecifics, mediaUrls: (item.media ?? []).filter(url => typeof url === 'string' && url.startsWith('https://')),
     } });
     if (error || !data?.success) { setStatus('eBay revise was not confirmed: ' + (data?.error ?? error?.message ?? 'Unknown response')); setBusy(false); return; }
@@ -112,16 +112,19 @@ export default function ReissEbayTestConsole() {
 
   const remove = () => {
     if (!tenant?.id || !item || !listing || !externalId) return;
-    Alert.alert('End and delete test listing?', 'This ends the live eBay listing and deletes only the separate SWISH listing record. The Reiss inventory record and its photos remain.', [
-      { text: 'Cancel', style: 'cancel' }, { text: 'End & delete', style: 'destructive', onPress: () => void doRemove() },
+    Alert.alert('End the existing eBay listing?', 'This ends the matched live eBay listing and retains its SWISH listing record for history. The original Reiss inventory row and its status are preserved.', [
+      { text: 'Cancel', style: 'cancel' }, { text: 'End listing', style: 'destructive', onPress: () => void doRemove() },
     ]);
   };
 
   const doRemove = async () => {
     if (!tenant?.id || !item || !listing || !externalId) return;
     setBusy(true); setStatus('Ending the listing on eBay…');
-    const ended = await endListing(listing.id, item.id, tenant.id, externalId);
-    if (ended.error) { setStatus('eBay could not confirm the end: ' + ended.error); setBusy(false); return; }
+    const { data, error } = await getSupabaseClient().functions.invoke('swish-ebay-list', { body: {
+      route: 'end', tenantId: tenant.id, listingId: listing.id, externalListingId: externalId,
+      preserveInventoryStatus: true,
+    } });
+    if (error || !data?.success) { setStatus('eBay could not confirm the end: ' + (data?.error ?? error?.message ?? 'Unknown response')); setBusy(false); return; }
     setListing({ ...listing, status: 'ended', externalListingId: externalId });
     setExternalId('');
     setStatus('Complete. eBay confirmed the existing listing was ended. Its SWISH listing record is retained for history, and the original inventory item is untouched.');
