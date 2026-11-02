@@ -69,6 +69,7 @@ export function ManifestOpportunityWorkspace({isHomeTab=false}:ManifestOpportuni
             <LinearGradient colors={[stopped?Colors.warningDim:Colors.primaryDim,Colors.surface]} style={s.hero}><View style={s.row}><View style={s.fileCircle}><MaterialIcons name={stopped?'front-hand':workflow.watchedBidNeedsRefresh?'update':'gavel'} size={26} color={stopped?Colors.warning:Colors.primary}/></View><Text style={[s.section,s.flex]}>{simpleAdvice.title}</Text></View><Text style={s.body}>{simpleAdvice.message}</Text>
               <Text style={s.note}>{simpleAdvice.suggestedBid!==null?simpleAdvice.bidLabel:'Base maximum purchase price'}</Text><Text style={s.bidPrice}>{invalid?'—':lotMoney(simpleAdvice.suggestedBid??evaluation.base.maximumHammerBid)}</Text>
               <View style={s.ceilingPill}><MaterialIcons name="lock-outline" size={18} color={Colors.primary}/><Text style={[s.ceilingText,s.flex]}>Never go above {invalid?'—':lotMoney(evaluation.base.maximumHammerBid)}</Text></View>
+              <Text style={s.note}>Break-even bid: {invalid?'—':lotMoney(evaluation.best.breakEvenHammer)}</Text>
               {workflow.watchedBidNeedsRefresh?<LotAction label="Update auction details" icon="update" onPress={()=>workflow.setStep(2)}/>:null}
               {draft.auctionUrl&&!workflow.auctionLinkError?<LotAction label="Open auction" icon="open-in-new" disabled={auction.opening} onPress={()=>{void auction.openAuction(draft.auctionUrl);}}/>:null}
             </LinearGradient>
