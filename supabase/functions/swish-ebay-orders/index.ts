@@ -611,7 +611,7 @@ async function refreshMultiQuantityListingStatuses(
   checks: Map<string, string>,
 ): Promise<{ checked: number; errors: string[] }> {
   if (!checks.size) return { checked: 0, errors: [] };
-  const baseUrl = (Deno.env.get('SUPABASE_URL') ?? '').replace(/\\/+$/, '');
+  const baseUrl = (Deno.env.get('SUPABASE_URL') ?? '').replace(/\/+$/, '');
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
   if (!baseUrl || !anonKey) {
     return { checked: 0, errors: ['Multi-quantity eBay status refresh could not run because backend invocation configuration is missing.'] };
