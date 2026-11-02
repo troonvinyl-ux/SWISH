@@ -48,6 +48,11 @@ describe('UK eBay fee estimates and profit accounting', () => {
     expect(result.marketplaceFee).toBeCloseTo(25 * 0.03, 6);
   });
 
+  test('uses a conservative 2% international rate for UK business sales when destination is not supplied', () => {
+    const result = calculateProfit({ salePrice: 100, acquisitionCost: 20, isInternationalSale: true });
+    expect(result.marketplaceFee).toBeCloseTo(100 * (0.129 + 0.0035 + 0.02) + 0.4, 6);
+  });
+
   test('an exact finance fee bypasses estimated rates and remains non-estimated when inputs are exact', () => {
     const result = calculateProfit({
       salePrice: 50, shippingRevenue: 5, acquisitionCost: 10,
