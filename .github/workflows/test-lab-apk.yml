@@ -33,7 +33,6 @@ jobs:
       - name: Configure isolated Test Lab app
         env:
           SWISH_TEST_LAB: '1'
-          EXPO_NO_DOTENV: '1'
         run: pnpm exec expo config --type public
       - uses: actions/setup-java@v4
         with:
