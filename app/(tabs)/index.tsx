@@ -45,6 +45,7 @@ export default function NicheHomeScreen() {
   if (product === 'bicycles') return <BikeFlipperScreen key={effectiveNicheId} isHomeTab />;
   if (product === 'clothing') return <ThreadsFlipScreen key={effectiveNicheId} isHomeTab />;
   if (product === 'surplus_flip') return <SurplusFlipScreen key={effectiveNicheId} isHomeTab />;
+  if (product === 'antiques') return <AntiqueFlipperHome key={effectiveNicheId} />;
   if (product) return <NicheOverview key={effectiveNicheId} />;
   return <Redirect href={"/niche-select" as any} />;
 }
