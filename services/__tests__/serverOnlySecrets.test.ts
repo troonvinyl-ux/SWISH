@@ -774,3 +774,29 @@ describe('eBay actual fee aggregation', () => {
       .toBe('Handle with care | fee_note:ACTUAL_EBAY');
   });
 });
+
+describe('SWISH eBay message send-state integrity', () => {
+  const source = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-ebay-messages/index.ts'), 'utf8');
+
+  test('requires an active eBay item ID and a confirmed HTTP-success acknowledgement', () => {
+    expect(source).toContain("An active eBay item ID is required to send this reply.");
+    expect(source).toContain("const ack = resp.ok ? parseAck(responseXml) : '';");
+    expect(source).toContain("ebaySuccess = resp.ok && (ack === 'Success' || ack === 'Warning')");
+  });
+
+  test('failed or unconfirmed sends return before local replied state or outbound transcript writes', () => {
+    const sendStart = source.indexOf('async function handleSendReply(');
+    const failedSend = source.indexOf('if (!ebaySuccess) {', sendStart);
+    const markReplied = source.indexOf('.update({ is_replied: true', sendStart);
+    const saveTranscript = source.indexOf(".from('ebay_messages').insert({", sendStart);
+    expect(failedSend).toBeGreaterThan(sendStart);
+    expect(markReplied).toBeGreaterThan(failedSend);
+    expect(saveTranscript).toBeGreaterThan(failedSend);
+    expect(source).not.toContain('Reply saved locally.');
+  });
+
+  test('a confirmed eBay send remains successful when local transcript persistence needs retry', () => {
+    expect(source).toContain('localSyncPending: true');
+    expect(source).toContain('eBay accepted the reply, but SWISH could not update its local message status.');
+  });
+});
