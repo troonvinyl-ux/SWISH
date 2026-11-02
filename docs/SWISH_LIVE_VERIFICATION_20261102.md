@@ -144,7 +144,7 @@ Small corrections saved:
 | Repeated order/item identities | Aggregate evidence and review blocker retained | No cleanup; allocation/duplicate diagnosis unverified |
 | Missing live test fixtures / device access | Record precise access requirements | BLOCKED; no mock replacement |
 
-Additional source-only risks retained, not silently modified: required-aspect name normalization in the listing adapter; direct item status write in the listing `end` branch; draft diagnostic creation/import limitations and tenant-only gates; header-only messages/no body route; unresolved actual fee/allocation/partial-success defects. A separate approved, tested remediation is required. The public privacy document still contains a placeholder business contact and statements about messaging/direct database access that need owner/legal reconciliation; no business contact or policy was invented.
+PR #135 closes the source-level global internal-secret bypass: a supplied `SWISH_INTERNAL_SECRET` is now an additional check and cannot replace user JWT verification or tenant membership. Any external internal caller must forward a valid user JWT; its existence and compatibility remain unknown until OnSpace caller/deployment inventory. Deployed enforcement remains unverified until revision parity is confirmed. Additional source-only risks retained, not silently modified: required-aspect name normalization in the listing adapter; direct item status write in the listing `end` branch; draft diagnostic creation/import limitations and tenant-only gates; header-only messages/no body route; unresolved actual fee/allocation/partial-success defects. A separate approved, tested remediation is required. The public privacy document still contains a placeholder business contact and statements about messaging/direct database access that need owner/legal reconciliation; no business contact or policy was invented.
 
 ### Unchanged architecture and data
 
@@ -163,7 +163,6 @@ PR #134 was merged to `main` as `2145b4c72d0eb111ff3c9a0bf95871af0cabd4db` and P
 On an approved runner, execute:
 
 ```sh
-node scripts/sync-backend-registry.mjs --check
 node scripts/validate-edge-deployment.mjs
 node scripts/validate-foundation.mjs
 node scripts/validate-production-register.mjs
@@ -182,7 +181,7 @@ The last command performs real safe GET requests only. A smoke pass is not full 
 
 1. **OnSpace deployment control:** deployment manifest/revision IDs and complete sanitized boot error details for the ten failing endpoints; permission to deploy reviewed function/shared assets. Current tools expose SQL, source and 20-entry logs, not an authenticated deployment API.
 2. **Approved subscriber fixtures:** two distinct designated test accounts/tenants/items and their paid niche grants, supplied through a secure runner environment, never chat. Existing protected GitHub environment `swish-s3-verification` expects `S3_BACKEND_URL`, `S3_ANON_KEY`, `S3_ACCOUNT_A_EMAIL`, `S3_ACCOUNT_A_PASSWORD`, `S3_ACCOUNT_B_EMAIL`, `S3_ACCOUNT_B_PASSWORD`, `S3_TENANT_A`, `S3_TENANT_B`, `S3_ITEM_A`, `S3_ITEM_B`, `S3_NICHE_A`, `S3_NICHE_B`. No service-role key or eBay secret needs to reach the client/runner for the existing read-only script.
-3. **GitHub/live workflow:** source changes are now committed and merged through PR #134; required source CI is green. The protected `swish-s3-verification` workflow still needs approved test fixtures and an authorized manual dispatch. The current connector cannot dispatch that protected workflow.
+3. **GitHub/live workflow:** source changes are now committed and merged through PRs #134 and #135; required source CI is green. The protected `swish-s3-verification` workflow still needs approved test fixtures and an authorized manual dispatch. The current connector cannot dispatch that protected workflow.
 4. **eBay authorization:** Nick designates an authorized sandbox account or the connected production seller and a safe unpublished offer fixture. No production reply/publish/end/buy permission is implied. Current draft diagnostic only reads/updates existing offers; do not call the publish route to create a supposed draft.
 5. **Media/web/device:** approved ten-niche photo fixtures with independently known identification basis, hosted app URLs/build revision, browser session/testing access, and an installed Android test build/device. Do not request plaintext credentials or a rebuild as a substitute.
 6. **Order data review:** owner-approved analysis/export of the 69 repeated order-ID / 70 repeated order-item groups before changing identity/uniqueness/allocation logic. Never delete records automatically. Any cleanup belongs in the Cloud Data dashboard under owner control.
