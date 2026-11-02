@@ -18,6 +18,14 @@ on:
       - 'utils/**'
       - 'assets/**'
       - 'niche-modules.json'
+      # Include this workflow file so a safety-gate change can supersede an obsolete run.
+      - '.github/workflows/publish-ota-update.yml'
+      # Test fixtures, documentation and backend-only changes must never publish OTA.
+      - '!**/__tests__/**'
+      - '!**/*.test.*'
+      - '!**/*.spec.*'
+      - '!supabase/**'
+      - '!docs/**'
   workflow_dispatch:
 
 permissions:
@@ -26,11 +34,65 @@ permissions:
 # Avoid overlapping matrix publishes against the same EAS project and API.
 concurrency:
   group: swish-ota-publish-${{ github.ref }}
-  # Never interrupt an in-flight multi-niche publication; newer commits queue behind it.
-  cancel-in-progress: false
+  # A newer main commit supersedes an older publish. The runtime-change gate below
+  # ensures a workflow-only safety update cancels old work but does not publish.
+  cancel-in-progress: true
 
 jobs:
+  detect-changes:
+    name: Confirm OTA-compatible runtime changes
+    runs-on: ubuntu-latest
+    outputs:
+      should_publish: ${{ steps.gate.outputs.should_publish }}
+    steps:
+      - name: Check out the exact push range
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gate on actual runtime files
+        id: gate
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ -z "$BEFORE_SHA" || "$BEFORE_SHA" == "0000000000000000000000000000000000000000" ]]; then
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only "$BEFORE_SHA" "$CURRENT_SHA")"
+          printf 'Changed files:\n%s\n' "$changed_files"
+          should_publish=false
+          while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+            case "$file" in
+              app/*|components/*|contexts/*|constants/*|hooks/*|services/*|shared/*|template/*|utils/*|assets/*|niche-modules.json)
+                case "$file" in
+                  */__tests__/*|*.test.*|*.spec.*|*.md) continue ;;
+                esac
+                should_publish=true
+                ;;
+            esac
+          done <<< "$changed_files"
+
+          echo "should_publish=$should_publish" >> "$GITHUB_OUTPUT"
+          if [[ "$should_publish" == "true" ]]; then
+            echo "Compatible application runtime changes detected."
+          else
+            echo "No compatible application runtime changes; OTA publish jobs will be skipped."
+          fi
+
   publish-update:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.should_publish == 'true'
     name: Publish ${{ matrix.niche }} JavaScript update
     runs-on: ubuntu-latest
     timeout-minutes: 30
