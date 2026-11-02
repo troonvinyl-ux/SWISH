@@ -1,7 +1,7 @@
 # SWISH Edge Function Security Matrix
 
 **Audit date:** 2026-11-02  
-**Repository baseline:** `main` at `7a4aec861c4167493fe4d25ced80ae2bc675e571`  
+**Repository baseline:** `main` at `f95affc8d1295d70adc1e4cf7b00a2d7db76864c`  
 **Scope:** Static source review of all 25 deployable directories under `supabase/functions/`. This is an architecture inventory, not a live deployment or penetration-test certification.
 
 ## Authentication and tenant-boundary inventory
@@ -9,30 +9,30 @@
 | Edge Function | Source-observed gate | Static review note |
 |---|---|---|
 | `swish-check-subscription` | OnSpace Cloud Supabase-compatible JWT user verification; derives the caller's tenant memberships | Entitlements are refreshed for the authenticated account; no client-supplied billing claim is treated as authority |
-| `swish-coin-image-enhance` | Supabase JWT user verification | Accepts caller-supplied image data and invokes the configured AI service; no tenant database read/write observed in the reviewed handler |
-| `swish-create-checkout` | Supabase JWT user verification | Checkout is bound to the authenticated user; live Stripe customer/checkout binding still requires environment verification |
-| `swish-customer-portal` | Supabase JWT user verification | Portal session is bound to the authenticated user; live Stripe customer binding still requires environment verification |
+| `swish-coin-image-enhance` | OnSpace Cloud Supabase-compatible JWT user verification | Accepts caller-supplied image data and invokes the configured AI service; no tenant database read/write observed in the reviewed handler |
+| `swish-create-checkout` | OnSpace Cloud Supabase-compatible JWT user verification | Checkout is bound to the authenticated user; live Stripe customer/checkout binding still requires environment verification |
+| `swish-customer-portal` | OnSpace Cloud Supabase-compatible JWT user verification | Portal session is bound to the authenticated user; live Stripe customer binding still requires environment verification |
 | `swish-decompose` | OnSpace Cloud Supabase-compatible JWT user verification plus tenant membership | Tenant-scoped processing |
-| `swish-ebay-browse` | Supabase JWT user verification plus tenant membership | Tenant-scoped marketplace browse |
-| `swish-ebay-category` | Supabase JWT user verification plus tenant membership | Category/aspect access is tenant-gated |
-| `swish-ebay-draft-sync-test` | Supabase JWT user verification plus tenant membership | Test workflow is restricted to explicitly unpublished eBay offers and supported actions; retain review because this is a test-oriented production endpoint |
-| `swish-ebay-finances` | Supabase JWT user verification plus tenant membership | Credentials are decrypted server-side; live finance API/error and fee reconciliation remain open |
-| `swish-ebay-list` | Supabase JWT user verification plus tenant membership; also has a server-to-server secret path | Internal-secret bypass requires separate deployed-secret and caller-scope verification |
-| `swish-ebay-listing-status` | Supabase JWT user verification plus tenant membership | Tenant-scoped listing status |
-| `swish-ebay-messages` | Supabase JWT user verification plus tenant membership | Tenant-scoped messaging; provider-send success must remain distinct from local persistence |
-| `swish-ebay-oauth` | Supabase JWT user verification plus tenant membership | OAuth/token material is encrypted by the shared server-only credential helper |
-| `swish-ebay-orders` | Supabase JWT user verification plus tenant membership | Order import path includes idempotency protections; live reconciliation remains open |
-| `swish-ebay-post-order` | Supabase JWT user verification plus tenant membership | Dispatch, returns and cases are tenant-scoped |
-| `swish-ebay-sync` | Supabase JWT user verification plus tenant membership; also has a server-to-server secret path | Internal-secret bypass requires separate deployed-secret and caller-scope verification |
+| `swish-ebay-browse` | OnSpace Cloud Supabase-compatible JWT user verification plus tenant membership | Tenant-scoped marketplace browse |
+| `swish-ebay-category` | OnSpace Cloud Supabase-compatible JWT user verification plus tenant membership | Category/aspect access is tenant-gated |
+| `swish-ebay-draft-sync-test` | OnSpace Cloud Supabase-compatible JWT user verification plus tenant membership | Test workflow is restricted to explicitly unpublished eBay offers and supported actions; retain review because this is a test-oriented production endpoint |
+| `swish-ebay-finances` | OnSpace Cloud Supabase-compatible JWT user verification plus tenant membership | Credentials are decrypted server-side; live finance API/error and fee reconciliation remain open |
+| `swish-ebay-list` | OnSpace Cloud Supabase-compatible JWT user verification plus tenant membership; also has a server-to-server secret path | Internal-secret bypass requires separate deployed-secret and caller-scope verification |
+| `swish-ebay-listing-status` | OnSpace Cloud Supabase-compatible JWT user verification plus tenant membership | Tenant-scoped listing status |
+| `swish-ebay-messages` | OnSpace Cloud Supabase-compatible JWT user verification plus tenant membership | Tenant-scoped messaging; provider-send success must remain distinct from local persistence |
+| `swish-ebay-oauth` | OnSpace Cloud Supabase-compatible JWT user verification plus tenant membership | OAuth/token material is encrypted by the shared server-only credential helper |
+| `swish-ebay-orders` | OnSpace Cloud Supabase-compatible JWT user verification plus tenant membership | Order import path includes idempotency protections; live reconciliation remains open |
+| `swish-ebay-post-order` | OnSpace Cloud Supabase-compatible JWT user verification plus tenant membership | Dispatch, returns and cases are tenant-scoped |
+| `swish-ebay-sync` | OnSpace Cloud Supabase-compatible JWT user verification plus tenant membership; also has a server-to-server secret path | Internal-secret bypass requires separate deployed-secret and caller-scope verification |
 | `swish-identify` | OnSpace Cloud Supabase-compatible JWT user verification, tenant membership and paid-niche authorization | Shared entitlement guard is used |
-| `swish-image-download` | Supabase JWT user verification plus tenant membership | Tenant-scoped image handling |
-| `swish-islamic-identify` | Supabase JWT user verification, tenant membership and paid-niche authorization | Coins entitlement is checked server-side |
-| `swish-list-generate` | Supabase JWT user verification plus tenant membership | Listing generation reads tenant-scoped item data and specialist attributes |
-| `swish-market-value` | Supabase JWT user verification, tenant membership and paid-niche authorization | Shared paid-niche guard is used |
+| `swish-image-download` | OnSpace Cloud Supabase-compatible JWT user verification plus tenant membership | Tenant-scoped image handling |
+| `swish-islamic-identify` | OnSpace Cloud Supabase-compatible JWT user verification, tenant membership and paid-niche authorization | Coins entitlement is checked server-side |
+| `swish-list-generate` | OnSpace Cloud Supabase-compatible JWT user verification plus tenant membership | Listing generation reads tenant-scoped item data and specialist attributes |
+| `swish-market-value` | OnSpace Cloud Supabase-compatible JWT user verification, tenant membership and paid-niche authorization | Shared paid-niche guard is used |
 | `swish-migrate-credentials` | OnSpace Cloud Supabase-compatible JWT user verification plus tenant membership and owner/admin role | Tenant ID is mandatory; service-role credential access occurs after privileged membership check |
 | `swish-privacy-policy` | Public GET endpoint | Deliberately unauthenticated read-only policy document |
-| `swish-reprice` | Supabase JWT user verification plus tenant membership and niche-scoped authorization | Server-side price application is guarded |
-| `swish-verify` | Supabase JWT user verification plus tenant membership | Tenant-scoped verification |
+| `swish-reprice` | OnSpace Cloud Supabase-compatible JWT user verification plus tenant membership and niche-scoped authorization | Server-side price application is guarded |
+| `swish-verify` | OnSpace Cloud Supabase-compatible JWT user verification plus tenant membership | Tenant-scoped verification |
 
 ## Shared security controls observed
 
@@ -55,3 +55,8 @@
 ## Verdict
 
 **S1-02 remains IMPLEMENTED, not VERIFIED.** This matrix closes the repository-level function inventory gap for the 25 deployable Edge Function directories. It does not close deployed authorization, effective RLS, direct-query, internal-secret caller, or live call-path verification.
+
+
+## Direct-query and caller review boundary
+
+The architecture audit records the direct query file inventory and 29 source files with Edge Function invocation matches. Those client-side tenant predicates are not a substitute for OnSpace Cloud RLS. Function rows above record source-observed guards only; they do not prove effective deployed policy. In particular, the `swish-ebay-list` and `swish-ebay-sync` internal-secret paths require their deployed secret values, rotation state and exact trusted caller scope to be verified in OnSpace Cloud. Do not expose or print secret values during that verification.
