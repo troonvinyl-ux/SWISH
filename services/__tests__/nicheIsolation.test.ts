@@ -620,13 +620,28 @@ describe('Mutation tenant guard', () => {
     expect(error).toContain('tenantId is required');
   });
 
-  test('updateItem with undefined tenantId follows the legacy unscoped path', async () => {
-    // The mocked Supabase query is intentionally non-thenable; inspect the
-    // query synchronously instead of awaiting a network operation in this test.
-    const pending = updateItem('some-item-id', { status: 'identified' as any }, undefined);
-    expect(pending).toBeInstanceOf(Promise);
-    // No database request is made: the test only checks that the legacy
-    // optional-tenant invocation is accepted without a synchronous throw.
+  test('updateItem with undefined tenantId fails closed', async () => {
+    const result = await updateItem('some-item-id', { canonicalTitle: 'Example' }, undefined);
+    expect(result.error).toContain('tenantId is required');
+  });
+
+  test('generic updateItem cannot bypass the atomic lifecycle command', async () => {
+    const result = await updateItem('some-item-id', { status: 'sold' as any }, 'tenant-id');
+    expect(result.error).toContain('transitionItemStatus or markItemSold');
+  });
+
+  test('manual sale, order creation and CSV sale import use the atomic lifecycle helper', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const stock = fs.readFileSync(path.resolve(__dirname, '../../app/stock-listing/[id].tsx'), 'utf8');
+    const orders = fs.readFileSync(path.resolve(__dirname, '../orderService.ts'), 'utf8');
+    const csv = fs.readFileSync(path.resolve(__dirname, '../../app/ebay-csv.tsx'), 'utf8');
+    expect(stock).toContain('markItemSold(item.id, tenant.id');
+    expect(stock).not.toContain("updateItem(item.id, { status: 'sold'");
+    expect(orders).toContain('markItemSold(input.itemId, tenantId');
+    expect(orders).not.toContain(".update({ status: 'sold'");
+    expect(csv).toContain('markItemSold(itemId, tenantId');
+    expect(csv).not.toContain("status: 'sold',\n          sold_price: salePrice");
   });
 });
 
