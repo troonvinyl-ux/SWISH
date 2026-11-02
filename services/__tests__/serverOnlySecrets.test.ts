@@ -121,6 +121,9 @@ describe('SWISH eBay Finances input and refresh safety', () => {
     expect(source).toContain('aggregateActualEbayFees(feeRows ?? [])');
     expect(source).toContain('withActualEbayFeeNote(ord.notes)');
     expect(source).toContain(".eq('currency', currency)");
+    expect(source).toContain("tx.bookingEntry === 'DEBIT' || tx.bookingEntry === 'CREDIT'");
+    expect(source).toContain("select('transaction_type, amount, booking_entry')");
+    expect(source).toContain("booking_entry === 'DEBIT'");
   });
 
   test('counts transaction updates only when an existing transaction was found', () => {
