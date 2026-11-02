@@ -51,8 +51,8 @@
         {
           "id": "S1-04",
           "title": "Record security, entitlement, eBay, finance, sync and release blockers",
-          "status": "IMPLEMENTED",
-          "evidence": "docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md#s1-04, docs/SWISH_ENGINEERING_AUDIT.md, docs/SWISH_ENGINEERING_HANDOVER.md and docs/SWISH_EDGE_FUNCTION_SECURITY_MATRIX.md consolidate security, entitlement, eBay finance/messages/sync, category specifics, order allocation, Android API 36, device, deployment and live-backend blockers. PR #126 refreshed the source security inventory for all 25 deployable Edge Function entry points. This verifies the blocker register as an audit artifact only; remediation and live acceptance remain open in downstream stages."
+          "status": "VERIFIED",
+          "evidence": "Verified as an audit deliverable on 2026-11-02: docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md#s1-04 records the security, entitlement, eBay, finance, sync and release blocker map; docs/SWISH_ENGINEERING_AUDIT.md and docs/SWISH_ENGINEERING_HANDOVER.md retain prioritized findings and release limits; docs/SWISH_EDGE_FUNCTION_SECURITY_MATRIX.md inventories all 25 deployable Edge Function entry points and explicitly separates source observations from live verification. This verifies completeness of the blocker-register artifact only. It does NOT verify remediation, deployed OnSpace revisions, live RLS/caller behavior, eBay acceptance or release readiness; those remain open in S1-02, S3 and S7."
         },
         {
           "id": "S1-05",
@@ -331,9 +331,9 @@
     "taskStateTotals": {
       "taskRecords": 34,
       "implementedOrVerified": 26,
-      "verified": 6,
+      "verified": 7,
       "implementedOrVerifiedPercent": 76.47,
-      "verifiedPercent": 17.65,
+      "verifiedPercent": 20.59,
       "meaning": "Unweighted historical task-state counts; not live feature coverage or production certification."
     },
     "sourceRepairPR": 134,
@@ -355,6 +355,10 @@
     "Real APK/device launches, signing, web parity, deployment and external CI billing constraints require evidence."
   ],
   "changeLog": [
+    {
+      "date": "2026-11-02",
+      "change": "Promoted S1-04 to VERIFIED after checking the complete Stage One blocker audit, engineering audit/handover and 25-entry Edge Function security matrix. Verification is limited to the audit artifact; no live security, OnSpace deployment, eBay or production acceptance is implied. Updated verified task count from 6/34 (17.65%) to 7/34 (20.59%); implemented-or-verified remains 26/34 (76.47%)."
+    },
     {
       "date": "2026-11-02",
       "change": "Executed live OnSpace Cloud SQL/grant/identity-free RLS checks and GET probes for all 25 existing Edge endpoints. Recorded ten HTTP 500 failures (nine BootFailure logs) and four still-failed live retests. Corrected out-of-deployment-tree imports, supplied generated canonical shared assets and restored a missing registry-derived repricing adapter; added dependency-containment/parity and manual safe HTTP smoke checks. No database/data/credential/UI/native changes, no authenticated eBay/AI/device acceptance, no CI or deployment verification and no VERIFIED promotion. S7-05 moved only to IN PROGRESS. Full results and required access recorded in docs/SWISH_LIVE_VERIFICATION_20261102.md."
