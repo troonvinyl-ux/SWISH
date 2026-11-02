@@ -374,7 +374,9 @@ async function handleGetMessageBody(
   if (typeof message.body === 'string' && message.body.trim()) {
     return jsonResponse({ success: true, body: message.body, cached: true });
   }
-  if (!message.ebay_message_id) return jsonResponse({ error: 'This message has no eBay message reference.' }, 422);
+  if (typeof message.ebay_message_id !== 'string' || !message.ebay_message_id.trim() || message.ebay_message_id.length > 200) {
+    return jsonResponse({ error: 'This message has no valid eBay message reference.' }, 422);
+  }
 
   const credsResult = await getEbayAccessToken(supabase, tenantId);
   if ('error' in credsResult) return jsonResponse({ error: credsResult.error }, 400);
