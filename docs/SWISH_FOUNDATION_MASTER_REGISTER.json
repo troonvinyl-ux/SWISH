@@ -122,13 +122,13 @@
           "id": "S3-04",
           "title": "Verify secure eBay OAuth, listing, orders, messages and sync flows",
           "status": "IN PROGRESS",
-          "evidence": "docs/S3_CORE_ACCEPTANCE_REPORT.md: service-side eBay message ingestion and inbox acknowledgement fixes implemented; live OAuth/token refresh, listing, order, message pagination/body, provider send and sync acceptance remain open. Keep IN PROGRESS."
+          "evidence": "Source implementation now includes bounded sequential GetMyMessages pagination (10 pages × 50), namespace-tolerant XML parsing, explicit partial-sync reporting and inbox handling; PR #130 merged as 0f24568 with Edge Function syntax/secret-boundary, regression/isolation, niche-routing, ten branded Android bundles and ten web exports all passing. Still IN PROGRESS: actual eBay response/seller permission acceptance, message bodies, remote send, deployed OnSpace Cloud revision and mailbox-over-cap retrieval."
         },
         {
           "id": "S3-05",
           "title": "Verify pricing, fees, profit, notifications and settings foundations",
           "status": "IN PROGRESS",
-          "evidence": "docs/S3_CORE_ACCEPTANCE_REPORT.md: fee aggregation and profit presentation hardening exists, but finance 400/499, complete multi-line fee allocation, settings/notification delivery and live reconciliation remain unverified. Keep IN PROGRESS."
+          "evidence": "Source implementation includes fee aggregation sign handling and finance partial/incomplete reporting (`docs/S3_CORE_ACCEPTANCE_REPORT.md`), plus profit engine v1.3 with current UK business/private seller estimates, category tiers, regulatory fee, order fixed fee and separate buyer/seller postage. Eight focused tests added in PR #131 (rebased as PR #132). Still IN PROGRESS: run checks, exact seller/account fee acceptance, multi-line/quantity allocation, historical finance 400/499 diagnosis and live order/finance reconciliation; no notification delivery service has been added."
         }
       ]
     },
@@ -427,6 +427,14 @@
     {
       "date": "2026-11-02",
       "change": "Merged PR #128 as 02e970167e8d17dad0c281f1cb6d28d17955677e after workflow run 41461306201 passed all 14 jobs (including secret-boundary/syntax, regression/isolation, Master Admin and ten niche Android JS bundles). Reconciled stale S4-S6 NOT STARTED labels to IMPLEMENTED where existing source/report/test evidence demonstrates implementation. S4-S6 remain IN PROGRESS: all ten niches still need real-image, live marketplace, cross-tenant, hosted web and device acceptance; optional unintegrated external data integrations remain explicitly deferred. No live OnSpace Cloud or eBay production acceptance is inferred from CI."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "Merged PR #130 as 0f24568 after all 25 checks passed, including Edge Function syntax/secret-boundary, regression/isolation, ten branded Android bundles and ten web exports. eBay message sync now paginates and reports incomplete results explicitly; deployed OnSpace Cloud/eBay acceptance remains open. S3-04 evidence updated."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "S3-05 source update: profit engine v1.3 aligns estimates to the official UK eBay business fee schedule checked 2026-11-02, supports UK private seller treatment, adds category thresholds and separates buyer-paid from seller-paid postage. Eight focused tests added. Exact account fees, VAT/shop/performance adjustments, international destination rates, multi-line fee allocation and live finance reconciliation remain unverified."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"
