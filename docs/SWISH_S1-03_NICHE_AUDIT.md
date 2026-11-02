@@ -23,7 +23,7 @@ All ten package IDs are distinct. All ten registered entry files exist. Scanner 
 
 ## Gaps and release risks
 
-1. **Only two niche descriptor files exist:** `niches/coins/module.json` and `niches/clothing/module.json`. The other eight registered niches do not yet have a descriptor under `niches/<id>/module.json`.
+1. **Descriptor coverage is now 10/10.** The eight existing descriptors plus `niches/tech/module.json` and `niches/surplus_flip/module.json` cover every registered niche. PR #126 added the final two and the parity regression test.
 2. All ten descriptors describe a shared-core-with-registered-niche-configuration model and explicitly state that end-to-end runtime isolation still requires live verification. The products are branded entry/configuration layers over the shared SWISH engine, not independently extracted code bundles.
 3. Card, Fossil, Beauty and Tech point to the shared `/capture` route; the registry has no dedicated home for these four products. `app/(tabs)/scan.tsx` uses the canonical niche and specialist profile to derive title, accent, capture instructions and AI capability text for products that use the shared capture card; Cards, Beauty and Tech are handled through this dynamic profile branch rather than a dedicated hard-coded card object. Their shared `/capture` route and end-to-end identification/persistence still require runtime acceptance.
 4. Static registry ownership and route tests do not prove database isolation. Tenant/niche RLS and server-side authorization still require live integration evidence for every niche.
@@ -40,7 +40,7 @@ All ten package IDs are distinct. All ten registered entry files exist. Scanner 
 
 ## Refreshed source baseline
 
-- Main commit: `f95affc8d1295d70adc1e4cf7b00a2d7db76864c`.
-- Descriptor coverage: 10/10. `niches/tech/module.json` and `niches/surplus_flip/module.json` were added and are now covered by a canonical-registry parity regression test.
+- Main commit: `e3df8fe19b1d3444919ddac77dadd41a5429acf1` (PR #126 merge).
+- Descriptor coverage: 10/10. `niches/tech/module.json` and `niches/surplus_flip/module.json` complete the set and are covered by a canonical-registry parity regression test.
 - The scan tab has named capture configurations for core products and a dynamic canonical-profile branch for Cards, Beauty and Tech; the latter derives niche title, colour, capture instructions and AI capabilities from the registered specialist. This is separate from live acceptance of the shared `/capture` route.
 - These are audit findings, not assertions that live capture, identification accuracy, persistence or isolation passed.
