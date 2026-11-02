@@ -92,7 +92,10 @@ describe('Antique Flipper dedicated scanner interface', () => {
 
     expect(screen).toContain('useGenericCapture');
     expect(screen).toContain('Evidence checklist');
-    expect(screen).toContain('Position the whole object');
+    expect(screen).toContain('CameraView');
+    expect(screen).toContain('Allow camera access');
+    expect(screen).toContain('flashEnabled ? \'on\' : \'off\'');
+    expect(screen).toContain('flip-camera-android');
     expect(screen).toContain('gridVisible');
     expect(screen).toContain('capture.capture(activeSlot.id, false)');
     expect(screen).toContain('capture.capture(activeSlot.id, true)');
