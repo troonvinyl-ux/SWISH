@@ -64,7 +64,7 @@ export const NicheOverview = memo(function NicheOverview(_props: NicheOverviewPr
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeading}><MaterialIcons name="flash-on" size={21} color={activeNiche.color}/><Text style={styles.section}>Quick actions</Text></View>
           <View style={styles.actionsGrid}>
-            {activeNiche.quickActions.map(action => <Pressable key={action.label} onPress={() => router.push(action.route as any)} style={({ pressed }) => [styles.action, { borderColor: activeNiche.color + '30', opacity: pressed ? 0.75 : 1 }]}><MaterialIcons name={action.icon as any} size={20} color={activeNiche.color}/><Text style={styles.actionLabel}>{action.label}</Text><MaterialIcons name="chevron-right" size={18} color={Colors.textMuted}/></Pressable>)}
+            {activeNiche.quickActions.map(action => <Pressable key={action.label} onPress={() => router.push(action.route as any)} style={({ pressed }) => [styles.action, { borderColor: activeNiche.color + '30', opacity: pressed ? 0.75 : 1 }]}><MaterialIcons name={action.icon as any} size={20} color={activeNiche.color}/><Text style={styles.actionLabel}>{action.label}</Text><MaterialIcons name="chevron-right" size={18} color={Colors.textTertiary}/></Pressable>)}
           </View>
         </View>
 
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
   body: { fontSize: Typography.size.base, color: Colors.textSecondary, lineHeight: 24 },
   statsRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xl, paddingVertical: Spacing.sm },
   stat: { gap: 2 }, statValue: { fontSize: Typography.size.xl, color: Colors.textPrimary, fontWeight: Typography.weight.bold },
-  statLabel: { fontSize: 9, color: Colors.textMuted, fontWeight: Typography.weight.bold, letterSpacing: 1.2 },
+  statLabel: { fontSize: 9, color: Colors.textTertiary, fontWeight: Typography.weight.bold, letterSpacing: 1.2 },
   statDivider: { width: 1, height: 30, backgroundColor: Colors.surfaceBorder },
   button: { minHeight: 52, paddingHorizontal: Spacing.base, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'space-between', flexDirection: 'row' },
   buttonText: { fontSize: Typography.size.base, color: Colors.background, fontWeight: Typography.weight.bold, flex: 1, textAlign: 'center' },
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
   cautionCard: { padding: Spacing.md, borderRadius: Radius.lg, backgroundColor: Colors.surface, borderWidth: 1, gap: Spacing.md },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   section: { fontSize: Typography.size.lg, color: Colors.textPrimary, fontWeight: Typography.weight.semibold },
-  subheading: { fontSize: 9, color: Colors.textMuted, fontWeight: Typography.weight.bold, letterSpacing: 1.1 },
+  subheading: { fontSize: 9, color: Colors.textTertiary, fontWeight: Typography.weight.bold, letterSpacing: 1.1 },
   checkRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   checkNumber: { width: 24, height: 24, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
   checkNumberText: { fontSize: 11, fontWeight: Typography.weight.bold },
