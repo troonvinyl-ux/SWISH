@@ -81,7 +81,8 @@ export function getEbayFeeRate(specialistId?: string): EbayFeeRate {
 export interface ProfitInputs {
   salePrice: number;
   acquisitionCost: number;
-  shippingCost?: number;         // cost to seller (postage, packaging)
+  shippingCost?: number;         // postage cost paid by seller
+  shippingRevenue?: number;      // postage/handling paid by buyer; included in eBay fee base and revenue
   packagingCost?: number;
   marketplaceFee?: number;        // if known exactly (e.g., from eBay financial API)
   marketplaceFeeRate?: number;    // 0-1, overrides the category final-value percentage only
@@ -100,6 +101,7 @@ export interface ProfitInputs {
 export interface ProfitResult {
   // Core financials
   salePrice: number;
+  shippingRevenue: number;
   acquisitionCost: number;
   marketplaceFee: number;
   shippingCost: number;
@@ -142,6 +144,7 @@ export function calculateProfit(inputs: ProfitInputs): ProfitResult {
     salePrice,
     acquisitionCost,
     shippingCost = 0,
+    shippingRevenue = 0,
     packagingCost = 0,
     otherCosts = 0,
     labourHours,
@@ -154,7 +157,8 @@ export function calculateProfit(inputs: ProfitInputs): ProfitResult {
   // ── Determine marketplace fee ────────────────────────────────────────────
   let marketplaceFee: number;
   let feeRateUsed: number;
-  const feeBase = Math.max(0, salePrice + shippingCost);
+  const grossRevenue = salePrice + shippingRevenue;
+  const feeBase = Math.max(0, grossRevenue);
   const estimatedFees = inputs.marketplaceFee == null;
 
   if (!estimatedFees) {
@@ -189,12 +193,12 @@ export function calculateProfit(inputs: ProfitInputs): ProfitResult {
   }
 
   // ── Core calculations ────────────────────────────────────────────────────
-  const netRevenue     = salePrice - marketplaceFee - shippingCost;
+  const netRevenue     = grossRevenue - marketplaceFee - shippingCost;
   const totalCosts     = acquisitionCost + marketplaceFee + shippingCost + packagingCost + otherCosts;
-  const grossProfit    = salePrice - totalCosts;
+  const grossProfit    = grossRevenue - totalCosts;
   const netProfit      = netRevenue - acquisitionCost - packagingCost - otherCosts;
 
-  const grossMarginPct = salePrice > 0 ? grossProfit / salePrice : 0;
+  const grossMarginPct = grossRevenue > 0 ? grossProfit / grossRevenue : 0;
   const roi            = acquisitionCost > 0 ? grossProfit / acquisitionCost : 0;
 
   // ── Labour efficiency ────────────────────────────────────────────────────
@@ -212,6 +216,7 @@ export function calculateProfit(inputs: ProfitInputs): ProfitResult {
 
   return {
     salePrice,
+    shippingRevenue,
     acquisitionCost,
     marketplaceFee,
     shippingCost,
