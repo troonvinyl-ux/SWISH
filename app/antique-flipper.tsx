@@ -11,7 +11,7 @@ import { BrandArtwork } from '@/components/feature/BrandArtwork';
 
 const GOLD = '#D8AD52';
 const ACTIONS = [
-  { icon: 'photo-camera', title: 'Scan & Identify', subtitle: 'Identify an antique with photographs', route: '/capture', primary: true },
+  { icon: 'photo-camera', title: 'Scan & Identify', subtitle: 'Identify an antique with photographs', route: '/antique-capture', primary: true },
   { icon: 'inventory-2', title: 'My Inventory', subtitle: 'Stock, drafts, live and sold', route: '/(tabs)/inventory' },
   { icon: 'sell', title: 'Create eBay Listing', subtitle: 'Prepare a category-specific listing', route: '/(tabs)/inventory' },
   { icon: 'query-stats', title: 'Market Value', subtitle: 'Review sold and asking-price evidence', route: '/antique-value' },
@@ -32,7 +32,7 @@ export default function AntiqueFlipperHome() {
     }
     if (title === 'Market Value' || title === 'Condition Assessment') {
       const routeName = title === 'Market Value' ? '/antique-value?id=' : '/antique-condition?id=';
-      router.push(firstItem ? (routeName + firstItem.id) as any : ('/capture' as any));
+      router.push(firstItem ? (routeName + firstItem.id) as any : ('/(tabs)/inventory' as any));
       return;
     }
     router.push(route as any);
@@ -73,7 +73,7 @@ export default function AntiqueFlipperHome() {
         <View style={s.actionCopy}><Text style={s.itemTitle} numberOfLines={1}>{item.canonicalTitle}</Text><Text style={s.actionSubtitle}>{item.condition || 'Condition not assessed'} · {item.status}</Text></View>
         <Text style={s.itemPrice}>{item.expectedSellingPrice ? `£${Number(item.expectedSellingPrice).toFixed(0)}` : '—'}</Text>
       </Pressable>)}
-      {!inventory.loading && inventory.items.length===0 ? <View style={s.empty}><Text style={s.emptyTitle}>Your next discovery starts here</Text><Text style={s.actionSubtitle}>Scan an object to identify it, assess its condition and save it to your Antique Flipper inventory.</Text><Pressable onPress={() => openAction('Scan & Identify', '/capture')} style={s.goldButton}><Text style={s.goldButtonText}>SCAN AN ANTIQUE  →</Text></Pressable></View> : null}
+      {!inventory.loading && inventory.items.length===0 ? <View style={s.empty}><Text style={s.emptyTitle}>Your next discovery starts here</Text><Text style={s.actionSubtitle}>Scan an object to identify it, assess its condition and save it to your Antique Flipper inventory.</Text><Pressable onPress={() => openAction('Scan & Identify', '/antique-capture')} style={s.goldButton}><Text style={s.goldButtonText}>SCAN AN ANTIQUE  →</Text></Pressable></View> : null}
       <Text style={s.footer}>Powered by SWISH Intelligence Engine · {tenant?.name ?? 'Private workspace'}</Text>
     </ScrollView>
   </SafeAreaView>;
