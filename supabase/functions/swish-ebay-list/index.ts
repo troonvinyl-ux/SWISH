@@ -2371,12 +2371,14 @@ async function handleRequest(req: Request): Promise<Response> {
     if (listingSaveError) throw new Error('Accepted listing could not be saved');
 
     if (item?.id) {
-      const { error: itemSaveError } = await supabase.from('items').update({
-        status: 'listed',
-        updated_at: publishedAt,
-        marketplace: 'ebay',
-      }).eq('id', item.id).eq('tenant_id', tenantId);
-      if (itemSaveError) warnings.push('Listing accepted, but item status needs reconciliation.');
+      const { data: transitioned, error: itemSaveError } = await supabase.rpc('swish_transition_item', {
+        p_tenant_id: tenantId,
+        p_item_id: item.id,
+        p_status: 'listed',
+        p_notes: `eBay listing published: ${externalListingId}`,
+        p_marketplace: 'ebay',
+      });
+      if (itemSaveError || transitioned !== true) warnings.push('Listing accepted, but item status needs reconciliation.');
     }
 
     if (catResult.wasResolved && resolvedCategoryId) {
