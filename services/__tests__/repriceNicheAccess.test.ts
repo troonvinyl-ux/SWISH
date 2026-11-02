@@ -5,7 +5,7 @@ import { isSpecialistAllowedForReprice, REPRICE_NICHE_SPECIALISTS } from '../../
 const projectRoot = path.resolve(__dirname, '../..');
 
 describe('server-side repricing niche authorization', () => {
-  test('the server allowlist exactly matches the canonical niche registry', () => {
+  test('the server allowlist matches canonical specialists only (legacy aliases excluded)', () => {
     const registry = JSON.parse(fs.readFileSync(path.join(projectRoot, 'niche-modules.json'), 'utf8'));
     for (const [nicheId, product] of Object.entries(registry.products) as Array<[string, { specialists: string[] }]>) {
       expect(REPRICE_NICHE_SPECIALISTS[nicheId]).toEqual(product.specialists);
