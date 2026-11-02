@@ -11,7 +11,7 @@ This file is the canonical human-readable companion to `SWISH_FOUNDATION_MASTER_
 - Failed or blocked work remains visible; new work must not erase the unresolved item.
 - Before merging, compare the PR head with the latest main, update/rebase where needed, rerun required checks, and verify the exact head SHA that passed.
 - Niche inventory, specialist configuration and app identity must be read from the existing `niche-modules.json`; do not create a duplicate registry.
-- Keep existing Supabase/OnSpace backend, auth, database, eBay OAuth/listing/order/message/finance architecture and credential security boundaries.
+- Keep OnSpace Cloud as the canonical backend (using Supabase-compatible APIs), auth, database, eBay OAuth/listing/order/message/finance architecture and credential security boundaries.
 - No native APK rebuild for ordinary JavaScript/UI work where OTA/web validation is sufficient; build native binaries at release milestones or for native dependency/configuration changes.
 
 ## Initial state
