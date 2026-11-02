@@ -37,7 +37,7 @@ import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { getSupabaseClient } from '@/template';
 import { useAlert } from '@/template';
-import { Item, getItem, updateItem } from '@/services/itemService';
+import { Item, getItem, updateItem, markItemSold } from '@/services/itemService';
 import { getItemListings, updateListingPrice, endListing, deleteListing, submitListingToMarketplace, updateListingStatus } from '@/services/listingService';
 import type { SubmitStep } from '@/services/listingService';
 import { FunctionsHttpError } from '@supabase/supabase-js';
@@ -2247,11 +2247,24 @@ export default function StockListingScreen() {
     showAlert('Mark as Sold', 'This will move the item to your History. Continue?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Mark Sold', onPress: async () => {
-        await updateItem(item.id, { status: 'sold', soldPrice: item.expectedSellingPrice, soldAt: new Date().toISOString() }, tenant?.id);
-        setItem(prev => prev ? { ...prev, status: 'sold', soldPrice: item.expectedSellingPrice, soldAt: new Date().toISOString() } : prev);
+        if (!tenant?.id) {
+          showAlert('Cannot mark sold', 'Your business account could not be verified. Reload and try again.');
+          return;
+        }
+        const soldAt = new Date().toISOString();
+        const result = await markItemSold(item.id, tenant.id, {
+          soldPrice: item.expectedSellingPrice,
+          soldAt,
+          marketplace: 'ebay',
+        });
+        if (result.error) {
+          showAlert('Sale not saved', result.error);
+          return;
+        }
+        setItem(prev => prev ? { ...prev, status: 'sold', soldPrice: item.expectedSellingPrice, soldAt } : prev);
       }},
     ]);
-  }, [item, showAlert]);
+  }, [item, tenant?.id, showAlert]);
 
   const activeListings = useMemo(() => listings.filter(l => l.status === 'active'), [listings]);
 
