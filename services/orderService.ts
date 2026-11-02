@@ -2,6 +2,7 @@
 // Manages the post-sale lifecycle: order intake, fulfilment, tracking, returns, reconciliation.
 
 import { getSupabaseClient } from '@/template';
+import { markItemSold } from '@/services/itemService';
 
 export type OrderStatus =
   | 'pending'
@@ -206,13 +207,15 @@ export async function createOrder(
 
   if (error) return { order: null, error: error.message };
 
-  // Update item status to sold if linked
+  // Update item through the atomic lifecycle command so the sale and audit trail agree.
   if (input.itemId) {
-    await supabase
-      .from('items')
-      .update({ status: 'sold', sold_price: input.salePrice, sold_at: new Date().toISOString(), marketplace: input.marketplaceId })
-      .eq('id', input.itemId)
-      .eq('tenant_id', tenantId);
+    const transition = await markItemSold(input.itemId, tenantId, {
+      soldPrice: input.salePrice,
+      marketplace: input.marketplaceId,
+    });
+    if (transition.error) {
+      return { order: mapOrder(data), error: `Order was created, but inventory could not be transitioned to sold: ${transition.error}` };
+    }
   }
 
   return { order: mapOrder(data), error: null };

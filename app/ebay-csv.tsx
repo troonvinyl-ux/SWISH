@@ -30,6 +30,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { getSupabaseClient } from '@/template';
+import { markItemSold } from '@/services/itemService';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { useAlert } from '@/template';
@@ -841,13 +842,15 @@ async function importOrderRows(
           import_source: 'csv',
         });
 
-        await supabase.from('items').update({
-          status: 'sold',
-          sold_price: salePrice,
-          sold_at: saleDate,
+        const transition = await markItemSold(itemId, tenantId, {
+          soldPrice: salePrice,
+          soldAt: saleDate,
           marketplace: 'ebay',
-          updated_at: new Date().toISOString(),
-        }).eq('id', itemId).not('status', 'eq', 'sold');
+          externalOrderId: orderId,
+        });
+        if (transition.error) {
+          errors.push(`Row ${i + 1}: Sale imported, but inventory status could not be transitioned: ${transition.error}`);
+        }
       }
 
       imported++;

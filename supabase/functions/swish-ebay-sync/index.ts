@@ -816,8 +816,19 @@ Deno.serve(async (req: Request) => {
       const newStatus = ebayItem?.ebayStatus === 'sold' ? 'sold' : 'ended';
       await supabase.from('listings').update({ status: newStatus, ended_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', l.id).eq('tenant_id', tenantId);
       if (l.item_id) {
-        await supabase.from('items').update({ status: newStatus === 'sold' ? 'sold' : 'identified', updated_at: new Date().toISOString() }).eq('id', l.item_id).eq('tenant_id', tenantId);
-        orphansFixed++;
+        const itemStatus = newStatus === 'sold' ? 'sold' : 'identified';
+        const { data: transitioned, error: transitionError } = await supabase.rpc('swish_transition_item', {
+          p_tenant_id: tenantId,
+          p_item_id: l.item_id,
+          p_status: itemStatus,
+          p_notes: `eBay sync reconciled listing ${l.id} as ${newStatus}`,
+          ...(newStatus === 'sold' ? { p_sold_at: new Date().toISOString(), p_marketplace: 'ebay' } : {}),
+        });
+        if (transitionError || transitioned !== true) {
+          console.warn('[SWISH Sync] Item lifecycle reconciliation was not confirmed.');
+        } else {
+          orphansFixed++;
+        }
       }
     }
   }

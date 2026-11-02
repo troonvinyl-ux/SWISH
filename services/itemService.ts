@@ -475,11 +475,13 @@ export async function updateItem(
   if (!tenantId || tenantId.trim() === '') {
     return { error: 'updateItem: tenantId is required — operation refused' };
   }
+  if (Object.prototype.hasOwnProperty.call(updates, 'status')) {
+    return { error: 'Item status must be changed through transitionItemStatus or markItemSold so lifecycle and audit events are recorded.' };
+  }
   const supabase = getSupabaseClient();
   const dbUpdates: Record<string, any> = {};
   const fieldMap: Record<string, string> = {
     canonicalTitle: 'canonical_title',
-    status: 'status',
     dispositionDecision: 'disposition_decision',
     condition: 'condition',
     conditionGrade: 'condition_grade',

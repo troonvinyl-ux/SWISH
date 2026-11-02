@@ -332,9 +332,16 @@ async function reconcileSoldOrder(
   const { error: listingError } = await supabase.from('listings').update({status:'sold', ended_at:soldAt,updated_at:new Date().toISOString()})
     .eq('id',listingId).eq('item_id',itemId).eq('tenant_id',tenantId).eq('marketplace_id','ebay');
   if (listingError) return 'Sold listing status could not be saved';
-  const { error: itemError } = await supabase.from('items').update({status:'sold',sold_price:salePrice,sold_at:soldAt,marketplace:'ebay',updated_at:new Date().toISOString()})
-    .eq('id',itemId).eq('tenant_id',tenantId);
-  return itemError ? 'Sold inventory status could not be saved' : null;
+  const { data: transitioned, error: itemError } = await supabase.rpc('swish_transition_item', {
+    p_tenant_id: tenantId,
+    p_item_id: itemId,
+    p_status: 'sold',
+    p_notes: `eBay order confirmed for listing ${listingId}`,
+    p_sold_price: salePrice,
+    p_sold_at: soldAt,
+    p_marketplace: 'ebay',
+  });
+  return itemError || transitioned !== true ? 'Sold inventory status could not be saved' : null;
 }
 
 async function importFulfillmentOrders(
