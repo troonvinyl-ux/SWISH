@@ -77,7 +77,7 @@ export default function TestLabHome() {
       setSession(next);
       if(next) await loadTenants(); else {setTenant(null);setTenants([]);setItems([]);setSelected(null);}
     }); } catch (error) { setMessage('Backend unavailable: '+(error instanceof Error ? error.message : String(error))); }
-    return()=>{alive=false;listener?.subscription?.unsubscribe?.();};
+    return()=>{alive=false;listener?.data?.subscription?.unsubscribe?.();};
   },[loadTenants]);
 
   const signIn=async()=>{
