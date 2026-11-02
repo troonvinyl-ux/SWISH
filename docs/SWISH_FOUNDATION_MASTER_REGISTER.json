@@ -205,7 +205,7 @@
     {
       "id": "S6",
       "name": "Foundations 4–6 — Optional specialist capabilities",
-      "status": "NOT STARTED",
+      "status": "IN PROGRESS",
       "goal": "Add advanced intelligence, specialist business tools and unique niche engines only where justified by the niche.",
       "tasks": [
         {
@@ -443,6 +443,10 @@
     {
       "date": "2026-11-02",
       "change": "Expanded PR #132 CI on commit 812c3b1: 14/14 Master readiness jobs passed including lint, register validation, TypeScript, 554 tests across 13 Jest suites, four Deno paid-niche authorization tests, Edge Function syntax/secret-boundary and ten niche Android JS bundles plus Master Admin. Web exports passed 10/10, niche routing/config and register validation passed. Live integration gate remained disabled; no live OnSpace/eBay or native release acceptance is inferred."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "Reconciled S6 stage roll-up: all four S6 task records are IMPLEMENTED at source level, so the stage is IN PROGRESS rather than stale NOT STARTED. Live niche-specific acceptance and verification remain outstanding; no VERIFIED status inferred."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"
