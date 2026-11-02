@@ -48,12 +48,17 @@ for (const [id, product] of Object.entries(products)) {
     if (!fs.existsSync(path.join(root, 'app', routeFile))) fail(id + ' scanner route is missing: ' + routeFile);
   }
   if (!Array.isArray(product.specialists) || product.specialists.length === 0) fail(id + ' requires canonical specialists');
-  if (!product.defaultSpecialist || !product.specialists?.includes(product.defaultSpecialist)) fail(id + ' defaultSpecialist must belong to its canonical specialists');
-  for (const specialist of [...(product.specialists ?? []), ...(product.legacySpecialists ?? [])]) {
-    if (specialistOwners.has(specialist) && specialistOwners.get(specialist) !== id) fail('specialist ' + specialist + ' has multiple niche owners');
-    specialistOwners.set(specialist, id);
+  if (product.legacySpecialists !== undefined && !Array.isArray(product.legacySpecialists)) fail(id + ' legacySpecialists must be an array when present');
+  if (Array.isArray(product.specialists) && (!product.defaultSpecialist || !product.specialists.includes(product.defaultSpecialist))) fail(id + ' defaultSpecialist must belong to its canonical specialists');
+  const ownedSpecialists = [
+    ...(Array.isArray(product.specialists) ? product.specialists : []),
+    ...(Array.isArray(product.legacySpecialists) ? product.legacySpecialists : []),
+  ];
+  for (const specialist of ownedSpecialists) {
+    if (typeof specialist !== 'string' || specialist.length === 0) fail(id + ' contains an invalid specialist ID');
+    else if (specialistOwners.has(specialist) && specialistOwners.get(specialist) !== id) fail('specialist ' + specialist + ' has multiple niche owners');
+    else specialistOwners.set(specialist, id);
   }
-  if (product.legacySpecialists && !Array.isArray(product.legacySpecialists)) fail(id + ' legacySpecialists must be an array when present');
   for (const route of product.dedicatedRoutes ?? []) {
     if (!fs.existsSync(path.join(root, 'app', route))) fail(id + ' dedicated route is missing: ' + route);
   }
