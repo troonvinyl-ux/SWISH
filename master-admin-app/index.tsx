@@ -6,21 +6,25 @@ import { useApp } from '@/hooks/useApp';
 import { isSwishMasterAdmin } from '@/contexts/AppContext';
 import { Colors } from '@/constants/theme';
 
+function PrivateOwnerMessage() {
+  return (
+    <View style={{ flex: 1, backgroundColor: Colors.background, justifyContent: 'center', padding: 28, gap: 14 }}>
+      <Text style={{ color: Colors.textPrimary, fontSize: 23, fontWeight: '800' }}>Private owner app</Text>
+      <Text style={{ color: Colors.textSecondary, fontSize: 15, lineHeight: 23 }}>This installation is reserved for the SWISH Master Admin account. Sign out and use the authorised owner account.</Text>
+    </View>
+  );
+}
+
 function MasterAdminGate() {
   const { user } = useAuth();
-  const { isMasterAdmin, tenantLoading, tenantError, reloadTenant } = useApp();
+  const { isMasterAdmin, tenantLoading, nichePreferencesLoading, tenantError, reloadTenant } = useApp();
 
   if (!user) return null;
-  if (!isSwishMasterAdmin(user.email) || !isMasterAdmin) {
-    return (
-      <View style={{ flex: 1, backgroundColor: Colors.background, justifyContent: 'center', padding: 28, gap: 14 }}>
-        <Text style={{ color: Colors.textPrimary, fontSize: 23, fontWeight: '800' }}>Private owner app</Text>
-        <Text style={{ color: Colors.textSecondary, fontSize: 15, lineHeight: 23 }}>This installation is reserved for the SWISH Master Admin account. Sign out and use the authorised owner account.</Text>
-      </View>
-    );
-  }
+  // Reject non-owner accounts immediately. For the configured owner, wait for
+  // the existing tenant/admin lookup before evaluating the server-derived flag.
+  if (!isSwishMasterAdmin(user.email)) return <PrivateOwnerMessage />;
 
-  if (tenantLoading) {
+  if (tenantLoading || nichePreferencesLoading) {
     return <View style={{ flex: 1, backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="large" color={Colors.primary} /></View>;
   }
 
@@ -36,6 +40,7 @@ function MasterAdminGate() {
     );
   }
 
+  if (!isMasterAdmin) return <PrivateOwnerMessage />;
   return <Redirect href={"/master-admin" as any} />;
 }
 
