@@ -801,3 +801,21 @@ describe('SWISH eBay message send-state integrity', () => {
     expect(source).toContain('eBay accepted the reply, but SWISH could not update its local message status.');
   });
 });
+
+
+describe('eBay listing internal-call authorization', () => {
+  const listing = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-ebay-list/index.ts'), 'utf8');
+  const start = listing.indexOf('async function verifyTenantMembership(');
+  const end = listing.indexOf('// ── Application-level', start);
+  const verifier = listing.slice(start, end);
+
+  test('a shared internal secret is additional authentication, never a tenant-membership bypass', () => {
+    expect(verifier).toContain('Invalid internal request authorization.');
+    expect(verifier).toContain('if (!authHeader)');
+    expect(verifier).toContain(".eq('tenant_id', tenantId)");
+    expect(verifier).toContain(".eq('user_id', user.id)");
+    const secretBranch = verifier.slice(verifier.indexOf('if (internalSecretHeader'), verifier.indexOf('if (!authHeader)'));
+    expect(secretBranch).not.toContain('return { ok: true');
+    expect(listing).toContain('if (auth.userId)');
+  });
+});
