@@ -858,7 +858,7 @@ describe('SWISH eBay message body retrieval boundary', () => {
     expect(messageHelpers).toContain('<DetailLevel>ReturnHeaders</DetailLevel>');
     expect(messageHelpers).toContain('<DetailLevel>ReturnMessages</DetailLevel>');
     expect(messageHelpers).toContain('<MessageIDs><MessageID>');
-    expect(messageHelpers).toContain('Message\\\\b');
+    expect(messageHelpers).toContain('Message\\b');
     expect(messageFunction).toContain('extractEbayMessageBlocks(responseXml)');
     expect(messageFunction).toContain('extractEbayXmlTag(msgXml, \'ReceiveDate\')');
   });
@@ -873,7 +873,7 @@ describe('SWISH eBay message body retrieval boundary', () => {
   });
 
   test('does not log provider message bodies or expose credentials', () => {
-    expect(messageFunction).not.toMatch(/console\\.(?:log|info|debug)\\([^\\n]*(?:body|accessToken|clientSecret)/i);
+    expect(messageFunction).not.toMatch(/console\.(?:log|info|debug)\([^\n]*(?:body|accessToken|clientSecret)/i);
     expect(messageFunction).toContain('verifyTenantAccess(supabase, authHeader, tenantId)');
   });
 });
