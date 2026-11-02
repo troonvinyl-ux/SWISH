@@ -115,6 +115,10 @@ describe('SWISH eBay Finances input and refresh safety', () => {
   test('scopes order lookups and updates by both order ID and tenant ID', () => {
     expect(source).toContain(".eq('id', swishOrderId).eq('tenant_id', tenantId).maybeSingle()");
     expect(source).toContain(".eq('id', swishOrderId).eq('tenant_id', tenantId);");
+    expect(source).toContain(".select('sale_price, shipping_cost, notes')");
+    expect(source).toContain('aggregateActualEbayFees(feeRows ?? [])');
+    expect(source).toContain('withActualEbayFeeNote(ord.notes)');
+    expect(source).toContain(".eq('currency', currency)");
   });
 
   test('counts transaction updates only when an existing transaction was found', () => {
