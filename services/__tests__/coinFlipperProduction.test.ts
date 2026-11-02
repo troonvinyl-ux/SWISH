@@ -22,6 +22,11 @@ jest.mock('@/template', () => ({
 
 jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
 
+jest.mock('@/services/photoQualityService', () => ({
+  preflightPhotos: jest.fn().mockResolvedValue({ checks: [], error: null }),
+  inspectPhotoQuality: jest.fn(),
+}));
+
 // ── Mock Supabase client ──────────────────────────────────────────────────────
 const mockInvoke = jest.fn();
 const mockFrom = jest.fn();
@@ -84,6 +89,7 @@ describe('Server-authoritative identification', () => {
   };
 
   beforeEach(() => {
+    mockInvoke.mockClear();
     mockInvoke.mockResolvedValue({
       data: { identification: MOCK_COIN_RESULT, quota: { isPremium: false, used: 1, limit: 5, remaining: 4 } },
       error: null,
