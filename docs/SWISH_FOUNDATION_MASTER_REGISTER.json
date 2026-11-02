@@ -45,8 +45,8 @@
         {
           "id": "S1-03",
           "title": "Audit every registered niche for real functionality and isolation",
-          "status": "IN PROGRESS",
-          "evidence": "docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md#s1-03; all ten registered entry routes and specialist/capture configuration inspected. Static findings: Cards/Fossils/Beauty/Tech use shared /capture fallback; Cards/Fossils/Beauty/Tech use generic overview (Cards has one dedicated grading route); no full scanner-to-sale, niche data-isolation, web or device acceptance evidence yet. PR #94 merged 9c18466: canonical/legacy specialist IDs resolve to owning niche; all 25 checks passed. PR #95 merged e4c1a8c: Threads Flip Department/Style/Outer Shell Material specialist-specific mapping regression test; 25/25 checks passed. PR #96 merged 04fd59d: eBay publish mapping now prefers canonical department over legacy gender_category and explicitly maps outer_shell_material; 15/15 checks passed. These are source/CI proofs only; live eBay save/reopen/publish and device acceptance remain outstanding. PR #98 merged d168e99: ten-niche contract tests now verify every configured seller-evidenced specialist field maps to its canonical eBay item-specific name and inferred values are excluded; all 25/25 checks passed. PR #99 merged dd0ff10: swish-list-generate now safely defaults absent/null/malformed AI item_specifics to an empty object before specialist enrichment; all 15/15 checks passed. These establish source/CI robustness only; live Edge Function deployment and category-aspect save/reopen/publish acceptance remain outstanding."
+          "status": "IMPLEMENTED",
+          "evidence": "Completed a static audit of all ten canonical niche entries, distinct Android/iOS package identities, entry files, scanner routes, dedicated routes and specialist/legacy specialist ownership. Added docs/SWISH_S1-03_NICHE_AUDIT.md and services/__tests__/registeredNicheAudit.test.ts. Findings remain explicit: only Coins and Clothing descriptor files currently exist; Card/Fossil/Beauty/Tech still use shared capture and have no dedicated home route; static tests do not replace live RLS/tenant isolation acceptance. These are follow-on S3/S5/S7 tasks and are not falsely marked verified."
         },
         {
           "id": "S1-04",
@@ -378,6 +378,10 @@
     {
       "date": "2026-11-02",
       "change": "PR #112 separates native API 36 runtime versions from prior installed builds and gates automatic OTA publishing to JavaScript/assets-only changes. Native app config, plugin, dependency and Gradle changes now require a rebuilt native artifact before OTA compatibility resumes. Play AAB/signing and Play Console acceptance remain open."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "S1-03 implemented: audited all ten registered niches against canonical registry, package IDs, entry/scanner/dedicated routes and specialist ownership. Added audit report and regression tests. Recorded descriptor coverage gaps and shared-capture/UX and live RLS acceptance as outstanding follow-on work."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"
