@@ -318,7 +318,7 @@
     "report": "docs/SWISH_LIVE_VERIFICATION_20261102.md",
     "evidence": "docs/SWISH_LIVE_VERIFICATION_20261102.json",
     "backendOrigin": "https://iwgaqieyoahmcjfziwga.backend.onspace.ai",
-    "repositoryReference": "316cdaabdcb4af742f7e6dbd50259a73f56b8dba",
+    "repositoryReference": "2145b4c72d0eb111ff3c9a0bf95871af0cabd4db",
     "deployedVersionParity": "BLOCKED",
     "logicalEndpointGetProbes": 25,
     "failedEndpointGetProbes": 10,
@@ -335,7 +335,9 @@
       "implementedOrVerifiedPercent": 76.47,
       "verifiedPercent": 17.65,
       "meaning": "Unweighted historical task-state counts; not live feature coverage or production certification."
-    }
+    },
+    "sourceRepairPR": 134,
+    "sourceRepairStatus": "MERGED; all source CI passed. Deployed revision parity and authenticated acceptance remain BLOCKED."
   },
   "knownReleaseRisks": [
     "Live 2026-11-02 GET probes returned HTTP 500 for ten endpoints, nine with BootFailure; four post-source-edit retests still failed. Acknowledged deployment parity and complete boot/import diagnostics are required.",
@@ -482,6 +484,10 @@
     {
       "date": "2026-11-02",
       "change": "Added source-path diagnosis for swish-ebay-finances 400/499: Edge Function 400 can be request validation or getToken requiresReauth; upstream /transaction 400 is mapped to 403/partial response; handler does not emit 499. This narrows but does not prove the historical production cause. Updated the dated engineering handover to reflect current message send-state, bounded pagination, fee model and CI evidence; live OnSpace/eBay/release acceptance remains open."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "PR #134 merged as 2145b4c72d0eb111ff3c9a0bf95871af0cabd4db. Repaired deployable Edge dependency imports and canonical mirror parity validation; restored coin 95% publication warning, full Antique Flipper specialist profile, Threads Flip listing editor theme, evidence-source fallback and safe AI error logging; removed unused eBay hook/orphan tests referencing a nonexistent service. CI passed: S2-S3 foundation 53 suites/1,053 tests, TypeScript, lint (0 errors; 327 warnings), 4 Deno authorization tests, master readiness 560 tests/15 suites, all 10 Android JS bundles plus Master Admin, all 10 web exports and niche routing. Live authenticated workflow skipped; deployment revision parity, four prior boot retests and production acceptance remain blocked."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"
