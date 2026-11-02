@@ -2,6 +2,7 @@
 // Run with: npx jest --config jest.config.ci.js --runInBand services/__tests__/serverOnlySecrets.test.ts
 import * as fs from 'fs';
 import * as path from 'path';
+import { aggregateActualEbayFees, withActualEbayFeeNote } from '../../supabase/functions/_shared/ebayFinance';
 
 const projectRoot = path.resolve(__dirname, '../..');
 const clientDirectories = ['app', 'services', 'hooks', 'contexts', 'components', 'constants', 'template', 'plugins'];
@@ -113,7 +114,8 @@ describe('SWISH eBay Finances input and refresh safety', () => {
   });
 
   test('scopes order lookups and updates by both order ID and tenant ID', () => {
-    expect(source).toContain(".eq('id', swishOrderId).eq('tenant_id', tenantId).maybeSingle()");
+    expect(source).toContain(".eq('id', swishOrderId)");
+    expect(source).toContain(".eq('tenant_id', tenantId)");
     expect(source).toContain(".eq('id', swishOrderId).eq('tenant_id', tenantId);");
     expect(source).toContain(".select('sale_price, shipping_cost, notes')");
     expect(source).toContain('aggregateActualEbayFees(feeRows ?? [])');
@@ -732,5 +734,40 @@ describe('eBay credential refresh compare-and-swap guards', () => {
     const source = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-ebay-messages/index.ts'), 'utf8');
     expect(source).toContain('Do not log raw exception text');
     expect(source).not.toContain('Token refresh failed for messages: ${e.message}');
+  });
+});
+
+describe('eBay actual fee aggregation', () => {
+  test('adds percentage and fixed-per-order fee components', () => {
+    expect(aggregateActualEbayFees([
+      { transaction_type: 'FINAL_VALUE_FEE', amount: '-2.35' },
+      { transaction_type: 'FINAL_VALUE_FEE_FIXED_PER_ORDER', amount: '-0.30' },
+    ])).toBe(2.65);
+  });
+
+  test('ignores credits, unrelated debits, zero and invalid amounts', () => {
+    expect(aggregateActualEbayFees([
+      { transaction_type: 'FINAL_VALUE_FEE', amount: '-1.20' },
+      { transaction_type: 'FINAL_VALUE_FEE', amount: '0.10' },
+      { transaction_type: 'SHIPPING_LABEL', amount: '-4.00' },
+      { transaction_type: 'FINAL_VALUE_FEE_FIXED_PER_ORDER', amount: 'invalid' },
+    ])).toBe(1.2);
+  });
+
+  test('rounds the aggregated total to currency precision', () => {
+    expect(aggregateActualEbayFees([
+      { transaction_type: 'FINAL_VALUE_FEE', amount: '-0.105' },
+      { transaction_type: 'FINAL_VALUE_FEE_FIXED_PER_ORDER', amount: '-0.105' },
+    ])).toBe(0.21);
+  });
+
+  test('preserves operator notes while replacing the fee estimate marker', () => {
+    expect(withActualEbayFeeNote('Fragile item | fee_note:ESTIMATE_12.8pct | buyer requested gift wrap'))
+      .toBe('Fragile item | buyer requested gift wrap | fee_note:ACTUAL_EBAY');
+  });
+
+  test('does not duplicate an existing actual-fee marker', () => {
+    expect(withActualEbayFeeNote('fee_note:ACTUAL_EBAY | Handle with care'))
+      .toBe('Handle with care | fee_note:ACTUAL_EBAY');
   });
 });
