@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth, getSupabaseClient } from '@/template';
 import { useApp } from '@/hooks/useApp';
 import { isSwishMasterAdmin } from '@/contexts/AppContext';
-import { updateListingTitle, updateListingPrice, updateListingDescription, type SavedListing } from '@/services/listingService';
+import type { SavedListing } from '@/services/listingService';
 import { Colors, Spacing, Radius, Typography } from '@/constants/theme';
 
 const TARGET_TITLE = "REISS Men's Khaki Hooded Parka Jacket";
@@ -83,12 +83,6 @@ export default function ReissEbayTestConsole() {
   const doRevise = async (parsedPrice: number) => {
     if (!tenant?.id || !item || !listing || !externalId) return;
     setBusy(true); setStatus('Saving revised values to the test listing and calling the existing eBay revise function…');
-    const [a,b,c] = await Promise.all([
-      updateListingTitle(listing.id, title.trim()),
-      updateListingDescription(listing.id, description.trim()),
-      updateListingPrice(listing.id, parsedPrice),
-    ]);
-    if (a.error || b.error || c.error) { setStatus('Could not save revised SWISH listing fields: ' + (a.error ?? b.error ?? c.error)); setBusy(false); return; }
     const attrs = item.attributes ?? {};
     const savedSpecifics = Array.isArray((attrs as any).ebay_item_specifics) ? (attrs as any).ebay_item_specifics : [];
     const itemSpecifics = [...savedSpecifics, ...Object.entries(attrs)
@@ -99,7 +93,7 @@ export default function ReissEbayTestConsole() {
     const { data, error } = await getSupabaseClient().functions.invoke('swish-ebay-list', { body: {
       route: 'revise', tenantId: tenant.id, listingId: listing.id, externalListingId: externalId,
       title: title.trim(), description: description.trim(), price: parsedPrice,
-      categoryId: attrs.ebay_category_id ?? attrs._ebay_category_id,
+      categoryId: listing.categoryId ?? attrs.ebay_category_id ?? attrs._ebay_category_id,
       condition: item.condition ?? '', conditionDescription: item.condition_notes ?? '',
       listingType: 'FixedPriceItem', quantity: item.quantity ?? 1, sku: '',
       itemSpecifics, mediaUrls: (item.media ?? []).filter(url => typeof url === 'string' && url.startsWith('https://')),
