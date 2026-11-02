@@ -104,10 +104,9 @@ describe('Branded Expo build configuration', () => {
 
   test('test-only changes do not trigger a branded APK build', () => {
     const workflow = fs.readFileSync(path.resolve(__dirname, '../../.github/workflows/build-niche-apk.yml'), 'utf8');
-    expect(workflow).toContain("'services/**'");
-    expect(workflow).toContain("'!services/__tests__/**'");
-    expect(workflow).toContain("'!services/__mocks__/**'");
-    expect(workflow).not.toContain("'.github/workflows/build-niche-apk.yml'");
+    expect(workflow).toContain('workflow_dispatch:');
+    expect(workflow).not.toContain('  push:');
+    expect(workflow).not.toContain('branches: [main]');
   });
 
 });
