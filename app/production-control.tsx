@@ -1,338 +1,225 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Redirect } from 'expo-router';
+import { memo, useCallback, type ReactNode } from 'react';
+import { ActivityIndicator, FlatList, Linking, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Redirect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useAuth } from '@/template';
+import { useAlert, useAuth } from '@/template';
 import { useApp } from '@/hooks/useApp';
+import { useProductionControl } from '@/hooks/useProductionControl';
 import { isSwishMasterAdmin } from '@/contexts/AppContext';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
-import { classifyProductionWorkflowJob, summarizeProductionWorkflowJobs } from '@/services/productionControlEvidence';
+import { classifyProductionWorkflowJob } from '@/services/productionControlEvidence';
+import { PRODUCTION_REPOSITORY } from '@/services/productionControlService';
 
-const OWNER_REPO = 'troonvinyl-ux/SWISH';
-const RAW = 'https://raw.githubusercontent.com/troonvinyl-ux/SWISH/main';
-const API = 'https://api.github.com';
-const GOLD = '#E6B83F';
-const GREEN = '#43C98B';
-const RED = '#F16F70';
-const AMBER = '#F2B84B';
+const github = `https://github.com/${PRODUCTION_REPOSITORY}`;
+const sections = ['next', 'stages', 'certification', 'pulls', 'workflows', 'runs', 'risks'] as const;
+type SectionId = typeof sections[number];
+type Tone = 'good' | 'bad' | 'warn' | 'muted';
+const statusTone = (status: string): Tone => status === 'VERIFIED' || status === 'PASSED' ? 'good' : status === 'FAILED' || status === 'BLOCKED' ? 'bad' : ['NOT STARTED', 'SKIPPED'].includes(status) ? 'muted' : 'warn';
 
-type Task = { id: string; title: string; status: string; evidence?: string };
-type Stage = { id: string; name: string; status: string; goal: string; tasks: Task[] };
-type Register = { programme: string; stages: Stage[]; knownReleaseRisks: string[]; nicheCertification: { source: string; requiredAreas: string[] } };
-type Pull = { number: number; title: string; html_url: string; state: string; draft: boolean; mergeable: boolean | null; head: { ref: string; sha: string }; base: { ref: string; sha: string }; updated_at: string; user: { login: string }; body?: string; behindBy?: number; checkTotal?: number; checkPassed?: number; checkFailed?: number; checkPending?: number };
-type Run = { id: number; name: string; display_title: string; html_url: string; status: string; conclusion: string | null; head_branch: string; head_sha: string; created_at: string };
-type WorkflowJob = { id: number; name: string; status: string; conclusion: string | null; steps?: Array<{name:string;status:string;conclusion:string|null}> };
-type WorkflowArtifact = { id:number; name:string; size_in_bytes:number; expired:boolean; created_at:string; expires_at:string };
-type Niche = { id: string; name: string; entry?: string; specialists?: string[]; defaultSpecialist?: string };
-type Snapshot = { register: Register | null; niches: Niche[]; pulls: Pull[]; openPullCount: number; runs: Run[]; webBuildRun: Run | null; webBuildJobs: WorkflowJob[]; routingRun: Run | null; routingJobs: WorkflowJob[]; webBuildArtifacts: WorkflowArtifact[]; mainSha: string; refreshedAt: string; errors: string[] };
-
-// Public GitHub REST is unauthenticated in the client (60 requests/hour). Cache a refresh briefly and enrich only the eight newest PRs.
-let cachedSnapshot: Snapshot | null = null;
-let cachedSnapshotAt = 0;
-const SNAPSHOT_CACHE_MS = 60_000;
-const PR_DETAIL_LIMIT = 8;
-
-const STAGES = [
-  ['S1','Full architectural audit'],['S2','Foundation architecture and registry'],['S3','Foundation 1 — SWISH Core'],['S4','Foundation 2 — Standard resale workflow'],['S5','Foundation 3 — Niche specialisation'],['S6','Foundations 4–6 — Optional specialist capabilities'],['S7','Full production verification']
-];
-
-async function getJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, { headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' } });
-  if (!response.ok) throw new Error(`${response.status} ${response.statusText} — ${url}`);
-  return response.json() as Promise<T>;
-}
-
-function Pill({ label, tone = 'muted' }: { label: string; tone?: 'good'|'bad'|'warn'|'muted' }) {
-  const color = tone === 'good' ? GREEN : tone === 'bad' ? RED : tone === 'warn' ? AMBER : '#A7B2C1';
-  return <View style={[styles.pill,{ borderColor: color + '66', backgroundColor: color + '18' }]}><Text style={[styles.pillText,{ color }]}>{label}</Text></View>;
+interface PillProps { label: string; tone?: Tone }
+const Pill = memo(function Pill({ label, tone = 'muted' }: PillProps) {
+  const color = tone === 'good' ? Colors.success : tone === 'bad' ? Colors.danger : tone === 'warn' ? Colors.warning : Colors.textSecondary;
+  return <View style={[styles.pill, { borderColor: color, backgroundColor: color + '16' }]}><Text style={[styles.pillText, { color }]}>{label}</Text></View>;
+});
+interface MetricProps { label: string; value: string; detail: string }
+const Metric = memo(function Metric({ label, value, detail }: MetricProps) {
+  return <View style={styles.metric}><Text style={styles.muted}>{label}</Text><Text style={styles.metricValue}>{value}</Text><Text style={styles.muted}>{detail}</Text></View>;
+});
+interface SectionProps { title: string; subtitle: string; children: ReactNode }
+function Section({ title, subtitle, children }: SectionProps) {
+  return <View style={styles.section}><View style={styles.heading}><Text style={styles.sectionTitle}>{title}</Text><Text style={styles.body}>{subtitle}</Text></View>{children}</View>;
 }
 
 export default function ProductionControlScreen() {
-  const { user } = useAuth();
-  const { isMasterAdmin } = useApp();
-  const insets = useSafeAreaInsets();
-  const [snapshot,setSnapshot] = useState<Snapshot>({register:null,niches:[],pulls:[],openPullCount:0,runs:[],webBuildRun:null,webBuildJobs:[],routingRun:null,routingJobs:[],webBuildArtifacts:[],mainSha:'',refreshedAt:'',errors:[]});
-  const [loading,setLoading] = useState(true);
-  const [expanded,setExpanded] = useState<string>('S1');
-  const [selectedNicheId,setSelectedNicheId] = useState<string>('');
+  const { user, loading: authLoading } = useAuth();
+  const { isMasterAdmin, tenantLoading, nichePreferencesLoading } = useApp();
+  const accessLoading = authLoading || tenantLoading || nichePreferencesLoading;
+  const allowed = !accessLoading && isSwishMasterAdmin(user?.email) && isMasterAdmin;
+  // Hook is always mounted, but it cannot fetch repository data before owner authorization.
+  const control = useProductionControl(allowed);
+  const router = useRouter();
+  const { showAlert } = useAlert();
+  const { snapshot, loading, refresh, overview, selectedNiche, setSelectedNicheId, expandedStageId, setExpandedStageId } = control;
+  const refreshNow = useCallback(() => { void refresh(true); }, [refresh]);
+  const back = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/master-admin' as any);
+  }, [router]);
+  const open = useCallback((url: string) => {
+    if (!url.startsWith(github + '/')) { showAlert('Link unavailable', 'The source link is not part of the canonical repository.'); return; }
+    void Linking.openURL(url).catch(() => showAlert('Unable to open source', 'Please try again or open the repository in your browser.'));
+  }, [showAlert]);
 
-  const refresh = useCallback(async (force = false) => {
-    if (!force && cachedSnapshot && Date.now() - cachedSnapshotAt < SNAPSHOT_CACHE_MS) {
-      setSnapshot(cachedSnapshot);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    const errors: string[] = [];
-    const settled = await Promise.allSettled([
-      getJson<Register>(RAW + '/docs/SWISH_FOUNDATION_MASTER_REGISTER.json'),
-      getJson<{products:Record<string,Niche>}>(RAW + '/niche-modules.json'),
-      getJson<Pull[]>(API + '/repos/' + OWNER_REPO + '/pulls?state=open&per_page=100&sort=updated&direction=desc'),
-      getJson<{workflow_runs:Run[]}>(API + '/repos/' + OWNER_REPO + '/actions/runs?per_page=20'),
-      getJson<{sha:string}>(API + '/repos/' + OWNER_REPO + '/commits/main')
-    ]);
-    const value = <T,>(i:number): T | null => {
-      const item = settled[i];
-      if (item.status === 'fulfilled') return item.value as T;
-      errors.push(String(item.reason));
-      return null;
-    };
-    const register = value<Register>(0);
-    const modules = value<{products:Record<string,Niche>}>(1);
-    const rawPulls = value<Pull[]>(2) ?? [];
-    const pulls = await Promise.all(rawPulls.slice(0,PR_DETAIL_LIMIT).map(async (p) => {
-      const [comparison, checks] = await Promise.allSettled([
-        getJson<{behind_by:number}>(API + '/repos/' + OWNER_REPO + '/compare/main...' + p.head.sha),
-        getJson<{check_runs:Array<{status:string;conclusion:string|null}>}>(API + '/repos/' + OWNER_REPO + '/commits/' + p.head.sha + '/check-runs?per_page=100')
-      ]);
-      const compareData = comparison.status === 'fulfilled' ? comparison.value : null;
-      const checkData = checks.status === 'fulfilled' ? checks.value.check_runs : [];
-      if (comparison.status === 'rejected') errors.push('PR #' + p.number + ' comparison unavailable: ' + String(comparison.reason));
-      if (checks.status === 'rejected') errors.push('PR #' + p.number + ' checks unavailable: ' + String(checks.reason));
-      return {...p, behindBy:compareData?.behind_by, checkTotal:checkData.length,
-        checkPassed:checkData.filter(x=>x.status==='completed' && x.conclusion==='success').length,
-        checkFailed:checkData.filter(x=>x.status==='completed' && x.conclusion!=='success' && x.conclusion!=='skipped' && x.conclusion!=='neutral').length,
-        checkPending:checkData.filter(x=>x.status!=='completed').length};
-    }));
-    const runs = value<{workflow_runs:Run[]}>(3);
-    const main = value<{sha:string}>(4);
-    const latestRuns = runs?.workflow_runs ?? [];
-    const webBuildRun = latestRuns.find(r => /SWISH branded web production builds/i.test(r.name)) ?? null;
-    const routingRun = latestRuns.find(r => /SWISH niche routing and branded config/i.test(r.name)) ?? null;
-    let webBuildJobs: WorkflowJob[] = [];
-    let webBuildArtifacts: WorkflowArtifact[] = [];
-    let routingJobs: WorkflowJob[] = [];
-    if (webBuildRun) {
-      try {
-        const jobPayload = await getJson<{jobs:WorkflowJob[]}>(API + '/repos/' + OWNER_REPO + '/actions/runs/' + webBuildRun.id + '/jobs?per_page=100');
-        webBuildJobs = jobPayload.jobs ?? [];
-        const artifactPayload = await getJson<{artifacts:WorkflowArtifact[]}>(API + '/repos/' + OWNER_REPO + '/actions/runs/' + webBuildRun.id + '/artifacts?per_page=100');
-        webBuildArtifacts = artifactPayload.artifacts ?? [];
-      } catch (error) {
-        errors.push('Latest ten-niche web build job details unavailable: ' + String(error));
-      }
-    }
-    if (routingRun) {
-      try {
-        const jobPayload = await getJson<{jobs:WorkflowJob[]}>(API + '/repos/' + OWNER_REPO + '/actions/runs/' + routingRun.id + '/jobs?per_page=100');
-        routingJobs = jobPayload.jobs ?? [];
-      } catch (error) {
-        errors.push('Latest routing, regression and authorization evidence unavailable: ' + String(error));
-      }
-    }
-    const nextSnapshot: Snapshot = {register,niches:Object.values(modules?.products ?? {}),pulls,openPullCount:rawPulls.length,runs:latestRuns,webBuildRun,webBuildJobs,routingRun,routingJobs,webBuildArtifacts,mainSha:main?.sha ?? '',refreshedAt:new Date().toISOString(),errors};
-    cachedSnapshot = nextSnapshot;
-    cachedSnapshotAt = Date.now();
-    setSnapshot(nextSnapshot);
-    setLoading(false);
-  },[]);
+  if (accessLoading) return <SafeAreaView style={styles.loading}><ActivityIndicator color={Colors.primary}/><Text style={styles.body}>Checking owner access…</Text></SafeAreaView>;
+  if (!allowed) return <Redirect href={'/master-admin' as any}/>;
+  const sourceLabel = snapshot.source === 'LIVE' ? 'LIVE REGISTER' : snapshot.source === 'CACHED' ? 'CACHED EVIDENCE' : 'BUNDLED / OFFLINE';
 
-  useEffect(() => { void refresh(); },[refresh]);
-  if (!isSwishMasterAdmin(user?.email) || !isMasterAdmin) return <Redirect href={"/master-admin" as any} />;
+  const renderSection = ({ item }: { item: SectionId }) => {
+    if (item === 'next') return <Section title="Next acceptance work" subtitle="The first unfinished programme stage, not the latest green workflow.">
+      <View style={styles.card}>
+        <Pill label={overview.currentStage?.status ?? (overview.tasks.length ? 'REVIEW RELEASE GATES' : 'REGISTER UNAVAILABLE')} tone="warn"/>
+        <Text style={styles.cardTitle}>{overview.currentStage?.name ?? 'Review the certification matrix'}</Text>
+        <Text style={styles.body}>{overview.currentStage?.goal ?? 'Record real deployment, security and device results before making a release decision.'}</Text>
+        {overview.currentStage?.tasks.filter(task => task.status !== 'VERIFIED').slice(0, 3).map(task => <View key={task.id} style={styles.row}><MaterialIcons name="arrow-forward" size={18} color={Colors.primary}/><Text style={styles.rowText}>{task.id} · {task.title}</Text></View>)}
+        <Pressable accessibilityRole="link" onPress={() => open(`${github}/blob/main/docs/SWISH_FOUNDATION_MASTER_REGISTER.json`)} style={({ pressed }) => [styles.link, pressed && styles.pressed]}><Text style={styles.linkText}>Open canonical master register</Text><MaterialIcons name="open-in-new" size={18} color={Colors.primary}/></Pressable>
+      </View>
+    </Section>;
 
-  const stages = snapshot.register?.stages ?? [];
-  const taskCounts = stages.flatMap(s=>s.tasks).reduce((a,t)=>{a[t.status]=(a[t.status]??0)+1;return a;},{} as Record<string,number>);
-  const allTasks = stages.flatMap(s=>s.tasks);
-  const verified = taskCounts['VERIFIED'] ?? 0;
-  const readiness = allTasks.length ? Math.round(verified / allTasks.length * 100) : 0;
-  const currentStage = stages.find(s=>s.status==='IN PROGRESS') ?? stages.find(s=>s.status!=='VERIFIED');
-  const readyPulls = snapshot.pulls.filter(p=>p.mergeable===true && !p.draft).length;
-  const failedRuns = snapshot.runs.filter(r=>r.conclusion==='failure').length;
-  const webBuildSummary = summarizeProductionWorkflowJobs(snapshot.webBuildJobs);
-  const certificationAreas = snapshot.register?.nicheCertification?.requiredAreas ?? [];
-  const selectedCertificationNiche = snapshot.niches.find(n=>n.id===selectedNicheId) ?? snapshot.niches[0] ?? null;
+    if (item === 'stages') return <Section title="Programme stages" subtitle="Task completion is historical register evidence, not a live production certification.">
+      {overview.stages.map(stage => {
+        const expanded = expandedStageId === stage.id;
+        return <View key={stage.id} style={styles.card}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Inspect ${stage.id}: ${stage.name}`} accessibilityState={{ expanded }} onPress={() => setExpandedStageId(expanded ? '' : stage.id)} style={({ pressed }) => [styles.wrapRow, styles.stageButton, pressed && styles.pressed]}>
+            <View style={styles.index}><Text style={styles.indexText}>{stage.id}</Text></View>
+            <View style={styles.copy}><Text style={styles.cardTitle}>{stage.name}</Text><Text style={styles.muted}>{stage.tasks.filter(task => task.status === 'VERIFIED').length} / {stage.tasks.length} register-verified</Text></View>
+            <Pill label={stage.status} tone={statusTone(stage.status)}/><MaterialIcons name={expanded ? 'expand-less' : 'expand-more'} size={24} color={Colors.textSecondary}/>
+          </Pressable>
+          {expanded ? <View style={styles.taskList}>{stage.tasks.map(task => <View key={task.id} style={styles.task}>
+            <View style={styles.wrapRow}><Text style={styles.rowText}>{task.id} · {task.title}</Text><Pill label={task.status} tone={statusTone(task.status)}/></View>
+            <Text selectable style={styles.body}>{task.evidence ? `Evidence: ${task.evidence}` : 'No acceptance evidence recorded.'}</Text>
+          </View>)}</View> : null}
+        </View>;
+      })}
+      {overview.stages.length === 0 ? <Text style={styles.body}>No valid register is available. Readiness cannot be calculated.</Text> : null}
+    </Section>;
 
-  const open = (url:string) => { void Linking.openURL(url); };
-  const taskTone = (status:string) => status==='VERIFIED'?'good':status==='BLOCKED'?'bad':status==='TESTING'?'warn':status==='IN PROGRESS'?'warn':'muted';
-  const prAssessment = (p:Pull) => {
-    if (p.mergeable === false) return {label:'CONFLICT / NOT MERGEABLE',tone:'bad' as const};
-    if ((p.behindBy ?? 0) > 0) return {label:'BEHIND MAIN — UPDATE & RETEST',tone:'bad' as const};
-    if ((p.checkFailed ?? 0) > 0) return {label:'CHECKS FAILING',tone:'bad' as const};
-    if ((p.checkPending ?? 0) > 0) return {label:'CHECKS RUNNING',tone:'warn' as const};
-    if (!p.checkTotal) return {label:'CHECKS NOT REPORTED',tone:'warn' as const};
-    if (p.draft) return {label:'DRAFT — NOT READY',tone:'muted' as const};
-    if (p.checkPassed === p.checkTotal && p.mergeable === true) return {label:'CHECKS PASS — REVIEW REQUIRED',tone:'good' as const};
-    return {label:'RECHECK REQUIRED',tone:'warn' as const};
+    if (item === 'certification') return <Section title="Ten-niche certification" subtitle={`${overview.gatesVerified} / ${overview.gatesTotal} current-commit acceptance gates · ${overview.certified} / ${snapshot.niches.length} certified niches`}>
+      <Text style={styles.body}>Only explicit, dated niche evidence for the loaded main commit counts. Missing records stay open; older or offline evidence requires recheck.</Text>
+      <View style={styles.nicheRail}><FlatList horizontal data={overview.certifications} keyExtractor={niche => niche.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.railContent} renderItem={({ item: niche }) => <Pressable accessibilityRole="button" accessibilityState={{ selected: selectedNiche?.id === niche.id }} onPress={() => setSelectedNicheId(niche.id)} style={({ pressed }) => [styles.nicheChip, selectedNiche?.id === niche.id && styles.selectedChip, pressed && styles.pressed]}>
+        <Text style={styles.chipTitle}>{niche.name}</Text><Text style={styles.muted}>{niche.verified} / {niche.total} verified</Text>
+      </Pressable>}/></View>
+      {selectedNiche ? <View style={styles.card}>
+        <View style={styles.wrapRow}><View style={styles.copy}><Text style={styles.cardTitle}>{selectedNiche.name}</Text><Text style={styles.muted}>{selectedNiche.id}</Text></View><Pill label={selectedNiche.certified ? 'CERTIFIED IN REGISTER' : 'NOT CERTIFIED'} tone={selectedNiche.certified ? 'good' : 'warn'}/></View>
+        {selectedNiche.gates.map(gate => <View key={gate.area} style={styles.task}>
+          <View style={styles.wrapRow}><Text style={styles.rowText}>{gate.area.replace(/-/g, ' ')}</Text><Pill label={gate.status} tone={statusTone(gate.status)}/></View>
+          <Text selectable style={styles.body}>{gate.record?.evidence ?? 'Niche-specific acceptance evidence has not been recorded.'}</Text>
+          {gate.record?.commitSha ? <Text style={styles.muted}>Tested commit {gate.record.commitSha.slice(0, 10)} · {gate.record.verifiedAt ?? 'Timestamp missing'}</Text> : null}
+        </View>)}
+      </View> : <Text style={styles.body}>No valid niche registry is available.</Text>}
+    </Section>;
+
+    if (item === 'pulls') return <Section title="Pull request control" subtitle={snapshot.openPullCount === null ? 'Open PR count unavailable' : `${snapshot.openPullCount}${snapshot.pullCountTruncated ? '+' : ''} open main-targeted PRs · newest ${snapshot.pulls.length} inspected`}>
+      {overview.pulls.map(pull => <Pressable key={pull.number} accessibilityRole="link" onPress={() => open(pull.html_url)} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+        <View style={styles.wrapRow}><Text style={styles.indexText}>#{pull.number}</Text><Pill label={pull.assessment.label} tone={pull.assessment.tone}/></View>
+        <Text style={styles.cardTitle}>{pull.title}</Text><Text style={styles.body}>{pull.head.ref} → {pull.base.ref}</Text>
+        <Text style={styles.muted}>{pull.behindBy === undefined ? 'Base comparison unavailable' : `${pull.behindBy} commits behind loaded main`} · checks {pull.checkPassed ?? 0} / {pull.checkTotal ?? 0} passed</Text>
+      </Pressable>)}
+      {snapshot.openPullCount === 0 ? <Text style={styles.body}>No open main-targeted pull requests were returned.</Text> : snapshot.pulls.length === 0 ? <Text style={styles.body}>Pull-request evidence is unavailable. This is not a zero-PR confirmation.</Text> : null}
+      <Text style={styles.warning}>Check summaries are not branch-protection or approval guarantees. Recheck latest main and required checks before merge. This panel never merges PRs.</Text>
+    </Section>;
+
+    if (item === 'workflows') return <Section title="Build and acceptance evidence" subtitle="Canonical workflow files, main-branch runs and explicit tested commits.">
+      {overview.workflows.map(workflow => <View key={workflow.label} style={styles.card}>
+        <Text style={styles.cardTitle}>{workflow.label}</Text>
+        {workflow.run ? <>
+          <View style={styles.wrapRow}><Pill label={classifyProductionWorkflowJob(workflow.run)} tone={workflow.current ? statusTone(classifyProductionWorkflowJob(workflow.run)) : 'warn'}/><Pill label={workflow.current ? 'LOADED MAIN COMMIT' : 'OLDER / UNCONFIRMED COMMIT'} tone={workflow.current ? 'muted' : 'warn'}/></View>
+          <Text style={styles.body}>Tested {workflow.run.head_sha.slice(0, 10)} · {new Date(workflow.run.created_at).toLocaleString()}</Text>
+          <Text style={styles.muted}>{workflow.summary.passed} passed · {workflow.summary.failed} failed · {workflow.summary.running + workflow.summary.queued} pending · {workflow.summary.skipped} skipped jobs</Text>
+          {workflow.jobs.length === 0 ? <Text style={styles.body}>Job evidence not reported. No result is inferred.</Text> : workflow.jobs.map(job => <View key={job.id} style={styles.task}>
+            <View style={styles.wrapRow}><Text style={styles.rowText}>{job.name}</Text><Pill label={classifyProductionWorkflowJob(job)} tone={statusTone(classifyProductionWorkflowJob(job))}/></View>
+            {job.steps?.filter(step => /complete regression suite|shared server authorization boundaries|bundle android production javascript|validate all ten expo branded|validate production register/i.test(step.name)).map(step => <View key={step.name} style={styles.wrapRow}><Text style={styles.body}>{step.name}</Text><Pill label={classifyProductionWorkflowJob(step)} tone={statusTone(classifyProductionWorkflowJob(step))}/></View>)}
+          </View>)}
+          {workflow.label === 'Ten-niche web builds' ? <View style={styles.task}>
+            <Text style={styles.cardTitle}>Build artifacts</Text>
+            {workflow.artifacts.length === 0 ? <Text style={styles.body}>No downloadable artifacts are confirmed.</Text> : workflow.artifacts.map(artifact => {
+              const expiry = Date.parse(artifact.expires_at);
+              const expired = artifact.expired || expiry <= Date.now();
+              const available = !expired && Number.isFinite(expiry) && artifact.size_in_bytes > 0;
+              return <View key={artifact.id} style={styles.wrapRow}><View style={styles.copy}><Text style={styles.rowText}>{artifact.name}</Text><Text style={styles.muted}>{(artifact.size_in_bytes / 1024 / 1024).toFixed(1)} MB · expires {new Date(artifact.expires_at).toLocaleDateString()}</Text></View><Pill label={expired ? 'EXPIRED' : available ? 'AVAILABLE' : 'NOT CONFIRMED'} tone={expired ? 'bad' : 'muted'}/></View>;
+            })}
+          </View> : null}
+          <Pressable accessibilityRole="link" onPress={() => open(workflow.run!.html_url)} style={({ pressed }) => [styles.link, pressed && styles.pressed]}><Text style={styles.linkText}>Inspect workflow and logs</Text><MaterialIcons name="open-in-new" size={18} color={Colors.primary}/></Pressable>
+        </> : <Text style={styles.body}>No eligible main-branch run was reported for this workflow.</Text>}
+        {workflow.errors.map((error, index) => <Text key={index} style={styles.error}>{error}</Text>)}
+      </View>)}
+      {overview.workflows.length === 0 ? <Text style={styles.body}>Live workflow evidence has not been loaded.</Text> : null}
+      <Text style={styles.warning}>A successful export, uploaded artifact or Android JavaScript bundle does not prove deployment, a signed release, installed-device behavior, tenant isolation or real eBay transactions.</Text>
+    </Section>;
+
+    if (item === 'runs') return <Section title="Recent main-branch workflows" subtitle="Recent signals remain separate from niche certification.">
+      {snapshot.runs.filter(run => run.event !== 'pull_request').slice(0, 10).map(run => <Pressable key={run.id} accessibilityRole="link" onPress={() => open(run.html_url)} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+        <View style={styles.wrapRow}><Text style={styles.rowText}>{run.display_title || run.name}</Text><Pill label={classifyProductionWorkflowJob(run)} tone={run.head_sha === snapshot.mainSha && snapshot.source === 'LIVE' ? statusTone(classifyProductionWorkflowJob(run)) : 'warn'}/></View>
+        <Text style={styles.muted}>{run.head_sha.slice(0, 10)} · {new Date(run.created_at).toLocaleString()}</Text>
+      </Pressable>)}
+      <Pressable accessibilityRole="link" onPress={() => open(`${github}/actions`)} style={({ pressed }) => [styles.link, pressed && styles.pressed]}><Text style={styles.linkText}>Open all GitHub Actions</Text><MaterialIcons name="open-in-new" size={18} color={Colors.primary}/></Pressable>
+    </Section>;
+
+    return <Section title="Known release blockers" subtitle="Carried forward without silently closing unresolved work.">
+      {overview.risks.map(risk => <View key={risk} style={styles.risk}><MaterialIcons name="warning-amber" size={22} color={Colors.warning}/><Text style={styles.rowText}>{risk}</Text></View>)}
+      {overview.risks.length === 0 ? <Text style={styles.body}>{snapshot.register ? 'No release risks recorded. This alone does not certify production.' : 'Release blockers cannot be loaded.'}</Text> : null}
+    </Section>;
   };
 
-  return <View style={styles.screen}>
-    <StatusBar style="light" />
-    <ScrollView contentContainerStyle={[styles.content,{paddingTop:insets.top+Spacing.lg,paddingBottom:insets.bottom+36}]} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => { void refresh(true); }} tintColor={GOLD}/>}>
+  return <SafeAreaView edges={['top', 'bottom']} style={styles.screen}>
+    <StatusBar style="light"/>
+    <FlatList data={sections} keyExtractor={item => item} renderItem={renderSection} showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={refreshNow} tintColor={Colors.primary}/>} ListHeaderComponent={<View style={styles.header}>
       <View style={styles.topline}>
-        <View style={{flex:1}}>
-          <Text style={styles.eyebrow}>SWISH / OWNER OPERATIONS</Text>
-          <Text style={styles.title}>Production Control</Text>
-          <Text style={styles.subtitle}>One source of truth. Evidence before green.</Text>
-        </View>
-        <Pressable onPress={() => { void refresh(true); }} style={styles.refresh}><MaterialIcons name="refresh" size={23} color={GOLD}/></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Return to Master Admin" onPress={back} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}><MaterialIcons name="arrow-back" size={24} color={Colors.textPrimary}/></Pressable>
+        <View style={styles.copy}><Text style={styles.eyebrow}>SWISH / OWNER OPERATIONS</Text><Text style={styles.title}>Production Control</Text></View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Refresh production evidence" disabled={loading} accessibilityState={{ disabled: loading }} onPress={refreshNow} style={({ pressed }) => [styles.iconButton, (pressed || loading) && styles.pressed]}>{loading ? <ActivityIndicator color={Colors.primary}/> : <MaterialIcons name="refresh" size={24} color={Colors.primary}/>}</Pressable>
       </View>
-
       <View style={styles.hero}>
-        <View style={styles.heroRow}><View><Text style={styles.heroEyebrow}>MASTER PROGRAMME</Text><Text style={styles.heroTitle}>7-stage readiness</Text></View><Pill label="LIVE REPOSITORY" tone="good"/></View>
+        <View style={styles.wrapRow}><Text style={styles.cardTitle}>Evidence before release</Text><Pill label={sourceLabel} tone={snapshot.source === 'LIVE' ? 'muted' : 'warn'}/></View>
+        <Pill label={overview.verdict} tone={overview.complete ? 'good' : snapshot.source === 'LIVE' && overview.risks.length ? 'bad' : 'warn'}/>
         <View style={styles.metrics}>
-          <Metric label="VERIFIED TASKS" value={String(verified)} detail={`of ${allTasks.length} registered`}/>
-          <Metric label="CURRENT STAGE" value={currentStage?.id ?? '—'} detail={currentStage?.name ?? 'No active stage'}/>
-          <Metric label="OPEN PULL REQUESTS" value={String(snapshot.openPullCount)} detail={`Enriching latest ${snapshot.pulls.length}; ${readyPulls} mergeable`}/>
-          <Metric label="FAILED RECENT RUNS" value={String(failedRuns)} detail="Latest 20 workflow runs"/>
+          <Metric label="REGISTER-VERIFIED TASKS" value={snapshot.register ? `${overview.verified} / ${overview.tasks.length}` : '—'} detail="Historical evidence, not certification"/>
+          <Metric label="CERTIFIED NICHES" value={`${overview.certified} / ${snapshot.niches.length}`} detail={`${overview.gatesVerified} / ${overview.gatesTotal} current gates`}/>
+          <Metric label="NEXT STAGE" value={overview.currentStage?.id ?? '—'} detail={overview.currentStage?.name ?? 'Review acceptance'}/>
+          <Metric label="BLOCKED TASKS" value={String(overview.blocked)} detail={`${overview.risks.length} recorded release risks`}/>
         </View>
-        <View style={styles.progressTrack}><View style={[styles.progressFill,{width:`${readiness}%`} as any]}/></View>
-        <Text style={styles.progressNote}>{readiness}% tasks independently verified. Implemented and testing work does not count as production-ready.</Text>
+        <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: overview.readiness }} accessibilityLabel="Programme task completion, not production readiness" style={styles.progressTrack}><View style={[styles.progressFill, { width: `${overview.readiness}%` }]}/></View>
+        <Text style={styles.body}>{overview.readiness}% of programme tasks are register-verified. Build success and implemented work do not make a product production-ready.</Text>
+        <Text style={styles.muted}>{snapshot.mainSha ? `Loaded main ${snapshot.mainSha.slice(0, 10)}` : 'Main commit not confirmed'} · {snapshot.refreshedAt ? `Evidence loaded ${new Date(snapshot.refreshedAt).toLocaleString()}` : 'Using the register packaged with this app'}</Text>
       </View>
-
-      <Section title="THE NEXT MOVE" subtitle="Work order from the master directive">
-        <View style={styles.nextCard}>
-          <Pill label={currentStage?.status ?? 'REGISTER UNAVAILABLE'} tone={currentStage?.status==='IN PROGRESS'?'warn':'muted'}/>
-          <Text style={styles.nextTitle}>{currentStage?.name ?? 'Load the master register'}</Text>
-          <Text style={styles.body}>{currentStage?.goal ?? 'The production register could not be loaded from the repository.'}</Text>
-          {currentStage?.tasks.filter(t=>t.status!=='VERIFIED').slice(0,3).map(t=><View key={t.id} style={styles.nextTask}><MaterialIcons name="arrow-right" size={17} color={GOLD}/><Text style={styles.body}><Text style={{color:'#F4F6FA',fontWeight:'700'}}>{t.id}</Text> · {t.title}</Text></View>)}
-        </View>
-      </Section>
-
-      <Pressable onPress={()=>open('https://github.com/'+OWNER_REPO+'/blob/main/docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md')} style={styles.directiveLink}>
-        <MaterialIcons name="description" size={18} color={GOLD}/>
-        <Text style={styles.directiveLinkText}>Open the canonical builder directive ↗</Text>
-      </Pressable>
-
-      <Section title="PROGRAMME STAGES" subtitle="Open a stage to inspect its acceptance tasks">
-        {STAGES.map(([id,name])=>{
-          const stage=stages.find(s=>s.id===id);
-          const isOpen=expanded===id;
-          return <View key={id} style={styles.stageCard}>
-            <Pressable onPress={()=>setExpanded(isOpen?'':id)} style={styles.stageHead}>
-              <View style={styles.stageIndex}><Text style={styles.stageIndexText}>{id}</Text></View>
-              <View style={{flex:1}}><Text style={styles.stageTitle}>{name}</Text><Text style={styles.muted}>{stage?.tasks.filter(t=>t.status==='VERIFIED').length ?? 0}/{stage?.tasks.length ?? 0} verified</Text></View>
-              <Pill label={stage?.status ?? 'NOT LOADED'} tone={taskTone(stage?.status ?? '')}/>
-              <MaterialIcons name={isOpen?'expand-less':'expand-more'} size={22} color="#A7B2C1"/>
-            </Pressable>
-            {isOpen && <View style={styles.taskList}>{stage?.tasks.map(t=><View key={t.id} style={styles.taskRow}><View style={{flex:1}}><Text style={styles.taskTitle}>{t.id} · {t.title}</Text>{t.evidence?<Text style={styles.muted}>Evidence: {t.evidence}</Text>:null}</View><Pill label={t.status} tone={taskTone(t.status)}/></View>)}</View>}
-          </View>;
-        })}
-      </Section>
-
-      <Section title="NICHE READINESS" subtitle="Ten registered products · certification tracked independently">
-        <View style={styles.nicheGrid}>{snapshot.niches.map(n=><View key={n.id} style={styles.nicheTile}><Text style={styles.nicheName}>{n.name}</Text><Text style={styles.muted}>{n.id}</Text><Pill label="NOT YET CERTIFIED" tone="warn"/></View>)}</View>
-        <Text style={styles.muted}>Registration, successful exports and JavaScript bundles do not certify a niche. The matrix below exposes every required acceptance area and leaves it unverified until niche-specific evidence is recorded.</Text>
-      </Section>
-
-      <Section title="TEN-NICHE CERTIFICATION MATRIX" subtitle={`${certificationAreas.length} required areas per niche · ${snapshot.niches.length * certificationAreas.length} evidence gates`}>
-        <View style={styles.nextCard}>
-          <View style={styles.prTop}><Text style={styles.taskTitle}>CERTIFICATION RECORD</Text><Pill label="EVIDENCE REQUIRED" tone="warn"/></View>
-          <Text style={styles.nextTitle}>0 / {snapshot.niches.length * certificationAreas.length} verified in the register</Text>
-          <Text style={styles.muted}>The current master register defines the required areas but does not yet contain per-niche completion records. Nothing is marked passed by inference from a shared workflow.</Text>
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap:8,paddingVertical:4}}>
-          {snapshot.niches.map(n=><Pressable key={n.id} onPress={()=>setSelectedNicheId(n.id)} style={[styles.nicheTile,{minWidth:128,borderColor:(selectedCertificationNiche?.id===n.id?GOLD:'#293545')}]}>
-            <Text style={styles.nicheName}>{n.name}</Text><Text style={styles.muted}>{n.id}</Text>
-          </Pressable>)}
-        </ScrollView>
-        {selectedCertificationNiche ? <View style={styles.stageCard}>
-          <View style={styles.stageHead}><View style={{flex:1}}><Text style={styles.stageTitle}>{selectedCertificationNiche.name}</Text><Text style={styles.muted}>{certificationAreas.length} mandatory acceptance areas</Text></View><Pill label="NOT CERTIFIED" tone="warn"/></View>
-          <View style={styles.taskList}>{certificationAreas.map(area=><View key={area} style={styles.taskRow}>
-            <View style={{flex:1}}><Text style={styles.taskTitle}>{area.replace(/-/g,' ').toUpperCase()}</Text><Text style={styles.muted}>Niche-specific evidence not yet recorded in the master register</Text></View><Pill label="NOT VERIFIED" tone="muted"/>
-          </View>)}</View>
-        </View> : <Text style={styles.body}>No niche registrations are currently available.</Text>}
-      </Section>
-
-      <Section title="PULL REQUEST CONTROL" subtitle={`Latest ${snapshot.pulls.length} of ${snapshot.openPullCount} open PRs · stale-base and mergeability warnings`}>
-        {snapshot.pulls.length===0?<Text style={styles.body}>No open pull requests returned, or GitHub API is unavailable.</Text>:snapshot.pulls.map(p=>{const a=prAssessment(p);return <Pressable key={p.number} onPress={()=>open(p.html_url)} style={styles.prCard}>
-          <View style={styles.prTop}><Text style={styles.prNumber}>#{p.number}</Text><Pill label={a.label} tone={a.tone}/></View>
-          <Text style={styles.prTitle}>{p.title}</Text><Text style={styles.muted}>{p.head.ref} → {p.base.ref} · {p.behindBy === undefined ? 'base comparison unavailable' : p.behindBy + ' commits behind main'} · checks {p.checkPassed ?? 0}/{p.checkTotal ?? 0} passed · updated {new Date(p.updated_at).toLocaleDateString()}</Text>
-          <Text style={styles.prLink}>Open pull request ↗</Text>
-        </Pressable>;})}
-        <Text style={styles.warningText}>Important: a changed base SHA is a warning to recheck, not proof of a stale branch. Before merge, compare the PR head against current main and rerun required checks. This dashboard does not merge PRs automatically.</Text>
-      </Section>
-
-      <Section title="TEN-NICHE WEB BUILD SCORECARD" subtitle="Actual job and artifact results from the latest branded web production workflow">
-        {snapshot.webBuildRun ? <View style={styles.nextCard}>
-          <View style={styles.prTop}><Text style={styles.taskTitle}>{snapshot.webBuildRun.display_title || snapshot.webBuildRun.name}</Text><Pill label={snapshot.webBuildRun.status==='completed'?(snapshot.webBuildRun.conclusion ?? 'COMPLETED').toUpperCase():snapshot.webBuildRun.status.toUpperCase()} tone={snapshot.webBuildRun.conclusion==='success'?'good':snapshot.webBuildRun.conclusion==='failure'?'bad':'warn'}/></View>
-          <View style={styles.metrics}>
-            <Metric label="BUILD ARTEFACTS CONFIRMED" value={String(snapshot.webBuildArtifacts.filter(a=>!a.expired).length)} detail={`${snapshot.webBuildArtifacts.filter(a=>a.expired).length} expired artefacts`}/>
-            <Metric label="EXPORT JOBS PASSED" value={String(webBuildSummary.passed)} detail={`of ${snapshot.webBuildJobs.length} reported jobs`}/>
-            <Metric label="FAILED JOBS" value={String(webBuildSummary.failed)} detail="Completed with an error"/>
-            <Metric label="PENDING JOBS" value={String(webBuildSummary.running + webBuildSummary.queued)} detail="Still running or queued"/>
-          </View>
-          {snapshot.webBuildArtifacts.length>0 ? <View style={{gap:5}}><Text style={styles.taskTitle}>GitHub-confirmed artefacts</Text>{snapshot.webBuildArtifacts.map(a=><View key={a.id} style={styles.runRow}><View style={{flex:1}}><Text style={styles.taskTitle}>{a.name}</Text><Text style={styles.muted}>{(a.size_in_bytes/1024/1024).toFixed(1)} MB · expires {new Date(a.expires_at).toLocaleDateString()}</Text></View><Pill label={a.expired?'EXPIRED':'AVAILABLE'} tone={a.expired?'bad':'good'}/></View>)}</View> : <Text style={styles.body}>No downloadable build artefacts are currently confirmed for this run.</Text>}
-          {snapshot.webBuildJobs.length===0 ? <Text style={styles.body}>GitHub has not returned job details for this run. No build result is inferred.</Text> : snapshot.webBuildJobs.map(j=>{
-            const artifact=j.steps?.find(s=>/upload web build artifact/i.test(s.name));
-            const state=classifyProductionWorkflowJob(j);
-            const passed=state==='PASSED';
-            const tone=state==='PASSED'?'good':state==='FAILED'?'bad':state==='SKIPPED'?'muted':'warn';
-            return <View key={j.id} style={styles.runRow}>
-              <View style={{flex:1}}><Text style={styles.taskTitle}>{j.name.replace(/^Export web — /,'')}</Text><Text style={styles.muted}>Artifact: {artifact?.conclusion==='success'?'uploaded':artifact?.status==='in_progress'?'uploading':artifact?.conclusion==='failure'?'failed':'not confirmed'}</Text></View>
-              <Pill label={state.replace('_',' ')} tone={tone}/>
-            </View>;
-          })}
-          <Text style={styles.warningText}>A successful static export proves the web bundle built and its workflow artifact uploaded. It does not prove live deployment, authentication, tenant isolation, eBay transactions or real-device acceptance.</Text>
-          <Pressable onPress={()=>open(snapshot.webBuildRun!.html_url)} style={styles.externalLink}><Text style={styles.externalLinkText}>Inspect source workflow and logs ↗</Text></Pressable>
-        </View> : <Text style={styles.body}>No branded ten-niche web production workflow was found in the latest 20 GitHub runs.</Text>}
-      </Section>
-
-      <Section title="REGRESSION, SECURITY & NATIVE EVIDENCE" subtitle="Live step results from the latest niche-routing validation workflow">
-        {snapshot.routingRun ? <View style={styles.nextCard}>
-          <View style={styles.prTop}><Text style={styles.taskTitle}>{snapshot.routingRun.display_title || snapshot.routingRun.name}</Text><Pill label={snapshot.routingRun.status==='completed'?(snapshot.routingRun.conclusion ?? 'COMPLETED').toUpperCase():snapshot.routingRun.status.toUpperCase()} tone={snapshot.routingRun.conclusion==='success'?'good':snapshot.routingRun.conclusion==='failure'?'bad':'warn'}/></View>
-          {snapshot.routingJobs.map(job=>{
-            const checks=[
-              {label:'Full regression suite',match:/complete regression suite/i},
-              {label:'Server authorization boundary tests',match:/shared server authorization boundaries/i},
-              {label:'Android production JavaScript bundle',match:/bundle android production javascript/i},
-              {label:'Ten Expo branded configurations',match:/validate all ten expo branded configurations/i}
-            ];
-            return <View key={job.id} style={{gap:8}}>
-              <Text style={styles.muted}>{job.name}</Text>
-              {checks.map(check=>{
-                const step=job.steps?.find(s=>check.match.test(s.name));
-                const done=step?.status==='completed';
-                const success=done && step?.conclusion==='success';
-                const failed=done && !success && step?.conclusion!=='skipped' && step?.conclusion!=='neutral';
-                return <View key={check.label} style={styles.runRow}>
-                  <View style={{flex:1}}><Text style={styles.taskTitle}>{check.label}</Text><Text style={styles.muted}>{step ? (success?'Completed successfully':failed?'Completed with failure':step.status==='in_progress'?'Currently running':'Waiting') : 'No matching step reported by workflow'}</Text></View>
-                  <Pill label={success?'PASSED':failed?'FAILED':step?.status==='in_progress'?'RUNNING':'PENDING'} tone={success?'good':failed?'bad':'warn'}/>
-                </View>;
-              })}
-            </View>;
-          })}
-          <Text style={styles.warningText}>These are workflow-step results, not a substitute for a full penetration test, live authorization review, installed-device acceptance or app-store/release verification.</Text>
-          <Pressable onPress={()=>open(snapshot.routingRun!.html_url)} style={styles.externalLink}><Text style={styles.externalLinkText}>Inspect regression and authorization workflow ↗</Text></Pressable>
-        </View> : <Text style={styles.body}>No niche-routing validation workflow was found in the latest 20 GitHub runs.</Text>}
-      </Section>
-
-      <Section title="CI / RELEASE SIGNALS" subtitle="Latest GitHub Actions workflow runs">
-        {snapshot.runs.slice(0,10).map(r=><Pressable key={r.id} onPress={()=>open(r.html_url)} style={styles.runRow}>
-          <View style={{flex:1}}><Text style={styles.taskTitle}>{r.display_title || r.name}</Text><Text style={styles.muted}>{r.head_branch} · {new Date(r.created_at).toLocaleString()}</Text></View>
-          <Pill label={r.status==='completed'?(r.conclusion??'COMPLETED').toUpperCase():r.status.toUpperCase()} tone={r.conclusion==='success'?'good':r.conclusion==='failure'?'bad':'warn'}/>
-        </Pressable>)}
-        <Pressable onPress={()=>open('https://github.com/'+OWNER_REPO+'/actions')} style={styles.externalLink}><Text style={styles.externalLinkText}>Open all GitHub Actions ↗</Text></Pressable>
-      </Section>
-
-      <Section title="KNOWN RELEASE BLOCKERS" subtitle="Carried forward from the engineering handover">
-        {(snapshot.register?.knownReleaseRisks ?? []).map((risk,i)=><View key={i} style={styles.riskRow}><MaterialIcons name="warning-amber" size={18} color={AMBER}/><Text style={styles.body}>{risk}</Text></View>)}
-      </Section>
-
-      {snapshot.errors.length>0?<View style={styles.errorBox}><Text style={styles.errorTitle}>Some live sources could not be loaded</Text>{snapshot.errors.map((e,i)=><Text key={i} style={styles.muted}>{e}</Text>)}</View>:null}
-      <Text style={styles.footer}>Last refreshed: {snapshot.refreshedAt ? new Date(snapshot.refreshedAt).toLocaleString() : 'Loading'} · Source: github.com/{OWNER_REPO}</Text>
-    </ScrollView>
-  </View>;
+      {snapshot.errors.length > 0 ? <View style={styles.errorBox}><View style={styles.row}><MaterialIcons name="error-outline" size={22} color={Colors.danger}/><Text style={styles.cardTitle}>Some evidence sources are unavailable</Text></View>{snapshot.errors.slice(0, 6).map((error, index) => <Text key={index} style={styles.body}>{error}</Text>)}</View> : null}
+      {snapshot.source !== 'LIVE' ? <Text style={styles.warning}>Cached or bundled evidence is shown for continuity. It cannot confirm current-main readiness. No statuses have been promoted.</Text> : null}
+      {snapshot.retryAt > Date.now() ? <Text style={styles.warning}>Refresh cooldown / GitHub rate limit. Retry after {new Date(snapshot.retryAt).toLocaleTimeString()}.</Text> : null}
+    </View>} ListFooterComponent={<Text style={styles.footer}>Read-only repository evidence · {PRODUCTION_REPOSITORY}{'\n'}Repeated refreshes are cached and rate-limited. No credentials or automatic release actions.</Text>}/>
+  </SafeAreaView>;
 }
 
-function Metric({label,value,detail}:{label:string;value:string;detail:string}) { return <View style={styles.metric}><Text style={styles.metricLabel}>{label}</Text><Text style={styles.metricValue}>{value}</Text><Text style={styles.metricDetail}>{detail}</Text></View>; }
-function Section({title,subtitle,children}:{title:string;subtitle:string;children:React.ReactNode}) { return <View style={styles.section}><View style={styles.sectionHeading}><Text style={styles.sectionTitle}>{title}</Text><Text style={styles.sectionSubtitle}>{subtitle}</Text></View>{children}</View>; }
-
-const styles=StyleSheet.create({
-  screen:{flex:1,backgroundColor:'#090D13'},content:{paddingHorizontal:Spacing.base,gap:Spacing.lg,maxWidth:1100,width:'100%',alignSelf:'center'},
-  topline:{flexDirection:'row',alignItems:'center',gap:12},eyebrow:{color:GOLD,fontSize:10,fontWeight:'900',letterSpacing:2},title:{color:'#F5F7FA',fontSize:30,fontWeight:'900',marginTop:4},subtitle:{color:'#9BA8B8',fontSize:13,marginTop:3},
-  refresh:{width:46,height:46,borderRadius:14,backgroundColor:'#18212D',alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:'#303D4D'},
-  hero:{backgroundColor:'#121B27',borderColor:'#334253',borderWidth:1,borderRadius:22,padding:18,gap:16},heroRow:{flexDirection:'row',justifyContent:'space-between',alignItems:'center'},heroEyebrow:{fontSize:9,color:GOLD,fontWeight:'900',letterSpacing:1.5},heroTitle:{fontSize:22,color:'#F5F7FA',fontWeight:'900',marginTop:4},
-  metrics:{flexDirection:'row',flexWrap:'wrap',gap:10},metric:{backgroundColor:'#1B2735',borderRadius:13,padding:12,minWidth:Platform.OS==='web'?190:'46%',flexGrow:1,gap:4},metricLabel:{fontSize:9,color:'#9EADBD',fontWeight:'800',letterSpacing:1},metricValue:{fontSize:25,color:'#F6F7FA',fontWeight:'900'},metricDetail:{fontSize:10,color:'#9EADBD'},
-  progressTrack:{height:8,borderRadius:8,backgroundColor:'#2C3948',overflow:'hidden'},progressFill:{height:8,borderRadius:8,backgroundColor:GREEN},progressNote:{color:'#AAB5C2',fontSize:11,lineHeight:17},
-  directiveLink:{flexDirection:'row',alignItems:'center',justifyContent:'center',gap:8,padding:13,borderRadius:12,borderWidth:1,borderColor:'#6D592A',backgroundColor:'#211C13'},directiveLinkText:{color:GOLD,fontSize:11,fontWeight:'900'},
-  section:{gap:10},sectionHeading:{gap:3},sectionTitle:{fontSize:15,color:'#F1F4F8',fontWeight:'900',letterSpacing:.5},sectionSubtitle:{fontSize:10,color:'#8593A4'},
-  nextCard:{backgroundColor:'#151F2B',borderRadius:16,borderWidth:1,borderColor:'#3A4655',padding:16,gap:10},nextTitle:{fontSize:19,color:'#F5F7FA',fontWeight:'900'},body:{fontSize:12,color:'#B9C4D0',lineHeight:18},nextTask:{flexDirection:'row',gap:5,alignItems:'flex-start'},
-  stageCard:{backgroundColor:'#121A25',borderRadius:14,borderWidth:1,borderColor:'#293545',overflow:'hidden'},stageHead:{padding:13,flexDirection:'row',alignItems:'center',gap:10},stageIndex:{width:35,height:35,borderRadius:10,backgroundColor:'#2B2619',alignItems:'center',justifyContent:'center'},stageIndexText:{color:GOLD,fontWeight:'900',fontSize:11},stageTitle:{color:'#F0F3F7',fontSize:12,fontWeight:'800'},muted:{color:'#8593A4',fontSize:10,marginTop:3},taskList:{paddingHorizontal:13,paddingBottom:10,gap:10},taskRow:{paddingTop:10,borderTopWidth:1,borderTopColor:'#283443',flexDirection:'row',alignItems:'center',gap:8},taskTitle:{color:'#E6EBF1',fontSize:11,fontWeight:'700',lineHeight:16},
-  pill:{borderRadius:20,borderWidth:1,paddingHorizontal:8,paddingVertical:4,alignSelf:'flex-start'},pillText:{fontSize:8,fontWeight:'900',letterSpacing:.4},
-  nicheGrid:{flexDirection:'row',flexWrap:'wrap',gap:9},nicheTile:{backgroundColor:'#121A25',borderRadius:13,borderWidth:1,borderColor:'#293545',padding:12,gap:5,minWidth:Platform.OS==='web'?180:'46%',flexGrow:1},nicheName:{fontSize:12,color:'#F0F3F7',fontWeight:'800'},
-  prCard:{backgroundColor:'#121A25',borderRadius:13,borderWidth:1,borderColor:'#293545',padding:13,gap:6},prTop:{flexDirection:'row',alignItems:'center',justifyContent:'space-between'},prNumber:{color:GOLD,fontWeight:'900',fontSize:12},prTitle:{color:'#F0F3F7',fontSize:13,fontWeight:'800'},prLink:{color:GOLD,fontSize:10,fontWeight:'800'},
-  warningText:{color:'#E7BB68',fontSize:10,lineHeight:16,backgroundColor:'#352A18',padding:11,borderRadius:10},runRow:{flexDirection:'row',alignItems:'center',gap:10,padding:11,backgroundColor:'#121A25',borderRadius:11,borderWidth:1,borderColor:'#293545'},externalLink:{padding:12,alignItems:'center'},externalLinkText:{color:GOLD,fontWeight:'800',fontSize:12},
-  riskRow:{flexDirection:'row',gap:9,alignItems:'flex-start',backgroundColor:'#171C22',borderRadius:10,padding:11},errorBox:{backgroundColor:'#351D22',borderColor:'#7D333C',borderWidth:1,borderRadius:12,padding:12,gap:5},errorTitle:{color:'#FF9A9E',fontWeight:'900',fontSize:12},footer:{color:'#667587',fontSize:9,textAlign:'center',paddingVertical:8}
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: Colors.background },
+  loading: { flex: 1, backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center', gap: Spacing.base },
+  content: { padding: Spacing.base, gap: Spacing.xl, maxWidth: 960, width: '100%', alignSelf: 'center', paddingBottom: Spacing.xxl },
+  header: { gap: Spacing.base }, topline: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  copy: { flex: 1, minWidth: 120, gap: Spacing.xs },
+  iconButton: { minWidth: 48, height: 48, borderRadius: Radius.md, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder },
+  eyebrow: { color: Colors.primary, fontSize: Typography.size.xs, fontWeight: Typography.weight.bold, letterSpacing: 1 },
+  title: { fontSize: Typography.size.lg, color: Colors.textPrimary, fontWeight: Typography.weight.bold, includeFontPadding: false },
+  hero: { backgroundColor: Colors.surfaceElevated, borderRadius: Radius.xl, borderWidth: 1, borderColor: Colors.gold + '66', padding: Spacing.base, gap: Spacing.base },
+  metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  metric: { flexGrow: 1, flexBasis: '46%', padding: Spacing.md, borderRadius: Radius.md, backgroundColor: Colors.surface, gap: Spacing.sm },
+  metricValue: { fontSize: Typography.size.xl, fontWeight: Typography.weight.bold, color: Colors.textPrimary, includeFontPadding: false },
+  progressTrack: { height: Spacing.sm, borderRadius: Radius.pill, backgroundColor: Colors.surfaceHighlight, overflow: 'hidden' },
+  progressFill: { height: Spacing.sm, backgroundColor: Colors.primary },
+  heading: { gap: Spacing.sm }, section: { gap: Spacing.md },
+  sectionTitle: { color: Colors.textPrimary, fontSize: Typography.size.md, fontWeight: Typography.weight.bold, includeFontPadding: false },
+  card: { padding: Spacing.base, gap: Spacing.md, backgroundColor: Colors.surface, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.surfaceBorder },
+  cardTitle: { fontSize: Typography.size.base, fontWeight: Typography.weight.semibold, color: Colors.textPrimary, lineHeight: 26, flexShrink: 1, includeFontPadding: false },
+  body: { fontSize: Typography.size.base, color: Colors.textSecondary, lineHeight: 26, flexShrink: 1, includeFontPadding: false },
+  muted: { fontSize: Typography.size.sm, color: Colors.textSecondary, lineHeight: 21, flexShrink: 1, includeFontPadding: false },
+  row: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm },
+  wrapRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Spacing.sm },
+  rowText: { flex: 1, minWidth: 120, color: Colors.textPrimary, fontSize: Typography.size.base, lineHeight: 26, includeFontPadding: false },
+  index: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: Colors.goldDim, alignItems: 'center', justifyContent: 'center' },
+  indexText: { color: Colors.gold, fontWeight: Typography.weight.bold, fontSize: Typography.size.base },
+  stageButton: { minHeight: 48 }, taskList: { gap: Spacing.base },
+  task: { borderTopWidth: 1, borderTopColor: Colors.surfaceBorder, paddingTop: Spacing.md, gap: Spacing.md },
+  pill: { borderWidth: 1, borderRadius: Radius.pill, paddingVertical: Spacing.xs, paddingHorizontal: Spacing.sm, alignSelf: 'flex-start', maxWidth: '100%' },
+  pillText: { fontSize: Typography.size.xs, fontWeight: Typography.weight.bold, lineHeight: 18, includeFontPadding: false },
+  nicheRail: { minHeight: 96 }, railContent: { gap: Spacing.sm, paddingVertical: Spacing.xs },
+  nicheChip: { minWidth: 160, minHeight: 80, padding: Spacing.md, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.surfaceBorder, backgroundColor: Colors.surface, justifyContent: 'center', gap: Spacing.xs },
+  selectedChip: { borderColor: Colors.primary, backgroundColor: Colors.primaryDim },
+  chipTitle: { fontSize: Typography.size.base, color: Colors.textPrimary, fontWeight: Typography.weight.semibold },
+  link: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm, paddingVertical: Spacing.sm },
+  linkText: { color: Colors.primary, fontSize: Typography.size.base, fontWeight: Typography.weight.semibold, flexShrink: 1 },
+  warning: { padding: Spacing.md, borderRadius: Radius.md, backgroundColor: Colors.warningDim, fontSize: Typography.size.base, lineHeight: 26, color: Colors.warning },
+  risk: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md, padding: Spacing.base, backgroundColor: Colors.surface, borderRadius: Radius.md },
+  errorBox: { padding: Spacing.base, gap: Spacing.md, borderRadius: Radius.md, backgroundColor: Colors.dangerDim, borderWidth: 1, borderColor: Colors.danger },
+  error: { color: Colors.danger, fontSize: Typography.size.base, lineHeight: 26 },
+  footer: { color: Colors.textSecondary, textAlign: 'center', fontSize: Typography.size.sm, lineHeight: 21, paddingVertical: Spacing.base },
+  pressed: { opacity: 0.75 },
 });

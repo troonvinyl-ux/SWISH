@@ -1,7 +1,6 @@
 // SWISH Repricing Hook
 import { useState, useEffect, useCallback } from 'react';
 import { useApp } from './useApp';
-import { getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 import {
   RepricingRule,
   StaleListingInfo,
@@ -17,10 +16,7 @@ import {
 } from '@/services/repricingService';
 
 export function useRepricing() {
-  const { tenant, activeNicheId, fixedNicheId } = useApp();
-  // A branded APK's fixed niche must take precedence over persisted workspace state.
-  const nicheId = fixedNicheId ?? activeNicheId;
-  const specialistIds = getProductionNicheSpecialistIds(nicheId);
+  const { tenant } = useApp();
   const [rules, setRules] = useState<RepricingRule[]>([]);
   const [staleListings, setStaleListings] = useState<StaleListingInfo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -28,37 +24,20 @@ export function useRepricing() {
   const [suggestions, setSuggestions] = useState<Record<string, RepriceSuggestion>>({});
 
   const load = useCallback(async () => {
-    if (!tenant?.id) {
-      setRules([]);
-      setStaleListings([]);
-      return;
-    }
+    if (!tenant) return;
     setLoading(true);
-    try {
-      const [rulesResult, staleResult] = await Promise.all([
-        listRepricingRules(tenant.id),
-        // The service enforces the niche boundary in the database query (fail closed).
-        getStaleListings(tenant.id, nicheId ?? '', 7),
-      ]);
-      const scopedListings = staleResult.listings.filter(listing => specialistIds.includes(listing.specialistId));
-      const scopedItemIds = new Set(scopedListings.map(listing => listing.itemId));
-      const scopedListingIds = new Set(scopedListings.map(listing => listing.id));
-      setRules(rulesResult.rules.filter(rule =>
-        (!rule.itemId && !rule.listingId) ||
-        (rule.itemId ? scopedItemIds.has(rule.itemId) : false) ||
-        (rule.listingId ? scopedListingIds.has(rule.listingId) : false)
-      ));
-      setStaleListings(scopedListings);
-      // Exception scans must use the same fixed-niche-aware scope as the visible list.
-      if (specialistIds.length > 0) {
-        scanForStaleListingExceptions(tenant.id, nicheId ?? '').catch(() => {});
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [tenant?.id, nicheId, specialistIds.join('|')]);
+    const [rulesResult, staleResult] = await Promise.all([
+      listRepricingRules(tenant.id),
+      getStaleListings(tenant.id, 7),
+    ]);
+    setRules(rulesResult.rules);
+    setStaleListings(staleResult.listings);
+    // Scan for exceptions in background
+    scanForStaleListingExceptions(tenant.id).catch(() => {});
+    setLoading(false);
+  }, [tenant?.id]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   const addRule = useCallback(async (input: Parameters<typeof createRepricingRule>[1]) => {
     if (!tenant) return { error: 'No tenant' };
@@ -80,31 +59,27 @@ export function useRepricing() {
   }, []);
 
   const getAISuggestion = useCallback(async (listing: StaleListingInfo) => {
-    if (!tenant?.id || !nicheId) return { error: 'No active niche' };
+    if (!tenant) return;
     setSuggestionLoading(prev => ({ ...prev, [listing.id]: true }));
-    try {
-      const { suggestion, error } = await getAIRepriceSuggestion(listing.id, tenant.id, nicheId);
-      if (suggestion) {
-        setSuggestions(prev => ({
-          ...prev,
-          [listing.id]: {
-            ...suggestion,
-            itemTitle: listing.itemTitle,
-            daysListed: listing.daysListed,
-            views: listing.views,
-            watchers: listing.watchers,
-          },
-        }));
-      }
-      return { error };
-    } finally {
-      setSuggestionLoading(prev => ({ ...prev, [listing.id]: false }));
+    const { suggestion, error } = await getAIRepriceSuggestion(listing.id, tenant.id);
+    setSuggestionLoading(prev => ({ ...prev, [listing.id]: false }));
+    if (suggestion) {
+      setSuggestions(prev => ({
+        ...prev,
+        [listing.id]: {
+          ...suggestion,
+          itemTitle: listing.itemTitle,
+          daysListed: listing.daysListed,
+          views: listing.views,
+          watchers: listing.watchers,
+        },
+      }));
     }
-  }, [tenant?.id, nicheId]);
+    return { error };
+  }, [tenant?.id]);
 
   const applyPrice = useCallback(async (listingId: string, newPrice: number) => {
-    if (!tenant?.id || !nicheId) return { error: 'No active niche' };
-    const { error } = await applyReprice(listingId, newPrice, tenant.id, nicheId);
+    const { error } = await applyReprice(listingId, newPrice);
     if (!error) {
       setStaleListings(prev => prev.map(l =>
         l.id === listingId ? { ...l, price: newPrice } : l
@@ -116,7 +91,7 @@ export function useRepricing() {
       });
     }
     return { error };
-  }, [tenant?.id, nicheId]);
+  }, []);
 
   const activeRules = rules.filter(r => r.isActive);
 

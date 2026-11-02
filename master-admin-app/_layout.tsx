@@ -1,26 +1,24 @@
-import React from 'react';
-import { View } from 'react-native';
+// Private launcher presentation layer. Reuses SWISH's canonical providers and backend.
+import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useFonts } from 'expo-font';
+import { MaterialIcons } from '@expo/vector-icons';
+import * as SplashScreen from 'expo-splash-screen';
 import { AlertProvider, AuthProvider } from '@/template';
 import { AppProvider } from '@/contexts/AppContext';
-import { GlobalAccountControls } from '@/components/layout/GlobalAccountControls';
 
-/** Deliberately small route tree: the Master Admin APK is a launcher, not a
- * second copy of every niche workspace. Niche products open as separate APKs. */
 export default function MasterAdminRootLayout() {
-  return (
-    <AlertProvider>
-      <SafeAreaProvider>
-        <AuthProvider>
-          <AppProvider>
-            <View style={{ flex: 1 }}>
-              <Stack screenOptions={{ headerShown: false }} />
-              <GlobalAccountControls />
-            </View>
-          </AppProvider>
-        </AuthProvider>
-      </SafeAreaProvider>
-    </AlertProvider>
-  );
+  useFonts(MaterialIcons.font);
+  useEffect(() => { void SplashScreen.hideAsync().catch(() => { /* Host may already have hidden the splash. */ }); }, []);
+  return <AlertProvider><SafeAreaProvider><AuthProvider><AppProvider>
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index"/>
+      <Stack.Screen name="login"/>
+      <Stack.Screen name="master-admin"/>
+      <Stack.Screen name="production-control"/>
+      <Stack.Screen name="master-diagnostics"/>
+      <Stack.Screen name="privacy-policy"/>
+    </Stack>
+  </AppProvider></AuthProvider></SafeAreaProvider></AlertProvider>;
 }

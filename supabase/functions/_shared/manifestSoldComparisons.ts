@@ -1,66 +1,43 @@
-export interface ManifestSoldItem {
-  id: string;
-  title: string;
-  price: number;
-  currency: 'GBP';
-  soldDate: string;
-  condition: string;
-  url: string;
-  imageUrl: string;
-}
-export interface ManifestSoldComparisons {
-  status: 'available' | 'empty' | 'unavailable';
-  items: ManifestSoldItem[];
-  message: string;
-  checkedAt: string;
-}
-const unavailable = (message = 'Sold prices are unavailable. Check sold listings on eBay instead.'): ManifestSoldComparisons => ({
-  status: 'unavailable', items: [], message, checkedAt: new Date().toISOString(),
-});
-export async function fetchManifestSoldComparisons(clientId: string, clientSecret: string, query: string): Promise<ManifestSoldComparisons> {
-  if (!clientId || !clientSecret || typeof query !== 'string' || query.trim().length < 3 || query.length > 100) return unavailable();
+// Real sold-item API only. Never substitute Browse asking prices or AI estimates.
+export async function fetchManifestSoldComparisons(clientId: string, clientSecret: string, query: string) {
+  const empty = { status: 'unavailable', source: 'ebay_marketplace_insights', query, items: [], checkedAt: new Date().toISOString(), message: 'Sold prices are unavailable right now. You can check sold listings on eBay.' };
   try {
     const tokenResponse = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
+      method: 'POST', headers: { Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`, 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ grant_type: 'client_credentials', scope: 'https://api.ebay.com/oauth/api_scope/buy.marketplace.insights' }).toString(),
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(8000),
     });
-    if (!tokenResponse.ok) return unavailable();
+    if (!tokenResponse.ok) {
+      console.log(`[Manifest sold] Token request HTTP ${tokenResponse.status}`);
+      return { ...empty, message: 'eBay sold-price access is not enabled for this app. Check sold listings on eBay instead.' };
+    }
     const token = await tokenResponse.json();
-    if (typeof token.access_token !== 'string' || !token.access_token) return unavailable();
-    const params = new URLSearchParams({ q: query.trim().slice(0, 100), limit: '50' });
-    const response = await fetch(`https://api.ebay.com/buy/marketplace_insights/v1_beta/item_sales/search?${params.toString()}`, {
+    if (!token.access_token) return empty;
+    const params = new URLSearchParams({ q: query, limit: '20' });
+    const response = await fetch(`https://api.ebay.com/buy/marketplace_insights/v1_beta/item_sales/search?${params}`, {
       headers: { Authorization: `Bearer ${token.access_token}`, Accept: 'application/json', 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_GB' },
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(12000),
     });
-    if (!response.ok) return unavailable();
+    if (!response.ok) {
+      console.log(`[Manifest sold] Item sales HTTP ${response.status}`);
+      return { ...empty, message: [401,403,404].includes(response.status) ? 'eBay has not made sold-price access available to this app. Check sold listings on eBay instead.' : empty.message };
+    }
     const data = await response.json();
-    const raw = data.itemSales ?? data.itemSummaries ?? data.items ?? data.sales ?? [];
+    if (!Array.isArray(data.itemSales)) return empty;
     const seen = new Set<string>();
-    const items: ManifestSoldItem[] = (Array.isArray(raw) ? raw : []).flatMap((item: any) => {
-      const id = String(item.itemId ?? item.legacyItemId ?? '');
-      const title = String(item.title ?? item.itemTitle ?? '').trim().slice(0, 180);
-      const soldDate = String(item.lastSoldDate ?? item.soldDate ?? item.saleDate ?? item.lastSoldDateTime ?? '');
-      const priceValue = Number(item.lastSoldPrice?.value ?? item.price?.value ?? item.soldPrice?.value ?? 0);
-      const currency = String(item.lastSoldPrice?.currency ?? item.price?.currency ?? item.soldPrice?.currency ?? item.currency ?? '');
-      if (!id || seen.has(id) || !title || currency !== 'GBP' || !Number.isFinite(priceValue) || priceValue <= 0 || !soldDate || !Number.isFinite(Date.parse(soldDate))) return [];
-      seen.add(id);
-      return [{
-        id, title, price: priceValue, currency: 'GBP' as const, soldDate,
-        condition: String(item.condition ?? item.conditionId ?? '').slice(0, 100),
-        url: typeof item.itemWebUrl === 'string' ? item.itemWebUrl : typeof item.itemUrl === 'string' ? item.itemUrl : '',
-        imageUrl: typeof item.image?.imageUrl === 'string' ? item.image.imageUrl : typeof item.imageUrl === 'string' ? item.imageUrl : '',
-      }];
-    }).slice(0, 8);
-    return {
-      status: items.length ? 'available' : 'empty', items, checkedAt: new Date().toISOString(),
-      message: items.length ? 'Similar sold items. Check model, condition and quantity.' : 'No comparable sold prices found. Try a shorter product name.',
-    };
+    const items = data.itemSales.map((item: any) => ({
+      id: String(item.itemId ?? ''), title: String(item.title ?? '').slice(0,180),
+      price: Number(item.lastSoldPrice?.value), currency: String(item.lastSoldPrice?.currency ?? ''),
+      soldDate: String(item.lastSoldDate ?? ''), condition: String(item.condition ?? ''),
+      url: String(item.itemWebUrl ?? ''), imageUrl: String(item.image?.imageUrl ?? ''),
+    })).filter((item: any) => {
+      if (!item.id || !item.title || !Number.isFinite(item.price) || item.price <= 0 || item.currency !== 'GBP' || !Number.isFinite(Date.parse(item.soldDate)) || seen.has(item.id)) return false;
+      seen.add(item.id); return true;
+    }).slice(0,8);
+    return { ...empty, status: items.length ? 'available' : 'empty', items,
+      message: items.length ? 'Similar sold items. Check the model, condition and quantity; these are not confirmed matches.' : 'No comparable GBP sold prices were returned. Try a shorter product name.' };
   } catch {
-    return unavailable();
+    console.error('[Manifest sold] Sold-price search unavailable');
+    return empty;
   }
 }

@@ -47,13 +47,6 @@ jest.mock('expo-image-manipulator', () => ({
   SaveFormat: { JPEG: 'JPEG' },
 }));
 
-jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
-
-jest.mock('@/services/photoQualityService', () => ({
-  inspectPhotoQuality: jest.fn(),
-  preflightPhotos: jest.fn().mockResolvedValue({ checks: [], error: null }),
-}));
-
 import { identifyItemWithAI, saveIdentifiedItem } from '@/services/aiIdentificationService';
 import { getNicheSpecialistIds, isSpecialistInNiche } from '@/constants/niches';
 
@@ -465,7 +458,6 @@ describe('Production configuration', () => {
   });
 
   test('tenantId is passed to edge function for quota tracking', async () => {
-    mockInvoke.mockClear();
     mockInvoke.mockResolvedValue({
       data: {
         identification: {

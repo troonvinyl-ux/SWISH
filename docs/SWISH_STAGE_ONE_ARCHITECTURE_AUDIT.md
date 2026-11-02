@@ -2,7 +2,7 @@
 
 **Audit date:** 2026-11-02  
 **Audited ref:** `main`  
-**Audited commit:** `dd0ff10e3927465fb83f5269d1f068376f4d31ae`  
+**Audited commit:** `04fd59d2150b9421e30dce906940fc3eadec599d`  
 **Scope:** S1-01 through S1-05 in `docs/SWISH_FOUNDATION_MASTER_REGISTER.json`.
 
 ## Executive result
@@ -109,11 +109,10 @@ The detailed prior audit and hardening evidence is in `docs/SWISH_ENGINEERING_AU
 **Result: VERIFIED at the audited snapshot.**
 
 - GitHub API query for open pull requests returned an empty list after PR #95 and PR #96 merged.
-- Current `main` is `dd0ff10e3927465fb83f5269d1f068376f4d31ae`.
-- PR #94 merged as `9c184665`; PR #95 merged as `e4c1a8c2`; PR #96 merged as `04fd59d2`; PR #97 merged as `069308bf`; PR #98 merged as `d168e99`; PR #99 merged as `dd0ff10`. PR #98 completed 25/25 checks and PR #99 completed 15/15 checks before merge.
-- Latest-main workflow set has 15 checks running at this audit snapshot: ten branded Android JS bundles, Master Admin shell, regression/niche isolation, niche-routing, Edge Function syntax/secret-boundary and gated live integration. No completed failures at snapshot.
-- Earlier OTA jobs on `069308bf` were superseded/cancelled as subsequent commits landed. Latest-main OTA publication is not yet evidenced. Do not claim deployment until a current OTA publish workflow succeeds.
-- No APK build was triggered. OTA JavaScript publication, web exports, Android JS bundles, APK packaging and installed-device acceptance are distinct evidence types.
+- Current `main` is `04fd59d2150b9421e30dce906940fc3eadec599d`.
+- PR #94 merged as `9c184665`; PR #95 merged as `e4c1a8c2`; PR #96 merged as `04fd59d2`. PR #95 completed 25/25 checks and PR #96 completed 15/15 checks before merge.
+- Post-merge main workflows are running: niche-routing and eleven OTA JavaScript publish jobs (ten niches plus Master Admin). These must complete successfully before claiming OTA publication.
+- No APK build was triggered. OTA JavaScript publication, web exports, APK packaging and installed-device acceptance are distinct evidence types.
 - Before any subsequent integration, repeat the open-PR query and compare the proposed branch against latest `main`.
 
 ## Stage S1 exit criteria

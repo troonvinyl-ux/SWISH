@@ -19,7 +19,6 @@ import FlipperMXScreen from '@/app/flipper-mx';
 import BikeFlipperScreen from '@/app/bike-flipper';
 import ThreadsFlipScreen from '@/app/threads-flip';
 import SurplusFlipScreen from '@/app/surplus-flip';
-import AntiqueFlipperScreen from '@/app/antique-flipper';
 import { NicheOverview } from '@/components/feature/NicheOverview';
 
 export default function NicheHomeScreen() {
@@ -28,7 +27,6 @@ export default function NicheHomeScreen() {
   // Build-time identity wins over persisted/account-selected state in branded APKs.
   const effectiveNicheId = fixedNicheId ?? activeNicheId;
   const product = resolveProductionNiche(effectiveNicheId);
-  const isThreadsFlip = product === 'clothing';
 
   // Show a brief spinner while AppContext is initialising
   if (tenantLoading && !tenant) {
@@ -46,7 +44,6 @@ export default function NicheHomeScreen() {
   if (product === 'bicycles') return <BikeFlipperScreen key={effectiveNicheId} isHomeTab />;
   if (product === 'clothing') return <ThreadsFlipScreen key={effectiveNicheId} isHomeTab />;
   if (product === 'surplus_flip') return <SurplusFlipScreen key={effectiveNicheId} isHomeTab />;
-  if (product === 'antiques') return <AntiqueFlipperScreen key={effectiveNicheId} />;
   if (product) return <NicheOverview key={effectiveNicheId} />;
   return <Redirect href={"/niche-select" as any} />;
 }

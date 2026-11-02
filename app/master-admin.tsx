@@ -1,23 +1,26 @@
 // SWISH Master Admin — owner-only platform control centre.
 import React, { useState } from 'react';
 import { Alert, Linking, View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import Constants from 'expo-constants';
 import * as Updates from 'expo-updates';
 import { Redirect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '@/template';
+import { useAuth, useAlert } from '@/template';
+import { nicheToAppSchemeUrl } from '@/services/nicheRouting';
 import { useApp } from '@/hooks/useApp';
 import { isSwishMasterAdmin } from '@/contexts/AppContext';
-import { resolveProductionNiche } from '@/services/nicheRouting';
-import { PRODUCTION_NICHES, NICHE_MODULES } from '@/constants/niches';
+import { PRODUCTION_NICHES } from '@/constants/niches';
 import { Colors, Typography, Spacing, Radius } from '@/constants/theme';
 
 export default function MasterAdminScreen() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const { showAlert } = useAlert();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { activeNicheId, enabledNiches, setActiveNiche, isMasterAdmin, tenant, subscriptionTier } = useApp();
+  const { activeNicheId, enabledNiches, setActiveNiche, isMasterAdmin, tenant, subscriptionTier, tenantLoading, nichePreferencesLoading } = useApp();
+  const isLauncher = Constants.expoConfig?.extra?.swishMasterAdminBuild === true;
   const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   const checkForAppUpdate = async () => {
@@ -45,28 +48,22 @@ export default function MasterAdminScreen() {
     }
   };
 
+  if (authLoading || tenantLoading || nichePreferencesLoading) return <View style={[styles.screen, { alignItems: 'center', justifyContent: 'center' }]}><ActivityIndicator color={Colors.primary}/></View>;
+
   // Fail closed: never render owner tools for another account.
   if (!isSwishMasterAdmin(user?.email) || !isMasterAdmin) {
     return <Redirect href="/" />;
   }
 
-  const switchNiche = async (id: (typeof PRODUCTION_NICHES)[number]['id']) => {
-    const nicheId = resolveProductionNiche(id);
-    const nicheModule = nicheId ? NICHE_MODULES[nicheId] : null;
-    const scheme = nicheModule?.scheme;
-    if (!nicheId || !nicheModule || !scheme) {
-      Alert.alert('App unavailable', 'This niche does not have a registered app launch link.');
+  const switchNiche = (id: (typeof PRODUCTION_NICHES)[number]['id']) => {
+    setActiveNiche(id);
+    if (isLauncher) {
+      const url = nicheToAppSchemeUrl(id);
+      if (!url) { showAlert('Application unavailable', 'This niche has no registered application scheme.'); return; }
+      void Linking.openURL(url).catch(() => showAlert('Unable to open niche app', 'Install the selected niche application before opening it from Master Admin.'));
       return;
     }
-    try {
-      await Linking.openURL(`${scheme}://`);
-      setActiveNiche(id);
-    } catch {
-      Alert.alert(
-        `${nicheModule.name} is not installed`,
-        `Install the ${nicheModule.name} APK on this device, then return here to launch it. The Master Admin app does not contain the niche workspace.`,
-      );
-    }
+    router.replace('/(tabs)' as any);
   };
 
   return (
@@ -74,10 +71,16 @@ export default function MasterAdminScreen() {
       <StatusBar style="light" />
       <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + Spacing.xl }]}>
         <View style={styles.header}>
+          <Pressable accessibilityLabel="Back" onPress={() => router.back()} style={styles.iconButton}>
+            <MaterialIcons name="arrow-back" size={22} color={Colors.textPrimary} />
+          </Pressable>
           <View style={styles.headerCopy}>
             <Text style={styles.eyebrow}>SWISH PLATFORM</Text>
             <Text style={styles.title}>Master Admin</Text>
             <Text style={styles.subtitle}>Owner control centre</Text>
+          </View>
+          <View style={styles.shield}>
+            <MaterialIcons name="admin-panel-settings" size={26} color={Colors.primary} />
           </View>
         </View>
 
@@ -94,7 +97,7 @@ export default function MasterAdminScreen() {
           <Text style={styles.sectionTitle}>Niche switcher</Text>
           <Text style={styles.sectionMeta}>{PRODUCTION_NICHES.length} registered niches</Text>
         </View>
-        <Text style={styles.helpText}>Choose a niche to launch its separately installed SWISH app. Return here from a niche using the account menu. Each app keeps its own stock and workspace.</Text>
+        <Text style={styles.helpText}>Choose a niche to open its existing SWISH workspace. Stock remains scoped to its own niche.</Text>
 
         <View style={styles.nicheList}>
           {PRODUCTION_NICHES.map(niche => {
@@ -117,7 +120,7 @@ export default function MasterAdminScreen() {
                   <Text style={styles.nicheStatus}>{enabled ? 'Premium access enabled' : 'Available to master account'}</Text>
                 </View>
                 {active
-                  ? <View style={[styles.activePill, { backgroundColor: niche.color }]}><Text style={styles.activePillText} >LAST OPENED</Text></View>
+                  ? <View style={[styles.activePill, { backgroundColor: niche.color }]}><Text style={styles.activePillText}>ACTIVE</Text></View>
                   : <MaterialIcons name="chevron-right" size={24} color={Colors.textTertiary} />}
               </Pressable>
             );
@@ -129,7 +132,7 @@ export default function MasterAdminScreen() {
           <Text style={styles.sectionMeta}>Owner view</Text>
         </View>
         <View style={styles.infoCard}>
-          <InfoRow icon="inventory-2" title="Last opened niche" value={PRODUCTION_NICHES.find(n => n.id === activeNicheId)?.name ?? activeNicheId} />
+          <InfoRow icon="inventory-2" title="Current workspace" value={PRODUCTION_NICHES.find(n => n.id === activeNicheId)?.name ?? activeNicheId} />
           <InfoRow icon="business" title="Business workspace" value={tenant?.name ?? 'Not loaded'} />
           <InfoRow icon="workspace-premium" title="Account tier" value={subscriptionTier ?? 'Lifetime entitlement for master account'} />
           <InfoRow icon="security" title="Access model" value="Owner-only screen; sensitive actions require server-side authorization before they are enabled." />
@@ -144,6 +147,15 @@ export default function MasterAdminScreen() {
           <MaterialIcons name="chevron-right" size={24} color={Colors.textPrimary} />
         </Pressable>
 
+        <Pressable accessibilityRole="button" accessibilityLabel="Open production readiness control" onPress={() => router.push('/production-control' as any)} style={({ pressed }) => [styles.updateButton, pressed && styles.pressed]}>
+          <View style={styles.updateIcon}><MaterialIcons name="fact-check" size={24} color={Colors.primary}/></View>
+          <View style={{ flex: 1, gap: Spacing.xs }}>
+            <Text style={styles.updateTitle}>Production Control</Text>
+            <Text style={styles.updateSubtitle}>Programme stages, niche certification, current-commit CI evidence and release blockers</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={24} color={Colors.textPrimary}/>
+        </Pressable>
+
         <Pressable accessibilityRole="button" onPress={() => router.push('/master-diagnostics' as any)} style={styles.diagnosticsButton}>
           <View style={styles.diagnosticsIcon}><MaterialIcons name="health-and-safety" size={24} color="#111111" /></View>
           <View style={{ flex: 1, gap: 3 }}>
@@ -153,18 +165,9 @@ export default function MasterAdminScreen() {
           <MaterialIcons name="chevron-right" size={24} color={Colors.textPrimary} />
         </Pressable>
 
-        <Pressable accessibilityRole="button" onPress={() => router.push('/production-control' as any)} style={styles.controlButton}>
-          <View style={styles.controlIcon}><MaterialIcons name="track-changes" size={24} color="#111111" /></View>
-          <View style={{ flex: 1, gap: 3 }}>
-            <Text style={styles.controlTitle}>SWISH Production Control</Text>
-            <Text style={styles.controlSubtitle}>Seven-stage programme, niche readiness, live pull requests and CI blockers</Text>
-          </View>
-          <MaterialIcons name="chevron-right" size={24} color="#111111" />
-        </Pressable>
-
         <View style={styles.notice}>
           <MaterialIcons name="info-outline" size={18} color={Colors.primary} />
-          <Text style={styles.noticeText}>This is the first admin slice: secure owner recognition, all-niche access and workspace switching. User management, live platform metrics, audit history and integration diagnostics need their own server-backed admin endpoints before they can be exposed here.</Text>
+          <Text style={styles.noticeText}>Production Control is read-only repository evidence, not an automatic release approval. Diagnostics perform real marketplace operations only after explicit confirmation. User management and privileged platform metrics still require authorized server-side admin endpoints.</Text>
         </View>
       </ScrollView>
     </View>
@@ -223,10 +226,6 @@ const styles = StyleSheet.create({
   updateTitle: { color: Colors.textPrimary, fontSize: Typography.size.base, fontWeight: '900' },
   updateSubtitle: { color: Colors.textSecondary, fontSize: Typography.size.xs, lineHeight: 17 },
   diagnosticsButton: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md, borderRadius: Radius.lg, backgroundColor: Colors.primary, borderWidth: 1, borderColor: Colors.primary },
-  controlButton: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md, borderRadius: Radius.lg, backgroundColor: '#E6B83F', borderWidth: 1, borderColor: '#E6B83F' },
-  controlIcon: { width: 42, height: 42, borderRadius: Radius.md, backgroundColor: '#FFFFFF66', alignItems: 'center', justifyContent: 'center' },
-  controlTitle: { color: '#111111', fontSize: Typography.size.base, fontWeight: '900' },
-  controlSubtitle: { color: '#292929', fontSize: Typography.size.xs, lineHeight: 17 },
   diagnosticsIcon: { width: 42, height: 42, borderRadius: Radius.md, backgroundColor: '#FFFFFF55', alignItems: 'center', justifyContent: 'center' },
   diagnosticsTitle: { color: '#111111', fontSize: Typography.size.base, fontWeight: '900' },
   diagnosticsSubtitle: { color: '#222222', fontSize: Typography.size.xs, lineHeight: 17 },

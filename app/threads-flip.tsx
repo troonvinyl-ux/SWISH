@@ -11,7 +11,7 @@ import {
   View, Text, StyleSheet, Pressable, ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -31,7 +31,6 @@ import {
   updateItemMedia,
 } from '@/services/aiIdentificationService';
 import { Image } from 'expo-image';
-import { getMarketValue, type MarketValueResult } from '@/services/marketValueService';
 
 // ── Threads Flip design tokens ────────────────────────────────────────────────
 const TF = {
@@ -76,34 +75,6 @@ const CLOTHING_CATEGORIES = [
 ];
 
 const TOP_BRANDS = ["Levi's", 'Nike', 'Carhartt', 'Ralph Lauren', 'Stone Island', 'The North Face', 'Adidas', 'Burberry', 'Prada', 'Supreme'];
-function CategoryPhoto({ uri, style, icon = 'checkroom' }: { uri: string; style: any; icon?: string }) {
-  const [failed, setFailed] = useState(false);
-  return (
-    <View style={[style, { backgroundColor: TF.surfaceHigh, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }]}>
-      {!failed ? (
-        <Image source={{ uri }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={180} onError={() => setFailed(true)} />
-      ) : (
-        <View style={{ flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center', backgroundColor: TF.pinkDim }}>
-          <MaterialIcons name={icon as any} size={26} color={TF.pink} />
-        </View>
-      )}
-    </View>
-  );
-}
-
-
-// Editorial category photography. These Pexels images are free-to-use under the
-// Pexels licence; attribution and source links are recorded in docs/threads-flip-screen-map.md.
-const CLOTHING_CATEGORY_IMAGES: Record<string, string> = {
-  vintage: 'https://images.pexels.com/photos/32734335/pexels-photo-32734335.jpeg?auto=compress&cs=tinysrgb&w=600',
-  designer: 'https://images.pexels.com/photos/3927390/pexels-photo-3927390.jpeg?auto=compress&cs=tinysrgb&w=600',
-  streetwear: 'https://images.pexels.com/photos/29790060/pexels-photo-29790060.jpeg?auto=compress&cs=tinysrgb&w=600',
-  high_street: 'https://images.pexels.com/photos/3927390/pexels-photo-3927390.jpeg?auto=compress&cs=tinysrgb&w=600',
-  sustainable: 'https://images.pexels.com/photos/32734335/pexels-photo-32734335.jpeg?auto=compress&cs=tinysrgb&w=600',
-  trainers: 'https://images.pexels.com/photos/31078822/pexels-photo-31078822.jpeg?auto=compress&cs=tinysrgb&w=600',
-  accessories: 'https://images.pexels.com/photos/31078822/pexels-photo-31078822.jpeg?auto=compress&cs=tinysrgb&w=600',
-  sportswear: 'https://images.pexels.com/photos/29790060/pexels-photo-29790060.jpeg?auto=compress&cs=tinysrgb&w=600',
-};
 
 // ── Paywall ───────────────────────────────────────────────────────────────────
 function TFPaywall({ onBack }: { onBack: () => void }) {
@@ -213,24 +184,13 @@ const pw = StyleSheet.create({
 function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boolean; onTabSelect: (t: TFTab) => void; onUpgrade: () => void; tenant: any }) {
   const router = useRouter();
   const [itemCount, setItemCount] = useState<number | null>(null);
-  const [heroImage, setHeroImage] = useState<string | null>(null);
-  const [heroImageFailed, setHeroImageFailed] = useState(false);
 
   useEffect(() => {
     if (!tenant?.id) return;
-    const supabase = getSupabaseClient();
-    supabase.from('items').select('id', { count: 'exact', head: true })
-      .eq('tenant_id', tenant.id).in('specialist_id', ['clothing', 'trainers_sneakers'])
+    getSupabaseClient()
+      .from('items').select('id', { count: 'exact', head: true })
+      .eq('tenant_id', tenant.id).eq('specialist_id', 'clothing')
       .then(({ count }) => setItemCount(count ?? 0));
-    supabase.from('items').select('media')
-      .eq('tenant_id', tenant.id).in('specialist_id', ['clothing', 'trainers_sneakers'])
-      .order('updated_at', { ascending: false }).limit(12)
-      .then(({ data }) => {
-        const firstPhoto = (data ?? []).map(item => Array.isArray(item.media) ? item.media[0] : null)
-          .find((uri): uri is string => typeof uri === 'string' && uri.startsWith('https://'));
-        setHeroImage(firstPhoto ?? null);
-        setHeroImageFailed(false);
-      });
   }, [tenant?.id]);
 
   const FEATURES = [
@@ -246,7 +206,7 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ht.content}>
       <View style={ht.hero}>
         <View style={ht.heroLeft}>
-          {heroImage && !heroImageFailed ? <Image source={{ uri: heroImage }} style={ht.heroImage} contentFit="cover" transition={180} onError={() => setHeroImageFailed(true)} /> : <CategoryPhoto uri={CLOTHING_CATEGORY_IMAGES.vintage} style={ht.heroImage} />}
+          <View style={ht.heroIcon}><MaterialIcons name="checkroom" size={32} color={TF.pink} /></View>
         </View>
         <View style={{ flex: 1, gap: 3 }}>
           <Text style={ht.brandText}>Threads<Text style={{ color: TF.pink }}> Flip</Text></Text>
@@ -302,7 +262,7 @@ function HomeTab({ isPremium, onTabSelect, onUpgrade, tenant }: { isPremium: boo
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm, paddingVertical: 4 }}>
         {CLOTHING_CATEGORIES.map(cat => (
           <Pressable key={cat.id} onPress={() => onTabSelect('identify')} style={({ pressed }) => [ht.catCard, pressed && { opacity: 0.82 }]}>
-            <CategoryPhoto uri={CLOTHING_CATEGORY_IMAGES[cat.id] ?? CLOTHING_CATEGORY_IMAGES.vintage} style={ht.catImage} icon={cat.id === 'trainers' ? 'directions-run' : cat.id === 'accessories' ? 'shopping-bag' : 'checkroom'} />
+            <MaterialIcons name="checkroom" size={16} color={TF.pink} />
             <Text style={ht.catLabel}>{cat.label}</Text>
             <Text style={ht.catSub}>{cat.sub}</Text>
           </Pressable>
@@ -332,7 +292,6 @@ const ht = StyleSheet.create({
   sectionLabel: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: TF.textMuted, textTransform: 'uppercase', letterSpacing: 0.8 },
   hero: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md, backgroundColor: TF.surface, borderRadius: Radius.xxl, padding: Spacing.base, borderWidth: 1, borderColor: TF.pink + '40' },
   heroLeft: { alignItems: 'center' },
-  heroImage: { width: 76, height: 92, borderRadius: Radius.lg, borderWidth: 1, borderColor: TF.pink + '50' },
   heroIcon: { width: 56, height: 56, borderRadius: Radius.lg, backgroundColor: TF.pinkDim, alignItems: 'center', justifyContent: 'center' },
   brandText: { fontSize: 20, fontWeight: Typography.weight.extrabold, color: TF.white },
   tagline: { fontSize: Typography.size.xs, color: TF.textSub, lineHeight: 17 },
@@ -352,8 +311,7 @@ const ht = StyleSheet.create({
   gridLabel: { fontSize: 9, fontWeight: Typography.weight.bold, color: TF.textPrimary, textAlign: 'center' },
   proTag: { backgroundColor: TF.pinkDim, borderRadius: Radius.pill, paddingHorizontal: 5, paddingVertical: 2 },
   proTagText: { fontSize: 7, fontWeight: Typography.weight.extrabold, color: TF.pink, letterSpacing: 0.5 },
-  catCard: { backgroundColor: TF.surface, borderRadius: Radius.xl, padding: 7, gap: 5, alignItems: 'center', width: 116, borderWidth: 1, borderColor: TF.border, overflow: 'hidden' },
-  catImage: { width: '100%', height: 82, borderRadius: Radius.md, backgroundColor: TF.surfaceHigh },
+  catCard: { backgroundColor: TF.surface, borderRadius: Radius.xl, padding: Spacing.md, gap: 4, alignItems: 'center', width: 100, borderWidth: 1, borderColor: TF.border },
   catLabel: { fontSize: Typography.size.xs, fontWeight: Typography.weight.bold, color: TF.textPrimary, textAlign: 'center' },
   catSub: { fontSize: 8, color: TF.textMuted, textAlign: 'center', lineHeight: 12 },
   upgradeBanner: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, backgroundColor: TF.pink, borderRadius: Radius.xxl, paddingVertical: Spacing.base, paddingHorizontal: Spacing.lg, shadowColor: TF.pink, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 14, elevation: 6 },
@@ -366,7 +324,7 @@ const ht = StyleSheet.create({
 
 // ── Identify Tab — Full AI Identification Flow ────────────────────────────────
 function IdentifyTab({
-  capturedImages, reviewingPhotos, onReviewPhotos, onBackToCapture, onCapture, onRemoveImage, onIdentify, identifying,
+  capturedImages, onCapture, onRemoveImage, onIdentify, identifying,
   processingStatus, aiError, idResult, isSaving, savedItemId, isUploading,
   uploadProgress, onSave, onReset, isPremium, tenant,
 }: {
@@ -374,9 +332,6 @@ function IdentifyTab({
   onCapture: (index: number) => void;
   onRemoveImage: (index: number) => void;
   onIdentify: () => void;
-  onReviewPhotos: () => void;
-  onBackToCapture: () => void;
-  reviewingPhotos: boolean;
   identifying: boolean;
   processingStatus: string;
   aiError: string | null;
@@ -417,29 +372,13 @@ function IdentifyTab({
 
   if (!idResult) {
     const SLOTS = [
-      { label: 'Front View', hint: 'Full front of the garment', primary: true },
-      { label: 'Back View', hint: 'Show the full back and shape', primary: false },
-      { label: 'Label / Tag', hint: 'Brand, size and care labels', primary: false },
-      { label: 'Detail / Flaw', hint: 'Logo, fabric, damage or hardware', primary: false },
+      { label: 'Brand Label', hint: 'Inside neck or waist - required', primary: true },
+      { label: 'Garment', hint: 'Full front view of item', primary: false },
+      { label: 'Detail / Flaw', hint: 'Damage, hardware, care label', primary: false },
     ];
-    const validImages = capturedImages.filter((image): image is CapturedImage => Boolean(image));
-    const canIdentify = validImages.length > 0;
-    if (identifying) return (
-      <View testID="threads-flip-screen-05" accessibilityLabel="Threads Flip screen 05 AI identification" style={{ flex: 1, padding: Spacing.base, justifyContent: 'center', gap: Spacing.lg }}>
-        <View style={id.processingHero}><View style={id.processingRing}><MaterialIcons name="checkroom" size={42} color={TF.pink} /></View><Text style={id.resultTitle}>Identifying Item…</Text><Text style={id.heroSub}>{processingStatus || 'Analysing your garment photos'}</Text></View>
-        {['Analysing photos…', 'Identifying brand…', 'Reading label…', 'Determining category…', 'Finding item specifics…'].map((step, index) => <View key={step} style={id.aiRow}><MaterialIcons name={index === 0 ? 'radio-button-checked' : 'radio-button-unchecked'} size={16} color={index === 0 ? TF.pink : TF.textMuted} /><Text style={id.aiText}>{step}</Text></View>)}
-      </View>
-    );
-    if (reviewingPhotos) return (
-      <ScrollView testID="threads-flip-screen-04" accessibilityLabel="Threads Flip screen 04 photo checklist" showsVerticalScrollIndicator={false} contentContainerStyle={id.content}>
-        <View style={id.hero}><MaterialIcons name="photo-library" size={26} color={TF.pink} /><View style={{ flex: 1 }}><Text style={id.heroTitle}>Item Photos</Text><Text style={id.heroSub}>Check each view before asking the AI to identify your item.</Text></View></View>
-        {SLOTS.map((slot, idx) => { const img = capturedImages[idx] ?? null; return <Pressable key={slot.label} onPress={() => onCapture(idx)} style={id.checklistRow}>{img ? <Image source={{ uri: img.uri }} style={id.checklistThumb} contentFit="cover" /> : <View style={[id.checklistThumb, id.checklistPlaceholder]}><MaterialIcons name="add-a-photo" size={20} color={TF.textMuted} /></View>}<View style={{ flex: 1, gap: 3 }}><Text style={id.checklistTitle}>{slot.label}</Text><Text style={id.checklistHint}>{img ? 'Photo captured · tap to retake' : slot.hint}</Text></View><MaterialIcons name={img ? 'check-circle' : 'add-circle-outline'} size={20} color={img ? TF.success : TF.pink} /></Pressable>; })}
-        <Text style={id.tipText}>A clear label photo helps identify the brand, size and material. Add all four views where possible.</Text>
-        <View style={id.actions}><Pressable onPress={onBackToCapture} style={id.resetBtn}><Text style={id.resetText}>Back to Capture</Text></Pressable><Pressable onPress={onIdentify} disabled={!canIdentify} style={[id.primaryBtn, !canIdentify && { opacity: 0.45 }]}><MaterialIcons name="auto-awesome" size={16} color={TF.black} /><Text style={id.primaryBtnText}>Continue</Text></Pressable></View>
-      </ScrollView>
-    );
+    const canIdentify = capturedImages.length > 0;
     return (
-      <View testID="threads-flip-screen-03" accessibilityLabel="Threads Flip screen 03 scan and capture" style={{ flex: 1 }}>
+      <View style={{ flex: 1 }}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={id.content}>
           <View style={id.hero}>
             <MaterialIcons name="photo-camera" size={28} color={TF.pink} />
@@ -447,27 +386,6 @@ function IdentifyTab({
               <Text style={id.heroTitle}>Identify Item</Text>
               <Text style={id.heroSub}>Photograph the label and garment - AI reads brand, era, size, composition, condition, and authentication risk</Text>
             </View>
-          </View>
-
-          <View style={id.photoGuidePanel}>
-            <Text style={id.photoGuideTitle}>GET THE BEST IDENTIFICATION</Text>
-            <View style={id.photoGuideGrid}>
-              {[
-                { icon: 'checkroom', title: 'Full garment', copy: 'Lay flat or hang straight. Show the complete shape.' },
-                { icon: 'sell', title: 'Brand & size', copy: 'Flatten the neck or waist label. Keep every word sharp.' },
-                { icon: 'local-laundry-service', title: 'Care label', copy: 'Show fabric composition and washing symbols.' },
-                { icon: 'zoom-in', title: 'Details & flaws', copy: 'Close-ups of stitching, logos, wear and damage.' },
-              ].map((guide) => (
-                <View key={guide.title} style={id.photoGuideCard}>
-                  <View style={id.photoGuideIcon}><MaterialIcons name={guide.icon as any} size={17} color={TF.pink} /></View>
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={id.photoGuideLabel}>{guide.title}</Text>
-                    <Text style={id.photoGuideCopy}>{guide.copy}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-            <Text style={id.photoGuideFoot}>Use bright, even daylight. Avoid filters and keep the real garment colour.</Text>
           </View>
 
           {aiError ? (
@@ -488,7 +406,7 @@ function IdentifyTab({
             </View>
           ) : null}
 
-          <Text style={id.sectionLabel}>CAPTURE FOUR VIEWS</Text>
+          <Text style={id.sectionLabel}>PHOTOS</Text>
           <View style={id.photoGrid}>
             {SLOTS.map((slot, idx) => {
               const img = capturedImages[idx] ?? null;
@@ -566,13 +484,13 @@ function IdentifyTab({
 
         <View style={id.actionBar}>
           <View style={{ flex: 1, gap: 2 }}>
-            <Text style={id.actionCount}>{validImages.length} of 4 photos added</Text>
+            <Text style={id.actionCount}>{capturedImages.length} of 3 photos added</Text>
             <Text style={id.actionHint}>
-              {validImages.length === 0 ? 'Start with a clear front view' : 'Review your photos before AI identification'}
+              {capturedImages.length === 0 ? 'Add brand label photo first' : 'Ready - tap Identify to analyse'}
             </Text>
           </View>
           <Pressable
-            onPress={onReviewPhotos}
+            onPress={onIdentify}
             disabled={!canIdentify || identifying}
             style={({ pressed }) => [
               id.identifyBtn,
@@ -586,7 +504,7 @@ function IdentifyTab({
               <MaterialIcons name="auto-awesome" size={18} color={canIdentify ? TF.black : TF.textMuted} />
             )}
             <Text style={[id.identifyBtnText, !canIdentify ? { color: TF.textMuted } : null]}>
-              Review Photos
+              {identifying ? (processingStatus || 'Identifying...') : 'Identify Item'}
             </Text>
           </Pressable>
         </View>
@@ -610,7 +528,7 @@ function IdentifyTab({
         </View>
       ) : null}
 
-      <View testID="threads-flip-screen-06" accessibilityLabel="Threads Flip screen 06 identification result" style={id.resultHero}>
+      <View style={id.resultHero}>
         <View style={id.resultIconWrap}>
           <MaterialIcons name="checkroom" size={32} color={TF.pink} />
         </View>
@@ -684,7 +602,7 @@ function IdentifyTab({
         </View>
       </View>
 
-      <View testID="threads-flip-screen-07" accessibilityLabel="Threads Flip screen 07 condition and authentication" style={id.condCard}>
+      <View style={id.condCard}>
         <Text style={id.specsTitle}>CONDITION</Text>
         <Text style={id.condOverall}>{idResult.condition}</Text>
         {clothingFields.damage ? (
@@ -744,26 +662,11 @@ function IdentifyTab({
 }
 
 const id = StyleSheet.create({
-  processingHero: { alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xl },
-  processingRing: { width: 116, height: 116, borderRadius: 58, borderWidth: 3, borderColor: TF.pink, backgroundColor: TF.pinkDim, alignItems: 'center', justifyContent: 'center', shadowColor: TF.pink, shadowOpacity: 0.6, shadowRadius: 20, elevation: 8 },
-  checklistRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.sm, backgroundColor: TF.surface, borderWidth: 1, borderColor: TF.border, borderRadius: Radius.lg },
-  checklistThumb: { width: 64, height: 64, borderRadius: Radius.md },
-  checklistPlaceholder: { backgroundColor: TF.surfaceHigh, alignItems: 'center', justifyContent: 'center' },
-  checklistTitle: { fontSize: Typography.size.sm, color: TF.white, fontWeight: Typography.weight.bold },
-  checklistHint: { fontSize: Typography.size.xs, color: TF.textSub },
   content: { padding: Spacing.base, gap: Spacing.md, paddingBottom: 40 },
   sectionLabel: { fontSize: 9, fontWeight: Typography.weight.extrabold, color: TF.textMuted, textTransform: 'uppercase', letterSpacing: 0.8 },
   hero: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, backgroundColor: TF.surface, borderRadius: Radius.xl, padding: Spacing.base, borderWidth: 1, borderColor: TF.pink + '30' },
   heroTitle: { fontSize: Typography.size.xl, fontWeight: Typography.weight.extrabold, color: TF.white },
   heroSub: { fontSize: Typography.size.xs, color: TF.textSub, lineHeight: 17, marginTop: 3 },
-  photoGuidePanel: { backgroundColor: TF.surface, borderWidth: 1, borderColor: TF.border, borderRadius: Radius.xl, padding: Spacing.md, gap: Spacing.sm },
-  photoGuideTitle: { fontSize: 9, color: TF.pink, fontWeight: Typography.weight.extrabold, letterSpacing: 1 },
-  photoGuideGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  photoGuideCard: { width: '47%', minHeight: 62, flexDirection: 'row', alignItems: 'flex-start', gap: 7, padding: 8, borderRadius: Radius.md, backgroundColor: TF.surfaceHigh },
-  photoGuideIcon: { width: 28, height: 28, borderRadius: Radius.sm, backgroundColor: TF.pinkDim, alignItems: 'center', justifyContent: 'center' },
-  photoGuideLabel: { fontSize: 10, color: TF.cream, fontWeight: Typography.weight.bold },
-  photoGuideCopy: { fontSize: 8, color: TF.textSub, lineHeight: 12 },
-  photoGuideFoot: { fontSize: 9, color: TF.textMuted, lineHeight: 13 },
   errorBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: TF.pinkDim, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: TF.danger + '40' },
   errorText: { flex: 1, fontSize: Typography.size.xs, color: TF.danger, lineHeight: 17 },
   quotaBtn: { backgroundColor: TF.pinkDim, borderRadius: Radius.md, paddingHorizontal: Spacing.sm, paddingVertical: 4, borderWidth: 1, borderColor: TF.pink + '40' },
@@ -834,123 +737,43 @@ const id = StyleSheet.create({
 });
 
 // ── Value Tab ─────────────────────────────────────────────────────────────────
-function ValueTab({ idResult, tenant, onIdentify }: { idResult: AIIdentificationResult | null; tenant: any; onIdentify: () => void }) {
-  const [marketData, setMarketData] = useState<MarketValueResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!idResult || !tenant?.id) {
-      setMarketData(null);
-      setError(null);
-      setLoading(false);
-      return;
-    }
-    let current = true;
-    setMarketData(null);
-    setLoading(true);
-    setError(null);
-    getMarketValue({
-      tenantId: tenant.id,
-      title: idResult.canonicalTitle,
-      specialistId: idResult.specialistId,
-      attributes: idResult.attributes ?? {},
-      condition: idResult.condition,
-      identificationConfidence: idResult.confidence,
-      identificationTier: idResult.confidenceTier,
-      applyToItem: false,
-    }).then(({ result, error: requestError }) => {
-      if (!current) return;
-      setMarketData(result);
-      setError(requestError);
-    }).catch((requestError: unknown) => {
-      if (current) setError(requestError instanceof Error ? requestError.message : 'Market value lookup failed');
-    }).finally(() => {
-      if (current) setLoading(false);
-    });
-    return () => { current = false; };
-  }, [idResult, tenant?.id]);
-
-  const money = (value: number | undefined) => typeof value === 'number' && value > 0
-    ? new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(value)
-    : '—';
-  const valuation = marketData?.valuation;
-  const sold = marketData?.soldMarket;
-  const hasValuation = Boolean(valuation && (valuation.valuationLow > 0 || valuation.valuationMid > 0 || valuation.valuationHigh > 0));
-
+function ValueTab() {
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={vt.content}>
       <View style={vt.hero}>
         <MaterialIcons name="bar-chart" size={28} color={TF.pink} />
         <View style={{ flex: 1 }}>
-          <Text style={vt.heroTitle}>Market Value</Text>
-          <Text style={vt.heroSub}>Verified sold evidence · pricing intelligence</Text>
+          <Text style={vt.heroTitle}>Value & Profit</Text>
+          <Text style={vt.heroSub}>Resale Value - Costs - Trends</Text>
         </View>
       </View>
-
-      {!idResult ? (
-        <View style={vt.emptyCard}>
-          <MaterialIcons name="search" size={34} color={TF.pink} />
-          <Text style={vt.emptyTitle}>Identify an item first</Text>
-          <Text style={vt.infoText}>Threads Flip will use the clothing specialist and current comparable sold-market evidence. Asking prices are kept separate from completed sales.</Text>
-          <Pressable onPress={onIdentify} style={vt.actionBtn}><Text style={vt.actionBtnText}>Scan an Item →</Text></Pressable>
+      <Text style={vt.sectionLabel}>EXAMPLE — VALUE ANALYSIS</Text>
+      <View style={vt.valueCard}>
+        <Text style={vt.valueName}>Levis Vintage Denim Jacket - 1980s</Text>
+        <View style={vt.priceRange}>
+          <Text style={vt.priceLabel}>Estimated Resale Value</Text>
+          <Text style={vt.priceMain}>70 - 140</Text>
         </View>
-      ) : (
-        <>
-          <View style={vt.valueCard}>
-            <Text style={vt.valueName}>{idResult.canonicalTitle}</Text>
-            {loading ? (
-              <View style={vt.loading}><ActivityIndicator size="large" color={TF.pink} /><Text style={vt.infoText}>Checking current sold-market evidence…</Text></View>
-            ) : error ? (
-              <View style={vt.infoCard}><MaterialIcons name="info-outline" size={14} color={TF.pink} /><Text style={vt.infoText}>{error}</Text></View>
-            ) : hasValuation && valuation ? (
-              <>
-                <View style={vt.priceRange}>
-                  <Text style={vt.priceLabel}>Evidence-based resale range</Text>
-                  <Text style={vt.priceMain}>{money(valuation.valuationLow)} – {money(valuation.valuationHigh)}</Text>
-                  <Text style={vt.heroSub}>Suggested listing price: {money(valuation.recommendedListingPrice)}</Text>
-                </View>
-                <View style={vt.opportunitySection}>
-                  <Text style={vt.oppTitle}>COMPLETED-SALE EVIDENCE</Text>
-                  <View style={vt.oppRow}><Text style={vt.oppLabel}>Verified sold listings</Text><Text style={vt.oppValue}>{sold?.verifiedSoldCount ?? 0}</Text></View>
-                  <View style={vt.oppRow}><Text style={vt.oppLabel}>Relevant sold matches</Text><Text style={vt.oppValue}>{sold?.relevantSoldCount ?? 0}</Text></View>
-                  <View style={vt.oppRow}><Text style={vt.oppLabel}>Median sold price</Text><Text style={vt.oppValue}>{money(sold?.medianPrice)}</Text></View>
-                  <View style={vt.oppRow}><Text style={vt.oppLabel}>Data quality</Text><Text style={[vt.oppValue, { color: TF.pink }]}>{sold?.dataQuality ?? 'insufficient'}</Text></View>
-                </View>
-                {marketData?.stats.recentSales.length ? (
-                  <View style={vt.opportunitySection}>
-                    <Text style={vt.oppTitle}>RECENT SOLD COMPARABLES</Text>
-                    {marketData.stats.recentSales.slice(0, 3).map((sale, index) => (
-                      <View key={index} style={vt.oppRow}>
-                        <Text style={vt.oppLabel} numberOfLines={2}>{sale.title}</Text>
-                        <Text style={vt.oppValue}>{money(sale.price)}</Text>
-                      </View>
-                    ))}
-                  </View>
-                ) : null}
-                {marketData?.activeAskingPrices.count ? (
-                  <View style={vt.infoCard}>
-                    <MaterialIcons name="info-outline" size={14} color={TF.pink} />
-                    <Text style={vt.infoText}>Active asking prices are shown separately and are not treated as completed sales. {marketData.activeAskingPrices.note}</Text>
-                  </View>
-                ) : null}
-                {valuation.valuationWarnings?.length ? (
-                  <View style={vt.infoCard}><MaterialIcons name="warning" size={14} color={TF.warning} /><Text style={vt.infoText}>{valuation.valuationWarnings.join(' ')}</Text></View>
-                ) : null}
-              </>
-            ) : (
-              <View style={vt.infoCard}>
-                <MaterialIcons name="info-outline" size={14} color={TF.pink} />
-                <Text style={vt.infoText}>There is not enough relevant sold evidence to produce a reliable price range yet. Do not substitute active asking prices for sold prices.</Text>
-              </View>
-            )}
-          </View>
-          <View style={vt.infoCard}>
-            <MaterialIcons name="account-balance-wallet" size={14} color={TF.pink} />
-            <Text style={vt.infoText}>Net profit needs your actual acquisition cost, cleaning, postage and fees. Add those in the listing workflow before treating a margin as confirmed.</Text>
-          </View>
-        </>
-      )}
+        <View style={vt.opportunitySection}>
+          <Text style={vt.oppTitle}>SELLING OPPORTUNITY</Text>
+          {[
+            { label: 'Typical Buy Price', value: '10 - 25' },
+            { label: 'Cleaning / Minor Repairs', value: '5' },
+            { label: 'Total Investment', value: '25', bold: false },
+            { label: 'Likely Selling Price', value: '100', bold: false },
+            { label: 'Potential Profit', value: '60 - 75', pink: true },
+          ].map(row => (
+            <View key={row.label} style={vt.oppRow}>
+              <Text style={[vt.oppLabel, row.bold ? { fontWeight: Typography.weight.bold, color: TF.white } : null]}>{row.label}</Text>
+              <Text style={[vt.oppValue, row.pink ? { color: TF.pink, fontWeight: Typography.weight.extrabold } : null]}>{row.value}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+      <View style={vt.infoCard}>
+        <MaterialIcons name="info-outline" size={14} color={TF.pink} />
+        <Text style={vt.infoText}>Identify an item first to get real eBay sold prices and a personalised profit estimate.</Text>
+      </View>
     </ScrollView>
   );
 }
@@ -972,11 +795,6 @@ const vt = StyleSheet.create({
   oppValue: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: TF.white },
   infoCard: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: TF.pinkDim, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: TF.pink + '25' },
   infoText: { flex: 1, fontSize: Typography.size.xs, color: TF.pink, lineHeight: 17 },
-  emptyCard: { alignItems: 'center', gap: Spacing.md, backgroundColor: TF.surface, borderRadius: Radius.xxl, padding: Spacing.xl, borderWidth: 1, borderColor: TF.border },
-  emptyTitle: { fontSize: Typography.size.lg, fontWeight: Typography.weight.extrabold, color: TF.white },
-  actionBtn: { backgroundColor: TF.pink, borderRadius: Radius.md, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md },
-  actionBtnText: { color: TF.black, fontSize: Typography.size.sm, fontWeight: Typography.weight.extrabold },
-  loading: { alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xl },
 });
 
 // ── Style Tab ─────────────────────────────────────────────────────────────────
@@ -997,13 +815,14 @@ function StyleTab() {
         </View>
       </View>
       {CATEGORIES_INFO.map(cat => (
-        <View key={cat.id} style={[st.catCard, { borderColor: cat.color + '40' }]}>
+        <Pressable key={cat.id} style={({ pressed }) => [st.catCard, { borderColor: cat.color + '40' }, pressed && { opacity: 0.85 }]}>
           <View style={[st.catIcon, { backgroundColor: cat.color + '20' }]}><MaterialIcons name={cat.icon as any} size={22} color={cat.color} /></View>
           <View style={{ flex: 1 }}>
             <Text style={st.catLabel}>{cat.label}</Text>
             <Text style={st.catDesc}>{cat.desc}</Text>
           </View>
-        </View>
+          <MaterialIcons name="chevron-right" size={16} color={TF.textMuted} />
+        </Pressable>
       ))}
       <Text style={st.sectionLabel}>TOP BRANDS FOR RESALE</Text>
       <View style={st.brandsGrid}>
@@ -1062,7 +881,7 @@ function SellTab() {
         </View>
       </View>
       {[
-        { icon: 'receipt-long', label: 'My Listings', sub: 'Drafts, live and ended clothing listings', color: '#E53238', route: '/ebay-admin' as any },
+        { icon: 'receipt-long', label: 'My Listings', sub: 'Active and draft eBay listings', color: '#E53238', route: '/(tabs)/listings' as any },
         { icon: 'checkroom', label: 'My Wardrobe', sub: 'All clothing items in inventory', color: TF.pink, route: '/(tabs)/inventory' as any },
         { icon: 'local-shipping', label: 'Orders', sub: 'Manage and dispatch orders', color: Colors.info, route: '/orders' as any },
         { icon: 'storefront', label: 'eBay Hub', sub: 'Messages, finances, returns', color: '#E53238', route: '/ebay-hub' as any },
@@ -1142,15 +961,15 @@ function InsightsTab() {
         </Pressable>
       ))}
       <View style={ins.factsCard}>
-        <Text style={ins.sectionLabel}>SELLER CHECKLIST</Text>
+        <Text style={ins.sectionLabel}>FASHION FLIPPING FACTS</Text>
         {[
-          'Compare completed sales in the same brand, model, size and condition.',
-          'Photograph labels, care tags, flaws, measurements and fabric clearly.',
-          'Check authenticity markers before describing an item as genuine.',
-          'Include pit-to-pit, length, waist and inside-leg measurements where relevant.',
-          'Calculate platform fees, postage, cleaning and packaging before pricing.',
-          'Use accurate condition notes and disclose every visible defect.',
-          'Review comparable sold listings again before accepting an offer.',
+          "Levi's 501s sell every 3 minutes on eBay globally",
+          'Vintage band tees can yield 10x+ on charity shop finds',
+          'Authentication evidence doubles sale price on designer items',
+          'Good photography is worth more than any listing upgrade',
+          'Stone Island sells fastest in autumn and winter',
+          'Deadstock with tags commands 30-50% premium',
+          'Depop buyers skew younger — use trend-aware language',
         ].map((fact, i) => (
           <View key={i} style={ins.factRow}>
             <MaterialIcons name="lightbulb-outline" size={12} color={TF.pink} />
@@ -1180,17 +999,14 @@ const ins = StyleSheet.create({
 export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean } = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const routeParams = useLocalSearchParams<{ tab?: string }>();
-  const initialTab = (['home', 'identify', 'value', 'style', 'sell', 'insights'].includes(routeParams.tab ?? '') ? routeParams.tab : 'home') as TFTab;
   const { tenant } = useApp();
   const { isPremium } = useSubscription();
   const { showAlert } = useAlert();
-  const [activeTab, setActiveTab] = useState<TFTab>(initialTab);
+  const [activeTab, setActiveTab] = useState<TFTab>('home');
   const [showPaywall, setShowPaywall] = useState(false);
 
   // ── Identify Tab capture & AI state ──────────────────────────────────────
   const [capturedImages, setCapturedImages] = useState<CapturedImage[]>([]);
-  const [reviewingPhotos, setReviewingPhotos] = useState(false);
   const [identifying, setIdentifying] = useState(false);
   const [processingStatus, setProcessingStatus] = useState('');
   const [aiError, setAiError] = useState<string | null>(null);
@@ -1212,13 +1028,11 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
   }, []);
 
   const handleRemoveImage = useCallback((index: number) => {
-    setCapturedImages(prev => { const next = [...prev]; delete next[index]; return next; });
+    setCapturedImages(prev => prev.filter((_, i) => i !== index));
   }, []);
 
   const handleIdentify = useCallback(async () => {
-    const validImages = capturedImages.filter((image): image is CapturedImage => Boolean(image));
-    if (validImages.length === 0) return;
-    setReviewingPhotos(false);
+    if (capturedImages.length === 0) return;
     setIdentifying(true);
     setAiError(null);
 
@@ -1235,7 +1049,7 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
     }
 
     const { result, error, quotaExceeded } = await identifyItemWithAI(
-      validImages, 'clothing', undefined, undefined,
+      capturedImages, 'clothing', undefined, undefined,
       { tenantId: tenant?.id },
     );
 
@@ -1258,19 +1072,18 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
 
   const handleSaveClothing = useCallback(async () => {
     if (!idResult || !tenant) return;
-    const validImages = capturedImages.filter((image): image is CapturedImage => Boolean(image));
     setIsSaving(true);
     const { item, error } = await saveIdentifiedItem(tenant.id, idResult, {
-      mediaUris: validImages.map(i => i.uri),
+      mediaUris: capturedImages.map(i => i.uri),
     });
     setIsSaving(false);
     if (error || !item) { showAlert('Save Failed', error ?? 'Could not save item.'); return; }
     setSavedItemId(item.id);
-    if (validImages.length > 0) {
+    if (capturedImages.length > 0) {
       setIsUploading(true);
       setUploadProgress('Uploading photos...');
       try {
-        const { urls } = await uploadItemImages(item.id, validImages);
+        const { urls } = await uploadItemImages(item.id, capturedImages);
         if (urls.length > 0) {
           await updateItemMedia(tenant.id, item.id, urls);
           setUploadProgress(`${urls.length} photo${urls.length === 1 ? '' : 's'} saved`);
@@ -1287,7 +1100,6 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
 
   const handleResetIdentify = useCallback(() => {
     setCapturedImages([]);
-    setReviewingPhotos(false);
     setIdResult(null);
     setAiError(null);
     setSavedItemId(null);
@@ -1304,15 +1116,8 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
 
   if (showPaywall) return <TFPaywall onBack={() => setShowPaywall(false)} />;
 
-  // Stable QA IDs make every Threads Flip state capturable against the numbered screen pack.
-  const screenId = activeTab === 'home' ? '02'
-    : activeTab === 'identify' ? (savedItemId ? '09' : idResult ? '06' : identifying ? '05' : reviewingPhotos ? '04' : '03')
-    : activeTab === 'value' ? '08'
-    : activeTab === 'style' ? 'TF-A'
-    : activeTab === 'sell' ? 'TF-B' : 'TF-C';
-
   return (
-    <View testID={'threads-flip-screen-' + screenId} accessibilityLabel={'Threads Flip screen ' + screenId} style={main.container}>
+    <View style={main.container}>
       <StatusBar style="light" />
       <View style={[main.header, { paddingTop: insets.top + Spacing.sm }]}>
         {!isHomeTab ? (
@@ -1334,7 +1139,7 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
           <MaterialIcons name="checkroom" size={16} color={TF.pink} />
         </Pressable>
       </View>
-      {activeTab !== 'home' ? <View style={main.tabBar}>
+      <View style={main.tabBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={main.tabBarContent}>
           {TABS.map(tab => {
             const active = activeTab === tab.id;
@@ -1348,15 +1153,12 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
             );
           })}
         </ScrollView>
-      </View> : null}
+      </View>
       <View style={{ flex: 1 }}>
         {activeTab === 'home' ? <HomeTab isPremium={isPremium} onTabSelect={handleTabSelect} onUpgrade={() => setShowPaywall(true)} tenant={tenant} /> : null}
         {activeTab === 'identify' ? (
           <IdentifyTab
             capturedImages={capturedImages}
-            reviewingPhotos={reviewingPhotos}
-            onReviewPhotos={() => setReviewingPhotos(true)}
-            onBackToCapture={() => setReviewingPhotos(false)}
             onCapture={handleCapture}
             onRemoveImage={handleRemoveImage}
             onIdentify={handleIdentify}
@@ -1374,7 +1176,7 @@ export default function ThreadsFlip({ isHomeTab = false }: { isHomeTab?: boolean
             tenant={tenant}
           />
         ) : null}
-        {activeTab === 'value' ? <ValueTab idResult={idResult} tenant={tenant} onIdentify={() => handleTabSelect('identify')} /> : null}
+        {activeTab === 'value' ? <ValueTab /> : null}
         {activeTab === 'style' ? <StyleTab /> : null}
         {activeTab === 'sell' ? <SellTab /> : null}
         {activeTab === 'insights' ? <InsightsTab /> : null}

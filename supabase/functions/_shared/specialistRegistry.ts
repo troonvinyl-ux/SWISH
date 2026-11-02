@@ -1,6 +1,6 @@
 // Server-only adapter to the SAME public identity and expertise used by Expo.
-import modules from './niche-modules.json' with { type: 'json' };
-import { getSpecialistProfile } from './specialistIntelligence.ts';
+import modules from '../../../niche-modules.json' with { type: 'json' };
+import { getSpecialistProfile } from '../../../shared/specialistIntelligence.ts';
 export function specialistNiche(specialistId: string): string | null {
   for (const [id, config] of Object.entries(modules.products)) {
     if ([...config.specialists,...config.legacySpecialists].includes(specialistId)) return id;

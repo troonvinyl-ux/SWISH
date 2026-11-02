@@ -64,7 +64,6 @@ function isValidImageUrl(url: string): boolean {
  */
 async function refreshAllEbayImages(
   tenantId: string,
-  specialistIds: string[],
   onProgress: (p: ImageRefreshProgress) => void,
 ): Promise<void> {
   const supabase = getSupabaseClient();
@@ -72,9 +71,8 @@ async function refreshAllEbayImages(
   // Find all listings with external eBay IDs
   const { data: listingRows } = await supabase
     .from('listings')
-    .select('id, item_id, external_listing_id, items!inner(specialist_id)')
+    .select('id, item_id, external_listing_id')
     .eq('tenant_id', tenantId)
-    .in('items.specialist_id', specialistIds)
     .not('external_listing_id', 'is', null)
     .neq('external_listing_id', '');
 
@@ -147,7 +145,7 @@ async function refreshAllEbayImages(
   // Phase 2: Download images permanently via edge function (server-side, no CORS issues)
   try {
     const { data: dlData } = await supabase.functions.invoke('swish-image-download', {
-      body: { tenantId, itemIds: targets.map(t => t.item_id), fixTitles: true },
+      body: { tenantId, fixTitles: true },
     });
     const downloaded = dlData?.imagesDownloaded ?? 0;
     const failed = dlData?.imagesFailed ?? 0;
@@ -196,7 +194,6 @@ interface EbayListing {
   ruler?: string;
   denomination?: string;
   countryOfOrigin?: string;
-  itemAttributes?: Record<string, unknown>;
 }
 
 interface InventoryItem {
@@ -787,7 +784,7 @@ function DispatchModal({
   const [tracking, setTracking] = useState('');
   const [carrier, setCarrier] = useState('Royal Mail');
   const [saving, setSaving] = useState(false);
-  const { tenant } = useApp();
+  const { tenant, activeNicheId } = useApp();
 
   useEffect(() => { if (visible) { setTracking(''); setCarrier('Royal Mail'); } }, [visible]);
 
@@ -1063,7 +1060,7 @@ function ListingRow({
   editingPriceId, priceEditValue, savingPriceId,
   endingId, submittingId, dispatchingId,
   onEditPrice, onPriceChange, onSavePrice, onCancelEdit,
-  onEnd, onRelist, onSubmit, onViewOnEbay, onNavigateItem, onDispatch, isThreadsFlip,
+  onEnd, onRelist, onSubmit, onViewOnEbay, onNavigateItem, onDispatch,
 }: {
   item: EbayListing;
   editingPriceId: string | null; priceEditValue: string; savingPriceId: string | null;
@@ -1078,7 +1075,6 @@ function ListingRow({
   onViewOnEbay: (listing: EbayListing) => void;
   onNavigateItem: (listing: EbayListing) => void;
   onDispatch: (listing: EbayListing) => void;
-  isThreadsFlip: boolean;
 }) {
   const router = useRouter();
   const statusColor  = STATUS_COLORS[item.status] ?? Colors.textTertiary;
@@ -1097,12 +1093,9 @@ function ListingRow({
   const itemStatusColor = ITEM_STATUS_COLORS[item.itemStatus] ?? Colors.textTertiary;
   const itemStatusLabel = ITEM_STATUS_LABELS[item.itemStatus] ?? item.itemStatus;
   const statusMismatch  = !!item.itemStatus && !isStatusMatch(item.status, item.itemStatus);
-  const clothingBrand = String(item.itemAttributes?.brand ?? item.itemAttributes?.brand_label ?? '').trim();
-  const clothingSize = String(item.itemAttributes?.size ?? item.itemAttributes?.labelled_size ?? '').trim();
-  const clothingMaterial = String(item.itemAttributes?.composition ?? item.itemAttributes?.fabric ?? '').trim();
 
   return (
-    <View style={[row.card, isThreadsFlip && { backgroundColor: '#160E16', borderColor: '#301830' }, statusMismatch && row.cardMismatch]}>
+    <View style={[row.card, statusMismatch && row.cardMismatch]}>
       <View style={[row.stripe, { backgroundColor: statusMismatch ? Colors.warning : statusColor }]} />
 
       <View style={row.body}>
@@ -1112,7 +1105,7 @@ function ListingRow({
             <ItemImage uri={item.itemMedia[0]} style={row.photo} contentFit="cover" transition={150} />
           ) : (
             <View style={row.photoPlaceholder}>
-              <MaterialIcons name={isThreadsFlip ? 'checkroom' : 'toll'} size={18} color={isThreadsFlip ? '#E91E8C' : Colors.textTertiary} />
+              <MaterialIcons name="toll" size={18} color={Colors.textTertiary} />
             </View>
           )}
           <View style={{ flex: 1, gap: 4 }}>
@@ -1143,7 +1136,7 @@ function ListingRow({
                 </Text>
               </View>
             </View>
-            <Text style={[row.title, isThreadsFlip && { color: '#FFF0F5' }]} numberOfLines={2}>{item.title}</Text>
+            <Text style={row.title} numberOfLines={2}>{item.title}</Text>
 
             {/* Dual status sync indicator */}
             {item.itemStatus ? (
@@ -1183,16 +1176,8 @@ function ListingRow({
               </View>
             ) : null}
 
-            {/* Niche-specific item metadata */}
-            {isThreadsFlip ? (
-              clothingBrand || clothingSize || clothingMaterial ? (
-                <View style={row.coinMeta}>
-                  {clothingBrand ? <Text style={[row.metaText, { color: '#E91E8C' }]}>{clothingBrand}</Text> : null}
-                  {clothingSize ? <Text style={[row.metaText, { color: '#FFF0F5' }]}>Size {clothingSize}</Text> : null}
-                  {clothingMaterial ? <Text style={row.metaText}>{clothingMaterial}</Text> : null}
-                </View>
-              ) : null
-            ) : (item.ruler || item.denomination || item.countryOfOrigin) ? (
+            {/* Coin meta */}
+            {(item.ruler || item.denomination || item.countryOfOrigin) ? (
               <View style={row.coinMeta}>
                 {item.ruler ? <Text style={row.metaText}>{item.ruler}</Text> : null}
                 {item.denomination ? <Text style={[row.metaText, { color: Colors.gold }]}>{item.denomination}</Text> : null}
@@ -1236,7 +1221,7 @@ function ListingRow({
               hitSlop={4}
               disabled={isSold}
             >
-              <Text style={[row.priceValue, isThreadsFlip && { color: '#E91E8C' }]}>£{item.price.toFixed(2)}</Text>
+              <Text style={row.priceValue}>£{item.price.toFixed(2)}</Text>
               {!isSold ? <MaterialIcons name="edit" size={11} color={Colors.textTertiary} /> : null}
             </Pressable>
           )}
@@ -1462,15 +1447,13 @@ const row = StyleSheet.create({
 export default function EbayAdminScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, activeNicheId, fixedNicheId } = useApp();
-  const nicheId = fixedNicheId ?? activeNicheId;
-  const isThreadsFlip = nicheId === 'clothing';
+  const { tenant, activeNicheId } = useApp();
   const { showAlert } = useAlert();
 
   const [listings, setListings] = useState<EbayListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<StatusTab>(isThreadsFlip ? 'draft' : 'all');
+  const [activeTab, setActiveTab] = useState<StatusTab>('all');
   const [search, setSearch] = useState('');
 
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
@@ -1507,7 +1490,7 @@ export default function EbayAdminScreen() {
     // Strict niche isolation: the shared eBay account can contain listings
     // for every SWISH product, but this screen must only show the active niche.
     // If no niche is selected, fail closed rather than leaking cross-niche stock.
-    const specialistIds = getProductionNicheSpecialistIds(nicheId);
+    const specialistIds = getProductionNicheSpecialistIds(activeNicheId);
     if (specialistIds.length === 0) {
       setListings([]);
       setLoading(false);
@@ -1517,7 +1500,7 @@ export default function EbayAdminScreen() {
 
     const { data, error } = await supabase
       .from('listings')
-      .select(`*, items!inner(id, canonical_title, specialist_id, status, condition, inventory_id, catalogue_number, folder_number, pocket_position, storage_location, media, ruler, denomination, country_of_origin, attributes)`)
+      .select(`*, items!inner(id, canonical_title, specialist_id, status, condition, inventory_id, catalogue_number, folder_number, pocket_position, storage_location, media, ruler, denomination, country_of_origin)`)
       .eq('tenant_id', tenant.id)
       .eq('marketplace_id', 'ebay')
       .in('items.specialist_id', specialistIds)
@@ -1551,12 +1534,11 @@ export default function EbayAdminScreen() {
       ruler: r.items?.ruler ?? undefined,
       denomination: r.items?.denomination ?? undefined,
       countryOfOrigin: r.items?.country_of_origin ?? undefined,
-      itemAttributes: r.items?.attributes ?? {},
     })));
 
     setLoading(false);
     setRefreshing(false);
-  }, [tenant?.id, nicheId, showAlert]);
+  }, [tenant?.id, activeNicheId, showAlert]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -1576,8 +1558,7 @@ export default function EbayAdminScreen() {
         l.folderNumber?.toLowerCase().includes(q) ||
         l.externalListingId?.includes(q) ||
         l.ruler?.toLowerCase().includes(q) ||
-        l.denomination?.toLowerCase().includes(q) ||
-        Object.values(l.itemAttributes ?? {}).some(value => typeof value === 'string' && value.toLowerCase().includes(q))
+        l.denomination?.toLowerCase().includes(q)
       );
     }
     return result;
@@ -1751,13 +1732,13 @@ export default function EbayAdminScreen() {
     setImageRefreshing(true);
     setImageProgress({ current: 0, total: 0, updated: 0, failed: 0, done: false });
     try {
-      await refreshAllEbayImages(tenant.id, getProductionNicheSpecialistIds(nicheId), p => setImageProgress(p));
+      await refreshAllEbayImages(tenant.id, p => setImageProgress(p));
     } catch (e: any) {
       showAlert('Image Refresh Failed', e?.message ?? 'Unknown error');
     } finally {
       setImageRefreshing(false);
     }
-  }, [tenant, nicheId, imageRefreshing, showAlert]);
+  }, [tenant, imageRefreshing, showAlert]);
 
   // ── Import orders ──────────────────────────────────────────────────────────
 
@@ -1798,11 +1779,11 @@ export default function EbayAdminScreen() {
   const draftCount   = (tabCounts['draft'] ?? 0) + (tabCounts['pending'] ?? 0);
 
   return (
-    <View testID={isThreadsFlip ? 'threads-flip-screen-14' : undefined} accessibilityLabel={isThreadsFlip ? 'Threads Flip screen 14 My Listings' : undefined} style={[s.container, isThreadsFlip && { backgroundColor: '#0C080C' }]}>
+    <View style={s.container}>
       <StatusBar style="light" />
 
       {/* Header */}
-      <View style={[s.header, { paddingTop: insets.top + Spacing.base }, isThreadsFlip && { backgroundColor: '#160E16', borderBottomColor: '#301830' }]}>
+      <View style={[s.header, { paddingTop: insets.top + Spacing.base }]}>
         <Pressable onPress={() => router.back()} style={s.backBtn} hitSlop={8}>
           <MaterialIcons name="arrow-back" size={20} color={Colors.textSecondary} />
         </Pressable>
@@ -1811,9 +1792,9 @@ export default function EbayAdminScreen() {
             <View style={s.ebayBadge}>
               <Text style={s.ebayBadgeText}>eBay</Text>
             </View>
-            <Text style={[s.title, isThreadsFlip && { color: '#FFF0F5' }]}>{isThreadsFlip ? 'My Listings' : 'Admin'}</Text>
+            <Text style={s.title}>Admin</Text>
           </View>
-          <Text style={[s.subtitle, isThreadsFlip && { color: '#9A7090' }]}>
+          <Text style={s.subtitle}>
             {totalActive} active · {listings.length} total · £{totalRevenue.toFixed(0)} sold
             {mismatchCount > 0 ? ` · ${mismatchCount} ⚠` : ''}
           </Text>
@@ -1822,11 +1803,11 @@ export default function EbayAdminScreen() {
         {/* Create new listing */}
         <Pressable
           onPress={() => setShowCreate(true)}
-          style={[s.headerBtn, { backgroundColor: isThreadsFlip ? '#E91E8C' : Colors.primary, borderColor: isThreadsFlip ? '#E91E8C' : Colors.primary }]}
+          style={[s.headerBtn, { backgroundColor: Colors.primary, borderColor: Colors.primary }]}
           hitSlop={4}
         >
-          <MaterialIcons name="add" size={14} color={isThreadsFlip ? '#0C080C' : Colors.background} />
-          <Text style={[s.headerBtnText, { color: isThreadsFlip ? '#0C080C' : Colors.background }]}>List Item</Text>
+          <MaterialIcons name="add" size={14} color={Colors.background} />
+          <Text style={[s.headerBtnText, { color: Colors.background }]}>List Item</Text>
         </Pressable>
 
         {/* Sync Status */}
@@ -1906,7 +1887,6 @@ export default function EbayAdminScreen() {
         disabled={imageRefreshing}
         style={({ pressed }) => [
           s.imageBanner,
-          isThreadsFlip && { backgroundColor: '#160E16', borderColor: '#301830' },
           imageProgress?.done ? s.imageBannerDone : null,
           pressed && !imageRefreshing && { opacity: 0.88 },
         ]}
@@ -1920,7 +1900,7 @@ export default function EbayAdminScreen() {
             <MaterialIcons name="image-search" size={16} color={Colors.accent} />
           )}
           <View style={{ flex: 1 }}>
-            <Text style={[s.imageBannerTitle, isThreadsFlip && { color: '#FFF0F5' }, imageProgress?.done && { color: Colors.success }]}>
+            <Text style={[s.imageBannerTitle, imageProgress?.done && { color: Colors.success }]}>
               {imageProgress?.done
                 ? `Images stored · ${imageProgress.updated} permanent · ${imageProgress.failed} not found`
                 : imageRefreshing
@@ -1930,7 +1910,7 @@ export default function EbayAdminScreen() {
                 : 'Download & Store eBay Images'}
             </Text>
             {!imageProgress ? (
-              <Text style={[s.imageBannerSub, isThreadsFlip && { color: '#9A7090' }]}>
+              <Text style={s.imageBannerSub}>
                 Downloads photos from eBay and stores permanently in SWISH
               </Text>
             ) : imageProgress.done ? (
@@ -1974,21 +1954,21 @@ export default function EbayAdminScreen() {
       </Pressable>
 
       {/* eBay Simple Delivery info banner */}
-      <View style={[s.simpleDeliveryBanner, isThreadsFlip && { backgroundColor: '#160E16', borderColor: '#301830' }]}>
+      <View style={s.simpleDeliveryBanner}>
         <MaterialIcons name="local-shipping" size={12} color={Colors.success} />
-        <Text style={[s.simpleDeliveryBannerText, isThreadsFlip && { color: '#9A7090' }]}>
+        <Text style={s.simpleDeliveryBannerText}>
           All new listings use <Text style={{ fontWeight: Typography.weight.bold }}>eBay Simple Delivery</Text> — eBay calculates the best shipping rate automatically
         </Text>
       </View>
 
       {/* Search bar */}
-      <View style={[s.searchWrap, isThreadsFlip && { backgroundColor: '#201420', borderColor: '#301830' }]}>
+      <View style={s.searchWrap}>
         <MaterialIcons name="search" size={15} color={Colors.textTertiary} style={{ marginLeft: Spacing.sm }} />
         <TextInput
-          style={[s.searchInput, isThreadsFlip && { color: '#FFF0F5' }]}
+          style={s.searchInput}
           value={search}
           onChangeText={setSearch}
-          placeholder={isThreadsFlip ? 'Brand, title, size, material, eBay ID...' : 'KC ID, catalogue, title, folder, eBay ID...'}
+          placeholder="KC ID, catalogue, title, folder, eBay ID..."
           placeholderTextColor={Colors.textTertiary}
           returnKeyType="search"
           clearButtonMode="while-editing"
@@ -2001,21 +1981,21 @@ export default function EbayAdminScreen() {
       </View>
 
       {/* Status tabs */}
-      <View style={[s.tabsOuter, isThreadsFlip && { backgroundColor: '#160E16', borderBottomColor: '#301830' }]}>
+      <View style={s.tabsOuter}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabsContent}>
-          {(isThreadsFlip ? STATUS_TABS.filter(tab => ['draft', 'active', 'ended'].includes(tab.id)) : STATUS_TABS).map(tab => {
+          {STATUS_TABS.map(tab => {
             const active = activeTab === tab.id;
             const count  = tab.id === 'all' ? listings.length : (tabCounts[tab.id] ?? 0);
             return (
               <Pressable
                 key={tab.id}
                 onPress={() => setActiveTab(tab.id)}
-                style={[s.tab, active && s.tabActive, isThreadsFlip && active && { backgroundColor: '#250014' }]}
+                style={[s.tab, active && s.tabActive]}
               >
-                <Text style={[s.tabLabel, active && { color: isThreadsFlip ? '#E91E8C' : tab.color }]}>{isThreadsFlip && tab.id === 'active' ? 'Live' : isThreadsFlip && tab.id === 'draft' ? 'Drafts' : tab.label}</Text>
+                <Text style={[s.tabLabel, active && { color: tab.color }]}>{tab.label}</Text>
                 {count > 0 ? (
-                  <View style={[s.tabCount, { backgroundColor: active ? (isThreadsFlip ? '#E91E8C30' : tab.color + '20') : Colors.surfaceHighlight }]}>
-                    <Text style={[s.tabCountText, active && { color: isThreadsFlip ? '#E91E8C' : tab.color }]}>{count}</Text>
+                  <View style={[s.tabCount, { backgroundColor: active ? tab.color + '20' : Colors.surfaceHighlight }]}>
+                    <Text style={[s.tabCountText, active && { color: tab.color }]}>{count}</Text>
                   </View>
                 ) : null}
               </Pressable>
@@ -2025,24 +2005,23 @@ export default function EbayAdminScreen() {
       </View>
 
       {loading ? (
-        <View style={[s.loading, isThreadsFlip && { backgroundColor: '#0C080C' }]}>
-          <ActivityIndicator size="large" color={isThreadsFlip ? '#E91E8C' : Colors.primary} />
-          <Text style={[s.loadingText, isThreadsFlip && { color: '#9A7090' }]}>Loading eBay listings...</Text>
+        <View style={s.loading}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={s.loadingText}>Loading eBay listings...</Text>
         </View>
       ) : (
         <FlatList
           data={displayed}
           keyExtractor={l => l.id}
-          contentContainerStyle={[s.list, { paddingBottom: insets.bottom + 100 }, isThreadsFlip && { backgroundColor: '#0C080C' }]}
+          contentContainerStyle={[s.list, { paddingBottom: insets.bottom + 100 }]}
           showsVerticalScrollIndicator={false}
           ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={isThreadsFlip ? '#E91E8C' : Colors.primary} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
           }
           renderItem={({ item }) => (
             <ListingRow
               item={item}
-              isThreadsFlip={isThreadsFlip}
               editingPriceId={editingPriceId}
               priceEditValue={priceEditValue}
               savingPriceId={savingPriceId}
@@ -2062,12 +2041,12 @@ export default function EbayAdminScreen() {
             />
           )}
           ListEmptyComponent={
-            <View style={[s.empty, isThreadsFlip && { backgroundColor: '#160E16', borderColor: '#301830' }]}>
+            <View style={s.empty}>
               <MaterialIcons name="storefront" size={48} color={Colors.textTertiary} />
-              <Text style={[s.emptyTitle, isThreadsFlip && { color: '#FFF0F5' }]}>
+              <Text style={s.emptyTitle}>
                 {search ? 'No listings found' : activeTab === 'all' ? 'No eBay Listings' : `No ${activeTab} listings`}
               </Text>
-              <Text style={[s.emptyText, isThreadsFlip && { color: '#9A7090' }]}>
+              <Text style={s.emptyText}>
                 {search
                   ? `No listings match "${search}"`
                   : 'Create a new listing or import from eBay to get started.'}

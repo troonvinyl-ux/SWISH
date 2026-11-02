@@ -189,10 +189,10 @@ Recommend the strategy that MAXIMISES net profit per labour hour, not just gross
     });
 
     if (!aiResponse.ok) {
-      const providerStatus = aiResponse.status;
-      console.error('[swish-decompose] AI provider request failed.', providerStatus);
+      const errText = await aiResponse.text();
+      console.error('OnSpace AI decompose error:', errText);
       return new Response(
-        JSON.stringify({ error: 'The decomposition service is temporarily unavailable.' }),
+        JSON.stringify({ error: `OnSpace AI: ${errText}` }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -209,9 +209,9 @@ Recommend the strategy that MAXIMISES net profit per labour hour, not just gross
         .trim();
       decomposition = JSON.parse(cleaned);
     } catch (parseErr) {
-      console.error('[swish-decompose] AI response was not valid JSON.');
+      console.error('JSON parse error:', parseErr, 'Raw:', rawContent);
       return new Response(
-        JSON.stringify({ error: 'The decomposition service returned an invalid response.' }),
+        JSON.stringify({ error: 'AI returned invalid JSON', raw: rawContent }),
         { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -252,9 +252,9 @@ Recommend the strategy that MAXIMISES net profit per labour hour, not just gross
     );
 
   } catch (err: any) {
-    console.error('[swish-decompose] Decomposition request failed.');
+    console.error('swish-decompose error:', err);
     return new Response(
-      JSON.stringify({ error: 'The decomposition service is temporarily unavailable.' }),
+      JSON.stringify({ error: err.message ?? 'Internal error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

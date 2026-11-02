@@ -40,8 +40,7 @@ const InventoryCard = memo(function InventoryCard({ item, tab, config, onOpen, o
   const color = tab === 'live' ? Colors.success : tab === 'sold' ? Colors.accent : config.color;
   const price = tab === 'sold' ? item.soldPrice : item.listing?.price ?? item.expectedSellingPrice ?? item.valuationMid;
   const meta = config.keyAttributes.map(key => item.attributes[key]).filter(value => typeof value === 'string' || typeof value === 'number').slice(0, 3).join(' · ');
-  const isThreadsFlip = config.color.toLowerCase() === '#e91e8c';
-  return <Pressable onPress={onOpen} style={({ pressed }) => [s.card, isThreadsFlip && { backgroundColor: '#160E16', borderColor: '#301830' }, { borderLeftColor: color, opacity: pressed ? 0.85 : 1 }]}>
+  return <Pressable onPress={onOpen} style={({ pressed }) => [s.card, { borderLeftColor: color, opacity: pressed ? 0.85 : 1 }]}>
     {item.media[0] ? <ItemImage uri={item.media[0]} contentFit="cover" transition={150} style={s.thumb} /> : <View style={s.thumb}><MaterialIcons name={config.icon as any} size={24} color={color} /></View>}
     <View style={s.flex}>
       {item.inventoryId ? <Text style={[s.reference, { color }]}>{item.inventoryId}</Text> : null}
@@ -67,8 +66,6 @@ export default function MasterInventoryScreen() {
   const [showReValue, setShowReValue] = useState(false); const [showReIdentify, setShowReIdentify] = useState(false);
   const [progress, setProgress] = useState<any>(null);
   const id = resolveProductionNiche(state.nicheId); const config = id ? NICHES[id] : NICHES.general;
-  const isThreadsFlip = id === 'clothing';
-  const threads = { background: '#0C080C', surface: '#160E16', surfaceHigh: '#201420', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5', muted: '#9A7090' };
   const filters = FILTERS[id ?? ''] ?? [[`All ${config.terms.items}`, '']]; const banner = BANNERS[id ?? ''];
   const counts = { stock: state.views.stock.length, draft: state.views.draft.length, live: state.views.live.length, sold: state.views.sold.length };
   const data = useMemo(() => state.views[state.activeTab].filter(item => {
@@ -126,10 +123,10 @@ export default function MasterInventoryScreen() {
       [{ text: 'Cancel', style: 'cancel' }, { text: state.activeTab === 'stock' ? 'Confirm & List All' : 'Confirm & Publish All', onPress: action }],
     );
   };
-  return <SafeAreaView testID={isThreadsFlip ? 'threads-flip-screen-10' : undefined} accessibilityLabel={isThreadsFlip ? 'Threads Flip screen 10 My Wardrobe' : undefined} edges={['top']} style={[s.container, isThreadsFlip && { backgroundColor: threads.background }]}>
+  return <SafeAreaView edges={['top']} style={s.container}>
     <StatusBar style="light" />
     <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <View style={[s.header, isThreadsFlip && { backgroundColor: threads.surface, borderBottomColor: threads.border }]}>
+      <View style={s.header}>
         <View style={s.headerIcon}><MaterialIcons name={config.icon as any} size={22} color={config.color} /></View>
         <View style={s.flex}><Text style={[s.headerTitle, { color: config.color }]}>{config.shortName} Inventory</Text>
           <Text style={s.sub}>{counts.stock} in stock · {counts.draft} draft · {counts.live} live · {counts.sold} sold</Text></View>
@@ -144,14 +141,14 @@ export default function MasterInventoryScreen() {
         </Pressable> : null}
         <Pressable onPress={() => router.push('/(tabs)/scan' as any)} style={[s.hBtn, { backgroundColor: config.color }]} accessibilityLabel="Add inventory"><MaterialIcons name="add" size={22} color={Colors.background} /></Pressable>
       </View>
-      <View style={[s.rail, isThreadsFlip && { backgroundColor: threads.surface, borderBottomColor: threads.border }]}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.railContent}>
-        {TABS.map(tab => <Pressable key={tab.id} onPress={() => state.setActiveTab(tab.id)} style={({ pressed }) => [s.chip, isThreadsFlip && { backgroundColor: threads.surfaceHigh }, { borderColor: state.activeTab === tab.id ? (isThreadsFlip ? threads.pink : tab.color) : (isThreadsFlip ? threads.border : Colors.surfaceBorder), opacity: pressed ? 0.7 : 1 }]}>
+      <View style={s.rail}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.railContent}>
+        {TABS.map(tab => <Pressable key={tab.id} onPress={() => state.setActiveTab(tab.id)} style={({ pressed }) => [s.chip, { borderColor: state.activeTab === tab.id ? tab.color : Colors.surfaceBorder, opacity: pressed ? 0.7 : 1 }]}>
           <MaterialIcons name={tab.icon as any} size={16} color={state.activeTab === tab.id ? tab.color : Colors.textTertiary} />
           <Text style={[s.chipText, { color: state.activeTab === tab.id ? tab.color : Colors.textSecondary }]}>{tab.label} {counts[tab.id]}</Text>
         </Pressable>)}
       </ScrollView></View>
-      <View style={[s.searchWrap, isThreadsFlip && { backgroundColor: threads.surfaceHigh, borderWidth: 1, borderColor: threads.border }]}><MaterialIcons name="search" size={20} color={Colors.textTertiary} />
-        <TextInput accessibilityLabel={`Search ${config.terms.items}`} value={search} onChangeText={setSearch} placeholder={`Search ${config.terms.items.toLowerCase()}...`} placeholderTextColor={Colors.textTertiary} style={[s.input, isThreadsFlip && { color: threads.cream }]} />
+      <View style={s.searchWrap}><MaterialIcons name="search" size={20} color={Colors.textTertiary} />
+        <TextInput accessibilityLabel={`Search ${config.terms.items}`} value={search} onChangeText={setSearch} placeholder={`Search ${config.terms.items.toLowerCase()}...`} placeholderTextColor={Colors.textTertiary} style={s.input} />
         {search ? <Pressable onPress={() => setSearch('')} style={s.hBtn} accessibilityLabel="Clear search"><MaterialIcons name="close" size={18} color={Colors.textSecondary} /></Pressable> : null}
       </View>
       {state.activeTab === 'stock' && banner ? <Pressable onPress={() => router.push(banner.route as any)} style={({ pressed }) => [s.banner, { opacity: pressed ? 0.85 : 1 }]}>
@@ -168,7 +165,7 @@ export default function MasterInventoryScreen() {
       <FlatList style={s.flex} data={data} keyExtractor={item => `${state.activeTab}-${item.id}-${item.listing?.id ?? ''}`} showsVerticalScrollIndicator={false} contentContainerStyle={s.list} refreshing={state.refreshing} onRefresh={state.refresh}
         ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
         renderItem={({ item }) => <InventoryCard item={item} tab={state.activeTab} config={config} onOpen={() => router.push(`/stock-listing/${item.id}` as any)} onAction={() => state.activeTab === 'stock' ? void runSingleListing(item) : state.activeTab === 'draft' ? void state.submit(item) : state.end(item)} />}
-        ListEmptyComponent={<View style={[s.empty, isThreadsFlip && { backgroundColor: threads.background }]}><MaterialIcons name={config.icon as any} size={40} color={config.color} /><Text style={s.emptyTitle}>{state.loading ? 'Loading inventory...' : `No ${state.activeTab === 'stock' ? config.terms.items.toLowerCase() + ' in stock' : state.activeTab + ' items'}`}</Text>
+        ListEmptyComponent={<View style={s.empty}><MaterialIcons name={config.icon as any} size={40} color={config.color} /><Text style={s.emptyTitle}>{state.loading ? 'Loading inventory...' : `No ${state.activeTab === 'stock' ? config.terms.items.toLowerCase() + ' in stock' : state.activeTab + ' items'}`}</Text>
           <Text style={s.emptyText}>{search ? 'Try another search or filter.' : state.activeTab === 'stock' ? 'Capture an item to start preparing a listing.' : state.activeTab === 'draft' ? 'Tap List on an in-stock item to create a draft.' : state.activeTab === 'sold' ? 'Sold records appear after order synchronization.' : 'Submit a draft to publish it on eBay.'}</Text>
           {state.activeTab === 'stock' ? <Pressable onPress={() => router.push('/(tabs)/scan' as any)} style={[s.emptyButton, { backgroundColor: config.color }]}><Text style={s.buttonText}>Add {config.terms.item}</Text></Pressable> : state.activeTab === 'sold' ? <Pressable onPress={state.syncSold} style={[s.emptyButton, { backgroundColor: config.color }]}><Text style={s.buttonText}>{state.syncing ? 'Syncing...' : 'Sync from eBay'}</Text></Pressable> : null}
         </View>}

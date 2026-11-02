@@ -1,5 +1,5 @@
 // SWISH root layout
-import { Stack, useRouter, usePathname, useSegments } from 'expo-router';
+import { Stack, useRouter, usePathname } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AlertProvider, AuthProvider } from '@/template';
 import { AppProvider } from '@/contexts/AppContext';
@@ -7,12 +7,9 @@ import { ManifestOpportunityProvider } from '@/contexts/ManifestOpportunityConte
 import { WatchedLotsProvider } from '@/contexts/WatchedLotsContext';
 import { Colors } from '@/constants/theme';
 import { NicheRouteBoundary } from '@/components/layout/NicheRouteBoundary';
-import { GlobalAccountControls } from '@/components/layout/GlobalAccountControls';
-import { useApp } from '@/hooks/useApp';
-import { nicheToScannerRoute } from '@/services/nicheRouting';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useCallback } from 'react';
-import { Platform, BackHandler, Pressable, Text, View, StyleSheet } from 'react-native';
+import { Platform, BackHandler } from 'react-native';
 import { IS_TV } from '@/hooks/useTVNavigation';
 import { useFonts } from 'expo-font';
 import {
@@ -61,53 +58,6 @@ function TVBackHandlerEffect({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function GlobalScanShortcut() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const segments = useSegments();
-  const { fixedNicheId, activeNicheId } = useApp();
-  const hidden = segments[0] === '(tabs)' || pathname.startsWith('/(tabs)') ||
-    pathname === '/login' || pathname === '/onboarding' ||
-    pathname === '/capture' || pathname === '/(tabs)/scan' ||
-    pathname.startsWith('/entry/');
-  if (hidden) return null;
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Open niche scanner"
-      onPress={() => router.push(nicheToScannerRoute(fixedNicheId ?? activeNicheId) as any)}
-      style={({ pressed }) => [globalScanStyles.button, pressed && globalScanStyles.pressed]}
-    >
-      <MaterialIcons name="qr-code-scanner" size={22} color="#111111" />
-      <Text style={globalScanStyles.label}>SCAN</Text>
-    </Pressable>
-  );
-}
-
-const globalScanStyles = StyleSheet.create({
-  button: {
-    position: 'absolute',
-    right: 18,
-    bottom: 24,
-    zIndex: 1000,
-    minHeight: 54,
-    paddingHorizontal: 18,
-    borderRadius: 28,
-    backgroundColor: '#F5C842',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    elevation: 10,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  label: { color: '#111111', fontSize: 12, fontWeight: '900', letterSpacing: 1 },
-  pressed: { opacity: 0.82, transform: [{ scale: 0.97 }] },
-});
-
 export default function RootLayout() {
   // Start loading icon fonts, but never make the entire app depend on the font
   // loader completing. Some preview/runtime environments can stall font loading;
@@ -136,7 +86,6 @@ export default function RootLayout() {
             <WatchedLotsProvider>
             <TVBackHandlerProvider>
               <NicheRouteBoundary>
-              <View style={{ flex: 1 }}>
               <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="index" />
                 <Stack.Screen name="(tabs)" />
@@ -160,6 +109,7 @@ export default function RootLayout() {
                 <Stack.Screen name="ebay-admin" />
                 <Stack.Screen name="master-admin" />
                 <Stack.Screen name="master-diagnostics" />
+                <Stack.Screen name="production-control" />
                 <Stack.Screen name="dispatch" />
                 <Stack.Screen name="tasks" />
                 <Stack.Screen name="stock-listing/[id]" />
@@ -188,30 +138,16 @@ export default function RootLayout() {
                 <Stack.Screen name="flipper-mx" />
                 <Stack.Screen name="bike-flipper" />
                 <Stack.Screen name="threads-flip" />
-                <Stack.Screen name="antique-flipper" />
-                <Stack.Screen name="antique-guides" />
-                <Stack.Screen name="antique-restoration" />
-                <Stack.Screen name="antique-condition" />
-                <Stack.Screen name="antique-value" />
                 <Stack.Screen name="subscription" />
                 {/* ── Niche entry routes — one per subscriber application ── */}
                 <Stack.Screen name="entry/coins" />
                 <Stack.Screen name="entry/motocross" />
                 <Stack.Screen name="entry/bicycles" />
                 <Stack.Screen name="entry/clothing" />
-                <Stack.Screen name="entry/cards" />
-                <Stack.Screen name="entry/antiques" />
-                <Stack.Screen name="entry/fossils" />
-                <Stack.Screen name="entry/beauty" />
-                <Stack.Screen name="entry/tech" />
-                <Stack.Screen name="entry/surplus-flip" />
                 <Stack.Screen name="buy-decision" />
                 <Stack.Screen name="research" />
                 <Stack.Screen name="deep-id-lab" />
               </Stack>
-              <GlobalScanShortcut />
-              <GlobalAccountControls />
-              </View>
               </NicheRouteBoundary>
             </TVBackHandlerProvider>
             </WatchedLotsProvider>

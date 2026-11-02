@@ -68,7 +68,7 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 // ── Auth ──────────────────────────────────────────────────────────────────────
 async function verifyTenantAccess(
   supabase: ReturnType<typeof adminClient>, authHeader: string | null, tenantId: string,
-): Promise<{ ok: false; error: string } | { ok: true; account: { id: string; email?: string } }> {
+): Promise<{ ok: boolean; error?: string; account?: { id: string; email?: string } }> {
   if (!authHeader) return { ok: false, error: 'Authentication required.' };
   const token = authHeader.replace('Bearer ', '').trim();
   if (!token || token === Deno.env.get('SUPABASE_ANON_KEY')) return { ok: false, error: 'Authentication required.' };
@@ -78,7 +78,7 @@ async function verifyTenantAccess(
     if (error || !user) return { ok: false, error: 'Invalid authentication token.' };
     const { data: member } = await supabase.from('tenant_memberships').select('id').eq('tenant_id', tenantId).eq('user_id', user.id).maybeSingle();
     if (!member) return { ok: false, error: 'Access denied.' };
-    return { ok: true, account: { id: user.id, email: user.email ?? undefined } };
+    return { ok: true, account: { id: user.id, email: user.email } };
   } catch { return { ok: false, error: 'Authentication could not be verified.' }; }
 }
 
@@ -1149,12 +1149,20 @@ Deno.serve(async (req: Request) => {
   const sec = await verifyTenantAccess(supabase, authHeader, tenantId);
   if (!sec.ok) return jsonResponse({ error: sec.error }, authHeader ? 403 : 401);
 
+  // Explicit manifest lookup: sold-only, no AI calls, item writes, or Browse fallback.
   if (body.route === 'manifest_sold_comparisons') {
-    try {
-      await requirePaidNiche(supabase, sec.account, tenantId, body.nicheId);
-    } catch (error) {
-      return nicheAccessResponse(error) ?? jsonResponse({ error: 'Subscription verification failed.' }, 500);
+    if (!sec.account || typeof body.nicheId !== 'string' || specialistNiche(specialistId) !== body.nicheId || title.length > 100) {
+      return jsonResponse({ error: 'Select a valid niche and a product search up to 100 characters.' }, 400);
     }
+    try { await requirePaidNiche(supabase, sec.account, tenantId, body.nicheId); }
+    catch (error) { const denied = nicheAccessResponse(error); if (denied) return denied; throw error; }
+    const { data: connector, error: connectorError } = await supabase.from('marketplace_connectors')
+      .select('credential_ref,status').eq('tenant_id',tenantId).eq('marketplace_id','ebay').maybeSingle();
+    if (connectorError) return jsonResponse({ error: 'eBay connection could not be checked. Try again.' }, 503);
+    if (!connector?.credential_ref || connector.status !== 'connected') return jsonResponse({ status:'unavailable', source:'ebay_marketplace_insights', query:title.trim(), items:[], checkedAt:new Date().toISOString(), message:'Connect eBay to check sold prices here. You can still open sold listings on eBay.' });
+    const credentials: any = await decryptCredentials(connector.credential_ref);
+    if (!credentials?.clientId || !credentials?.clientSecret) return jsonResponse({ error:'Your eBay connection needs checking.' }, 400);
+    return jsonResponse(await fetchManifestSoldComparisons(credentials.clientId, credentials.clientSecret, title.trim()));
   }
 
   const cleanTitle = sanitiseTitle(title);
@@ -1165,18 +1173,6 @@ Deno.serve(async (req: Request) => {
   if (!creds) {
     return jsonResponse({ error: 'eBay is not connected. Connect eBay in Marketplaces to enable market valuation.' }, 400);
   }
-  if (body.route === 'manifest_sold_comparisons') {
-    const sold = await fetchManifestSoldComparisons(creds.clientId, creds.clientSecret, title.trim());
-    return jsonResponse({
-      source: 'ebay_marketplace_insights',
-      status: sold.status,
-      query: title.trim(),
-      checkedAt: sold.checkedAt,
-      items: sold.items,
-      message: sold.message,
-    });
-  }
-
   console.log(`[SWISH Market v7] Token: expires=${creds.expiresAt} hasAnalyticsScope=${creds.hasAnalyticsScope}`);
 
   // ── Item ownership and niche isolation ─────────────────────────────────────

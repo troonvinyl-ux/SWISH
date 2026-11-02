@@ -15,16 +15,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { requirePaidNiche,nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
 import { canonicalSpecialist, specialistNiche, profileForSpecialist } from '../_shared/specialistRegistry.ts';
-import { normalizeSpecialistAnalysis, specialistOutputInstructions, recordValue, textList } from '../_shared/specialistIntelligence.ts';
+import { normalizeSpecialistAnalysis, specialistOutputInstructions, recordValue, textList } from '../../../shared/specialistIntelligence.ts';
 
 const NUMISTA_API = 'https://api.numista.com/api/v3';
 
 type ObjectType = 'coin' | 'medal' | 'token' | 'jeton' | 'commemorative_piece' |
   'banknote' | 'jewellery' | 'motorcycle' | 'motorcycle_part' |
-  'garment' | 'footwear' | 'accessory' | 'furniture' | 'ceramics' | 'porcelain' | 'pottery' |
-  'glassware' | 'silverware' | 'metalware' | 'clock' | 'watch' | 'painting' | 'print' |
-  'sculpture' | 'lighting' | 'book' | 'artwork' | 'decorative_arts' | 'collectable' |
-  'replica_reproduction' | 'unknown';
+  'garment' | 'footwear' | 'accessory' | 'replica_reproduction' | 'unknown';
 
 const CONFIDENCE_TIER_CAPS: Record<string, number> = {
   observation_only: 0.25,
@@ -200,17 +197,9 @@ Player/subject name, year (if printed), brand, set name, card number from visibl
   stamps: `You are an expert philatelist. Identify from VISIBLE evidence only.
 Country, denomination, year (if printed), SG/Scott number ONLY if clearly identifiable.
 Do not guess perforation gauge from a photograph.`,
-  antiques: `You are a specialist antiques and collectables researcher preparing evidence-led resale records.
-FIRST classify the object: ceramics / pottery, glass, silverware, jewellery, furniture, artwork, decorative arts, clock / watch, militaria, book, or other collectible.
-Read visible maker marks, signatures, hallmarks, labels and serial / edition marks literally. Describe their location, shape and legibility before proposing an attribution. Distinguish a sponsor's mark from a maker's mark, a style from a production date, and an attributed-to claim from a verified maker.
-For books, capture exact title, author, publisher, copyright page, number line, edition, dust jacket and completeness. For furniture, note construction, joints, veneers, hardware and repairs. For ceramics and glass, note body, glaze, moulding, base marks and chips. For silver, record visible hallmarks but never infer solid silver or fineness from colour.
-Condition: report chips, cracks, hairlines, losses, replaced parts, overpainting, re-gilding, repairs and restoration only where visible. Never certify authenticity, originality, age, provenance or material from photographs alone.
-Commercial record: use cautious title language; identify what evidence is missing; distinguish sold comparables from active asking prices and auction hammer prices from buyer totals. Flag provenance, cultural-property and export concerns for human review.`,
-  fossils: `You are a specialist palaeontology and fossil specimen identification researcher.
-FIRST classify the object as fossil specimen, mineral, cast / replica, composite, modern shell / bone, or uncertain lookalike. Identify broad group before proposing genus or species. Consider ammonites, belemnites, trilobites, echinoids, brachiopods, shark teeth, fish, reptile / dinosaur material, plant fossils, petrified wood and trace fossils.
-Describe diagnostic anatomy that is actually visible: sutures, chambers, ribs, symmetry, tooth crown and root, bone texture, growth lines, leaf venation or other specific features. Ask for scale, multiple angles, matrix and preparation details where needed. A visual resemblance is a candidate, not species verification.
-Do not infer an exact geological age, formation or collecting locality from appearance. Keep reported locality and provenance as user-supplied claims, separate from observed evidence. Distinguish natural specimen from cast, replica, repaired or composite material. Note missing anatomy, restoration, glue, reconstruction and preparation only when supported by images.
-Commercial record: compare only specimens with similar taxon confidence, size, completeness, preservation, preparation and documented provenance. Flag protected species, protected sites, collecting permission, ownership and export concerns for expert/legal review. Never give blanket legal clearance or invent provenance.`,
+  antiques: `You are an expert antiques appraiser. Identify from VISIBLE evidence only.
+Object type, likely maker/origin from visible marks only, period/style.
+Only attribute maker marks if clearly legible. Use conservative period dating.`,
   gold: `You are an expert precious metals specialist. Identify from VISIBLE evidence only.
 Object type, visible hallmarks (only if legible), estimated fineness from visible marks.
 Do not estimate weight from photographs. Flag plating indicators if visible.`,
@@ -238,7 +227,7 @@ const MASTER_EVIDENCE_RULES = `
 === SWISH MANDATORY EVIDENCE RULES ===
 
 OBJECT CLASSIFICATION (mandatory first step):
-Classify as: coin / medal / token / jeton / commemorative_piece / banknote / jewellery / motorcycle / motorcycle_part / garment / footwear / accessory / antique_object / book / fossil_specimen / mineral_specimen / replica_reproduction / unknown.
+Classify as: coin / medal / token / jeton / commemorative_piece / banknote / jewellery / motorcycle / motorcycle_part / garment / footwear / accessory / replica_reproduction / unknown.
 This classification CONTROLS which fields you populate.
 
 CONFIDENCE FRAMEWORK:
@@ -1439,8 +1428,7 @@ async function checkStripeSubscription(userId: string, userEmail: string, nicheI
       const linkedUserId = sub.metadata?.user_id;
       if (linkedUserId && linkedUserId !== userId) continue;
       if (sub.status !== 'active' && sub.status !== 'trialing') continue;
-      let subscribedNiche = String(sub.metadata?.niche_id ?? 'coins').toLowerCase();
-      if (subscribedNiche === 'surplus_trader') subscribedNiche = 'surplus_flip';
+      const subscribedNiche = String(sub.metadata?.niche_id ?? 'coins').toLowerCase();
       if (subscribedNiche !== nicheId) continue;
       for (const item of sub.items?.data ?? []) {
         if (item.price?.product === STRIPE_PRODUCT_ID) return true;

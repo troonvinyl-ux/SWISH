@@ -60,10 +60,9 @@ export function normaliseManifest(matrix: unknown[][]): ParsedManifest {
     // Never expand rounded scientific notation or guess discarded digits/check digits.
     const ean = validGtin(eanRaw) ? eanRaw : '';
     if (eanRaw && !ean) notes.push('EAN is rounded/scientific or fails its check digit. Read the actual label; not sent to eBay.');
+    const declaredUnitRrp = manifestNumber(get('Unit RRP', 'RRP', 'Retail Price'));
     const declaredLineRrp = manifestNumber(get('Total RRP'));
-    const suppliedUnitRrp = manifestNumber(get('Unit RRP', 'RRP', 'Retail Price'));
-    // Total-only supplier exports can safely recover a unit reference when quantity is known.
-    const unitRrp = suppliedUnitRrp ?? (declaredLineRrp !== null && quantity > 0 ? declaredLineRrp / quantity : 0);
+    const unitRrp = declaredUnitRrp ?? (quantity > 0 && declaredLineRrp !== null ? declaredLineRrp / quantity : 0);
     const totalRrp = declaredLineRrp ?? unitRrp * quantity;
     if (Math.abs(totalRrp - unitRrp * quantity) > 0.02) notes.push('Supplier line total does not match quantity × unit RRP.');
     const condition = get('Condition'); const grade = get('Grade');

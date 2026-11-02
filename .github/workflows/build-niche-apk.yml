@@ -1,5 +1,19 @@
 name: Build isolated SWISH niche APK
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'services/**'
+      - 'hooks/**'
+      - 'contexts/**'
+      - 'components/**'
+      - 'constants/**'
+      - 'niche-modules.json'
+      - 'app.config.js'
+      - 'scripts/**'
+      - '.github/workflows/_niche-android.yml'
+      - '.github/workflows/build-niche-apk.yml'
   workflow_dispatch:
     inputs:
       niche:

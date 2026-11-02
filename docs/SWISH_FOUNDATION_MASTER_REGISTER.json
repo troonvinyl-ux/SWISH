@@ -40,25 +40,25 @@
           "id": "S1-02",
           "title": "Map shared services, hooks, backend functions and database dependencies",
           "status": "IMPLEMENTED",
-          "evidence": "docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md#s1-02 maps app/components/contexts/hooks/services/constants, canonical registry, Expo build preparation, Supabase-compatible backend, Edge Function inventory, SQL migration count, workflows and current direct-query/runtime verification gaps. Per-function authorization and deployed call-path matrix remains outstanding. Static 2026-11-02 source matrix added at docs/SWISH_EDGE_FUNCTION_SECURITY_MATRIX.md: inventories all 25 deployable Edge Function directories and records source-observed JWT, tenant, paid-niche, owner/admin, public-read and internal-secret gates. This does not verify deployed function parity, live RLS/grants, internal-secret callers, direct-query authorization or runtime call paths; S1-02 remains IMPLEMENTED, not VERIFIED. PR #103 merged a33ac4a: all 25 deployable Edge Function directories inventoried in docs/SWISH_EDGE_FUNCTION_SECURITY_MATRIX.md with source-observed auth gates. Live verification is currently blocked because existing Supabase project nkfnagbkotafewgphuda reports INACTIVE; database migration listing times out while inactive. Do not mark VERIFIED until deployed function parity, live RLS/grants, internal-secret callers, direct-query authorization and runtime call paths are checked after restoration."
+          "evidence": "docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md#s1-02 maps app/components/contexts/hooks/services/constants, canonical registry, Expo build preparation, Supabase-compatible backend, Edge Function inventory, SQL migration count, workflows and current direct-query/runtime verification gaps. Per-function authorization and deployed call-path matrix remains outstanding. Static 2026-11-02 source matrix added at docs/SWISH_EDGE_FUNCTION_SECURITY_MATRIX.md: inventories all 25 deployable Edge Function directories and records source-observed JWT, tenant, paid-niche, owner/admin, public-read and internal-secret gates. This does not verify deployed function parity, live RLS/grants, internal-secret callers, direct-query authorization or runtime call paths; S1-02 remains IMPLEMENTED, not VERIFIED."
         },
         {
           "id": "S1-03",
           "title": "Audit every registered niche for real functionality and isolation",
           "status": "IN PROGRESS",
-          "evidence": "docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md#s1-03; all ten registered entry routes and specialist/capture configuration inspected. Static findings: Cards/Fossils/Beauty/Tech use shared /capture fallback; Cards/Fossils/Beauty/Tech use generic overview (Cards has one dedicated grading route); no full scanner-to-sale, niche data-isolation, web or device acceptance evidence yet. PR #94 merged 9c18466: canonical/legacy specialist IDs resolve to owning niche; all 25 checks passed. PR #95 merged e4c1a8c: Threads Flip Department/Style/Outer Shell Material specialist-specific mapping regression test; 25/25 checks passed. PR #96 merged 04fd59d: eBay publish mapping now prefers canonical department over legacy gender_category and explicitly maps outer_shell_material; 15/15 checks passed. These are source/CI proofs only; live eBay save/reopen/publish and device acceptance remain outstanding. PR #98 merged d168e99: ten-niche contract tests now verify every configured seller-evidenced specialist field maps to its canonical eBay item-specific name and inferred values are excluded; all 25/25 checks passed. PR #99 merged dd0ff10: swish-list-generate now safely defaults absent/null/malformed AI item_specifics to an empty object before specialist enrichment; all 15/15 checks passed. These establish source/CI robustness only; live Edge Function deployment and category-aspect save/reopen/publish acceptance remain outstanding. PR #108 merged ce39afa (25/25 checks): Cards, Fossils, Beauty and Tech now have distinct specialist home guidance, evidence checklists, safety/provenance cautions, quick actions and niche inventory presentation through the shared engine. Tests verify all ten production niches have a specialist profile, at least four capture instructions, key attributes and a scanner route. All ten Android JS bundles and all ten specialist web exports passed on PR #108. This is source/CI evidence only; real device, live backend and complete scan-to-sale acceptance remain open."
+          "evidence": "docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md#s1-03; all ten registered entry routes and specialist/capture configuration inspected. Static findings: Cards/Fossils/Beauty/Tech use shared /capture fallback; Cards/Fossils/Beauty/Tech use generic overview (Cards has one dedicated grading route); no full scanner-to-sale, niche data-isolation, web or device acceptance evidence yet. PR #94 merged 9c18466: canonical/legacy specialist IDs resolve to owning niche; all 25 checks passed. PR #95 merged e4c1a8c: Threads Flip Department/Style/Outer Shell Material specialist-specific mapping regression test; 25/25 checks passed. PR #96 merged 04fd59d: eBay publish mapping now prefers canonical department over legacy gender_category and explicitly maps outer_shell_material; 15/15 checks passed. These are source/CI proofs only; live eBay save/reopen/publish and device acceptance remain outstanding. PR #98 merged d168e99: ten-niche contract tests now verify every configured seller-evidenced specialist field maps to its canonical eBay item-specific name and inferred values are excluded; all 25/25 checks passed. PR #99 merged dd0ff10: swish-list-generate now safely defaults absent/null/malformed AI item_specifics to an empty object before specialist enrichment; all 15/15 checks passed. These establish source/CI robustness only; live Edge Function deployment and category-aspect save/reopen/publish acceptance remain outstanding."
         },
         {
           "id": "S1-04",
           "title": "Record security, entitlement, eBay, finance, sync and release blockers",
           "status": "IMPLEMENTED",
-          "evidence": "docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md#s1-04; docs/SWISH_ENGINEERING_AUDIT.md; docs/SWISH_ENGINEERING_HANDOVER.md. Security, entitlement, eBay finance/messages/sync, category specifics, order allocation, Play Store, device and deployment blockers consolidated. Remediation and live acceptance remain open in downstream stages. PR #105 merged 2787339 (25/25 checks): eBay finance reconciliation now uses the API bookingEntry debit/credit indicator, aggregates all final-value-fee components per order/currency, preserves order notes and recalculates net revenue. PR #107 merged a46b20a (25/25 checks): eBay replies are only marked sent after HTTP success and provider Success/Warning acknowledgement; local persistence failures are reported as localSyncPending. Live eBay finance/message acceptance remains blocked while Supabase is inactive. Multi-line and multi-quantity order allocation and interrupted-import recovery remain open."
+          "evidence": "docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md#s1-04; docs/SWISH_ENGINEERING_AUDIT.md; docs/SWISH_ENGINEERING_HANDOVER.md. Security, entitlement, eBay finance/messages/sync, category specifics, order allocation, Play Store, device and deployment blockers consolidated. Remediation and live acceptance remain open in downstream stages."
         },
         {
           "id": "S1-05",
           "title": "Reconcile open PRs, branches and current main before implementation",
           "status": "VERIFIED",
-          "evidence": "GitHub API rechecked 2026-11-02 after PRs #104-#108. Main is ce39afa936641c80e130ca8b6a8db4bce10b8b07. PR #104 merged 4dbdbc0: OTA concurrency now queues newer publications instead of cancelling active ones. PR #105 merged 2787339 (25/25); PR #107 merged a46b20a (25/25); PR #108 merged ce39afa (25/25). OTA run #296 on a33ac4a completed all 11 targets successfully. OTA run #297 on 2787339 is still publishing; the subsequent main revision ce39afa must also be checked for its queued OTA release. No APK build was triggered. Open work is not treated as production complete."
+          "evidence": "GitHub API rechecked 2026-11-02 after PRs #97-#99: PR #97 merged 069308bf; PR #98 merged d168e99 (25/25 checks passed); PR #99 merged dd0ff10 (15/15 checks passed). Latest main is dd0ff10e3927465fb83f5269d1f068376f4d31ae. Latest-main workflow set currently has 15 checks running (ten branded Android JS bundles, Master Admin shell, regression/niche isolation, niche-routing, Edge Function syntax/secret-boundary and gated live integration); no completed failures at snapshot. Earlier OTA jobs on 069308bf were superseded/cancelled as subsequent main commits landed, so OTA publication for the latest main is not evidenced. No APK build was triggered. Recheck latest main workflows and compare against main before future merges."
         }
       ]
     },
@@ -259,6 +259,7 @@
   ],
   "nicheCertification": {
     "source": "niche-modules.json",
+    "records": {},
     "requiredAreas": [
       "brand-and-routes",
       "scanner-and-identification",
@@ -287,14 +288,14 @@
     "noForcePush": true
   },
   "knownReleaseRisks": [
-    "Paid niche access and trusted server-side entitlement enforcement still require complete live API/RLS coverage.",
-    "eBay finance recurring 400/499 diagnosis and actual-fee reconciliation require live production acceptance; source-level fee aggregation and bookingEntry handling are now fixed.",
-    "eBay messaging table schema, actual provider delivery and local transcript persistence require live acceptance; false-success reporting is fixed in source.",
-    "eBay localized category aspect/item-specific normalization requires live save/reopen/publish verification.",
+    "Paid niche access and trusted server-side entitlement enforcement require complete API/RLS coverage.",
+    "eBay finance recurring 400/499 and fee aggregation/sign conventions remain unresolved.",
+    "eBay messaging must not report success after a failed provider send.",
+    "eBay localized category aspect/item-specific normalization requires live verification.",
     "Some inventory/detail paths need trusted niche authorization rather than tenant-only checks.",
     "Marketplace reconciliation for listings missing external IDs needs verification.",
-    "Multi-line and multi-quantity order allocation, and interrupted-import recovery remain incomplete.",
-    "Real APK/device launches, signing, web deployment, Google Play compliance and external CI billing constraints require evidence."
+    "Multi-line and multi-quantity order allocation, fee aggregation and interrupted-import recovery remain incomplete.",
+    "Real APK/device launches, signing, web parity, deployment and external CI billing constraints require evidence."
   ],
   "changeLog": [
     {
@@ -348,10 +349,6 @@
     {
       "date": "2026-11-02",
       "change": "Added a static source-level security matrix for all 25 deployable Edge Function directories and linked it to S1-02 evidence. Explicitly retained S1-02 as IMPLEMENTED pending deployed revision, RLS/grants, internal-secret caller, direct-query and live call-path verification."
-    },
-    {
-      "date": "2026-11-02",
-      "change": "Refreshed S1 evidence after PRs #104-#108: OTA cancellation fix, fee reconciliation and bookingEntry handling, truthful eBay reply state, and specialist home/capture contracts for all ten niches. Supabase live verification remains blocked by the existing inactive project."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"

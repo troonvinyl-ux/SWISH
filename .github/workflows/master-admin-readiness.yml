@@ -9,14 +9,13 @@ on:
         default: true
   pull_request:
     paths:
-      - '.github/workflows/publish-swish-ota.yml'
-      - '.github/workflows/publish-ota-update.yml'
-      - '.github/workflows/build-swish-suite.yml'
       - 'app/master-admin.tsx'
+      - 'app/production-control.tsx'
       - 'master-admin-app/**'
-      - 'app.config.js'
-      - 'components/layout/GlobalAccountControls.tsx'
-      - '.github/workflows/build-niche-apk.yml'
+      - 'services/productionControl*.ts'
+      - 'hooks/useProductionControl.ts'
+      - 'scripts/validate-production-register.mjs'
+      - 'docs/SWISH_FOUNDATION_MASTER_REGISTER.json'
       - 'services/__tests__/**'
       - 'constants/niches.ts'
       - 'services/nicheRouting.ts'
@@ -25,14 +24,13 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/publish-swish-ota.yml'
-      - '.github/workflows/publish-ota-update.yml'
-      - '.github/workflows/build-swish-suite.yml'
-      - '.github/workflows/build-niche-apk.yml'
-      - 'components/layout/GlobalAccountControls.tsx'
-      - 'app.config.js'
-      - 'master-admin-app/**'
       - 'app/master-admin.tsx'
+      - 'app/production-control.tsx'
+      - 'master-admin-app/**'
+      - 'services/productionControl*.ts'
+      - 'hooks/useProductionControl.ts'
+      - 'scripts/validate-production-register.mjs'
+      - 'docs/SWISH_FOUNDATION_MASTER_REGISTER.json'
       - 'services/__tests__/**'
       - 'constants/niches.ts'
       - 'services/nicheRouting.ts'
@@ -61,9 +59,13 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: Install locked dependencies
-        run: pnpm install --frozen-lockfile
+        run: bash scripts/install-dependencies.sh
       - name: Lint
         run: pnpm lint
+      - name: Validate production register
+        run: node scripts/validate-production-register.mjs
+      - name: Typecheck shared app and owner launcher
+        run: npx tsc --noEmit
       - name: Run targeted SWISH regression tests
         run: >-
           pnpm dlx jest@29.7.0 --config jest.config.ci.js --runInBand
@@ -72,7 +74,9 @@ jobs:
           services/__tests__/brandedBuildConfig.test.ts
           services/__tests__/surplusFlipRouting.test.ts
           services/__tests__/serverOnlySecrets.test.ts
-          services/__tests__/surplusAuctionBidEngine.test.ts
+          services/__tests__/productionControlEvidence.test.ts
+          services/__tests__/productionControlService.test.ts
+          services/__tests__/productionRegisterValidation.test.ts
 
   edge-function-syntax:
     name: Edge Function syntax and secret-boundary guard
@@ -88,7 +92,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: Install locked dependencies
-        run: pnpm install --frozen-lockfile
+        run: bash scripts/install-dependencies.sh
       - name: Transpile-check every Supabase Edge Function
         run: |
           node <<'NODE'
@@ -129,7 +133,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        niche: [coins, motocross, bicycles, clothing, trading_cards, antiques, fossils, beauty, tech, surplus_flip]
+        niche: [coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -141,7 +145,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: Install locked dependencies
-        run: pnpm install --frozen-lockfile
+        run: bash scripts/install-dependencies.sh
       - name: Validate branded Expo config
         env:
           SWISH_NICHE: ${{ matrix.niche }}
@@ -151,11 +155,9 @@ jobs:
           SWISH_NICHE: ${{ matrix.niche }}
         run: npx expo export --platform android --output-dir dist-ci-${{ matrix.niche }}
 
-  master-admin-shell-bundle:
-    name: Lightweight Master Admin shell bundle
+  master-admin-bundle:
+    name: Private Master Admin configuration and Android bundle
     runs-on: ubuntu-latest
-    env:
-      EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -164,24 +166,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-      - name: Install locked dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Validate Master Admin native identity and isolated route root
+      - name: Install committed dependencies
+        run: bash scripts/install-dependencies.sh
+      - name: Validate private launcher configuration
         env:
-          SWISH_NICHE: ''
           SWISH_MASTER_ADMIN: '1'
-          EXPO_NO_DOTENV: '1'
-        run: |
-          npx expo config --type public --json > /tmp/swish-master-admin-config.json
-          node -e "const c=require('/tmp/swish-master-admin-config.json'); if(c.android?.package!=='com.swish.inventory') throw Error('Master Admin must preserve its existing install identity'); if(!c.plugins?.some(p=>Array.isArray(p)&&p[0]==='expo-router'&&p[1]?.root==='master-admin-app')) throw Error('Master Admin route root not isolated');"
-      - name: Bundle lightweight Master Admin Android routes
+        run: npx expo config --type public
+      - name: Bundle private launcher Android JavaScript
         env:
-          SWISH_NICHE: ''
           SWISH_MASTER_ADMIN: '1'
-          EXPO_NO_DOTENV: '1'
-        run: npx expo export --platform android --output-dir dist-ci-master-admin
+        run: npx expo export --platform android --output-dir dist-ci-master
 
   external-integrations:
     name: Live integration checks (explicitly gated)
