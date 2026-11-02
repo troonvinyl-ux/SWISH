@@ -1148,14 +1148,21 @@ Deno.serve(async (req: Request) => {
   const authHeader = req.headers.get('Authorization');
   const sec = await verifyTenantAccess(supabase, authHeader, tenantId);
   if (!sec.ok) return jsonResponse({ error: sec.error }, authHeader ? 403 : 401);
+  if (!sec.account) return jsonResponse({ error: 'Authenticated account required.' }, 401);
+  const requestedNiche = specialistNiche(specialistId);
+  try {
+    await requirePaidNiche(supabase, sec.account, tenantId, requestedNiche);
+  } catch (error) {
+    const denied = nicheAccessResponse(error);
+    if (denied) return denied;
+    throw error;
+  }
 
   // Explicit manifest lookup: sold-only, no AI calls, item writes, or Browse fallback.
   if (body.route === 'manifest_sold_comparisons') {
     if (!sec.account || typeof body.nicheId !== 'string' || specialistNiche(specialistId) !== body.nicheId || title.length > 100) {
       return jsonResponse({ error: 'Select a valid niche and a product search up to 100 characters.' }, 400);
     }
-    try { await requirePaidNiche(supabase, sec.account, tenantId, body.nicheId); }
-    catch (error) { const denied = nicheAccessResponse(error); if (denied) return denied; throw error; }
     const { data: connector, error: connectorError } = await supabase.from('marketplace_connectors')
       .select('credential_ref,status').eq('tenant_id',tenantId).eq('marketplace_id','ebay').maybeSingle();
     if (connectorError) return jsonResponse({ error: 'eBay connection could not be checked. Try again.' }, 503);
