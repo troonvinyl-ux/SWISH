@@ -116,7 +116,7 @@
           "id": "S3-03",
           "title": "Verify shared inventory and lifecycle services",
           "status": "IMPLEMENTED",
-          "evidence": "All identified item-status transition paths now use the existing atomic `swish_transition_item` RPC or the shared `markItemSold`/`transitionItemStatus` helpers: generic `updateItem` rejects status changes; Stock Listing manual sale, manual order creation, eBay CSV sold-history import, eBay order ingestion, eBay listing publication and eBay listing sync all use the lifecycle command. PR #122 merged as 46a412d with passing lint, TypeScript, Edge Function syntax, 1,030-test regression, shared authorization, Android JS bundle and ten-niche Expo configuration checks. Static audit of the remaining `items` updates found only non-status field updates and initial record creation. Status IMPLEMENTED, not VERIFIED: quantity/partial-sale semantics, live RLS and end-to-end backend lifecycle/reconciliation tests remain open."
+          "evidence": "All identified item-status transition paths now use the existing atomic `swish_transition_item` RPC or the shared `markItemSold`/`transitionItemStatus` helpers: generic `updateItem` rejects status changes; Stock Listing manual sale, manual order creation, eBay CSV sold-history import, eBay order ingestion, eBay listing publication and eBay listing sync all use the lifecycle command. PR #122 merged as 46a412d with passing lint, TypeScript, Edge Function syntax, 1,030-test regression, shared authorization, Android JS bundle and ten-niche Expo configuration checks. Static audit of the remaining `items` updates found only non-status field updates and initial record creation. Status IMPLEMENTED, not VERIFIED: quantity/partial-sale semantics, live RLS and end-to-end backend lifecycle/reconciliation tests remain open. PR #136 merged as 9f31800: eBay EndFixedPriceItem confirmation now transitions the linked item through the existing `swish_transition_item` RPC instead of a direct service-role status write; explicit RPC acknowledgement is required and a regression test prevents reintroduction. Full S2-S3, Master Admin, ten-niche web, Android JS bundle and niche-routing CI passed. Still IMPLEMENTED, not VERIFIED: live backend/RLS and end-to-end order/quantity reconciliation remain outstanding."
         },
         {
           "id": "S3-04",
@@ -318,7 +318,7 @@
     "report": "docs/SWISH_LIVE_VERIFICATION_20261102.md",
     "evidence": "docs/SWISH_LIVE_VERIFICATION_20261102.json",
     "backendOrigin": "https://iwgaqieyoahmcjfziwga.backend.onspace.ai",
-    "repositoryReference": "d5e876a96139325cfb27e8a9c85361a92cb90c01",
+    "repositoryReference": "9f3180092bb4025c62dd2504eb3e5a486280b47a",
     "deployedVersionParity": "BLOCKED",
     "logicalEndpointGetProbes": 25,
     "failedEndpointGetProbes": 10,
@@ -494,6 +494,10 @@
     {
       "date": "2026-11-02",
       "change": "PR #135 merged as d5e876a96139325cfb27e8a9c85361a92cb90c01. Closed the global SWISH_INTERNAL_SECRET-only bypass in swish-ebay-list: an internal secret can no longer skip user authentication, tenant membership or the downstream paid-niche guard; it is now an additional check when supplied. Added regression coverage. Full S2-S3, Master Admin, ten-niche web, Android JS bundle and niche-routing CI passed. Deployed revision parity and external internal-caller compatibility remain unverified."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "PR #136 merged as 9f3180092bb4025c62dd2504eb3e5a486280b47a. Fixed eBay listing end reconciliation to transition inventory through the existing atomic swish_transition_item RPC, ensuring lifecycle/audit event creation and explicit RPC acknowledgement. Added regression coverage. Full S2-S3 (including TypeScript and 1,053-test suite), Master Admin, ten niche Android JS bundles, ten web exports and niche routing passed. Live OnSpace deployment and authenticated eBay acceptance remain outstanding."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"
