@@ -848,3 +848,32 @@ describe('eBay category aspect name normalization', () => {
     expect(source).toContain('aspectName: a.localizedAspectName ?? a.aspectName ?? \'\'');
   });
 });
+
+
+describe('SWISH eBay message body retrieval boundary', () => {
+  const messageFunction = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-ebay-messages/index.ts'), 'utf8');
+  const messageHelpers = fs.readFileSync(path.join(projectRoot, 'supabase/functions/_shared/ebayMessagePagination.ts'), 'utf8');
+
+  test('uses the required GetMyMessages detail levels and documented Message XML elements', () => {
+    expect(messageHelpers).toContain('<DetailLevel>ReturnHeaders</DetailLevel>');
+    expect(messageHelpers).toContain('<DetailLevel>ReturnMessages</DetailLevel>');
+    expect(messageHelpers).toContain('<MessageIDs><MessageID>');
+    expect(messageHelpers).toContain('Message\\\\b');
+    expect(messageFunction).toContain('extractEbayMessageBlocks(responseXml)');
+    expect(messageFunction).toContain('extractEbayXmlTag(msgXml, \'ReceiveDate\')');
+  });
+
+  test('loads message bodies only after tenant-scoped local message lookup', () => {
+    expect(messageFunction).toContain("route === 'get_message_body'");
+    expect(messageFunction).toContain(".select('id, ebay_message_id, body')");
+    expect(messageFunction).toContain(".eq('id', localMessageId)");
+    expect(messageFunction).toContain(".eq('tenant_id', tenantId)");
+    expect(messageFunction).toContain('buildGetEbayMessageBodyRequest(accessToken, message.ebay_message_id)');
+    expect(messageFunction).toContain('extractEbayMessageBody(responseXml)');
+  });
+
+  test('does not log provider message bodies or expose credentials', () => {
+    expect(messageFunction).not.toMatch(/console\\.(?:log|info|debug)\\([^\\n]*(?:body|accessToken|clientSecret)/i);
+    expect(messageFunction).toContain('verifyTenantAccess(supabase, authHeader, tenantId)');
+  });
+});
