@@ -13,7 +13,12 @@ import { PRODUCTION_NICHES } from '@/constants/niches';
 type Item = { id:string; canonical_title:string; description?:string; expected_selling_price?:number; condition?:string; condition_notes?:string; media?:string[]; specialist_id:string; attributes?:Record<string,any>; quantity?:number; inventory_id?:string; status?:string };
 type NicheId = (typeof PRODUCTION_NICHES)[number]['id'];
 type Result = { create:'waiting'|'passed'|'failed'; revise:'waiting'|'passed'|'failed'; end:'waiting'|'passed'|'failed'; detail:string; at:string };
-const client = getSupabaseClient();
+let clientInstance: ReturnType<typeof getSupabaseClient> | null = null;
+function getClient() {
+  if (clientInstance) return clientInstance;
+  clientInstance = getSupabaseClient();
+  return clientInstance;
+}
 const RESULTS_KEY = 'swish.testlab.niche-results.v2';
 const OWNER_EMAIL = 'troonvinyl@gmail.com';
 
@@ -46,7 +51,7 @@ export default function TestLabHome() {
   },[niche]);
 
   const loadTenants = useCallback(async()=>{
-    const {data,error}=await client.from('tenants').select('id,name').order('created_at',{ascending:true});
+    const {data,error}=await getClient().from('tenants').select('id,name').order('created_at',{ascending:true});
     if(error){setMessage('Tenant access check failed: '+error.message);return;}
     const rows=data??[];
     setTenants(rows);
@@ -59,37 +64,42 @@ export default function TestLabHome() {
     (async()=>{
       const saved=await AsyncStorage.getItem(RESULTS_KEY);
       if(saved&&alive){try{setResults(JSON.parse(saved));}catch{}}
-      const {data}=await client.auth.getSession();
-      if(alive&&data.session){setSession(data.session);await loadTenants();}
+      try {
+        const {data}=await getClient().auth.getSession();
+        if(alive&&data.session){setSession(data.session);await loadTenants();}
+      } catch (error) {
+        if (alive) setMessage('Backend configuration unavailable: '+(error instanceof Error ? error.message : String(error)));
+      }
       if(alive){setEvents([new Date().toISOString()+' · APP_LAUNCH · version '+(Application.nativeApplicationVersion??'unknown')]);}
     })();
-    const {data:listener}=client.auth.onAuthStateChange(async(_event,next)=>{
+    let listener: any = null;
+    try { listener = getClient().auth.onAuthStateChange(async(_event,next)=>{
       setSession(next);
       if(next) await loadTenants(); else {setTenant(null);setTenants([]);setItems([]);setSelected(null);}
-    });
-    return()=>{alive=false;listener.subscription.unsubscribe();};
+    }); } catch (error) { setMessage('Backend unavailable: '+(error instanceof Error ? error.message : String(error))); }
+    return()=>{alive=false;listener?.subscription?.unsubscribe?.();};
   },[loadTenants]);
 
   const signIn=async()=>{
     setBusy(true);
-    const {data,error}=await client.auth.signInWithPassword({email:email.trim(),password});
+    const {data,error}=await getClient().auth.signInWithPassword({email:email.trim(),password});
     setBusy(false);
     if(error){setMessage('Sign-in failed: '+error.message);return;}
-    if(!isSwishMasterAdmin(data.user?.email)){await client.auth.signOut();setMessage('Access restricted to the SWISH Master Admin owner account.');return;}
+    if(!isSwishMasterAdmin(data.user?.email)){await getClient().auth.signOut();setMessage('Access restricted to the SWISH Master Admin owner account.');return;}
     setPassword('');setSession(data.session);await loadTenants();setMessage('Owner authenticated. Tenant access is still enforced by backend membership policies.');
     void record('MASTER_ADMIN_SIGN_IN',data.user?.email??'owner');
   };
-  const signOut=async()=>{await client.auth.signOut();setSession(null);setTenant(null);setTenants([]);setItems([]);setSelected(null);void record('SIGN_OUT');};
+  const signOut=async()=>{await getClient().auth.signOut();setSession(null);setTenant(null);setTenants([]);setItems([]);setSelected(null);void record('SIGN_OUT');};
 
   const loadItems=useCallback(async()=>{
     if(!session||!tenant?.id||!specialistIds.length)return;
     setLoading(true);setSelected(null);setListing(null);setExternalId('');
-    const {data,error}=await client.from('items')
+    const {data,error}=await getClient().from('items')
       .select('id,canonical_title,description,expected_selling_price,condition,condition_notes,media,specialist_id,attributes,quantity,inventory_id,status')
       .eq('tenant_id',tenant.id).in('specialist_id',specialistIds)
       .not('canonical_title','is',null).order('updated_at',{ascending:false}).limit(100);
     if(error){setItems([]);setMessage('Inventory query failed: '+error.message);setLoading(false);return;}
-    const {data:liveRows,error:liveError}=await client.from('listings').select('item_id')
+    const {data:liveRows,error:liveError}=await getClient().from('listings').select('item_id')
       .eq('tenant_id',tenant.id).eq('marketplace_id','ebay').in('status',['active','live']);
     if(liveError){setItems([]);setMessage('Could not safely exclude already-live items: '+liveError.message);setLoading(false);return;}
     const live=new Set((liveRows??[]).map((row:any)=>row.item_id));
@@ -134,7 +144,7 @@ export default function TestLabHome() {
       fail('create',reason+(unknown?' Test record retained for reconciliation; do not retry until eBay is checked.':' Test draft removed; inventory row retained.'));
       return;
     }
-    const {data:row,error}=await client.from('listings').select('id,status,external_listing_id,title,price').eq('id',created.listing.id).eq('tenant_id',tenant.id).maybeSingle();
+    const {data:row,error}=await getClient().from('listings').select('id,status,external_listing_id,title,price').eq('id',created.listing.id).eq('tenant_id',tenant.id).maybeSingle();
     if(error||!row||!['active','live'].includes(String(row.status).toLowerCase())||row.external_listing_id!==result.externalListingId||row.title!==title||Number(row.price)!==price){
       setExternalId(result.externalListingId);fail('create','eBay returned an ID, but SWISH read-back failed. Test record retained for reconciliation.');return;
     }
@@ -150,7 +160,7 @@ export default function TestLabHome() {
     if(titleUpdate.error||priceUpdate.error){fail('revise',titleUpdate.error??priceUpdate.error??'Local revise preparation failed.');return;}
     const attrs=selected.attributes??{};
     const itemSpecifics=Object.entries(attrs).filter(([key,value])=>!key.startsWith('_')&&['string','number','boolean'].includes(typeof value)&&String(value).trim()).slice(0,25).map(([name,value])=>({name,value:String(value)}));
-    const {data,error}=await client.functions.invoke('swish-ebay-list',{body:{
+    const {data,error}=await getClient().functions.invoke('swish-ebay-list',{body:{
       route:'revise',tenantId:tenant.id,listingId:listing.id,externalListingId:externalId,title:nextTitle,
       description:'Temporary SWISH TEST LAB listing. Revised successfully by controlled acceptance test.',
       price:nextPrice,categoryId:attrs.ebay_category_id??attrs._ebay_category_id,
@@ -159,7 +169,7 @@ export default function TestLabHome() {
       itemSpecifics,mediaUrls:(selected.media??[]).filter(url=>typeof url==='string'&&url.startsWith('https://'))
     }});
     if(error||!data?.success){fail('revise',data?.error??error?.message??'eBay did not confirm revise.');return;}
-    const {data:verified,error:readError}=await client.from('listings').select('title,price,external_listing_id').eq('id',listing.id).eq('tenant_id',tenant.id).maybeSingle();
+    const {data:verified,error:readError}=await getClient().from('listings').select('title,price,external_listing_id').eq('id',listing.id).eq('tenant_id',tenant.id).maybeSingle();
     if(readError||!verified||verified.title!==nextTitle||Number(verified.price)!==nextPrice||verified.external_listing_id!==externalId){fail('revise','eBay accepted revise but SWISH read-back did not match. Retain for reconciliation.');return;}
     setTestTitle(nextTitle);setListing({...listing,title:nextTitle,price:nextPrice});setResult('revise','passed','eBay revise and SWISH title/price read-back verified.');setMessage('REVISE PASSED — updated title and price confirmed. Next run END.');setBusy(false);void record('REVISE_PASSED',externalId);
   };
@@ -178,7 +188,7 @@ export default function TestLabHome() {
     if(ended.error){fail('end','eBay end failed; test record retained for reconciliation: '+ended.error);return;}
     const removed=await deleteListing(listing.id,tenant.id);
     if(removed.error){fail('end','eBay listing ended but test record cleanup failed: '+removed.error);return;}
-    const {data:stillThere,error}=await client.from('listings').select('id').eq('id',listing.id).eq('tenant_id',tenant.id).maybeSingle();
+    const {data:stillThere,error}=await getClient().from('listings').select('id').eq('id',listing.id).eq('tenant_id',tenant.id).maybeSingle();
     if(error||stillThere){fail('end','eBay end was requested but SWISH test-record removal could not be verified.');return;}
     setResult('end','passed','eBay end confirmed; temporary SWISH listing record removed. Inventory retained.');
     setMessage('CREATE → REVISE → END PASSED. Temporary listing ended and test record removed; original inventory remains.');setListing(null);setExternalId('');setBusy(false);void record('END_PASSED',externalId);
