@@ -55,3 +55,9 @@ test('Android 16 native builds receive a new OTA runtime and native config canno
   expect(ota).not.toContain("'app.json'");
   expect(ota).not.toContain("'plugins/**'");
 });
+
+test('signed Master Admin release workflow uses the committed pnpm version', () => {
+  const packageJson = JSON.parse(read('package.json'));
+  const workflow = read('.github/workflows/build-swish-release-apk.yml');
+  expect(workflow).toContain('version: ' + packageJson.packageManager.replace('pnpm@', ''));
+});
