@@ -52,4 +52,14 @@ describe('Source boundary contracts (not substitutes for RLS integration tests)'
     expect(publish).toContain('auth.userId');
   });
 
+
+  test('server-side listing generation enforces entitlement from the stored item specialist before AI work',()=>{
+    const generate=read('supabase/functions/swish-list-generate/index.ts');
+    expect(generate).toContain("from '../_shared/paidNicheAuthorization.ts'");
+    expect(generate).toContain("from '../_shared/specialistRegistry.ts'");
+    expect(generate).toContain('specialistNiche(String(item.specialist_id ?? \'\'))');
+    expect(generate).toContain('await requirePaidNiche(supabaseAdmin');
+    expect(generate.indexOf('await requirePaidNiche(supabaseAdmin')).toBeLessThan(generate.indexOf('const profile = profileForSpecialist'));
+  });
+
 });
