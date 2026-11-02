@@ -12,7 +12,8 @@ permissions:
 # Avoid overlapping matrix publishes against the same EAS project and API.
 concurrency:
   group: swish-ota-publish-${{ github.ref }}
-  cancel-in-progress: true
+  # Never interrupt an in-flight multi-niche publication; newer commits queue behind it.
+  cancel-in-progress: false
 
 jobs:
   publish-update:
