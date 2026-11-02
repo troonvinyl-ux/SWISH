@@ -5,11 +5,12 @@ import { isSpecialistAllowedForReprice, REPRICE_NICHE_SPECIALISTS } from '../../
 const projectRoot = path.resolve(__dirname, '../..');
 
 describe('server-side repricing niche authorization', () => {
-  test('the server allowlist exactly matches the canonical niche registry', () => {
+  test('the server allowlist matches canonical specialists only (legacy aliases excluded)', () => {
     const registry = JSON.parse(fs.readFileSync(path.join(projectRoot, 'niche-modules.json'), 'utf8'));
-    for (const [nicheId, product] of Object.entries(registry.products) as Array<[string, { specialists: string[]; legacySpecialists?: string[] }]>) {
-      expect(REPRICE_NICHE_SPECIALISTS[nicheId]).toEqual([...product.specialists, ...(product.legacySpecialists ?? [])]);
-    }
+    Object.entries(registry.products).forEach(([nicheId, product]) => {
+      const canonicalSpecialists = (product as { specialists: string[] }).specialists;
+      expect(REPRICE_NICHE_SPECIALISTS[nicheId]).toStrictEqual(canonicalSpecialists);
+    });
     expect(Object.keys(REPRICE_NICHE_SPECIALISTS).sort()).toEqual(Object.keys(registry.products).sort());
   });
 
@@ -26,6 +27,12 @@ describe('server-side repricing niche authorization', () => {
     ['surplus_flip', 'surplus_trader'],
   ])('allows canonical %s specialist %s', (niche, specialist) => {
     expect(isSpecialistAllowedForReprice(niche, specialist)).toBe(true);
+  });
+
+  test('rejects legacy specialist IDs for server-side repricing', () => {
+    expect(isSpecialistAllowedForReprice('coins', 'coins_uk')).toBe(false);
+    expect(isSpecialistAllowedForReprice('coins', 'numismatic')).toBe(false);
+    expect(isSpecialistAllowedForReprice('clothing', 'clothing_specialist')).toBe(false);
   });
 
   test('rejects cross-niche and missing specialist identities', () => {
