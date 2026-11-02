@@ -41,3 +41,15 @@ test('EAS exposes isolated APK and Android App Bundle profiles for all ten niche
   }
   expect(eas.build['master-admin']).toMatchObject({ env: { SWISH_MASTER_ADMIN: '1' }, android: { buildType: 'apk' } });
 });
+
+test('Android 16 native builds receive a new OTA runtime and native config cannot publish OTA alone', () => {
+  const config = read('app.config.js');
+  expect(config).toContain('isolated-api36-v1');
+  expect(config).toContain('master-admin-api36-v1');
+  const ota = read('.github/workflows/publish-ota-update.yml');
+  expect(ota).toContain("paths:");
+  expect(ota).toContain("'app/**'");
+  expect(ota).toContain("'niche-modules.json'");
+  expect(ota).not.toContain("'app.json'");
+  expect(ota).not.toContain("'plugins/**'");
+});
