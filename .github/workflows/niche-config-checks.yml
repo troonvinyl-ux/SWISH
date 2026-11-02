@@ -28,6 +28,8 @@ on:
       - 'supabase/tests/**'
       - 'supabase/migrations/**'
       - 'shared/**'
+      - 'scripts/validate-foundation.mjs'
+      - 'scripts/sync-backend-registry.mjs'
       - 'niche-modules.json'
       - 'services/nicheRouting.ts'
       - 'constants/niches.ts'
@@ -36,7 +38,6 @@ on:
       - 'services/__tests__/entryRoutes.test.ts'
       - 'services/__tests__/brandedBuildConfig.test.ts'
       - 'services/__tests__/surplusFlipRouting.test.ts'
-      - 'services/__tests__/listingConfidencePolicy.test.ts'
       - 'app/master-admin.tsx'
       - 'app/entry/surplus-flip.tsx'
       - 'app/surplus-flip.tsx'
@@ -89,6 +90,8 @@ on:
       - 'supabase/tests/**'
       - 'supabase/migrations/**'
       - 'shared/**'
+      - 'scripts/validate-foundation.mjs'
+      - 'scripts/sync-backend-registry.mjs'
       - 'niche-modules.json'
       - 'services/nicheRouting.ts'
       - 'constants/niches.ts'
@@ -97,7 +100,6 @@ on:
       - 'services/__tests__/entryRoutes.test.ts'
       - 'services/__tests__/brandedBuildConfig.test.ts'
       - 'services/__tests__/surplusFlipRouting.test.ts'
-      - 'services/__tests__/listingConfidencePolicy.test.ts'
       - 'app/master-admin.tsx'
       - 'app/entry/surplus-flip.tsx'
       - 'app/surplus-flip.tsx'
@@ -140,11 +142,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
         run: bash scripts/install-dependencies.sh
+
+      - name: Validate canonical foundation and backend registry parity
+        run: node scripts/validate-foundation.mjs
 
       - name: Run project lint
         run: pnpm lint

@@ -1,18 +1,15 @@
-// Server-side niche scope for repricing. Keep aligned with niche-modules.json.
-export const REPRICE_NICHE_SPECIALISTS: Readonly<Record<string, readonly string[]>> = {
-  coins: ['coins', 'islamic_silver', 'banknotes', 'gold', 'silver', 'jewellery_precious_metals', 'ancient_artefacts'],
-  motocross: ['motocross'],
-  bicycles: ['bicycles'],
-  clothing: ['clothing', 'trainers_sneakers'],
-  trading_cards: ['pokemon_cards', 'trading_cards'],
-  antiques: ['antiques', 'books'],
-  fossils: ['fossils'],
-  beauty: ['beauty'],
-  tech: ['tech', 'retro_games', 'retro_consoles'],
-  surplus_flip: ['surplus_trader'],
-};
+// Server-only adapter over the generated canonical registry; no parallel niche list.
+import modules from './niche-modules.json' with { type: 'json' };
 
-export function isSpecialistAllowedForReprice(nicheId: string, specialistId: string | null | undefined): boolean {
-  if (!specialistId) return false;
-  return REPRICE_NICHE_SPECIALISTS[nicheId]?.includes(specialistId) ?? false;
+export const REPRICE_NICHE_SPECIALISTS: Record<string, readonly string[]> = Object.fromEntries(
+  Object.entries(modules.products).map(([nicheId, product]) => [
+    nicheId,
+    [...product.specialists, ...(product.legacySpecialists ?? [])],
+  ]),
+);
+
+export function isSpecialistAllowedForReprice(nicheId: unknown, specialistId: unknown): boolean {
+  if (typeof nicheId !== 'string' || typeof specialistId !== 'string' ||
+      !Object.hasOwn(REPRICE_NICHE_SPECIALISTS, nicheId)) return false;
+  return REPRICE_NICHE_SPECIALISTS[nicheId].includes(specialistId);
 }

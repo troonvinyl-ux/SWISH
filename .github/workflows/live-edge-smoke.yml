@@ -1,0 +1,35 @@
+name: SWISH approved live Edge smoke checks
+on:
+  workflow_dispatch:
+    inputs:
+      approved_read_only:
+        description: Approve credential-free GET probes against the existing OnSpace Cloud project (no eBay writes or AI calls)
+        type: boolean
+        required: true
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: swish-live-edge-smoke
+  cancel-in-progress: false
+jobs:
+  smoke:
+    if: ${{ inputs.approved_read_only }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run real read-only HTTP probes (no build or dependency installation)
+        env:
+          SWISH_APPROVED_EDGE_SMOKE: '1'
+        run: node scripts/verify-edge-smoke.mjs
+      - name: Retain sanitized HTTP evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-smoke-${{ github.sha }}
+          path: edge-smoke-evidence.json
+          if-no-files-found: error
