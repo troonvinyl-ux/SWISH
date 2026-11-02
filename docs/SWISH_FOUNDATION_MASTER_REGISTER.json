@@ -58,7 +58,7 @@
           "id": "S1-05",
           "title": "Reconcile open PRs, branches and current main before implementation",
           "status": "VERIFIED",
-          "evidence": "GitHub API rechecked 2026-11-02 against current main 0909394e3f797e018415f98c4c4e54be8d31e456. PRs #115, #116, #117, #118, #119 and #120 are merged; PR #121 is the sole open PR and is awaiting full validation. No other open PR branches are being merged. Current main workflows and latest PR #121 checks must be rechecked before each subsequent merge; production web/Android builds and the two pre-existing default Threads APK jobs are tracked separately."
+          "evidence": "GitHub API rechecked 2026-11-02 against main 44ad21c126bd1eab561b62b364172dcfdbf19222. PRs #115-#121 are merged; there are currently no open pull requests. Main workflows and subsequent main changes remain subject to fresh checks before any release or future PR merge."
         }
       ]
     },
@@ -135,7 +135,7 @@
     {
       "id": "S4",
       "name": "Foundation 2 — Standard resale workflow",
-      "status": "NOT STARTED",
+      "status": "IN PROGRESS",
       "goal": "Deliver one complete, repeatable scan-to-sale workflow for every supported niche.",
       "tasks": [
         {
@@ -169,14 +169,14 @@
     {
       "id": "S5",
       "name": "Foundation 3 — Niche specialisation",
-      "status": "NOT STARTED",
+      "status": "IN PROGRESS",
       "goal": "Make each niche a distinct specialist configuration over shared foundations, with strict data and entitlement isolation.",
       "tasks": [
         {
           "id": "S5-01",
           "title": "Validate specialist IDs, prompts and capture requirements per niche",
           "status": "IN PROGRESS",
-          "evidence": "Static specialist ownership audit is implemented in S1-03; Silver Batch's generic specialist misassignment was corrected to canonical `silver` in PR #119. Remaining: complete a per-niche audit of specialist prompts, required capture slots, legacy aliases and output schemas, then run real image/device acceptance for all ten niches."
+          "evidence": "Static specialist ownership audit is implemented in S1-03; Silver Batch's generic specialist misassignment was corrected to canonical `silver` in PR #119. Remaining: complete a per-niche audit of specialist prompts, required capture slots, legacy aliases and output schemas, then run real image/device acceptance for all ten niches. PR #121 merged (44ad21c) with 25/25 checks passed; the new contract test confirms every canonical specialist has required capture evidence and each niche has a server-supported capture mode. Prompt-specific output and real-image/device acceptance remain open."
         },
         {
           "id": "S5-02",
@@ -400,6 +400,10 @@
     {
       "date": "2026-11-02",
       "change": "Reconciled S1-05 against main 0909394: PRs #115-#120 merged; PR #121 is the only open PR. Current main and open PR state recorded; merge policy remains fresh-checks-before-merge."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "Merged PR #121 with 25/25 checks: verified required capture slots and server-supported capture modes for every canonical specialist across all ten niches. S5-01 remains IN PROGRESS pending prompt/output-schema and real-image acceptance. Reconciled S1-05: main 44ad21c and no open PRs."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"
