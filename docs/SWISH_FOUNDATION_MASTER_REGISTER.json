@@ -265,7 +265,7 @@
           "id": "S7-07",
           "title": "Meet Google Play release requirements for each published niche app",
           "status": "BLOCKED",
-          "evidence": "Google Play policy requires Android 16 (API 36) for new apps and app updates from 31 August 2026. PR #112 adds a shared Expo config plugin, generated Gradle property verification, SDK 36/Build Tools 36.0.0 installation and APK target-SDK assertions. It also adds EAS APK profiles for all ten niches, matching `*-play` Android App Bundle profiles, and a separate owner-only Master Admin APK profile. This remains BLOCKED until API 36 native builds and target manifests pass, persistent release signing is confirmed, signed AABs are generated for all published niche package IDs, and per-app Play Console declarations/policy review are completed. The owner-only Master Admin launcher remains a separate internal-distribution artifact."
+          "evidence": "Google Play policy requires Android 16 (API 36) for new apps and app updates from 31 August 2026. PR #112 adds a shared Expo config plugin, generated Gradle property verification, SDK 36/Build Tools 36.0.0 installation and APK target-SDK assertions. It also adds EAS APK profiles for all ten niches, matching `*-play` Android App Bundle profiles, and a separate owner-only Master Admin APK profile. This remains BLOCKED until API 36 native builds and target manifests pass, persistent release signing is confirmed, signed AABs are generated for all published niche package IDs, and per-app Play Console declarations/policy review are completed. The owner-only Master Admin launcher remains a separate internal-distribution artifact. PR #112 also increments niche and Master Admin runtime versions for the native API 36 rebuild and restricts automatic OTA publication to JS/assets-only paths; native app config, plugins, dependencies and Gradle changes no longer trigger OTA publication without a rebuilt APK."
         }
       ]
     }
@@ -374,6 +374,10 @@
     {
       "date": "2026-11-02",
       "change": "PR #112 adds Android 16 API 36 Gradle configuration and fail-closed APK target verification across niche and owner builds; all ten niche and private Master Admin prebuilds report API 36 properties successfully. Added complete EAS APK profiles for all ten niches, matching Play AAB profiles, and a separate Master Admin APK profile. S7-07 remains BLOCKED pending native API 36 compilation/manifest verification, persistent signing, actual AAB artifacts and Play Console declarations."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "PR #112 separates native API 36 runtime versions from prior installed builds and gates automatic OTA publishing to JavaScript/assets-only changes. Native app config, plugin, dependency and Gradle changes now require a rebuilt native artifact before OTA compatibility resumes. Play AAB/signing and Play Console acceptance remain open."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"
