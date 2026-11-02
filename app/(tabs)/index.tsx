@@ -19,6 +19,7 @@ import FlipperMXScreen from '@/app/flipper-mx';
 import BikeFlipperScreen from '@/app/bike-flipper';
 import ThreadsFlipScreen from '@/app/threads-flip';
 import SurplusFlipScreen from '@/app/surplus-flip';
+import AntiqueFlipperHome from '@/app/antique-flipper';
 import { NicheOverview } from '@/components/feature/NicheOverview';
 
 export default function NicheHomeScreen() {
