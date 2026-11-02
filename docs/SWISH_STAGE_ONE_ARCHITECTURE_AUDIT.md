@@ -1,8 +1,8 @@
 # SWISH Stage S1 — Full Architectural Audit
 
-**Audit date:** 2026-11-02 (refreshed against main after PR #125)  
+**Audit date:** 2026-11-02 (refreshed against main after PR #127)  
 **Audited ref:** `main`  
-**Audited commit:** `e3df8fe19b1d3444919ddac77dadd41a5429acf1`  
+**Audited commit:** `b1f805e22139ba89c3267dbf9c7b21f50582a9f9`  
 **Scope:** S1-01 through S1-05 in `docs/SWISH_FOUNDATION_MASTER_REGISTER.json`.
 
 ## Executive result
@@ -58,8 +58,8 @@ Stage S1 is **partially complete**. The canonical route/build map and PR reconci
 - Native and Expo web source consume the same service modules and the canonical OnSpace Cloud backend through its Supabase-compatible client/API; no separate website source workspace was identified in this repository.
 - The service layer is not yet the exclusive data-access boundary: GitHub source search on this baseline returns at least 43 files containing direct `supabase.from(...)` access and another five `getSupabaseClient().from(...)` call sites (some overlap). Direct-query call sites are present in screens and services, so UI/service ownership alone cannot be used as proof of authorization. The indexed search is an inventory aid, not a guarantee that every dynamic query was discovered.
 - Existing canonical item UUIDs, tenant membership/RLS, storage, connector records and eBay architecture are retained. No second database or auth system is proposed.
-- The handover documents the existing Edge Function families and applied security hardening. A full function-by-function authorization, schema, input-validation, idempotency and redaction review is still required before S3/S7 acceptance.
-- A source inventory is not a live dependency graph: deployed OnSpace Cloud Edge Function revisions, effective database grants/RLS policies, secret configuration and the separate website deployment must be checked in their respective environments.
+- The handover documents the existing Edge Function families and applied security hardening. The refreshed security matrix identified a global `x-swish-internal-secret` bypass in `swish-ebay-list`: secret-only calls have no user identity/tenant membership check and skip the conditional paid-niche gate. No in-repository caller was found in source search; external callers/deployed configuration remain unknown. `swish-ebay-sync` is JWT+membership-only in current source despite an unused secret variable/comment. A full function-by-function authorization, schema, input-validation, idempotency and redaction review is still required before S3/S7 acceptance.
+- A source inventory is not a live dependency graph: deployed OnSpace Cloud Edge Function revisions, effective database grants/RLS policies, external callers and secret configuration, and the separate website deployment must be checked in their respective environments.
 
 ## S1-03 — Ten-niche functionality and isolation audit
 
