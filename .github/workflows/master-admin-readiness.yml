@@ -110,7 +110,9 @@ jobs:
           walk('supabase/functions');
           const failures = [];
           for (const file of files) {
-            const result = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+            const sourceText = fs.readFileSync(file, 'utf8');
+            const source = ts.createSourceFile(file, sourceText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
+            const result = ts.transpileModule(sourceText, {
               fileName: file,
               reportDiagnostics: true,
               compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
