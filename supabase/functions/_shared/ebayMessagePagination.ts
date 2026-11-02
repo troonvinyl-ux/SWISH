@@ -40,7 +40,7 @@ function decodeEbayMessageText(value: string): string {
 
 export function extractEbayMessageBody(xml: string): string {
   const message = extractEbayMessageBlocks(xml)[0] ?? xml;
-  const raw = extractEbayXmlTag(message, 'Text') || extractEbayXmlTag(message, 'Content');
+  const raw = extractEbayXmlTag(message, 'Content') || extractEbayXmlTag(message, 'Text');
   return raw ? decodeEbayMessageText(raw) : '';
 }
 
@@ -74,8 +74,8 @@ export function buildGetEbayMessagesRequest(
   }
   return `<?xml version="1.0" encoding="utf-8"?>
 <GetMyMessagesRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-  <DetailLevel>ReturnHeaders</DetailLevel>
   <RequesterCredentials><eBayAuthToken>${xmlEscape(accessToken)}</eBayAuthToken></RequesterCredentials>
+  <DetailLevel>ReturnHeaders</DetailLevel>
   <FolderID>0</FolderID>
   <StartCreationTime>${xmlEscape(startTime)}</StartCreationTime>
   <EndCreationTime>${xmlEscape(endTime)}</EndCreationTime>
