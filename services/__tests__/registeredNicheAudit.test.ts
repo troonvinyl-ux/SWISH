@@ -57,6 +57,25 @@ describe('S1-03 registered niche audit', () => {
     }
   });
 
+
+  test('all ten niches have descriptors that match the canonical registry', () => {
+    for (const [id, product] of Object.entries(registry.products) as Array<[string, any]>) {
+      const descriptorPath = path.join(root, 'niches', id, 'module.json');
+      expect(fs.existsSync(descriptorPath)).toBe(true);
+      const descriptor = JSON.parse(fs.readFileSync(descriptorPath, 'utf8'));
+      expect(descriptor.schemaVersion).toBe(2);
+      expect(descriptor.id).toBe(id);
+      expect(descriptor.androidPackage).toBe(product.androidPackage);
+      expect(descriptor.iosBundleIdentifier).toBe(product.iosBundleIdentifier);
+      expect(descriptor.entryRoute).toBe('/' + String(product.entry).replace(/\\.tsx$/, ''));
+      expect(descriptor.scannerRoute).toBe(product.scannerRoute);
+      expect(descriptor.defaultSpecialistId).toBe(product.defaultSpecialist);
+      expect(descriptor.specialistIds).toEqual(product.specialists);
+      expect(descriptor.legacySpecialistIds).toEqual(product.legacySpecialists);
+      expect(descriptor.dedicatedRoutes).toEqual(product.dedicatedRoutes ?? []);
+    }
+  });
+
   test('every canonical specialist has required capture evidence and a server-supported mode', () => {
     for (const [nicheId, product] of Object.entries(registry.products) as Array<[string, any]>) {
       const profile = getSpecialistProfile(nicheId);
