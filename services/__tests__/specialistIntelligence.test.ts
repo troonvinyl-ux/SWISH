@@ -22,6 +22,10 @@ describe('Shared researched specialist contracts',()=>{
     const specs=mappedSpecialistSpecifics(SPECIALIST_PROFILES.clothing,{ brand:'Nike',composition:'Cotton',_inferred_composition:'Cotton' });
     expect(specs.Brand).toBe('Nike');expect(specs.Material).toBeUndefined();expect(specs.Ruler).toBeUndefined();
   });
+  test('Threads Flip maps required clothing attributes to their exact eBay item specifics',()=>{
+    const specs=mappedSpecialistSpecifics(SPECIALIST_PROFILES.clothing,{ department:"Women's",style:'Vintage',outer_shell_material:'Leather' });
+    expect(specs.Department).toBe("Women's");expect(specs.Style).toBe('Vintage');expect(specs['Outer Shell Material']).toBe('Leather');
+  });
   test('beauty exclusions and tech locks do not depend on a high model score',()=>{
     expect(evaluateSpecialistSafety('beauty',{ tester:true }).blocked).toBe(true);
     expect(evaluateSpecialistSafety('beauty',{ opened:true }).blocked).toBe(true);
