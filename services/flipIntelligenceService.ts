@@ -23,7 +23,7 @@ export function calculateFlipIntelligence(input: FlipInputs) {
   const yieldRate = input.sellableYield ?? 1;
   const expectedSale = basePrice * yieldRate; const conservativeSale = Math.min(lowPrice,basePrice) * yieldRate;
   const calc = (salePrice: number) => calculateProfit({
-    salePrice: salePrice+input.shippingRevenue, acquisitionCost: input.purchaseCost,
+    salePrice, shippingRevenue: input.shippingRevenue, acquisitionCost: input.purchaseCost,
     marketplaceFee: (salePrice+input.shippingRevenue)*input.feeRate+input.fixedFee,
     shippingCost: input.shippingCost, packagingCost: input.packagingCost,
     otherCosts: input.repairCost+input.otherCosts, labourHours: input.labourHours, labourRatePerHour: input.labourRate,
