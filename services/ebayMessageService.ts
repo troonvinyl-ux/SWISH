@@ -32,7 +32,7 @@ export async function listEbayMessages(tenantId: string): Promise<{ messages: Eb
   return { messages: (data ?? []).map(row => ({
     id: row.id, ebayMessageId: row.ebay_message_id ?? undefined, conversationId: row.conversation_id ?? undefined,
     ebayItemId: row.item_id ?? undefined, ebayOrderId: row.order_id ?? undefined, buyerUsername: row.buyer_username ?? '',
-    subject: row.subject ?? '', body: row.body || 'Message body was not returned by eBay. Open the conversation on eBay to review it.',
+    subject: row.subject ?? '', body: row.body || 'Open this message to retrieve its full body from eBay.',
     isRead: row.is_read ?? false, isReplied: row.is_replied ?? false, isArchived: row.is_archived ?? false,
     direction: row.direction === 'outbound' ? 'outbound' as const : 'inbound' as const,
     aiDraft: row.ai_draft ?? undefined, listingId: row.listing_id ?? undefined, receivedAt: row.received_at ?? row.created_at, repliedAt: row.replied_at ?? undefined,
