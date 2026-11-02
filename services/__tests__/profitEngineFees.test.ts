@@ -24,12 +24,14 @@ describe('UK eBay fee estimates and profit accounting', () => {
     expect(result.marketplaceFee).toBeCloseTo(450 * 0.109 + 50 * 0.03 + 500 * 0.0035 + 0.4, 6);
   });
 
-  test('uses documented category rates for the registered specialist families', () => {
+  test('uses documented category rates and the high-value trainer rate', () => {
     expect(getEbayFeeRate('antiques').finalValueFee).toBe(0.109);
     expect(getEbayFeeRate('clothing').finalValueFee).toBe(0.119);
     expect(getEbayFeeRate('tech').finalValueFee).toBe(0.099);
     expect(getEbayFeeRate('bicycles').finalValueFee).toBe(0.109);
     expect(getEbayFeeRate('surplus_flip').finalValueFee).toBe(0.129);
+    const trainer = calculateProfit({ salePrice: 120, acquisitionCost: 20, specialistId: 'trainers_sneakers' });
+    expect(trainer.marketplaceFee).toBeCloseTo(120 * 0.07 + 120 * 0.0035 + 0.4, 6);
   });
 
   test('UK private domestic sales have no final-value or regulatory operating fee', () => {
