@@ -8,6 +8,7 @@ import { useAuth } from '@/template';
 import { useApp } from '@/hooks/useApp';
 import { isSwishMasterAdmin } from '@/contexts/AppContext';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
+import { classifyProductionWorkflowJob, summarizeProductionWorkflowJobs } from '@/services/productionControlEvidence';
 
 const OWNER_REPO = 'troonvinyl-ux/SWISH';
 const RAW = 'https://raw.githubusercontent.com/troonvinyl-ux/SWISH/main';
@@ -138,6 +139,7 @@ export default function ProductionControlScreen() {
   const currentStage = stages.find(s=>s.status==='IN PROGRESS') ?? stages.find(s=>s.status!=='VERIFIED');
   const readyPulls = snapshot.pulls.filter(p=>p.mergeable===true && !p.draft).length;
   const failedRuns = snapshot.runs.filter(r=>r.conclusion==='failure').length;
+  const webBuildSummary = summarizeProductionWorkflowJobs(snapshot.webBuildJobs);
 
   const open = (url:string) => { void Linking.openURL(url); };
   const taskTone = (status:string) => status==='VERIFIED'?'good':status==='BLOCKED'?'bad':status==='TESTING'?'warn':status==='IN PROGRESS'?'warn':'muted';
@@ -225,18 +227,19 @@ export default function ProductionControlScreen() {
           <View style={styles.prTop}><Text style={styles.taskTitle}>{snapshot.webBuildRun.display_title || snapshot.webBuildRun.name}</Text><Pill label={snapshot.webBuildRun.status==='completed'?(snapshot.webBuildRun.conclusion ?? 'COMPLETED').toUpperCase():snapshot.webBuildRun.status.toUpperCase()} tone={snapshot.webBuildRun.conclusion==='success'?'good':snapshot.webBuildRun.conclusion==='failure'?'bad':'warn'}/></View>
           <View style={styles.metrics}>
             <Metric label="BUILD ARTEFACTS CONFIRMED" value={String(snapshot.webBuildArtifacts.filter(a=>!a.expired).length)} detail={`${snapshot.webBuildArtifacts.filter(a=>a.expired).length} expired artefacts`}/>
-            <Metric label="EXPORT JOBS PASSED" value={String(snapshot.webBuildJobs.filter(j=>j.status==='completed' && j.conclusion==='success').length)} detail={`of ${snapshot.webBuildJobs.length} reported jobs`}/>
-            <Metric label="FAILED JOBS" value={String(snapshot.webBuildJobs.filter(j=>j.status==='completed' && j.conclusion!=='success' && j.conclusion!=='skipped' && j.conclusion!=='neutral').length)} detail="Completed with an error"/>
-            <Metric label="PENDING JOBS" value={String(snapshot.webBuildJobs.filter(j=>j.status!=='completed').length)} detail="Still running or queued"/>
+            <Metric label="EXPORT JOBS PASSED" value={String(webBuildSummary.passed)} detail={`of ${snapshot.webBuildJobs.length} reported jobs`}/>
+            <Metric label="FAILED JOBS" value={String(webBuildSummary.failed)} detail="Completed with an error"/>
+            <Metric label="PENDING JOBS" value={String(webBuildSummary.running + webBuildSummary.queued)} detail="Still running or queued"/>
           </View>
           {snapshot.webBuildArtifacts.length>0 ? <View style={{gap:5}}><Text style={styles.taskTitle}>GitHub-confirmed artefacts</Text>{snapshot.webBuildArtifacts.map(a=><View key={a.id} style={styles.runRow}><View style={{flex:1}}><Text style={styles.taskTitle}>{a.name}</Text><Text style={styles.muted}>{(a.size_in_bytes/1024/1024).toFixed(1)} MB · expires {new Date(a.expires_at).toLocaleDateString()}</Text></View><Pill label={a.expired?'EXPIRED':'AVAILABLE'} tone={a.expired?'bad':'good'}/></View>)}</View> : <Text style={styles.body}>No downloadable build artefacts are currently confirmed for this run.</Text>}
           {snapshot.webBuildJobs.length===0 ? <Text style={styles.body}>GitHub has not returned job details for this run. No build result is inferred.</Text> : snapshot.webBuildJobs.map(j=>{
             const artifact=j.steps?.find(s=>/upload web build artifact/i.test(s.name));
-            const passed=j.status==='completed' && j.conclusion==='success';
-            const tone=passed?'good':j.status==='completed'?'bad':'warn';
+            const state=classifyProductionWorkflowJob(j);
+            const passed=state==='PASSED';
+            const tone=state==='PASSED'?'good':state==='FAILED'?'bad':state==='SKIPPED'?'muted':'warn';
             return <View key={j.id} style={styles.runRow}>
               <View style={{flex:1}}><Text style={styles.taskTitle}>{j.name.replace(/^Export web — /,'')}</Text><Text style={styles.muted}>Artifact: {artifact?.conclusion==='success'?'uploaded':artifact?.status==='in_progress'?'uploading':artifact?.conclusion==='failure'?'failed':'not confirmed'}</Text></View>
-              <Pill label={passed?'EXPORT PASSED':j.status==='completed'?(j.conclusion ?? 'FAILED').toUpperCase():j.status.toUpperCase()} tone={tone}/>
+              <Pill label={state.replace('_',' ')} tone={tone}/>
             </View>;
           })}
           <Text style={styles.warningText}>A successful static export proves the web bundle built and its workflow artifact uploaded. It does not prove live deployment, authentication, tenant isolation, eBay transactions or real-device acceptance.</Text>
