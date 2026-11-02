@@ -84,3 +84,21 @@ describe('Antique Flipper valuation context',()=>{
     expect(screen).not.toContain("specialistId:'antiques'");
   });
 });
+
+
+describe('Antique Flipper dedicated scanner interface', () => {
+  test('scanner is a bespoke camera-first screen backed by the shared capture engine', () => {
+    const screen = source('app/antique-capture.tsx');
+
+    expect(screen).toContain('useGenericCapture');
+    expect(screen).toContain('Evidence checklist');
+    expect(screen).toContain('Position the whole object');
+    expect(screen).toContain('gridVisible');
+    expect(screen).toContain('capture.capture(activeSlot.id, false)');
+    expect(screen).toContain('capture.capture(activeSlot.id, true)');
+    expect(screen).toContain('capture.identify()');
+    expect(screen).toContain('capture.save()');
+    expect(screen).toContain("capture.activeNiche.id !== 'antiques'");
+    expect(screen).not.toContain("export { default } from '@/app/capture'");
+  });
+});
