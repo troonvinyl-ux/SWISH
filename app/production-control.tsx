@@ -56,6 +56,7 @@ export default function ProductionControlScreen() {
   const [snapshot,setSnapshot] = useState<Snapshot>({register:null,niches:[],pulls:[],openPullCount:0,runs:[],webBuildRun:null,webBuildJobs:[],routingRun:null,routingJobs:[],webBuildArtifacts:[],mainSha:'',refreshedAt:'',errors:[]});
   const [loading,setLoading] = useState(true);
   const [expanded,setExpanded] = useState<string>('S1');
+  const [selectedNicheId,setSelectedNicheId] = useState<string>('');
 
   const refresh = useCallback(async (force = false) => {
     if (!force && cachedSnapshot && Date.now() - cachedSnapshotAt < SNAPSHOT_CACHE_MS) {
@@ -140,6 +141,8 @@ export default function ProductionControlScreen() {
   const readyPulls = snapshot.pulls.filter(p=>p.mergeable===true && !p.draft).length;
   const failedRuns = snapshot.runs.filter(r=>r.conclusion==='failure').length;
   const webBuildSummary = summarizeProductionWorkflowJobs(snapshot.webBuildJobs);
+  const certificationAreas = snapshot.register?.nicheCertification?.requiredAreas ?? [];
+  const selectedCertificationNiche = snapshot.niches.find(n=>n.id===selectedNicheId) ?? snapshot.niches[0] ?? null;
 
   const open = (url:string) => { void Linking.openURL(url); };
   const taskTone = (status:string) => status==='VERIFIED'?'good':status==='BLOCKED'?'bad':status==='TESTING'?'warn':status==='IN PROGRESS'?'warn':'muted';
@@ -208,9 +211,28 @@ export default function ProductionControlScreen() {
         })}
       </Section>
 
-      <Section title="NICHE READINESS" subtitle="Pulled from the canonical niche-modules.json registry">
-        <View style={styles.nicheGrid}>{snapshot.niches.map(n=><View key={n.id} style={styles.nicheTile}><Text style={styles.nicheName}>{n.name}</Text><Text style={styles.muted}>{n.id}</Text><Pill label="CERTIFICATION PENDING" tone="warn"/></View>)}</View>
-        <Text style={styles.muted}>Niche registration is not evidence of niche production readiness. Each product must pass the full certification matrix in the master register.</Text>
+      <Section title="NICHE READINESS" subtitle="Ten registered products · certification tracked independently">
+        <View style={styles.nicheGrid}>{snapshot.niches.map(n=><View key={n.id} style={styles.nicheTile}><Text style={styles.nicheName}>{n.name}</Text><Text style={styles.muted}>{n.id}</Text><Pill label="NOT YET CERTIFIED" tone="warn"/></View>)}</View>
+        <Text style={styles.muted}>Registration, successful exports and JavaScript bundles do not certify a niche. The matrix below exposes every required acceptance area and leaves it unverified until niche-specific evidence is recorded.</Text>
+      </Section>
+
+      <Section title="TEN-NICHE CERTIFICATION MATRIX" subtitle="14 required areas per niche · 140 evidence gates">
+        <View style={styles.nextCard}>
+          <View style={styles.prTop}><Text style={styles.taskTitle}>CERTIFICATION RECORD</Text><Pill label="EVIDENCE REQUIRED" tone="warn"/></View>
+          <Text style={styles.nextTitle}>0 / {snapshot.niches.length * certificationAreas.length} verified in the register</Text>
+          <Text style={styles.muted}>The current master register defines the required areas but does not yet contain per-niche completion records. Nothing is marked passed by inference from a shared workflow.</Text>
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap:8,paddingVertical:4}}>
+          {snapshot.niches.map(n=><Pressable key={n.id} onPress={()=>setSelectedNicheId(n.id)} style={[styles.nicheTile,{minWidth:128,borderColor:(selectedCertificationNiche?.id===n.id?GOLD:'#293545')}]}>
+            <Text style={styles.nicheName}>{n.name}</Text><Text style={styles.muted}>{n.id}</Text>
+          </Pressable>)}
+        </ScrollView>
+        {selectedCertificationNiche ? <View style={styles.stageCard}>
+          <View style={styles.stageHead}><View style={{flex:1}}><Text style={styles.stageTitle}>{selectedCertificationNiche.name}</Text><Text style={styles.muted}>{certificationAreas.length} mandatory acceptance areas</Text></View><Pill label="NOT CERTIFIED" tone="warn"/></View>
+          <View style={styles.taskList}>{certificationAreas.map(area=><View key={area} style={styles.taskRow}>
+            <View style={{flex:1}}><Text style={styles.taskTitle}>{area.replace(/-/g,' ').toUpperCase()}</Text><Text style={styles.muted}>Niche-specific evidence not yet recorded in the master register</Text></View><Pill label="NOT VERIFIED" tone="muted"/>
+          </View>)}</View>
+        </View> : <Text style={styles.body}>No niche registrations are currently available.</Text>}
       </Section>
 
       <Section title="PULL REQUEST CONTROL" subtitle={`Latest ${snapshot.pulls.length} of ${snapshot.openPullCount} open PRs · stale-base and mergeability warnings`}>
