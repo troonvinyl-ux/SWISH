@@ -1855,6 +1855,16 @@ async function handleRequest(req: Request): Promise<Response> {
 
   // ── Route: end ────────────────────────────────────────────────────────────
   if (route === 'end') {
+    // Inventory-status preservation is an owner-only diagnostic exception.
+    // The browser's Master Admin gate is presentation only; enforce it again
+    // against the verified JWT email before any eBay or database side effect.
+    const preserveInventoryStatus = body.preserveInventoryStatus === true;
+    if (preserveInventoryStatus) {
+      const configuredOwnerEmail = (Deno.env.get('SWISH_MASTER_ADMIN_EMAIL') ?? '').trim().toLowerCase();
+      if (!configuredOwnerEmail || !auth.userEmail || auth.userEmail.trim().toLowerCase() !== configuredOwnerEmail) {
+        return jsonResponse({ error: 'Owner-only inventory preservation is not authorised.' }, 403);
+      }
+    }
     const { listingId, externalListingId: requestedExternalListingId } = body;
     if (!listingId) return jsonResponse({ error: 'listingId required' }, 400);
 
@@ -1911,10 +1921,8 @@ async function handleRequest(req: Request): Promise<Response> {
       .update({ status: 'ended', ended_at: now, updated_at: now })
       .eq('id', ownedListing.id)
       .eq('tenant_id', tenantId);
-    // The single-item owner test console can end the marketplace listing while
-    // preserving the linked inventory row exactly as it was. Normal end flows
-    // retain the existing lifecycle transition behaviour.
-    const preserveInventoryStatus = body.preserveInventoryStatus === true;
+    // The single-item owner test console can preserve inventory only after
+    // the server-side owner check above has succeeded.
     const { data: transitioned, error: itemUpdateError } = preserveInventoryStatus
       ? { data: true, error: null }
       : await supabase.rpc('swish_transition_item', {
