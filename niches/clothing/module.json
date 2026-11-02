@@ -1,14 +1,25 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "clothing",
   "name": "Threads Flip",
   "specialistIds": [
     "clothing",
     "trainers_sneakers"
   ],
+  "legacySpecialistIds": [
+    "clothing_specialist",
+    "threads",
+    "threads_flip"
+  ],
+  "defaultSpecialistId": "clothing",
   "androidPackage": "com.swish.threadsflip",
+  "iosBundleIdentifier": "com.swish.threadsflip",
   "entryRoute": "/entry/clothing",
-  "responsibilities": "Clothing and footwear identification, garment attributes, category item specifics, clothing valuation rules, prompts and theme.",
+  "scannerRoute": "/threads-flip?tab=identify",
+  "dedicatedRoutes": [
+    "threads-flip.tsx"
+  ],
+  "responsibilities": "Clothing and footwear identification, brand/style/size/material, condition, category specifics and resale value.",
   "sharedCapabilities": [
     "auth",
     "tenant-and-subscription",
@@ -18,5 +29,12 @@
     "learning-and-prediction",
     "reusable-ui-primitives"
   ],
-  "isolationStatus": "migration-started-not-yet-bundle-isolated"
+  "isolationModel": "shared-core-with-registered-niche-configuration",
+  "verification": {
+    "registrySource": "niche-modules.json",
+    "specialistOwnership": "canonical-specialist-and-legacy-aliases",
+    "runtimeBoundary": "separate-branded-entry-and-build-identity",
+    "dataBoundary": "tenant-and-niche-scoped-authorization-required",
+    "status": "audited-contract; end-to-end runtime isolation still requires live verification"
+  }
 }
