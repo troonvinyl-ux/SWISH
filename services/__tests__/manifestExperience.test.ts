@@ -44,6 +44,14 @@ describe('Simple lot presentation preserves the real calculation',()=>{
   });
 });
 describe('Experience source contracts (not device/render tests)',()=>{
+  test('Antique Flipper Home tab mounts its bespoke dashboard rather than the generic overview',()=>{
+    expect(source('app/(tabs)/index.tsx')).toContain("if (product === 'antiques') return <AntiqueFlipperHome key={effectiveNicheId} />;");
+    expect(source('app/(tabs)/index.tsx')).toContain("import AntiqueFlipperHome from '@/app/antique-flipper';");
+  });
+  test('Antique Flipper dashboard scan action uses the registered dedicated scanner route',()=>{
+    expect(source('app/antique-flipper.tsx')).toContain("nicheToScannerRoute('antiques')");
+    expect(source('services/nicheRouting.ts')).toContain("return NICHE_MODULES[niche].scannerRoute;");
+  });
   test('status copy is attached to actual file operations and does not claim market scraping',()=>{
     expect(source('services/manifestFileService.ts')).toContain("onProgress?.('reading')");
     expect(source('services/manifestFileService.ts')).toContain("onProgress?.('checking')");
