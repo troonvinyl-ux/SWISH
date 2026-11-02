@@ -141,7 +141,8 @@
         {
           "id": "S4-01",
           "title": "Scan, identify, confidence and evidence",
-          "status": "NOT STARTED"
+          "status": "IN PROGRESS",
+          "evidence": "Server-side coin publication policy requires at least 95% identification confidence; observation-only records are blocked across niches and low-confidence non-coin items require review. Silver Batch now writes coin items with the registered `silver` specialist, so the coin-specific gate and paid-niche mapping apply. PR #113 and PR #119 merged. Remaining: verify capture/photo evidence and confidence calibration end-to-end across all ten specialist workflows."
         },
         {
           "id": "S4-02",
@@ -174,7 +175,8 @@
         {
           "id": "S5-01",
           "title": "Validate specialist IDs, prompts and capture requirements per niche",
-          "status": "NOT STARTED"
+          "status": "IN PROGRESS",
+          "evidence": "Static specialist ownership audit is implemented in S1-03; Silver Batch's generic specialist misassignment was corrected to canonical `silver` in PR #119. Remaining: complete a per-niche audit of specialist prompts, required capture slots, legacy aliases and output schemas, then run real image/device acceptance for all ten niches."
         },
         {
           "id": "S5-02",
@@ -386,6 +388,10 @@
     {
       "date": "2026-11-02",
       "change": "S3-01 implementation completed: common paid-niche authorization now gates identify, Islamic identify, valuation, listing generation, listing verification/human override, repricing and authenticated eBay publication. Regression suites passed in PR #117; live RLS and account-level integration acceptance remains open."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "S4-01 and S5-01 advanced to IN PROGRESS: coin confidence publication gate and canonical Silver Batch specialist ownership are merged; full cross-niche capture/evidence calibration and live device acceptance remain outstanding."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"
