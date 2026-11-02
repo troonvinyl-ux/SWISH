@@ -32,6 +32,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
+import { assessListingConfidence } from '../_shared/listingConfidencePolicy.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -2084,7 +2085,7 @@ async function handleRequest(req: Request): Promise<Response> {
     .from('listings')
     .select(`id, title, description, price, floor_price, shipping_cost, status, category_id, external_listing_id, publish_claim_id,
       items(id, canonical_title, condition, condition_grade, condition_notes, status, quantity,
-            media, attributes, weight_grams, diameter_mm, specialist_id)`)
+            media, attributes, weight_grams, diameter_mm, specialist_id, identification_confidence)`)
     .eq('id', listingId)
     .eq('tenant_id', tenantId)
     .maybeSingle();
@@ -2094,6 +2095,21 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 
   const item = (listingRow as any).items as any;
+  const confidenceGate = assessListingConfidence(
+    item?.specialist_id,
+    item?.identification_confidence,
+    item?.attributes?.identification_state,
+  );
+  if (!confidenceGate.allowed) {
+    return jsonResponse({
+      success: false,
+      code: confidenceGate.code,
+      error: confidenceGate.reason,
+      reviewRequired: true,
+      identificationConfidence: Math.round(confidenceGate.confidence * 100),
+      minimumConfidence: Math.round(confidenceGate.threshold * 100),
+    }, 422);
+  }
   if (item?.attributes?._manifest_review_required === true) {
     return jsonResponse({ success: false, code: 'MANIFEST_REVIEW_REQUIRED', error: 'This manifest draft needs physical inspection and completed listing fields. Save editor changes, then confirm Manifest stock inspection. Nothing was submitted.' }, 400);
   }

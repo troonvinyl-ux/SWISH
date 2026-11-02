@@ -62,6 +62,8 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 
 type Stage = 'analyse' | 'category' | 'specifics' | 'pricing' | 'review';
 
+const COIN_LISTING_SPECIALISTS = new Set(['coins', 'coins_uk', 'coins_world', 'coins_currency', 'numismatic', 'islamic_silver', 'banknotes', 'gold', 'silver', 'jewellery_precious_metals', 'ancient_artefacts']);
+
 interface CategoryConfirmation {
   id: string;
   name: string;
@@ -1207,6 +1209,7 @@ export default function CreateListingScreen() {
   const primaryImage = (item.media ?? []).find(u => u.startsWith('https://')) ?? (item.media ?? [])[0] ?? null;
   const allAnalysisDone = swishAnalysisDone && (ebaySearchDone || (!ebaySearchRunning && !primaryImage));
   const hasExistingListing = existingListings.length > 0;
+  const coinPublishBlocked = COIN_LISTING_SPECIALISTS.has(String(item.specialistId ?? '').toLowerCase()) && Number(item.identificationConfidence ?? 0) < 0.95;
 
   return (
     <View testID={isThreadsFlip ? `threads-flip-screen-${stage === 'analyse' ? '11' : (stage === 'category' || stage === 'specifics') ? '12' : '13'}` : undefined} accessibilityLabel={isThreadsFlip ? `Threads Flip listing stage ${stage}` : undefined} style={[s.container, isThreadsFlip && { backgroundColor: threads.background }]}>
@@ -1310,6 +1313,12 @@ export default function CreateListingScreen() {
               </View>
             );
           })()}
+          {coinPublishBlocked ? (
+            <View style={s.gateCard}>
+              <MaterialIcons name="lock-outline" size={16} color={Colors.warning} />
+              <Text style={s.gateTxt}>Coin eBay publication is locked below 95% identification confidence. Improve the photographs or complete specialist review. You may prepare a private draft, but SWISH will not submit it to eBay until the confidence threshold is met.</Text>
+            </View>
+          ) : null}
         </View>
 
         {/* eBay Visual Search */}
@@ -1464,7 +1473,7 @@ export default function CreateListingScreen() {
                 ) : (
                   <MaterialIcons name="auto-awesome" size={16} color={Colors.background} />
                 )}
-                <Text style={s.primaryBtnTxt}>{generatingListing ? 'Generating...' : 'Generate Listing'}</Text>
+                <Text style={s.primaryBtnTxt}>{generatingListing ? 'Generating...' : coinPublishBlocked ? 'Prepare Review Draft · eBay Locked' : 'Generate Listing'}</Text>
               </Pressable>
             )}
           </>
