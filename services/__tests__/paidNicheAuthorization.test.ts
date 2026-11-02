@@ -62,4 +62,13 @@ describe('Source boundary contracts (not substitutes for RLS integration tests)'
     expect(generate.indexOf('await requirePaidNiche(supabaseAdmin')).toBeLessThan(generate.indexOf('const profile = profileForSpecialist'));
   });
 
+
+  test('all market valuation routes require a paid entitlement for the requested canonical specialist',()=>{
+    const market=read('supabase/functions/swish-market-value/index.ts');
+    expect(market).toContain('const requestedNiche = specialistNiche(specialistId)');
+    expect(market).toContain('await requirePaidNiche(supabase, sec.account, tenantId, requestedNiche)');
+    expect(market.indexOf('await requirePaidNiche(supabase, sec.account, tenantId, requestedNiche)')).toBeLessThan(market.indexOf("if (body.route === 'manifest_sold_comparisons')"));
+    expect(market).toContain('Item and valuation specialist belong to different products.');
+  });
+
 });
