@@ -1,3 +1,5 @@
+const fs = require('node:fs');
+const path = require('node:path');
 // Tests the dynamic Expo configuration without requiring a native build.
 const configureApp = require('../../app.config.js');
 
@@ -99,4 +101,13 @@ describe('Branded Expo build configuration', () => {
     process.env.SWISH_NICHE = 'unregistered_product';
     expect(() => configureApp({ config: BASE_CONFIG })).toThrow(/Unsupported SWISH_NICHE/);
   });
+
+  test('test-only changes do not trigger a branded APK build', () => {
+    const workflow = fs.readFileSync(path.resolve(__dirname, '../../.github/workflows/build-niche-apk.yml'), 'utf8');
+    expect(workflow).toContain("'services/**'");
+    expect(workflow).toContain("'!services/__tests__/**'");
+    expect(workflow).toContain("'!services/__mocks__/**'");
+    expect(workflow).not.toContain("'.github/workflows/build-niche-apk.yml'");
+  });
+
 });
