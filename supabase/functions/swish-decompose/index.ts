@@ -189,17 +189,16 @@ Recommend the strategy that MAXIMISES net profit per labour hour, not just gross
     });
 
     if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-      console.error('OnSpace AI decompose error:', errText);
+      console.warn('Decomposition provider request failed with status:', aiResponse.status);
       return new Response(
-        JSON.stringify({ error: `OnSpace AI: ${errText}` }),
+        JSON.stringify({ error: 'The decomposition service is temporarily unavailable.' }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     const aiData = await aiResponse.json();
     const rawContent = aiData.choices?.[0]?.message?.content ?? '';
-    console.log('Decomposition raw response:', rawContent.slice(0, 800));
+    console.log('Decomposition provider response received.');
 
     let decomposition: any = null;
     try {
@@ -208,10 +207,10 @@ Recommend the strategy that MAXIMISES net profit per labour hour, not just gross
         .replace(/```\s*/g, '')
         .trim();
       decomposition = JSON.parse(cleaned);
-    } catch (parseErr) {
-      console.error('JSON parse error:', parseErr, 'Raw:', rawContent);
+    } catch {
+      console.warn('Decomposition provider returned an invalid response.');
       return new Response(
-        JSON.stringify({ error: 'AI returned invalid JSON', raw: rawContent }),
+        JSON.stringify({ error: 'The decomposition service returned an invalid response.' }),
         { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -251,10 +250,10 @@ Recommend the strategy that MAXIMISES net profit per labour hour, not just gross
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (err: any) {
-    console.error('swish-decompose error:', err);
+  } catch (err: unknown) {
+    console.error('swish-decompose request failed:', err instanceof Error ? err.name : 'UnknownError');
     return new Response(
-      JSON.stringify({ error: err.message ?? 'Internal error' }),
+      JSON.stringify({ error: 'Unable to decompose this acquisition. Please retry.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

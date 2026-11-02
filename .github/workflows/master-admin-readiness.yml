@@ -110,17 +110,14 @@ jobs:
           walk('supabase/functions');
           const failures = [];
           for (const file of files) {
-            const sourceText = fs.readFileSync(file, 'utf8');
-            const source = ts.createSourceFile(file, sourceText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
-            const result = ts.transpileModule(sourceText, {
+            const result = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
               fileName: file,
               reportDiagnostics: true,
               compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
             });
             for (const d of result.diagnostics ?? []) {
               if (d.category === ts.DiagnosticCategory.Error) {
-                const location = d.start === undefined ? null : source.getLineAndCharacterOfPosition(d.start);
-                failures.push(file + (location ? ':' + (location.line + 1) + ':' + (location.character + 1) : '') + ': ' + ts.flattenDiagnosticMessageText(d.messageText, '\n'));
+                failures.push(file + ': ' + ts.flattenDiagnosticMessageText(d.messageText, '\n'));
               }
             }
           }

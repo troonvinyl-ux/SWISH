@@ -16,8 +16,7 @@ import {
 } from '@/services/repricingService';
 
 export function useRepricing() {
-  const { tenant, activeNicheId, fixedNicheId } = useApp();
-  const nicheId = String(fixedNicheId ?? activeNicheId ?? '');
+  const { tenant } = useApp();
   const [rules, setRules] = useState<RepricingRule[]>([]);
   const [staleListings, setStaleListings] = useState<StaleListingInfo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -29,14 +28,14 @@ export function useRepricing() {
     setLoading(true);
     const [rulesResult, staleResult] = await Promise.all([
       listRepricingRules(tenant.id),
-      getStaleListings(tenant.id, nicheId, 7),
+      getStaleListings(tenant.id, 7),
     ]);
     setRules(rulesResult.rules);
     setStaleListings(staleResult.listings);
     // Scan for exceptions in background
-    scanForStaleListingExceptions(tenant.id, nicheId).catch(() => {});
+    scanForStaleListingExceptions(tenant.id).catch(() => {});
     setLoading(false);
-  }, [tenant?.id, nicheId]);
+  }, [tenant?.id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -51,7 +50,7 @@ export function useRepricing() {
     const { error } = await toggleRepricingRule(ruleId, isActive);
     if (!error) setRules(prev => prev.map(r => r.id === ruleId ? { ...r, isActive } : r));
     return { error };
-  }, [tenant?.id, nicheId]);
+  }, []);
 
   const removeRule = useCallback(async (ruleId: string) => {
     const { error } = await deleteRepricingRule(ruleId);
@@ -62,7 +61,7 @@ export function useRepricing() {
   const getAISuggestion = useCallback(async (listing: StaleListingInfo) => {
     if (!tenant) return;
     setSuggestionLoading(prev => ({ ...prev, [listing.id]: true }));
-    const { suggestion, error } = await getAIRepriceSuggestion(listing.id, tenant.id, nicheId);
+    const { suggestion, error } = await getAIRepriceSuggestion(listing.id, tenant.id);
     setSuggestionLoading(prev => ({ ...prev, [listing.id]: false }));
     if (suggestion) {
       setSuggestions(prev => ({
@@ -77,10 +76,10 @@ export function useRepricing() {
       }));
     }
     return { error };
-  }, [tenant?.id, nicheId]);
+  }, [tenant?.id]);
 
   const applyPrice = useCallback(async (listingId: string, newPrice: number) => {
-    const { error } = await applyReprice(listingId, newPrice, tenant?.id ?? '', nicheId);
+    const { error } = await applyReprice(listingId, newPrice);
     if (!error) {
       setStaleListings(prev => prev.map(l =>
         l.id === listingId ? { ...l, price: newPrice } : l
@@ -92,7 +91,7 @@ export function useRepricing() {
       });
     }
     return { error };
-  }, [tenant?.id, nicheId]);
+  }, []);
 
   const activeRules = rules.filter(r => r.isActive);
 

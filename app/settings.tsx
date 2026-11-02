@@ -3069,8 +3069,7 @@ const nichStyles = StyleSheet.create({
 
 // ── Main Screen ────────────────────────────────────────────────────────────
 
-export default function SettingsScreen({ embedded = false }: { embedded?: boolean } = {}) {
-  void embedded;
+export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { tenant, businessConfig, reloadBusinessConfig, triggerInventoryReload, activeNiche, activeNicheId, setActiveNiche } = useApp();

@@ -468,10 +468,10 @@ async function searchZeno(
       searchUrl, totalFound: rawCandidates.length,
     };
   } catch (e: any) {
-    console.error(`[swish-islamic-identify] Zeno search error for "${query}": ${e.message}`);
+    console.warn('[swish-islamic-identify] Zeno search is temporarily unavailable.');
     return {
       available: false, query, candidates: [], searchUrl,
-      error: `Network error: ${e.message}`, totalFound: 0,
+      error: 'Zeno search is temporarily unavailable.', totalFound: 0,
     };
   }
 }
@@ -571,7 +571,7 @@ async function searchNumistaIslamicSilver(
           firstError ||= `Numista direct lookup for N#${suppliedReferenceId} returned HTTP ${directResp.status}`;
         }
       } catch (e: any) {
-        firstError ||= `Numista direct lookup failed: ${e.message}`;
+        firstError ||= 'Numista direct lookup failed.';
       }
     }
 
@@ -592,7 +592,7 @@ async function searchNumistaIslamicSilver(
     }
 
     if (successfulQueries === 0) {
-      return { available: false, query, candidates: [], error: firstError || 'Numista search unavailable', totalFound: 0 };
+      return { available: false, query, candidates: [], error: firstError || 'Numista search is temporarily unavailable.', totalFound: 0 };
     }
 
     const scoredCandidates = [...candidateMap.values()]
@@ -1710,7 +1710,7 @@ Deno.serve(async (req: Request) => {
     if (accessError) return accessError;
     console.error('[swish-islamic-identify] Request failed:', err instanceof Error ? err.name : 'UnknownError');
     return new Response(
-      JSON.stringify({ error: 'Identification could not be completed. Please try again.' }),
+      JSON.stringify({ error: 'Unable to complete Islamic coin identification.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }
