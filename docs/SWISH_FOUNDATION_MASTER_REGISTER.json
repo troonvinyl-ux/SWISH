@@ -57,8 +57,8 @@
         {
           "id": "S1-05",
           "title": "Reconcile open PRs, branches and current main before implementation",
-          "status": "IN PROGRESS",
-          "evidence": "Rechecked on 2026-11-02 against main bcfe039b0f9980c10eeaac01d7d0a9f00da90eb0. Three open PRs are reconciled and all branches are up to date with main: PR #139 head 46230da96e6a339122c965a61d3732e8967acd17 passed all four required workflows; PR #140 head e86e973853bf82b9345dad7a3a8ec70f77e97849 passed all four required workflows; PR #141 head f2ea4001d5d31fc96652594ea111796673197456 passed all five required workflows. All three PRs are mergeable and remain open/unmerged. Physical Android acceptance remains open for #139/#140; live eBay and OnSpace deployment acceptance remains open for #141. Keep S1-05 IN PROGRESS until merges are explicitly authorised and main/open-PR state is rechecked before each integration."
+          "status": "VERIFIED",
+          "evidence": "Reconciled and integrated on 2026-11-02. PR #139 (Antique Flipper scanner) merged as b1976e62a9d3b540452f3b9af594a04d2b123d27; PR #141 (eBay message header/body retrieval) merged as 7d4644e5eeae6507e765e80db8b157607e2106dd; PR #140 (Android scanner Back navigation, canonical-only repricing authorization and narrow-screen photo-quality layout) merged as a9c0bebeca602f54bc833de3ec9c283dc00fcef6. Rechecked main at a9c0bebeca602f54bc833de3ec9c283dc00fcef6 and confirmed no open PRs. Post-merge workflows were triggered. This closes the repository/branch reconciliation task only; physical Android acceptance, live eBay seller-account acceptance and deployed OnSpace parity remain open under S3/S7."
         }
       ]
     },
