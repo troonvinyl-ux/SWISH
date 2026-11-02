@@ -58,7 +58,7 @@
           "id": "S1-05",
           "title": "Reconcile open PRs, branches and current main before implementation",
           "status": "IMPLEMENTED",
-          "evidence": "PR audit and reconciliation completed against main ac6961c2528a66ba0e53ae4f84aa54e09bd179bd. PR #78 merged with 25/25 checks; PR #82 merged with 25/25 checks. PRs #41, #49, #51, #52, #81 and #83 are closed without merging stale branches or unapproved schema changes. Production-pack standard docs already exist on main. No open PRs remain."
+          "evidence": "Open-PR reconciliation was completed against main. PR #87 merged as ea7b35a with the evidence-based production-register CI gate. PR #88 is the current focused Production Control enhancement and remains open pending fresh CI; do not treat it as merged or verified until its checks pass."
         }
       ]
     },
@@ -321,6 +321,10 @@
     {
       "date": "2026-11-01",
       "change": "Merged PR #85 (00aa203) after 25/25 checks passed. Fixed a niche-isolation defect in niche-modules.json: Coins listed `coin-flipper` without `.tsx`, while the route preparation script filters exact file paths. Corrected and deduplicated the route entry; added registry integrity tests for all ten niche entry routes, declared homes and dedicated routes. No UI, database, auth, eBay, OTA or native release changes."
+    },
+    {
+      "date": "2026-11-01",
+      "change": "Merged PR #87 (ea7b35a): added a read-only production register validator and focused GitHub Actions evidence gate. The validator checks schema/status integrity, verified-task evidence, all ten canonical niche registrations and mandatory programme guardrails. Current follow-up PR #88 adds live ten-niche web build, GitHub artifact, regression, server-authorization and native-bundle evidence to the existing owner-only Production Control screen; it remains unmerged pending fresh CI."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"

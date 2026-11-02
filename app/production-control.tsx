@@ -8,6 +8,7 @@ import { useAuth } from '@/template';
 import { useApp } from '@/hooks/useApp';
 import { isSwishMasterAdmin } from '@/contexts/AppContext';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
+import { classifyProductionWorkflowJob, summarizeProductionWorkflowJobs } from '@/services/productionControlEvidence';
 
 const OWNER_REPO = 'troonvinyl-ux/SWISH';
 const RAW = 'https://raw.githubusercontent.com/troonvinyl-ux/SWISH/main';
@@ -22,8 +23,10 @@ type Stage = { id: string; name: string; status: string; goal: string; tasks: Ta
 type Register = { programme: string; stages: Stage[]; knownReleaseRisks: string[]; nicheCertification: { source: string; requiredAreas: string[] } };
 type Pull = { number: number; title: string; html_url: string; state: string; draft: boolean; mergeable: boolean | null; head: { ref: string; sha: string }; base: { ref: string; sha: string }; updated_at: string; user: { login: string }; body?: string; behindBy?: number; checkTotal?: number; checkPassed?: number; checkFailed?: number; checkPending?: number };
 type Run = { id: number; name: string; display_title: string; html_url: string; status: string; conclusion: string | null; head_branch: string; head_sha: string; created_at: string };
+type WorkflowJob = { id: number; name: string; status: string; conclusion: string | null; steps?: Array<{name:string;status:string;conclusion:string|null}> };
+type WorkflowArtifact = { id:number; name:string; size_in_bytes:number; expired:boolean; created_at:string; expires_at:string };
 type Niche = { id: string; name: string; entry?: string; specialists?: string[]; defaultSpecialist?: string };
-type Snapshot = { register: Register | null; niches: Niche[]; pulls: Pull[]; openPullCount: number; runs: Run[]; mainSha: string; refreshedAt: string; errors: string[] };
+type Snapshot = { register: Register | null; niches: Niche[]; pulls: Pull[]; openPullCount: number; runs: Run[]; webBuildRun: Run | null; webBuildJobs: WorkflowJob[]; routingRun: Run | null; routingJobs: WorkflowJob[]; webBuildArtifacts: WorkflowArtifact[]; mainSha: string; refreshedAt: string; errors: string[] };
 
 // Public GitHub REST is unauthenticated in the client (60 requests/hour). Cache a refresh briefly and enrich only the eight newest PRs.
 let cachedSnapshot: Snapshot | null = null;
@@ -50,7 +53,7 @@ export default function ProductionControlScreen() {
   const { user } = useAuth();
   const { isMasterAdmin } = useApp();
   const insets = useSafeAreaInsets();
-  const [snapshot,setSnapshot] = useState<Snapshot>({register:null,niches:[],pulls:[],openPullCount:0,runs:[],mainSha:'',refreshedAt:'',errors:[]});
+  const [snapshot,setSnapshot] = useState<Snapshot>({register:null,niches:[],pulls:[],openPullCount:0,runs:[],webBuildRun:null,webBuildJobs:[],routingRun:null,routingJobs:[],webBuildArtifacts:[],mainSha:'',refreshedAt:'',errors:[]});
   const [loading,setLoading] = useState(true);
   const [expanded,setExpanded] = useState<string>('S1');
 
@@ -94,7 +97,31 @@ export default function ProductionControlScreen() {
     }));
     const runs = value<{workflow_runs:Run[]}>(3);
     const main = value<{sha:string}>(4);
-    const nextSnapshot: Snapshot = {register,niches:Object.values(modules?.products ?? {}),pulls,openPullCount:rawPulls.length,runs:runs?.workflow_runs ?? [],mainSha:main?.sha ?? '',refreshedAt:new Date().toISOString(),errors};
+    const latestRuns = runs?.workflow_runs ?? [];
+    const webBuildRun = latestRuns.find(r => /SWISH branded web production builds/i.test(r.name)) ?? null;
+    const routingRun = latestRuns.find(r => /SWISH niche routing and branded config/i.test(r.name)) ?? null;
+    let webBuildJobs: WorkflowJob[] = [];
+    let webBuildArtifacts: WorkflowArtifact[] = [];
+    let routingJobs: WorkflowJob[] = [];
+    if (webBuildRun) {
+      try {
+        const jobPayload = await getJson<{jobs:WorkflowJob[]}>(API + '/repos/' + OWNER_REPO + '/actions/runs/' + webBuildRun.id + '/jobs?per_page=100');
+        webBuildJobs = jobPayload.jobs ?? [];
+        const artifactPayload = await getJson<{artifacts:WorkflowArtifact[]}>(API + '/repos/' + OWNER_REPO + '/actions/runs/' + webBuildRun.id + '/artifacts?per_page=100');
+        webBuildArtifacts = artifactPayload.artifacts ?? [];
+      } catch (error) {
+        errors.push('Latest ten-niche web build job details unavailable: ' + String(error));
+      }
+    }
+    if (routingRun) {
+      try {
+        const jobPayload = await getJson<{jobs:WorkflowJob[]}>(API + '/repos/' + OWNER_REPO + '/actions/runs/' + routingRun.id + '/jobs?per_page=100');
+        routingJobs = jobPayload.jobs ?? [];
+      } catch (error) {
+        errors.push('Latest routing, regression and authorization evidence unavailable: ' + String(error));
+      }
+    }
+    const nextSnapshot: Snapshot = {register,niches:Object.values(modules?.products ?? {}),pulls,openPullCount:rawPulls.length,runs:latestRuns,webBuildRun,webBuildJobs,routingRun,routingJobs,webBuildArtifacts,mainSha:main?.sha ?? '',refreshedAt:new Date().toISOString(),errors};
     cachedSnapshot = nextSnapshot;
     cachedSnapshotAt = Date.now();
     setSnapshot(nextSnapshot);
@@ -112,6 +139,7 @@ export default function ProductionControlScreen() {
   const currentStage = stages.find(s=>s.status==='IN PROGRESS') ?? stages.find(s=>s.status!=='VERIFIED');
   const readyPulls = snapshot.pulls.filter(p=>p.mergeable===true && !p.draft).length;
   const failedRuns = snapshot.runs.filter(r=>r.conclusion==='failure').length;
+  const webBuildSummary = summarizeProductionWorkflowJobs(snapshot.webBuildJobs);
 
   const open = (url:string) => { void Linking.openURL(url); };
   const taskTone = (status:string) => status==='VERIFIED'?'good':status==='BLOCKED'?'bad':status==='TESTING'?'warn':status==='IN PROGRESS'?'warn':'muted';
@@ -192,6 +220,60 @@ export default function ProductionControlScreen() {
           <Text style={styles.prLink}>Open pull request ↗</Text>
         </Pressable>;})}
         <Text style={styles.warningText}>Important: a changed base SHA is a warning to recheck, not proof of a stale branch. Before merge, compare the PR head against current main and rerun required checks. This dashboard does not merge PRs automatically.</Text>
+      </Section>
+
+      <Section title="TEN-NICHE WEB BUILD SCORECARD" subtitle="Actual job and artifact results from the latest branded web production workflow">
+        {snapshot.webBuildRun ? <View style={styles.nextCard}>
+          <View style={styles.prTop}><Text style={styles.taskTitle}>{snapshot.webBuildRun.display_title || snapshot.webBuildRun.name}</Text><Pill label={snapshot.webBuildRun.status==='completed'?(snapshot.webBuildRun.conclusion ?? 'COMPLETED').toUpperCase():snapshot.webBuildRun.status.toUpperCase()} tone={snapshot.webBuildRun.conclusion==='success'?'good':snapshot.webBuildRun.conclusion==='failure'?'bad':'warn'}/></View>
+          <View style={styles.metrics}>
+            <Metric label="BUILD ARTEFACTS CONFIRMED" value={String(snapshot.webBuildArtifacts.filter(a=>!a.expired).length)} detail={`${snapshot.webBuildArtifacts.filter(a=>a.expired).length} expired artefacts`}/>
+            <Metric label="EXPORT JOBS PASSED" value={String(webBuildSummary.passed)} detail={`of ${snapshot.webBuildJobs.length} reported jobs`}/>
+            <Metric label="FAILED JOBS" value={String(webBuildSummary.failed)} detail="Completed with an error"/>
+            <Metric label="PENDING JOBS" value={String(webBuildSummary.running + webBuildSummary.queued)} detail="Still running or queued"/>
+          </View>
+          {snapshot.webBuildArtifacts.length>0 ? <View style={{gap:5}}><Text style={styles.taskTitle}>GitHub-confirmed artefacts</Text>{snapshot.webBuildArtifacts.map(a=><View key={a.id} style={styles.runRow}><View style={{flex:1}}><Text style={styles.taskTitle}>{a.name}</Text><Text style={styles.muted}>{(a.size_in_bytes/1024/1024).toFixed(1)} MB · expires {new Date(a.expires_at).toLocaleDateString()}</Text></View><Pill label={a.expired?'EXPIRED':'AVAILABLE'} tone={a.expired?'bad':'good'}/></View>)}</View> : <Text style={styles.body}>No downloadable build artefacts are currently confirmed for this run.</Text>}
+          {snapshot.webBuildJobs.length===0 ? <Text style={styles.body}>GitHub has not returned job details for this run. No build result is inferred.</Text> : snapshot.webBuildJobs.map(j=>{
+            const artifact=j.steps?.find(s=>/upload web build artifact/i.test(s.name));
+            const state=classifyProductionWorkflowJob(j);
+            const passed=state==='PASSED';
+            const tone=state==='PASSED'?'good':state==='FAILED'?'bad':state==='SKIPPED'?'muted':'warn';
+            return <View key={j.id} style={styles.runRow}>
+              <View style={{flex:1}}><Text style={styles.taskTitle}>{j.name.replace(/^Export web — /,'')}</Text><Text style={styles.muted}>Artifact: {artifact?.conclusion==='success'?'uploaded':artifact?.status==='in_progress'?'uploading':artifact?.conclusion==='failure'?'failed':'not confirmed'}</Text></View>
+              <Pill label={state.replace('_',' ')} tone={tone}/>
+            </View>;
+          })}
+          <Text style={styles.warningText}>A successful static export proves the web bundle built and its workflow artifact uploaded. It does not prove live deployment, authentication, tenant isolation, eBay transactions or real-device acceptance.</Text>
+          <Pressable onPress={()=>open(snapshot.webBuildRun!.html_url)} style={styles.externalLink}><Text style={styles.externalLinkText}>Inspect source workflow and logs ↗</Text></Pressable>
+        </View> : <Text style={styles.body}>No branded ten-niche web production workflow was found in the latest 20 GitHub runs.</Text>}
+      </Section>
+
+      <Section title="REGRESSION, SECURITY & NATIVE EVIDENCE" subtitle="Live step results from the latest niche-routing validation workflow">
+        {snapshot.routingRun ? <View style={styles.nextCard}>
+          <View style={styles.prTop}><Text style={styles.taskTitle}>{snapshot.routingRun.display_title || snapshot.routingRun.name}</Text><Pill label={snapshot.routingRun.status==='completed'?(snapshot.routingRun.conclusion ?? 'COMPLETED').toUpperCase():snapshot.routingRun.status.toUpperCase()} tone={snapshot.routingRun.conclusion==='success'?'good':snapshot.routingRun.conclusion==='failure'?'bad':'warn'}/></View>
+          {snapshot.routingJobs.map(job=>{
+            const checks=[
+              {label:'Full regression suite',match:/complete regression suite/i},
+              {label:'Server authorization boundary tests',match:/shared server authorization boundaries/i},
+              {label:'Android production JavaScript bundle',match:/bundle android production javascript/i},
+              {label:'Ten Expo branded configurations',match:/validate all ten expo branded configurations/i}
+            ];
+            return <View key={job.id} style={{gap:8}}>
+              <Text style={styles.muted}>{job.name}</Text>
+              {checks.map(check=>{
+                const step=job.steps?.find(s=>check.match.test(s.name));
+                const done=step?.status==='completed';
+                const success=done && step?.conclusion==='success';
+                const failed=done && !success && step?.conclusion!=='skipped' && step?.conclusion!=='neutral';
+                return <View key={check.label} style={styles.runRow}>
+                  <View style={{flex:1}}><Text style={styles.taskTitle}>{check.label}</Text><Text style={styles.muted}>{step ? (success?'Completed successfully':failed?'Completed with failure':step.status==='in_progress'?'Currently running':'Waiting') : 'No matching step reported by workflow'}</Text></View>
+                  <Pill label={success?'PASSED':failed?'FAILED':step?.status==='in_progress'?'RUNNING':'PENDING'} tone={success?'good':failed?'bad':'warn'}/>
+                </View>;
+              })}
+            </View>;
+          })}
+          <Text style={styles.warningText}>These are workflow-step results, not a substitute for a full penetration test, live authorization review, installed-device acceptance or app-store/release verification.</Text>
+          <Pressable onPress={()=>open(snapshot.routingRun!.html_url)} style={styles.externalLink}><Text style={styles.externalLinkText}>Inspect regression and authorization workflow ↗</Text></Pressable>
+        </View> : <Text style={styles.body}>No niche-routing validation workflow was found in the latest 20 GitHub runs.</Text>}
       </Section>
 
       <Section title="CI / RELEASE SIGNALS" subtitle="Latest GitHub Actions workflow runs">
