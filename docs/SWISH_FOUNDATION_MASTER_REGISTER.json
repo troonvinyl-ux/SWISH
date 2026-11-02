@@ -141,28 +141,32 @@
         {
           "id": "S4-01",
           "title": "Scan, identify, confidence and evidence",
-          "status": "IN PROGRESS",
-          "evidence": "Server-side coin publication policy requires at least 95% identification confidence; observation-only records are blocked across niches and low-confidence non-coin items require review. Silver Batch now writes coin items with the registered `silver` specialist, so the coin-specific gate and paid-niche mapping apply. PR #113 and PR #119 merged. Remaining: verify capture/photo evidence and confidence calibration end-to-end across all ten specialist workflows."
+          "status": "IMPLEMENTED",
+          "evidence": "IMPLEMENTED source baseline: `docs/SPECIALIST_IMPLEMENTATION_REPORT.md` sections B/D/G documents shared capture/review, canonical specialist routing, confidence/evidence handling and per-niche output schemas. Ten specialist profiles and capture contracts are covered by the specialist tests; PR #128 regression/isolation workflow run 41461306201 passed. Not VERIFIED: no real-image/device acceptance or measured confidence calibration for all ten niches."
         },
         {
           "id": "S4-02",
           "title": "Condition, valuation and acquisition decision",
-          "status": "NOT STARTED"
+          "status": "IMPLEMENTED",
+          "evidence": "IMPLEMENTED source baseline: specialist profiles define niche condition/value rules; the buying-decision panel separates sold evidence from asking/manual scenarios and models repair, postage, labour, break-even and yield sensitivity. Market-value source labels are explicit. Not VERIFIED: actual approved sold-data access, per-niche valuation accuracy and safety/condition acceptance remain open."
         },
         {
           "id": "S4-03",
           "title": "Costs, margin, inventory and listing draft",
-          "status": "NOT STARTED"
+          "status": "IMPLEMENTED",
+          "evidence": "IMPLEMENTED source baseline: buying panel costs/margin scenarios, canonical inventory persistence, atomic listing-draft RPC and specifics-preserving saveListing path are documented in `docs/SPECIALIST_IMPLEMENTATION_REPORT.md` sections B/E/G. Not VERIFIED: authenticated concurrent draft calls and complete capture-to-inventory-to-draft acceptance remain open."
         },
         {
           "id": "S4-04",
           "title": "eBay category, item specifics, edit, save and publish",
-          "status": "NOT STARTED"
+          "status": "IMPLEMENTED",
+          "evidence": "IMPLEMENTED source baseline: niche-aware listing generation, existing Taxonomy/category/aspect retrieval, item-specific preservation, editor save RPC and existing publish infrastructure are documented in `docs/SPECIALIST_IMPLEMENTATION_REPORT.md` sections B/G. Not VERIFIED: category/aspect completeness for every niche and controlled live eBay draft/publish/revise/end acceptance remain open; direct privileged publish authorization review remains a blocker."
         },
         {
           "id": "S4-05",
           "title": "Sales, fees, order reconciliation and profit",
-          "status": "NOT STARTED"
+          "status": "IMPLEMENTED",
+          "evidence": "IMPLEMENTED source baseline: existing order ingestion/reconciliation, fee aggregation sign handling, estimate-vs-actual profit presentation and finance partial/incomplete reporting are documented in `docs/S3_CORE_ACCEPTANCE_REPORT.md`. Not VERIFIED: multi-line/quantity fee allocation, historical finance 400/499 diagnosis and live order/finance reconciliation remain release risks."
         }
       ]
     },
@@ -175,23 +179,26 @@
         {
           "id": "S5-01",
           "title": "Validate specialist IDs, prompts and capture requirements per niche",
-          "status": "IN PROGRESS",
-          "evidence": "Static specialist ownership audit is implemented in S1-03; Silver Batch's generic specialist misassignment was corrected to canonical `silver` in PR #119. Remaining: complete a per-niche audit of specialist prompts, required capture slots, legacy aliases and output schemas, then run real image/device acceptance for all ten niches. PR #121 merged (44ad21c) with 25/25 checks passed; the new contract test confirms every canonical specialist has required capture evidence and each niche has a server-supported capture mode. Prompt-specific output and real-image/device acceptance remain open."
+          "status": "IMPLEMENTED",
+          "evidence": "IMPLEMENTED source baseline: canonical specialist ownership, ten versioned prompt/output profiles and per-specialist capture requirements are documented in `docs/SPECIALIST_IMPLEMENTATION_REPORT.md`; PR #121 and its 25/25 checks cover required capture slots/server-supported capture modes; PR #128 regression/isolation run 41461306201 passed. Not VERIFIED: prompt-specific output acceptance on real images/devices remains open."
         },
         {
           "id": "S5-02",
           "title": "Validate niche attributes, condition and measurements",
-          "status": "NOT STARTED"
+          "status": "IMPLEMENTED",
+          "evidence": "IMPLEMENTED source baseline: ten specialist profiles define niche attributes, condition/value/listing rules; saved stock detail supports niche-aware editable fields, bounded corrections and tenant/niche-scoped optimistic writes (`docs/SPECIALIST_IMPLEMENTATION_REPORT.md`, sections A/B). Not VERIFIED: all niche fields have not been exercised through live save/reopen/device scenarios."
         },
         {
           "id": "S5-03",
           "title": "Validate valuation sources, category mappings and listing templates",
-          "status": "NOT STARTED"
+          "status": "IMPLEMENTED",
+          "evidence": "IMPLEMENTED source baseline: niche-specific valuation/source guidance and listing templates/item-specific mapping are documented in `docs/SPECIALIST_IMPLEMENTATION_REPORT.md`, sections A/F/G. Not VERIFIED: authorised sold-data provider access, live leaf-category/aspect validation and all-niche live listing acceptance remain open."
         },
         {
           "id": "S5-04",
           "title": "Verify niche inventory, routes, permissions and branding isolation",
-          "status": "NOT STARTED"
+          "status": "IMPLEMENTED",
+          "evidence": "IMPLEMENTED source baseline: canonical `niche-modules.json`, ten module descriptors, niche-aware routes/specialist ownership and inventory isolation regression coverage are in place; PR #126 and PR #128 ten-niche build/regression checks passed. Not VERIFIED: live cross-tenant/wrong-niche access tests and hosted web/device isolation remain open."
         }
       ]
     },
@@ -204,22 +211,26 @@
         {
           "id": "S6-01",
           "title": "Select advanced intelligence capabilities by niche",
-          "status": "NOT STARTED"
+          "status": "IMPLEMENTED",
+          "evidence": "IMPLEMENTED scoped selection: `docs/SPECIALIST_IMPLEMENTATION_REPORT.md` section A records niche-by-niche justified advanced intelligence and explicit deferrals; section B documents the shared evidence/confidence, specialist analysis and market-research capabilities. Research-only integrations are not represented as shipped."
         },
         {
           "id": "S6-02",
           "title": "Select specialist business tools by niche",
-          "status": "NOT STARTED"
+          "status": "IMPLEMENTED",
+          "evidence": "IMPLEMENTED scoped selection: section A of `docs/SPECIALIST_IMPLEMENTATION_REPORT.md` maps niche business needs to implemented starting tools (buying decision, card grading scenarios, surplus manifest/buying analysis, specialist capture/review). Unintegrated manufacturer/checklist/recall services remain explicitly deferred."
         },
         {
           "id": "S6-03",
           "title": "Implement unique niche engines only where required",
-          "status": "NOT STARTED"
+          "status": "IMPLEMENTED",
+          "evidence": "IMPLEMENTED selectively, not as a blanket feature set: existing coin/Numista and Islamic tools, surplus manifest/decomposition, card grading scenarios and specialist buying/capture slices are retained or enhanced where justified. The implementation report explicitly lists advanced catalogue, fitment, recall, collection-tracking and other integrations as not integrated; those remain deferred until evidence/licensing/API approval."
         },
         {
           "id": "S6-04",
           "title": "Test optional modules cannot contaminate unrelated niches",
-          "status": "NOT STARTED"
+          "status": "IMPLEMENTED",
+          "evidence": "IMPLEMENTED source regression baseline: canonical registry/descriptor contracts, specialist routing and niche-isolation tests are present; PR #128 regression/isolation job and ten branded Android JS bundle jobs all passed in workflow run 41461306201. Not VERIFIED against live multi-tenant accounts or real devices."
         }
       ]
     },
@@ -412,6 +423,10 @@
     {
       "date": "2026-11-02",
       "change": "S3-03 advanced to IMPLEMENTED after PR #122: all identified item status transitions now use the atomic lifecycle RPC/shared helpers; generic updateItem status changes are blocked. Regression and build checks passed. Live RLS, quantity/partial-sale and real order reconciliation remain unverified."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "Merged PR #128 as 02e970167e8d17dad0c281f1cb6d28d17955677e after workflow run 41461306201 passed all 14 jobs (including secret-boundary/syntax, regression/isolation, Master Admin and ten niche Android JS bundles). Reconciled stale S4-S6 NOT STARTED labels to IMPLEMENTED where existing source/report/test evidence demonstrates implementation. S4-S6 remain IN PROGRESS: all ten niches still need real-image, live marketplace, cross-tenant, hosted web and device acceptance; optional unintegrated external data integrations remain explicitly deferred. No live OnSpace Cloud or eBay production acceptance is inferred from CI."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"
