@@ -20,24 +20,24 @@ function useNicheHomeTab() {
   const { activeNicheId, fixedNicheId } = useApp();
   const id = resolveProductionNiche(fixedNicheId ?? activeNicheId) ?? '';
   if (id === 'coins') {
-    return { icon: 'toll' as const, label: 'Coins' };
+    return { icon: 'toll' as const, label: 'Coins', isAntiques: false };
   }
-  if (id === 'motocross') return { icon: 'two-wheeler' as const, label: 'MX' };
-  if (id === 'bicycles') return { icon: 'pedal-bike' as const, label: 'Bikes' };
-  if (id === 'clothing') return { icon: 'checkroom' as const, label: 'Fashion' };
-  if (id === 'surplus_flip') return { icon: 'inventory-2' as const, label: 'Surplus' };
+  if (id === 'motocross') return { icon: 'two-wheeler' as const, label: 'MX', isAntiques: false };
+  if (id === 'bicycles') return { icon: 'pedal-bike' as const, label: 'Bikes', isAntiques: false };
+  if (id === 'clothing') return { icon: 'checkroom' as const, label: 'Fashion', isAntiques: false };
+  if (id === 'surplus_flip') return { icon: 'inventory-2' as const, label: 'Surplus', isAntiques: false };
   const config = id ? NICHES[id] : null;
-  return { icon: (config?.icon ?? 'dashboard') as React.ComponentProps<typeof MaterialIcons>['name'], label: config?.shortName ?? 'Home' };
+  return { icon: (config?.icon ?? 'dashboard') as React.ComponentProps<typeof MaterialIcons>['name'], label: config?.shortName ?? 'Home', isAntiques: id === 'antiques' };
 }
 
 // ── Live listings count ───────────────────────────────────────────────────────
 
 function useLiveListingCount() { return useNicheListingCount(); }
 
-function TabLabel({ label, focused }: { label: string; focused: boolean }) {
+function TabLabel({ label, focused, accentColor = Colors.primary }: { label: string; focused: boolean; accentColor?: string }) {
   return (
     <Text
-      style={[styles.tabLabel, focused && styles.tabLabelActive]}
+      style={[styles.tabLabel, focused && { color: accentColor }]}
       numberOfLines={1}
       allowFontScaling={false}
     >
@@ -66,6 +66,9 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const liveCount = useLiveListingCount();
   const nicheHome = useNicheHomeTab();
+  const { activeNicheId, fixedNicheId } = useApp();
+  const isThreadsFlip = (fixedNicheId ?? activeNicheId) === 'clothing';
+  const threads = { background: '#0C080C', surface: '#160E16', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5' };
 
   const tabBarStyle = {
     height: Platform.select({
@@ -80,9 +83,9 @@ export default function TabLayout() {
       default: Spacing.sm,
     }),
     paddingHorizontal: Spacing.xs,
-    backgroundColor: Colors.surface,
+    backgroundColor: isThreadsFlip ? threads.surface : Colors.surface,
     borderTopWidth: 1,
-    borderTopColor: Colors.surfaceBorder,
+    borderTopColor: isThreadsFlip ? threads.border : Colors.surfaceBorder,
   };
 
   return (
@@ -91,7 +94,7 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle,
-        tabBarActiveTintColor: Colors.primary,
+        tabBarActiveTintColor: isThreadsFlip ? threads.pink : Colors.primary,
         tabBarInactiveTintColor: Colors.textTertiary,
         tabBarShowLabel: false,
       }}
@@ -101,9 +104,9 @@ export default function TabLayout() {
         name="index"
         options={{
           tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.tabItem, focused && styles.tabItemActive]}>
+            <View style={[styles.tabItem, focused && styles.tabItemActive, focused && isThreadsFlip && { backgroundColor: '#E91E8C20' }]}>
               <MaterialIcons name={nicheHome.icon} size={22} color={color} />
-              <TabLabel label={nicheHome.label} focused={focused} />
+              <TabLabel label={nicheHome.label} focused={focused} accentColor={isThreadsFlip ? threads.pink : Colors.primary} />
             </View>
           ),
         }}
@@ -114,8 +117,8 @@ export default function TabLayout() {
         name="scan"
         options={{
           tabBarIcon: ({ color, focused }) => (
-            <View style={styles.scanTab}>
-              <MaterialIcons name="qr-code-scanner" size={26} color={Colors.background} />
+            <View style={[styles.scanTab, isThreadsFlip && { backgroundColor: threads.pink, shadowColor: threads.pink }]}>
+              <MaterialIcons name="qr-code-scanner" size={26} color={isThreadsFlip ? threads.background : Colors.background} />
             </View>
           ),
         }}
@@ -126,7 +129,7 @@ export default function TabLayout() {
         name="inventory"
         options={{
           tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.tabItem, focused && styles.tabItemActive]}>
+            <View style={[styles.tabItem, focused && styles.tabItemActive, focused && isThreadsFlip && { backgroundColor: '#E91E8C20' }]}>
               <View style={styles.iconWrap}>
                 <MaterialIcons name="inventory" size={22} color={color} />
                 {liveCount > 0 ? (
@@ -137,7 +140,7 @@ export default function TabLayout() {
                   </View>
                 ) : null}
               </View>
-              <TabLabel label="Stock" focused={focused} />
+              <TabLabel label={nicheHome.isAntiques || isThreadsFlip ? "Inventory" : "Stock"} focused={focused} accentColor={isThreadsFlip ? threads.pink : Colors.primary} />
             </View>
           ),
         }}
@@ -147,10 +150,11 @@ export default function TabLayout() {
       <Tabs.Screen
         name="listings"
         options={{
+          href: isThreadsFlip ? null : undefined,
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.tabItem, focused && styles.tabItemActive]}>
-              <MaterialIcons name="storefront" size={22} color={color} />
-              <TabLabel label="eBay" focused={focused} />
+              <MaterialIcons name="storefront" size={22} color={nicheHome.isAntiques ? (focused ? Colors.primary : Colors.textTertiary) : color} />
+              <TabLabel label={nicheHome.isAntiques ? "Listings" : "eBay"} focused={focused} accentColor={isThreadsFlip ? threads.pink : Colors.primary} />
             </View>
           ),
         }}
@@ -165,7 +169,8 @@ export default function TabLayout() {
         name="insights"
         options={{ href: null }}
       />
-      <Tabs.Screen name="account" options={{ href: null }} />
+      <Tabs.Screen name="antique-more" options={{ href: null }} />
+      <Tabs.Screen name="account" options={{ href: nicheHome.isAntiques || isThreadsFlip ? undefined : null, tabBarIcon: ({ focused }) => (<View style={[styles.tabItem, focused && styles.tabItemActive, focused && isThreadsFlip && { backgroundColor: '#E91E8C20' }]}><MaterialIcons name="more-horiz" size={22} color={focused ? (isThreadsFlip ? threads.pink : Colors.primary) : Colors.textTertiary} /><TabLabel label="More" focused={focused} accentColor={isThreadsFlip ? threads.pink : Colors.primary} /></View>) }} />
     </Tabs>
     <TVTabHint />
     </>

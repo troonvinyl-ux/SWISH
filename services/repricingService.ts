@@ -270,7 +270,7 @@ export async function getAIRepriceSuggestion(
   if (!ownedListing) return { suggestion: null, error: 'Listing does not belong to the active niche.' };
 
   const { data, error } = await supabase.functions.invoke('swish-reprice', {
-    body: { listing_id: listingId, tenant_id: tenantId },
+    body: { listing_id: listingId, tenant_id: tenantId, niche_id: nicheId },
   });
 
   if (error) {
@@ -329,13 +329,9 @@ export async function applyReprice(
     .maybeSingle();
   if (ownershipError) return { error: ownershipError.message };
   if (!ownedListing) return { error: 'Listing does not belong to the active niche.' };
-  const { error } = await supabase
-    .from('listings')
-    .update({
-      price: newPrice,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', listingId);
+  const { error } = await supabase.functions.invoke('swish-reprice', {
+    body: { action: 'apply', listing_id: listingId, tenant_id: tenantId, niche_id: nicheId, new_price: newPrice },
+  });
   return { error: error?.message ?? null };
 }
 

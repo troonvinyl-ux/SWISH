@@ -969,7 +969,9 @@ export default function CreateListingScreen() {
   const { id: itemId } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant } = useApp();
+  const { tenant, activeNicheId, fixedNicheId } = useApp();
+  const isThreadsFlip = (fixedNicheId ?? activeNicheId) === 'clothing';
+  const threads = { background: '#0C080C', surface: '#160E16', surfaceHigh: '#201420', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5', muted: '#9A7090' };
   const { showAlert } = useAlert();
 
   const [item, setItem] = useState<Item | null>(null);
@@ -1184,7 +1186,7 @@ export default function CreateListingScreen() {
 
   if (loading) {
     return (
-      <View style={s.container}>
+      <View style={[s.container, isThreadsFlip && { backgroundColor: threads.background }]}>
         <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 120 }} />
       </View>
     );
@@ -1192,7 +1194,7 @@ export default function CreateListingScreen() {
 
   if (!item) {
     return (
-      <View style={[s.container, s.center]}>
+      <View style={[s.container, s.center, isThreadsFlip && { backgroundColor: threads.background }]}>
         <MaterialIcons name="error-outline" size={40} color={Colors.textTertiary} />
         <Text style={s.emptyText}>Item not found</Text>
         <Pressable onPress={() => router.back()} style={s.backLink}>
@@ -1207,17 +1209,17 @@ export default function CreateListingScreen() {
   const hasExistingListing = existingListings.length > 0;
 
   return (
-    <View style={s.container}>
+    <View testID={isThreadsFlip ? `threads-flip-screen-${stage === 'analyse' ? '11' : (stage === 'category' || stage === 'specifics') ? '12' : '13'}` : undefined} accessibilityLabel={isThreadsFlip ? `Threads Flip listing stage ${stage}` : undefined} style={[s.container, isThreadsFlip && { backgroundColor: threads.background }]}>
       <StatusBar style="light" />
 
       {/* Header */}
-      <View style={[s.header, { paddingTop: insets.top + Spacing.sm }]}>
+      <View style={[s.header, { paddingTop: insets.top + Spacing.sm }, isThreadsFlip && { backgroundColor: threads.surface, borderBottomColor: threads.border }]}>
         <Pressable onPress={() => router.back()} style={s.headerBtn} hitSlop={8}>
           <MaterialIcons name="arrow-back" size={20} color={Colors.textSecondary} />
         </Pressable>
         <View style={s.flex}>
-          <Text style={s.headerTitle}>Create Listing</Text>
-          <Text style={s.headerSub} numberOfLines={1}>{item.canonicalTitle}</Text>
+          <Text style={[s.headerTitle, isThreadsFlip && { color: threads.cream }]}>Threads Flip · Create Listing</Text>
+          <Text style={[s.headerSub, isThreadsFlip && { color: threads.muted }]} numberOfLines={1}>{item.canonicalTitle}</Text>
         </View>
         {hasExistingListing ? (
           <Pressable onPress={() => router.push(`/ebay-listing-editor?id=${existingListings[0].id}` as any)} style={s.headerAction} hitSlop={4}>
@@ -1228,7 +1230,7 @@ export default function CreateListingScreen() {
       </View>
 
       {/* Stage progress strip */}
-      <View style={s.stageStrip}>
+      <View style={[s.stageStrip, isThreadsFlip && { backgroundColor: threads.surface, borderBottomColor: threads.border }]}>
         {(['analyse', 'specifics', 'review'] as Stage[]).map((st, i) => {
           const stageOrder: Stage[] = ['analyse', 'specifics', 'review'];
           const idx = stageOrder.indexOf(stage);

@@ -138,7 +138,7 @@ describe('Budget-free shared workspace contracts (not device tests)', () => {
     expect(ui).not.toContain('draft.assumptions.budget');
     expect(ui).not.toContain('Total spending limit');
     expect(ui).not.toContain('Profit you want');
-    expect(ui).toContain('biddingAdvice.suggestedBid');
+    expect(ui).toContain('simpleAdvice.suggestedBid');
     expect(ui).toContain('evaluation.base.maximumHammerBid');
     expect(ui).toContain('not take-home profit');
     expect(ui).toContain('Break-even bid');

@@ -27,6 +27,6 @@ Deno.serve(async (req:Request)=>{
       niche_entitlements:niches,entitlement_source:legacy ? 'tenant_tier' : 'verified_stripe',verified_at:new Date().toISOString(),cache_max_age_seconds:300 });
   } catch(error:unknown) {
     console.error('[swish-check-subscription] Verified entitlement refresh failed.');
-    return nicheAccessResponse(error) ?? json({ error:'Subscription verification unavailable' },503);
+    return nicheAccessResponse(error) ?? json({ error:'Subscription status could not be checked. Please retry.' },503);
   }
 });

@@ -769,6 +769,8 @@ Return ONLY this exact JSON:
       }
     }
 
+    if (!listing.item_specifics || typeof listing.item_specifics !== 'object' || Array.isArray(listing.item_specifics)) listing.item_specifics = {};
+
     // ── POST-PROCESS item_specifics: clean junk fields ────────────────────────
     const SPEC_BLOCK_PATTERNS = [
       /^(batch|capture).*id/i, /^(object|objecttype|object type)$/i,
