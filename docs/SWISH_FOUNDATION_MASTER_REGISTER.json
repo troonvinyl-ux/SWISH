@@ -252,7 +252,7 @@
           "id": "S7-07",
           "title": "Meet Google Play release requirements for each published niche app",
           "status": "BLOCKED",
-          "evidence": "Current repository audit (2026-11-02): .github/workflows/build-swish-release-apk.yml installs Android platform 34/build-tools 34.0.0 and builds assembleRelease APK; eas.json production profile is APK. API 36 targeting, compatible Android Gradle/Expo toolchain, signed AAB generation, per-app Play Console declarations and policy acceptance are not yet evidenced. Keep Java 17/setup-java@v4 pending compatibility verification."
+          "evidence": "Current repository audit (2026-11-02): .github/workflows/build-swish-release-apk.yml installs Android platform 34/build-tools 34.0.0 and builds assembleRelease APK; eas.json production profile and five niche profiles are APK-only, with no profiles yet for Cards, Antiques, Fossils, Beauty or Tech. app.config.js does not explicitly set targetSdkVersion/compileSdkVersion. API 36 targeting, compatible Android Gradle/Expo toolchain, signed AAB generation for all ten package identities, per-app Play Console declarations and policy acceptance are not yet evidenced. Keep Java 17/setup-java@v4 pending compatibility verification."
         }
       ]
     }
