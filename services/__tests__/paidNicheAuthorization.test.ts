@@ -24,4 +24,21 @@ describe('Source boundary contracts (not substitutes for RLS integration tests)'
   test('cache cannot be written by clients; expiry and racing revocations are guarded',()=>{ const sql=read('supabase/migrations/20261030_paid_niche_authorization.sql');expect(sql).toContain('as restrictive for select to authenticated');expect(sql).toContain('pg_advisory_xact_lock');expect(sql).toContain('v_last>=p_checked_at');expect(sql).toContain('from public,anon,authenticated');expect(sql).toContain('expires_at>now()'); });
   test('both specialist APIs use the same paid guard and structured error response',()=>{ const identify=read('supabase/functions/swish-identify/index.ts'),islamic=read('supabase/functions/swish-islamic-identify/index.ts');expect(identify).toContain('return requirePaidNiche(');expect(islamic).toContain('await requirePaidNiche(');expect(islamic).not.toContain("specialist_id: 'islamic_silver',");expect(identify).toContain('nicheAccessResponse(err)'); });
   test('local metrics and diagnostics cannot invoke AI during navigation',()=>{ for(const file of ['services/photoQualityService.ts','services/imageQualityMetrics.ts','services/photoQualityDeviceTests.ts'])expect(read(file)).not.toMatch(/functions\.invoke|chat\/completions/);expect(read('services/aiIdentificationService.ts').indexOf('preflightPhotos([')).toBeLessThan(read('services/aiIdentificationService.ts').indexOf("functions.invoke('swish-identify'")); });
+
+  test('server-side listing verification enforces paid entitlement for normal and human-override paths',()=>{
+    const verify=read('supabase/functions/swish-verify/index.ts');
+    expect(verify).toContain("from '../_shared/paidNicheAuthorization.ts'");
+    expect(verify).toContain("from '../_shared/specialistRegistry.ts'");
+    expect(verify).toContain('await requirePaidNiche(supabaseAdmin');
+    expect(verify).toContain('specialistNiche(String(item.specialist_id))');
+    expect(verify.indexOf('await requirePaidNiche(supabaseAdmin')).toBeLessThan(verify.indexOf('if (human_override)'));
+  });
+  test('repricing enforces canonical niche ownership and paid entitlement before suggestions or writes',()=>{
+    const reprice=read('supabase/functions/swish-reprice/index.ts');
+    expect(reprice).toContain('specialistNiche(String(item?.specialist_id ?? \'\')) !== niche_id');
+    expect(reprice).toContain('await requirePaidNiche(supabaseAdmin');
+    expect(reprice.indexOf('await requirePaidNiche(supabaseAdmin')).toBeLessThan(reprice.indexOf("if (body.action === 'apply')"));
+    expect(reprice.indexOf('await requirePaidNiche(supabaseAdmin')).toBeLessThan(reprice.indexOf('const systemPrompt'));
+  });
+
 });
