@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Read-only dependency-boundary gate. Resolves local imports without executing handlers.
+// Read-only deployment dependency and generated-asset parity gate.
+// Does not execute Edge handlers, contact providers, or certify deployed revisions.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { syncBackendRegistry, syncBackendSharedAssets } from './sync-backend-registry.mjs';
 
 export function validateEdgeDeployment(root = process.cwd()) {
   const boundary = path.resolve(root, 'supabase/functions');
@@ -17,12 +17,27 @@ export function validateEdgeDeployment(root = process.cwd()) {
     }
   }
   try {
-    syncBackendRegistry(root, true);
-    syncBackendSharedAssets(root, true);
     walk(boundary);
   } catch (error) {
     errors.push(error instanceof Error ? error.message : 'Deployment assets unavailable');
   }
+
+  const mirrors = [
+    ['niche-modules.json', 'supabase/functions/_shared/niche-modules.json'],
+    ['shared/nicheAuthorization.ts', 'supabase/functions/_shared/nicheAuthorization.ts'],
+    ['shared/specialistIntelligence.ts', 'supabase/functions/_shared/specialistIntelligence.ts'],
+    ['shared/ebayMessagePagination.ts', 'supabase/functions/_shared/ebayMessagePagination.ts'],
+  ];
+  for (const [canonical, deployed] of mirrors) {
+    const sourcePath = path.resolve(root, canonical);
+    const deployedPath = path.resolve(root, deployed);
+    if (!fs.existsSync(sourcePath) || !fs.existsSync(deployedPath)) {
+      errors.push('missing canonical/deployable asset pair: ' + canonical + ' -> ' + deployed);
+    } else if (!fs.readFileSync(sourcePath).equals(fs.readFileSync(deployedPath))) {
+      errors.push('stale deployment asset mirror: ' + deployed);
+    }
+  }
+
   for (const file of files.filter(name => name.endsWith('.ts'))) {
     const source = fs.readFileSync(file, 'utf8');
     const imports = source.matchAll(/(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)["'](\.[^"']+)["']/g);
@@ -37,7 +52,10 @@ export function validateEdgeDeployment(root = process.cwd()) {
       }
     }
   }
-  return { errors, functionCount: files.filter(file => path.basename(file) === 'index.ts' && path.dirname(file) !== path.join(boundary, '_shared')).length };
+  return {
+    errors,
+    functionCount: files.filter(file => path.basename(file) === 'index.ts' && path.dirname(file) !== path.join(boundary, '_shared')).length,
+  };
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const result = validateEdgeDeployment();
