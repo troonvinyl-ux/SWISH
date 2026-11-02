@@ -652,7 +652,8 @@ describe('Mutation tenant guard', () => {
     const sync = fs.readFileSync(path.resolve(__dirname, '../../supabase/functions/swish-ebay-sync/index.ts'), 'utf8');
     expect(publish).toContain("rpc('swish_transition_item'");
     expect(publish).not.toContain(".from('items').update({\n        status: 'listed'");
-    expect(orders).toContain("rpc('swish_transition_item'");
+    expect(orders).toContain("rpc('swish_reconcile_ebay_sold_order'");
+    expect(orders).not.toContain(".from('items').update({status:'sold'");
     expect(orders).not.toContain(".from('items').update({status:'sold'");
     expect(sync).toContain("rpc('swish_transition_item'");
     expect(sync).not.toContain(".from('items').update({ status: newStatus");
