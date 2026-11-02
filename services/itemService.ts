@@ -393,43 +393,15 @@ export async function markItemSold(
     triggeredBy?: 'user' | 'ebay_sync' | 'system';
   }
 ): Promise<{ error: string | null }> {
-  const supabase = getSupabaseClient();
-  const soldAt = params.soldAt ?? new Date().toISOString();
-
-  // Get current status for lifecycle event
-  const { data: currentItem } = await supabase
-    .from('items')
-    .select('status')
-    .eq('id', itemId)
-    .eq('tenant_id', tenantId)
-    .maybeSingle();
-
-  const [itemUpdate, lifecycleEvent] = await Promise.all([
-    supabase
-      .from('items')
-      .update({
-        status: 'sold',
-        sold_price: params.soldPrice,
-        sold_at: soldAt,
-        marketplace: params.marketplace ?? 'ebay',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', itemId).eq('tenant_id', tenantId),
-    supabase
-      .from('item_lifecycle_events')
-      .insert({
-        tenant_id: tenantId,
-        item_id: itemId,
-        from_status: currentItem?.status ?? 'unknown',
-        to_status: 'sold',
-        triggered_by: params.triggeredBy ?? 'system',
-        notes: params.externalOrderId ? `Order: ${params.externalOrderId}` : null,
-      })
-      .select()
-      .single(),
-  ]);
-
-  return { error: itemUpdate.error?.message ?? null };
+  if (!tenantId?.trim() || !itemId?.trim()) return { error: 'Item and tenantId are required' };
+  if (!Number.isFinite(params.soldPrice) || params.soldPrice < 0) return { error: 'A non-negative sale amount is required' };
+  const { data, error } = await getSupabaseClient().rpc('swish_transition_item', {
+    p_tenant_id: tenantId, p_item_id: itemId, p_status: 'sold',
+    p_notes: params.externalOrderId ? `User-reported sale; order reference: ${params.externalOrderId}` : 'User-reported sale',
+    p_sold_price: params.soldPrice, p_sold_at: params.soldAt ?? new Date().toISOString(),
+    p_marketplace: params.marketplace ?? 'ebay',
+  });
+  return { error: error?.message ?? (data === true ? null : 'Sale transition was not confirmed') };
 }
 
 /**
@@ -441,32 +413,7 @@ export async function archiveItem(
   tenantId: string,
   reason: string = 'User removed from sale'
 ): Promise<{ error: string | null }> {
-  const supabase = getSupabaseClient();
-
-  const { data: currentItem } = await supabase
-    .from('items')
-    .select('status')
-    .eq('id', itemId)
-    .eq('tenant_id', tenantId)
-    .maybeSingle();
-
-  await supabase
-    .from('item_lifecycle_events')
-    .insert({
-      tenant_id: tenantId,
-      item_id: itemId,
-      from_status: currentItem?.status ?? 'unknown',
-      to_status: 'held',
-      triggered_by: 'user',
-      notes: reason,
-    });
-
-  const { error } = await supabase
-    .from('items')
-    .update({ status: 'held', updated_at: new Date().toISOString() })
-    .eq('id', itemId).eq('tenant_id', tenantId);
-
-  return { error: error?.message ?? null };
+  return transitionItemStatus(itemId, tenantId, 'held', 'user', reason);
 }
 
 /**
@@ -479,32 +426,13 @@ export async function transitionItemStatus(
   triggeredBy: 'user' | 'ebay_sync' | 'system' = 'system',
   notes?: string
 ): Promise<{ error: string | null }> {
-  const supabase = getSupabaseClient();
-
-  const { data: currentItem } = await supabase
-    .from('items')
-    .select('status')
-    .eq('id', itemId)
-    .eq('tenant_id', tenantId)
-    .maybeSingle();
-
-  await supabase
-    .from('item_lifecycle_events')
-    .insert({
-      tenant_id: tenantId,
-      item_id: itemId,
-      from_status: currentItem?.status ?? 'unknown',
-      to_status: newStatus,
-      triggered_by: triggeredBy,
-      notes: notes ?? null,
-    });
-
-  const { error } = await supabase
-    .from('items')
-    .update({ status: newStatus, updated_at: new Date().toISOString() })
-    .eq('id', itemId).eq('tenant_id', tenantId);
-
-  return { error: error?.message ?? null };
+  if (!tenantId?.trim() || !itemId?.trim()) return { error: 'Item and tenantId are required' };
+  // The server determines the audit actor from the session; labels are not authorization.
+  const { data, error } = await getSupabaseClient().rpc('swish_transition_item', {
+    p_tenant_id: tenantId, p_item_id: itemId, p_status: newStatus,
+    p_notes: notes ?? `Requested transition (${triggeredBy}); server session determines actor`,
+  });
+  return { error: error?.message ?? (data === true ? null : 'Item transition was not confirmed') };
 }
 
 // Delete an item
@@ -543,8 +471,8 @@ export async function updateItem(
   updates: Partial<Item>,
   tenantId?: string
 ): Promise<{ error: string | null }> {
-  // Fail closed if an explicit tenantId was passed but is invalid
-  if (tenantId !== undefined && (!tenantId || tenantId.trim() === '')) {
+  // Fail closed for every mutation, including legacy omitted tenant arguments.
+  if (!tenantId || tenantId.trim() === '') {
     return { error: 'updateItem: tenantId is required — operation refused' };
   }
   const supabase = getSupabaseClient();

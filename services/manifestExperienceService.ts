@@ -1,4 +1,5 @@
 import type { LotEvaluation, LotLine } from './lotEconomicsService';
+import type { LotBasePrice } from './lotBasePriceService';
 import { LOT_COST_GROUPS } from '@/constants/manifestExperience';
 export function lotMoney(value: number | null | undefined): string {
   return typeof value !== 'number' || !Number.isFinite(value) ? '—' : `£${value.toFixed(2)}`;
@@ -63,22 +64,18 @@ export function presentLotVerdict(evaluation: LotEvaluation) {
         : 'There is some resale value after costs, but not enough to meet the chosen profit cushion. Check the figures below.',
   };
 }
+export function presentBaseLotVerdict(base: LotBasePrice) {
+  const variants = {
+    invalid: { title: 'Check the list and delivery', message: 'We need valid retail prices, quantities and buying costs before setting a base maximum.', tone: 'warning' as const, icon: 'error-outline' },
+    no_value: { title: 'Check the products first', message: 'No eligible retail value is available yet. Check missing prices and any products left out for safety.', tone: 'warning' as const, icon: 'search' },
+    no_room: { title: 'Delivery uses up the buying room', message: 'There is no room for a purchase under the base rule once this delivery cost is included.', tone: 'warning' as const, icon: 'local-shipping' },
+    needs_bid: { title: 'Your base maximum is ready', message: 'You do not need a budget or current bid to value the lot. Add the bid if you want a lower starting suggestion.', tone: 'neutral' as const, icon: 'fact-check' },
+    within_limit: { title: 'Room below the base maximum', message: 'This bid fits the base price rule. You may be able to buy for less; check condition and extra selling costs before bidding.', tone: 'success' as const, icon: 'trending-up' },
+    above_limit: { title: 'Above the base maximum', message: 'This bid is already above the buying ceiling. Do not increase the ceiling because the auction is busy or ending soon.', tone: 'warning' as const, icon: 'front-hand' },
+  };
+  return variants[base.status];
+}
 export function bestManifestProducts(lines: LotLine[]): LotLine[] {
   // Sorting for convenience is not a bestseller/demand claim.
   return [...lines].sort((a,b) => b.price * b.quantity - a.price * a.quantity);
-}
-
-
-/** Human-readable explanation of the saved base buying ceiling. */
-export function presentBaseLotVerdict(base: import('./lotBasePriceService').LotBasePrice) {
-  const variants = {
-    invalid: { title: 'Check the figures', message: 'Some amounts are invalid. Correct the figures before relying on this buying ceiling.', tone: 'warning' as const, icon: 'warning-amber' },
-    no_value: { title: 'No resale value established', message: 'The eligible resale estimate does not support a buying price.', tone: 'warning' as const, icon: 'block' },
-    no_room: { title: 'No room for a bid', message: 'Delivery and buying costs leave no positive hammer-price ceiling.', tone: 'warning' as const, icon: 'front-hand' },
-    needs_bid: { title: 'Enter the current bid', message: 'Your maximum hammer bid is a ceiling, not a suggested opening bid.', tone: 'neutral' as const, icon: 'gavel' },
-    within_limit: { title: 'Room below the base maximum', message: 'The entered bid is within the calculated base maximum. Recheck fees, condition and live auction details.', tone: 'success' as const, icon: 'check-circle' },
-    above_limit: { title: 'Current bid is above the ceiling', message: 'The entered bid exceeds the calculated base maximum. Avoid increasing your bid on these figures.', tone: 'warning' as const, icon: 'trending-down' },
-  };
-  return { ...variants[base.status], maximumHammerBid: base.maximumHammerBid, maximumPurchasePrice: base.maximumPurchasePrice,
-    resaleCeiling: base.resaleCeiling, delivery: base.delivery, profitAtCurrentBid: base.profitAtCurrentBid };
 }

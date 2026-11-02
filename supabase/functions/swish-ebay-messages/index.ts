@@ -12,11 +12,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+import { corsHeaders } from '../_shared/cors.ts';
 
 const EBAY_TRADING_API_URL = 'https://api.ebay.com/ws/api.dll';
 const EBAY_TOKEN_URL       = 'https://api.ebay.com/identity/v1/oauth2/token';
@@ -202,13 +198,14 @@ async function handleSyncMessages(
   }
 
   const ack = parseAck(responseXml);
-  if (ack === 'Failure') {
+  if (!['Success', 'Warning'].includes(ack)) {
     const errMsg = responseXml.match(/<LongMessage>([\s\S]*?)<\/LongMessage>/)?.[1] ?? 'eBay API error';
     return jsonResponse({ error: 'eBay could not complete the messages request. Please retry.' }, 502);
   }
 
   const msgMatches = Array.from(responseXml.matchAll(/<MessageSummary>([\s\S]*?)<\/MessageSummary>/g));
   let synced = 0;
+  let failed = 0;
 
   for (const match of msgMatches) {
     const msgXml = match[1];
@@ -221,26 +218,19 @@ async function handleSyncMessages(
 
     if (!msgId) continue;
 
-    const { error } = await supabase
-      .from('ebay_messages')
-      .upsert({
-        tenant_id:       tenantId,
-        ebay_message_id: msgId,
-        buyer_username:  sender,
-        subject,
-        body: '(tap to view full message)',
-        is_read:         isRead,
-        is_replied:      false,
-        direction:       'inbound',
-        ebay_item_id:    itemId || null,
-        received_at:     creationDate,
-      }, { onConflict: 'ebay_message_id', ignoreDuplicates: false });
-
-    if (!error) synced++;
+    // Existing schema has item_id, not ebay_item_id, and no unique message-ID constraint.
+    // The server-only command serializes tenant/provider ID and preserves operator flags.
+    const { data: persisted, error } = await supabase.rpc('swish_ingest_ebay_message', {
+      p_tenant_id: tenantId, p_message_id: msgId,
+      p_observation: { sender, subject, item_id: itemId || null, is_read: isRead, received_at: creationDate },
+    });
+    if (!error && persisted) synced++; else failed++;
   }
 
   console.log(`[SWISH] Messages synced: ${synced} for tenant ${tenantId}`);
-  return jsonResponse({ success: true, synced });
+  return jsonResponse({ success: failed === 0, synced, failed, bodyAvailable: false,
+    ...(failed ? { error: 'Some eBay messages could not be saved. Existing messages were retained; retry sync.' } : {}),
+  });
 }
 
 // ── Route: send_reply ─────────────────────────────────────────────────────────
@@ -256,14 +246,13 @@ async function handleSendReply(
     conversationId?: string;
   },
 ): Promise<Response> {
-  const { messageId, replyText, buyerUsername, ebayItemId, conversationId } = params;
-
-  if (!replyText?.trim()) return jsonResponse({ error: 'Reply text is required.' }, 400);
-  if (!buyerUsername) return jsonResponse({ error: 'Buyer username is required.' }, 400);
+  const { messageId, replyText } = params;
+  if (typeof messageId !== 'string' || !messageId.trim()) return jsonResponse({ error: 'Message ID is required.' }, 400);
+  if (typeof replyText !== 'string' || !replyText.trim() || replyText.length > 4000) return jsonResponse({ error: 'Reply text must contain 1–4000 characters.' }, 400);
 
   const { data: msgRow } = await supabase
     .from('ebay_messages')
-    .select('id, tenant_id')
+    .select('id, tenant_id, buyer_username, item_id, conversation_id')
     .eq('id', messageId)
     .eq('tenant_id', tenantId)
     .maybeSingle();
@@ -272,6 +261,11 @@ async function handleSendReply(
     return jsonResponse({ error: 'Message not found or does not belong to your account.' }, 404);
   }
 
+  // Recipient/item identity comes from the persisted tenant-owned message, not client parameters.
+  const buyerUsername = msgRow.buyer_username;
+  const ebayItemId = msgRow.item_id;
+  const conversationId = msgRow.conversation_id;
+  if (!buyerUsername) return jsonResponse({ error: 'Buyer username is required.' }, 400);
   if (!ebayItemId) {
     return jsonResponse({ success: false, ebaySuccess: false, error: 'An active eBay item ID is required to send this reply.' }, 422);
   }
@@ -316,7 +310,7 @@ async function handleSendReply(
 
   if (!ebaySuccess) {
     console.warn('[SWISH] eBay did not confirm message reply.', { messageId, responseStatus, ack });
-    return jsonResponse({ success: false, ebaySuccess: false, error: 'eBay did not confirm the reply. Nothing was marked as sent; please retry after checking the eBay connection.' }, 502);
+    return jsonResponse({ success: false, ebaySuccess: false, error: 'eBay did not confirm the reply. Nothing was marked as sent; check the eBay conversation before retrying because a lost response may hide an accepted send.' }, 502);
   }
 
   const { error: markError } = await supabase.from('ebay_messages')
@@ -329,7 +323,7 @@ async function handleSendReply(
   const { error: transcriptError } = await supabase.from('ebay_messages').insert({
     tenant_id: tenantId, conversation_id: conversationId ?? null,
     buyer_username: buyerUsername, subject: '(outbound reply)', body: replyText,
-    direction: 'outbound', is_read: true, is_replied: true, ebay_item_id: ebayItemId,
+    direction: 'outbound', is_read: true, is_replied: true, item_id: ebayItemId,
   });
   if (transcriptError) {
     return jsonResponse({ success: true, ebaySuccess: true, localSyncPending: true, message: 'eBay accepted the reply, but SWISH could not save the local conversation copy. Refresh messages.' });
@@ -349,7 +343,11 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: 'Invalid JSON request body' }, 400);
   }
 
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return jsonResponse({ error: 'Request body must be an object.' }, 400);
   const { route, tenantId } = body;
+  if (typeof tenantId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantId)) return jsonResponse({ error: 'A valid tenantId is required.' }, 400);
+  const daysBack = Number(body.daysBack ?? 30);
+  if (!Number.isInteger(daysBack) || daysBack < 1 || daysBack > 365) return jsonResponse({ error: 'daysBack must be between 1 and 365.' }, 400);
   if (!tenantId) return jsonResponse({ error: 'tenantId is required' }, 400);
   if (!route)    return jsonResponse({ error: 'route is required (sync_messages | send_reply)' }, 400);
 
@@ -363,7 +361,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     if (route === 'sync_messages') {
-      return await handleSyncMessages(supabase, tenantId, Number(body.daysBack ?? 30));
+      return await handleSyncMessages(supabase, tenantId, daysBack);
     }
     if (route === 'send_reply') {
       return await handleSendReply(supabase, tenantId, {
@@ -376,7 +374,7 @@ Deno.serve(async (req: Request) => {
     }
     return jsonResponse({ error: `Unknown route: ${route}` }, 400);
   } catch (e: any) {
-    console.error(`[SWISH] swish-ebay-messages unhandled error (route=${route}):`, e.message);
+    console.error('[SWISH] swish-ebay-messages request failed.', { route });
     return jsonResponse({ error: 'Unable to complete the eBay messages request. Please retry or contact support.' }, 500);
   }
 });

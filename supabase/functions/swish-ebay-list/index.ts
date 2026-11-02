@@ -2195,13 +2195,10 @@ async function handleRequest(req: Request): Promise<Response> {
   else if (specialistId === 'clothing' || specialistId === 'trainers_sneakers') {
     addSpec('Brand', attrs['brand'] ?? item?.manufacturer);
     addSpec('Type', attrs['garment_type'] ?? attrs['type']);
-    // Prefer the current specialist field; retain gender_category as a legacy fallback.
-    const department = attrs['department'] ?? attrs['gender_category'];
-    addSpec('Department', department ? String(department).replace(/mens?ware?/i, "Men's").replace(/womens?ware?/i, "Women's") : null);
+    addSpec('Department', attrs['gender_category'] ? String(attrs['gender_category']).replace(/mens?ware?/i, "Men's").replace(/womens?ware?/i, "Women's") : null);
     addSpec('Size', attrs['size'] ?? attrs['labelled_size']);
     addSpec('Colour', attrs['colour'] ?? attrs['color']);
     addSpec('Material', attrs['material'] ?? attrs['composition']);
-    addSpec('Outer Shell Material', attrs['outer_shell_material']);
     addSpec('Country/Region of Manufacture', attrs['country_manufacture'] ?? item?.country_of_origin);
     addSpec('Year Manufactured', attrs['era'] ? attrs['era'].split('-')[0] : null);
     addSpec('Style', attrs['style']);

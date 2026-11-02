@@ -1,6 +1,6 @@
 import { corsHeaders } from './cors.ts';
-import modules from './niche-modules.json' with { type: 'json' };
-import { LEGACY_PREMIUM_TIERS, verifiedSubscriptionNiches, type StripeSubscriptionEvidence } from './nicheAuthorization.ts';
+import modules from '../../../niche-modules.json' with { type: 'json' };
+import { LEGACY_PREMIUM_TIERS, verifiedSubscriptionNiches, type StripeSubscriptionEvidence } from '../../../shared/nicheAuthorization.ts';
 
 // Structural contract accepts the existing unique Supabase admin client, not a second auth system.
 type AdminClient = { from: (table: string) => any; rpc: (name: string, args: Record<string, unknown>) => any };

@@ -770,10 +770,6 @@ Return ONLY this exact JSON:
     }
 
     // ── POST-PROCESS item_specifics: clean junk fields ────────────────────────
-    // The model can omit this optional object despite the prompt schema. Keep specialist mapping resilient.
-    if (!listing.item_specifics || typeof listing.item_specifics !== 'object' || Array.isArray(listing.item_specifics)) {
-      listing.item_specifics = {};
-    }
     const SPEC_BLOCK_PATTERNS = [
       /^(batch|capture).*id/i, /^(object|objecttype|object type)$/i,
       /^(has[_ ]?alteration|has[_ ]?hole|has[_ ]?countermark)/i,

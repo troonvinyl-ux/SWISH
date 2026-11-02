@@ -303,7 +303,7 @@ describe('SWISH Stripe account binding', () => {
 
   test('subscription check refuses a subscription explicitly linked to a different user', () => {
     expect(subscription).toContain('refreshVerifiedNiches(admin,{ id:user.id,email:user.email })');
-    const rules = fs.readFileSync(path.join(projectRoot, 'supabase/functions/_shared/nicheAuthorization.ts'), 'utf8');
+    const rules = fs.readFileSync(path.join(projectRoot, 'shared/nicheAuthorization.ts'), 'utf8');
     expect(rules).toContain('sub.metadata?.user_id && sub.metadata.user_id !== userId');
     expect(rules).toContain("!['active', 'trialing'].includes(sub.status ?? '')");
   });

@@ -12,27 +12,10 @@
 import { SpecialistId } from './specialists';
 import moduleRegistry from '../niche-modules.json';
 
-export interface NicheModule {
-  id: string; name: string; slug: string; scheme: string;
-  androidPackage: string; iosBundleIdentifier: string;
-  entry: string; home: string | null; aliases: string[];
-  specialists: string[]; legacySpecialists: string[];
-  defaultSpecialist: string; dedicatedRoutes: string[];
-}
-export const NICHE_MODULES = moduleRegistry.products as Record<Exclude<NicheId, 'general'>, NicheModule>;
-
-export type NicheId =
-  | 'coins'
-  | 'trading_cards'
-  | 'antiques'
-  | 'bicycles'
-  | 'motocross'
-  | 'fossils'
-  | 'clothing'
-  | 'beauty'
-  | 'tech'
-  | 'general'
-  | 'surplus_flip';
+import type { NicheModuleContract, RegisteredNicheId } from '@/shared/moduleContracts';
+export type NicheModule = NicheModuleContract;
+export const NICHE_MODULES = moduleRegistry.products as Record<RegisteredNicheId, NicheModule>;
+export type NicheId = RegisteredNicheId | 'general';
 
 export interface NicheConfig {
   id: NicheId;
@@ -208,7 +191,7 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     icon: 'pedal-bike',
     color: '#22C55E',
     accentColor: '#16A34A',
-    specialists: ['bicycles'],
+    specialists: NICHE_MODULES.bicycles.specialists as SpecialistId[],
     defaultSpecialist: 'bicycles',
     terms: {
       item: 'Bike',
@@ -254,7 +237,7 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     // curiosities_collectibles deliberately excluded — it is the generic catch-all
     // and its inclusion caused cross-niche contamination (coins/generic items
     // bleeding into MX inventory views).
-    specialists: ['motocross'],
+    specialists: NICHE_MODULES.motocross.specialists as SpecialistId[],
     defaultSpecialist: 'motocross',
     terms: {
       item: 'Bike',
@@ -339,7 +322,7 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     // NICHE-ISOLATION: clothing uses ONLY 'clothing' and 'trainers_sneakers'.
     // curiosities_collectibles deliberately excluded — generic catch-all causes
     // cross-niche contamination (coins/MX/bike items bleeding into fashion views).
-    specialists: ['clothing', 'trainers_sneakers'],
+    specialists: NICHE_MODULES.clothing.specialists as SpecialistId[],
     defaultSpecialist: 'clothing',
     terms: {
       item: 'Item',
@@ -478,7 +461,7 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     icon: 'inventory-2',
     color: '#14B8A6',
     accentColor: '#0D9488',
-    specialists: ['surplus_trader'],
+    specialists: NICHE_MODULES.surplus_flip.specialists as SpecialistId[],
     defaultSpecialist: 'surplus_trader',
     terms: {
       item: 'Product',
@@ -553,18 +536,11 @@ export function nicheIdForSpecialist(specialistId: string): NicheId | null {
 
 // ── Production niche gate ─────────────────────────────────────────────────────
 // Only explicitly registered production niches are active in the application.
-// Other legacy niches (fossils, beauty, antiques, trading_cards, general) exist
-// in the data model for historical records but are NOT selectable by subscribers
-// and do NOT appear in navigation, onboarding, or niche selection screens.
-// Historical inventory records belonging to inactive niches are preserved as-is
-// but are hidden from the active niche views.
+// All ten registered products are selectable subject to server entitlements.
+// The generic catch-all remains outside production. Historical records are preserved.
 
-export const PRODUCTION_NICHE_IDS = [
-  'coins', 'motocross', 'bicycles', 'clothing', 'surplus_flip',
-  'trading_cards', 'antiques', 'fossils', 'beauty', 'tech',
-] as const;
-
-export type ProductionNicheId = typeof PRODUCTION_NICHE_IDS[number];
+export const PRODUCTION_NICHE_IDS = Object.keys(moduleRegistry.products) as RegisteredNicheId[];
+export type ProductionNicheId = RegisteredNicheId;
 
 /** Returns true only if the niche is one of the active production niches. */
 export function isProductionNiche(nicheId: NicheId | string | null | undefined): nicheId is ProductionNicheId {

@@ -101,12 +101,13 @@ describe('Manual bidding suggestions stay below intrinsic value', () => {
     const result = suggestLotBid({ ...bidding(), increment:0.005 });
     expect(result.suggestedBid).toBe(20.01);
   });
-  test('UI distinguishes base maximum, lower offer and extra-cost profit', () => {
+  test('simple UI shows one offer and its profit without a competing cautious ceiling', () => {
     const ui = source('components/feature/ManifestOpportunityWorkspace.tsx');
     expect(ui).toContain('Base maximum purchase price');
     expect(ui).toContain('evaluation.base.maximumHammerBid');
-    expect(ui).toContain('Suggested next bid');
-    expect(ui).toContain('Separate cautious buying guide');
+    expect(ui).toContain('simpleAdvice.suggestedBid');
+    expect(ui).toContain('simpleAdvice.profit');
+    expect(ui).not.toContain('Separate cautious buying guide');
     expect(ui).toContain('not take-home profit');
     expect(ui).not.toContain('50% of the supplier');
   });

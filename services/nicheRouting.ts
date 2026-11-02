@@ -34,24 +34,9 @@ export function nicheToEntryRoute(value: string | null | undefined): ProductEntr
 export function nicheToScannerRoute(value: string | null | undefined): string {
   const niche = resolveProductionNiche(value);
   if (!niche) return '/capture';
-  switch (niche) {
-    case 'coins': return '/coin-flipper?tab=capture';
-    case 'motocross': return '/flipper-mx';
-    case 'bicycles': return '/bike-flipper';
-    case 'clothing': return '/threads-flip?tab=identify';
-    case 'surplus_flip': return '/surplus-flip';
-    case 'antiques': return '/antique-capture';
-    // These products intentionally use the shared, tenant-aware capture screen.
-    // useGenericCapture resolves their active niche, specialist profile and
-    // captureRequirements; keep them explicit so a new niche cannot silently
-    // inherit this workflow without a regression test.
-    case 'trading_cards':
-    case 'fossils':
-    case 'beauty':
-    case 'tech':
-      return '/capture';
-    default: return '/capture';
-  }
+  // Every product explicitly declares its scanner in the canonical registry.
+  // Shared capture remains niche/specialist scoped; no implicit product fallback.
+  return NICHE_MODULES[niche].scannerRoute;
 }
 
 export function isRouteAllowedForBuild(pathname: string, fixedNiche: string | null): boolean {
