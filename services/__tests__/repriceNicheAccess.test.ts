@@ -7,8 +7,8 @@ const projectRoot = path.resolve(__dirname, '../..');
 describe('server-side repricing niche authorization', () => {
   test('the server allowlist exactly matches the canonical niche registry', () => {
     const registry = JSON.parse(fs.readFileSync(path.join(projectRoot, 'niche-modules.json'), 'utf8'));
-    for (const [nicheId, product] of Object.entries(registry.products) as Array<[string, { specialists: string[] }]>) {
-      expect(REPRICE_NICHE_SPECIALISTS[nicheId]).toEqual(product.specialists);
+    for (const [nicheId, product] of Object.entries(registry.products) as Array<[string, { specialists: string[]; legacySpecialists?: string[] }]>) {
+      expect(REPRICE_NICHE_SPECIALISTS[nicheId]).toEqual([...product.specialists, ...(product.legacySpecialists ?? [])]);
     }
     expect(Object.keys(REPRICE_NICHE_SPECIALISTS).sort()).toEqual(Object.keys(registry.products).sort());
   });
