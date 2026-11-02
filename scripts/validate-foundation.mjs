@@ -23,33 +23,49 @@ const products = canonical.products && typeof canonical.products === 'object' ? 
 const ids = Object.keys(products);
 if (ids.length !== 10) fail('exactly ten niche products must be registered');
 const packages = new Set();
+const iosBundles = new Set();
 const schemes = new Set();
 const specialistOwners = new Map();
 for (const [id, product] of Object.entries(products)) {
-  if (!product || product.id !== id || !product.name || !product.entry || !product.androidPackage || !product.scheme) {
+  if (!product || product.id !== id || !product.name || !product.entry || !product.androidPackage || !product.iosBundleIdentifier || !product.scheme) {
     fail('invalid canonical identity for niche ' + id);
     continue;
   }
-  if (packages.has(product.androidPackage)) fail('duplicate Android package: ' + product.androidPackage);
-  packages.add(product.androidPackage);
-  if (schemes.has(product.scheme)) fail('duplicate deep-link scheme: ' + product.scheme);
-  schemes.add(product.scheme);
+  for (const [label, value, seen] of [
+    ['Android package', product.androidPackage, packages],
+    ['iOS bundle identifier', product.iosBundleIdentifier, iosBundles],
+    ['deep-link scheme', product.scheme, schemes],
+  ]) {
+    if (seen.has(value)) fail('duplicate ' + label + ': ' + value);
+    seen.add(value);
+  }
   if (!fs.existsSync(path.join(root, 'app', product.entry))) fail(id + ' entry file is missing: ' + product.entry);
   if (product.home && !fs.existsSync(path.join(root, 'app', product.home))) fail(id + ' home route is missing: ' + product.home);
-  if (typeof product.scannerRoute !== 'string' || !product.scannerRoute.startsWith('/')) fail(id + ' scannerRoute must be an absolute app route');
+  if (typeof product.scannerRoute !== 'string' || !product.scannerRoute.startsWith('/') || product.scannerRoute.startsWith('//')) fail(id + ' scannerRoute must be an absolute app route');
   else {
-    const routeFile = product.scannerRoute.split('?')[0].replace(/^\//, '') + '.tsx';
+    const routePath = product.scannerRoute.split('?')[0].replace(/^\//, '');
+    const routeFile = routePath + (routePath.endsWith('.tsx') ? '' : '.tsx');
     if (!fs.existsSync(path.join(root, 'app', routeFile))) fail(id + ' scanner route is missing: ' + routeFile);
   }
   if (!Array.isArray(product.specialists) || product.specialists.length === 0) fail(id + ' requires canonical specialists');
-  for (const specialist of product.specialists ?? []) {
-    if (specialistOwners.has(specialist) && specialistOwners.get(specialist) !== id) fail('specialist ' + specialist + ' has multiple niche owners');
-    specialistOwners.set(specialist, id);
+  if (product.legacySpecialists !== undefined && !Array.isArray(product.legacySpecialists)) fail(id + ' legacySpecialists must be an array when present');
+  if (Array.isArray(product.specialists) && (!product.defaultSpecialist || !product.specialists.includes(product.defaultSpecialist))) fail(id + ' defaultSpecialist must belong to its canonical specialists');
+  const ownedSpecialists = [
+    ...(Array.isArray(product.specialists) ? product.specialists : []),
+    ...(Array.isArray(product.legacySpecialists) ? product.legacySpecialists : []),
+  ];
+  for (const specialist of ownedSpecialists) {
+    if (typeof specialist !== 'string' || specialist.length === 0) fail(id + ' contains an invalid specialist ID');
+    else if (specialistOwners.has(specialist) && specialistOwners.get(specialist) !== id) fail('specialist ' + specialist + ' has multiple niche owners');
+    else specialistOwners.set(specialist, id);
   }
   for (const route of product.dedicatedRoutes ?? []) {
     if (!fs.existsSync(path.join(root, 'app', route))) fail(id + ' dedicated route is missing: ' + route);
   }
 }
+if (packages.size !== ids.length) fail('every registered niche must have a unique Android package');
+if (iosBundles.size !== ids.length) fail('every registered niche must have a unique iOS bundle identifier');
+if (schemes.size !== ids.length) fail('every registered niche must have a unique deep-link scheme');
 if (errors.length) {
   console.error('SWISH foundation validation FAILED:');
   for (const error of errors) console.error('- ' + error);
