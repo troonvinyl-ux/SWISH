@@ -274,7 +274,7 @@ Deno.serve(async (req: Request) => {
           if (FINAL_VALUE_FEE_TYPES.includes(txType as typeof FINAL_VALUE_FEE_TYPES[number]) && swishOrderId) {
             const { data: feeRows, error: feeReadError } = await supabase
               .from('ebay_financials')
-              .select('transaction_type, amount')
+              .select('transaction_type, amount, booking_entry')
               .eq('tenant_id', tenantId)
               .eq('order_id', swishOrderId)
               .eq('currency', currency)
@@ -315,9 +315,11 @@ Deno.serve(async (req: Request) => {
               }
             }
           }
-        } catch (e: any) { errors.push(e.message); }
+        } catch { errors.push('A transaction could not be reconciled because an unexpected processing error occurred.'); }
       }
-      return jr({ success: true, financesApiAvailable: true, fetched: allTx.length, inserted, updated, errors: errors.slice(0, 10), partialError: fetchErr ?? null });
+      const partialError = fetchErr ?? (errors.length ? 'One or more finance transactions could not be fully reconciled.' : null);
+      const complete = !partialError && errors.length === 0;
+      return jr({ success: complete, financesApiAvailable: true, fetched: allTx.length, inserted, updated, errors: errors.slice(0, 10), partialError, ...(complete ? {} : { error: 'Finance sync was incomplete. Review the reported errors and retry.' }) });
     }
 
     if (route === 'get_funds_summary') {
