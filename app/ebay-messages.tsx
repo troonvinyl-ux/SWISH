@@ -18,7 +18,7 @@ import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { useAlert } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
-import { getEbayMessageBody } from '@/services/ebayMessageService';
+import { getEbayMessageBody, updateEbayMessageFlag } from '@/services/ebayMessageService';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -571,16 +571,24 @@ export default function EbayMessagesScreen() {
   }, [tenant, showAlert, load]);
 
   const handleMarkRead = useCallback(async (id: string) => {
-    const supabase = getSupabaseClient();
-    await supabase.from('ebay_messages').update({ is_read: true }).eq('id', id);
+    if (!tenant?.id) return;
+    const result = await updateEbayMessageFlag(tenant.id, id, 'is_read');
+    if (result.error) {
+      showAlert('Could not mark message as read', result.error);
+      return;
+    }
     setMessages(prev => prev.map(m => m.id === id ? { ...m, isRead: true } : m));
-  }, []);
+  }, [tenant?.id, showAlert]);
 
   const handleArchive = useCallback(async (id: string) => {
-    const supabase = getSupabaseClient();
-    await supabase.from('ebay_messages').update({ is_archived: true }).eq('id', id);
+    if (!tenant?.id) return;
+    const result = await updateEbayMessageFlag(tenant.id, id, 'is_archived');
+    if (result.error) {
+      showAlert('Could not archive message', result.error);
+      return;
+    }
     setMessages(prev => prev.map(m => m.id === id ? { ...m, isArchived: true } : m));
-  }, []);
+  }, [tenant?.id, showAlert]);
 
   const handleMessagePress = useCallback(async (m: EbayMessage) => {
     if (!m.isRead) handleMarkRead(m.id);
