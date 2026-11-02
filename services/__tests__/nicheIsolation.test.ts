@@ -644,6 +644,19 @@ describe('Mutation tenant guard', () => {
     expect(csv).not.toContain("status: 'sold',\n          sold_price: salePrice");
   });
 
+  test('eBay order import screens report partial reconciliation instead of false success', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const ordersScreen = fs.readFileSync(path.resolve(__dirname, '../../app/orders.tsx'), 'utf8');
+    const ebayAdminScreen = fs.readFileSync(path.resolve(__dirname, '../../app/ebay-admin.tsx'), 'utf8');
+    for (const source of [ordersScreen, ebayAdminScreen]) {
+      expect(source).toContain('if (!data?.success)');
+      expect(source).toContain('Import Partially Complete');
+      expect(source).toContain('quantityStatusPending');
+      expect(source).toContain('errors.filter');
+    }
+  });
+
   test('eBay publish, order and sync server paths use the atomic lifecycle RPC', () => {
     const fs = require('node:fs');
     const path = require('node:path');
