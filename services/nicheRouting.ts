@@ -41,6 +41,15 @@ export function nicheToScannerRoute(value: string | null | undefined): string {
     case 'clothing': return '/threads-flip?tab=identify';
     case 'surplus_flip': return '/surplus-flip';
     case 'antiques': return '/antique-capture';
+    // These products intentionally use the shared, tenant-aware capture screen.
+    // useGenericCapture resolves their active niche, specialist profile and
+    // captureRequirements; keep them explicit so a new niche cannot silently
+    // inherit this workflow without a regression test.
+    case 'trading_cards':
+    case 'fossils':
+    case 'beauty':
+    case 'tech':
+      return '/capture';
     default: return '/capture';
   }
 }
