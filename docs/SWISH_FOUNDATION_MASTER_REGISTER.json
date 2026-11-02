@@ -33,32 +33,32 @@
         {
           "id": "S1-01",
           "title": "Map app entry points, routes and build identities",
-          "status": "IMPLEMENTED",
-          "evidence": "docs/SWISH_ENGINEERING_HANDOVER.md; niche-modules.json"
+          "status": "VERIFIED",
+          "evidence": "docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md#s1-01; PR #85 merge 00aa203 with 25/25 route-registry checks; PR #90 niche-routing workflow run 810 completed successfully on tested head; main snapshot 8d84f319cb778c84cf1ba1152c8a2b56c2680dd0. Verified registry, entry/home/dedicated route ownership and configured build identity source contract. Installed-device launch remains outside this verification."
         },
         {
           "id": "S1-02",
           "title": "Map shared services, hooks, backend functions and database dependencies",
-          "status": "IN PROGRESS",
-          "evidence": "docs/SWISH_ENGINEERING_HANDOVER.md; docs/SWISH_PRODUCT_DESIGN_ROADMAP.md"
+          "status": "IMPLEMENTED",
+          "evidence": "docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md#s1-02 maps app/components/contexts/hooks/services/constants, canonical registry, Expo build preparation, Supabase-compatible backend, Edge Function inventory, SQL migration count, workflows and current direct-query/runtime verification gaps. Per-function authorization and deployed call-path matrix remains outstanding."
         },
         {
           "id": "S1-03",
           "title": "Audit every registered niche for real functionality and isolation",
           "status": "IN PROGRESS",
-          "evidence": "PR #85 merged as 00aa203. All ten canonical entry routes, configured home routes and 18 dedicated route paths were checked against the app route tree. Corrected the Coins `coin-flipper` route filename to `coin-flipper.tsx` so exact-path filtering excludes it from other branded builds. Added `services/__tests__/nicheRouteRegistryIntegrity.test.ts`; all 25 checks passed. Remaining full niche workflow, prompt, attributes, inventory, web and runtime audits are still in progress."
+          "evidence": "docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md#s1-03; all ten registered entry routes and specialist/capture configuration inspected. Static findings: Cards/Fossils/Beauty/Tech use shared /capture fallback; Cards/Fossils/Beauty/Tech use generic overview (Cards has one dedicated grading route); no full scanner-to-sale, niche data-isolation, web or device acceptance evidence yet."
         },
         {
           "id": "S1-04",
           "title": "Record security, entitlement, eBay, finance, sync and release blockers",
           "status": "IMPLEMENTED",
-          "evidence": "docs/SWISH_ENGINEERING_HANDOVER.md"
+          "evidence": "docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md#s1-04; docs/SWISH_ENGINEERING_AUDIT.md; docs/SWISH_ENGINEERING_HANDOVER.md. Security, entitlement, eBay finance/messages/sync, category specifics, order allocation, Play Store, device and deployment blockers consolidated. Remediation and live acceptance remain open in downstream stages."
         },
         {
           "id": "S1-05",
           "title": "Reconcile open PRs, branches and current main before implementation",
-          "status": "IMPLEMENTED",
-          "evidence": "Open-PR reconciliation was completed against main. PR #87 merged as ea7b35a with the evidence-based production-register CI gate. PR #88 is the current focused Production Control enhancement and remains open pending fresh CI; do not treat it as merged or verified until its checks pass."
+          "status": "VERIFIED",
+          "evidence": "docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md#s1-05; GitHub GET /repos/troonvinyl-ux/SWISH/pulls?state=open returned []; main confirmed at 8d84f319cb778c84cf1ba1152c8a2b56c2680dd0; PR #88/#89/#90 merged as 719b7c3/89ed4c3/8d84f31; PR #90 pre-merge compare was 4 ahead, 0 behind and all three workflow runs succeeded. Recheck before every future merge."
         }
       ]
     },
@@ -336,6 +336,10 @@
     {
       "date": "2026-11-02",
       "change": "Merged PR #88 (719b7c3): Production Control now displays live ten-niche web export, artifact, regression, authorization and Android JS bundle evidence with explicit limits. Merged PR #89 (89ed4c3): added a selectable ten-niche certification matrix; all 140 niche-specific acceptance areas remain NOT VERIFIED until evidence is recorded. No app release, database, auth or eBay architecture changes."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "Stage S1 audit pass: S1-01 VERIFIED against PR #85 route-registry checks and PR #90 niche-routing CI; S1-02 architecture map IMPLEMENTED in docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md; S1-03 remains IN PROGRESS after static review of all ten niches, with shared scanner fallback and generic-home gaps recorded; S1-04 blocker map IMPLEMENTED; S1-05 VERIFIED against current main 8d84f31 and GitHub open-PR query (none open). Stage S1 remains IN PROGRESS because niche workflow/runtime and per-function authorization audits are not complete. No DB/auth/eBay architecture changes and no APK rebuild."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"
