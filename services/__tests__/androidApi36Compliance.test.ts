@@ -22,6 +22,7 @@ test('isolated niche and Master Admin APK builds install and verify Android 16 S
   }
   expect(read('scripts/verify-apk.sh')).toContain("targetSdkVersion:'36'");
   expect(read('scripts/verify-master-admin-apk.sh')).toContain("targetSdkVersion:'36'");
+  expect(read('.github/workflows/build-swish-suite.yml')).toContain("release/apk-suite-*");
 });
 
 test('generated Gradle properties are checked fail-closed before native compilation', () => {
