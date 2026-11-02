@@ -79,8 +79,14 @@ if (!products || typeof products !== 'object' || Array.isArray(products)) {
 }
 
 const areas = register.nicheCertification?.requiredAreas;
-if (!Array.isArray(areas) || areas.length < 10 || areas.some((area) => typeof area !== 'string' || !area.trim())) {
-  fail('nicheCertification.requiredAreas must contain the complete non-empty certification matrix');
+if (!Array.isArray(areas) || areas.length < 15 || areas.some((area) => typeof area !== 'string' || !area.trim())) {
+  fail('nicheCertification.requiredAreas must contain at least 15 complete non-empty certification areas');
+}
+if (!areas?.includes('google-play-store-compliance')) {
+  fail('nicheCertification.requiredAreas must include google-play-store-compliance');
+}
+if (!register.stages?.find((stage) => stage.id === 'S7')?.tasks?.some((task) => task.id === 'S7-07')) {
+  fail('stage S7 must track Google Play release readiness as task S7-07');
 }
 
 if (errors.length) {
