@@ -251,7 +251,7 @@
           "id": "S7-04",
           "title": "Build and inspect release APKs only at release milestones",
           "status": "IN PROGRESS",
-          "evidence": "PR #110 commit 64aae9d2b1cf6b99a547ff996a7d290461e5c81a: Android JavaScript bundles and branded configurations passed for all ten niches and the private Master Admin launcher. A separate clothing APK build was triggered on main; remaining nine niche APKs and the signed owner APK have not yet been built and inspected."
+          "evidence": "PR #110 commit 64aae9d2b1cf6b99a547ff996a7d290461e5c81a: Android JavaScript bundles and branded configurations passed for all ten niches and the private Master Admin launcher. A separate clothing APK build was triggered on main; remaining nine niche APKs and the signed owner APK have not yet been built and inspected. PR #120 merged (2619f7f): removed automatic push-triggered single-niche APK builds; individual APK builds are now manual-dispatch only, while the ten-niche suite remains a controlled release workflow. This prevents test-only and ordinary source commits from repeatedly producing a default Threads Flip APK. Two earlier default Threads APK jobs were already in flight from commits before this trigger fix and are not release certification."
         },
         {
           "id": "S7-05",
@@ -392,6 +392,10 @@
     {
       "date": "2026-11-02",
       "change": "S4-01 and S5-01 advanced to IN PROGRESS: coin confidence publication gate and canonical Silver Batch specialist ownership are merged; full cross-niche capture/evidence calibration and live device acceptance remain outstanding."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "Merged PR #120: individual niche APK builds are now manual-dispatch only; full APK suite remains a controlled release workflow. This closes the automatic default-Threads rebuild loop and keeps APK generation for planned release milestones."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"
