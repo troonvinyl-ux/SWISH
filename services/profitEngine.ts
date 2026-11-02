@@ -184,11 +184,12 @@ export function calculateProfit(inputs: ProfitInputs): ProfitResult {
     } else {
       const feeStructure = getEbayFeeRate(specialistId);
       const finalValueRate = inputs.marketplaceFeeRate ?? feeStructure.finalValueFee;
-      const highValueRate = feeStructure.highValueThreshold != null && feeStructure.highValueRate != null && salePrice >= feeStructure.highValueThreshold
+      const hasCustomFinalValueRate = inputs.marketplaceFeeRate != null;
+      const highValueRate = !hasCustomFinalValueRate && feeStructure.highValueThreshold != null && feeStructure.highValueRate != null && salePrice >= feeStructure.highValueThreshold
         ? feeStructure.highValueRate
         : finalValueRate;
-      const tierThreshold = feeStructure.tierThreshold;
-      const aboveThresholdRate = feeStructure.aboveThresholdRate;
+      const tierThreshold = hasCustomFinalValueRate ? undefined : feeStructure.tierThreshold;
+      const aboveThresholdRate = hasCustomFinalValueRate ? undefined : feeStructure.aboveThresholdRate;
       const finalValueFee = tierThreshold != null && aboveThresholdRate != null
         ? Math.min(feeBase, tierThreshold) * highValueRate + Math.max(0, feeBase - tierThreshold) * aboveThresholdRate
         : feeBase * highValueRate;
