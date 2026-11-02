@@ -282,7 +282,8 @@ describe('SWISH eBay inventory sync tenant write isolation', () => {
 
   test('tenant-scopes orphan listing and item status transitions', () => {
     expect(sync).toContain(".eq('id', l.id).eq('tenant_id', tenantId)");
-    expect(sync).toContain(".eq('id', l.item_id).eq('tenant_id', tenantId)");
+    expect(sync).toContain("rpc('swish_transition_item'");
+    expect(sync).not.toContain(".from('items').update({ status: newStatus");
   });
 
   test('clears finance scope marker when the restricted eBay sync flow refreshes a token', () => {
