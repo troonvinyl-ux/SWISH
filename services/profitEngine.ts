@@ -174,7 +174,7 @@ export function calculateProfit(inputs: ProfitInputs): ProfitResult {
   } else {
     const sellerType = inputs.ebaySellerType ?? 'business';
     const internationalRate = inputs.internationalFeeRate ??
-      (sellerType === 'private' && inputs.isInternationalSale ? 0.03 : 0);
+      (inputs.isInternationalSale ? (sellerType === 'private' ? 0.03 : 0.02) : 0);
 
     if (sellerType === 'private') {
       // UK private sellers pay no domestic final-value or regulatory operating fee.
