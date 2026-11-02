@@ -20,3 +20,13 @@ describe('Master Admin Production Control route', () => {
     expect(screen).toContain("return <Redirect href={\"/master-admin\" as any} />");
   });
 });
+
+test('private launcher waits for the owner tenant check before reading the admin flag', () => {
+  const root = path.resolve(__dirname, '../..');
+  const entry = fs.readFileSync(path.join(root, 'master-admin-app/index.tsx'), 'utf8');
+  const loadingGate = entry.indexOf('if (tenantLoading || nichePreferencesLoading)');
+  const adminFlag = entry.indexOf('if (!isMasterAdmin)');
+  expect(loadingGate).toBeGreaterThan(-1);
+  expect(adminFlag).toBeGreaterThan(loadingGate);
+  expect(entry).toContain('if (!isSwishMasterAdmin(user.email))');
+});
