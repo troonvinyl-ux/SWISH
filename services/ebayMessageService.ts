@@ -44,6 +44,15 @@ export async function syncEbayMessages(tenantId: string): Promise<{ synced: numb
   if (result.data?.success !== true || !Number.isInteger(result.data?.synced)) return { synced: Number(result.data?.synced ?? 0), error: result.data?.error ?? 'Message sync was incomplete or not confirmed.' };
   return { synced: result.data.synced, error: null };
 }
+export async function getEbayMessageBody(tenantId: string, messageId: string): Promise<{ body: string | null; error: string | null }> {
+  if (!messageId.trim()) return { body: null, error: 'Message is required.' };
+  const { data, error } = await invoke('get_message_body', tenantId, { messageId });
+  if (error) return { body: null, error };
+  if (data?.success !== true || typeof data?.body !== 'string') {
+    return { body: null, error: data?.error ?? 'eBay did not return the message body.' };
+  }
+  return { body: data.body, error: null };
+}
 export async function sendEbayReply(tenantId: string, params: EbayReplyInput): Promise<EbayReplyResult> {
   const { data, error } = await invoke('send_reply', tenantId, { ...params });
   if (error || data?.success !== true || data?.ebaySuccess !== true) return { ebaySuccess: false, localSyncPending: false, message: '', error: error ?? data?.error ?? 'eBay did not confirm this reply. Check the conversation before retrying.' };
