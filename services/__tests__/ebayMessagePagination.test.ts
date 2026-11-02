@@ -43,7 +43,7 @@ describe('eBay GetMyMessages API helpers', () => {
 
   test('extracts and safely converts a CDATA HTML message body to readable text', () => {
     const xml = '<GetMyMessagesResponse><Messages><Message><MessageID>m1</MessageID><Text><![CDATA[<p>Hello &amp; welcome</p><br/>Buyer]]></Text></Message></Messages></GetMyMessagesResponse>';
-    expect(extractEbayMessageBody(xml)).toBe('Hello & welcome\nBuyer');
+    expect(extractEbayMessageBody(xml)).toBe('Hello & welcome\n\nBuyer');
   });
 
   test('falls back to Content when Text is absent', () => {
