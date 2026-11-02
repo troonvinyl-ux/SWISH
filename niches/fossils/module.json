@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 2,
+  "id": "fossils",
+  "name": "Fossil Flipper",
+  "specialistIds": [
+    "fossils"
+  ],
+  "legacySpecialistIds": [],
+  "defaultSpecialistId": "fossils",
+  "androidPackage": "com.swish.fossilflipper",
+  "iosBundleIdentifier": "com.swish.fossilflipper",
+  "entryRoute": "/entry/fossils",
+  "scannerRoute": "/capture",
+  "dedicatedRoutes": [],
+  "responsibilities": "Fossil identification, species/formation context, dimensions, preservation, provenance and responsible-sale checks.",
+  "sharedCapabilities": [
+    "auth",
+    "tenant-and-subscription",
+    "inventory-persistence",
+    "ebay-oauth-listings-drafts-orders-sync",
+    "shared-ai-orchestration",
+    "learning-and-prediction",
+    "reusable-ui-primitives"
+  ],
+  "isolationModel": "shared-core-with-registered-niche-configuration",
+  "verification": {
+    "registrySource": "niche-modules.json",
+    "specialistOwnership": "canonical-specialist-and-legacy-aliases",
+    "runtimeBoundary": "separate-branded-entry-and-build-identity",
+    "dataBoundary": "tenant-and-niche-scoped-authorization-required",
+    "status": "audited-contract; end-to-end runtime isolation still requires live verification"
+  }
+}
