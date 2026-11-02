@@ -156,6 +156,15 @@ export default function MasterAdminScreen() {
           <MaterialIcons name="chevron-right" size={24} color={Colors.textPrimary}/>
         </Pressable>
 
+        <Pressable accessibilityRole="button" onPress={() => router.push('/reiss-ebay-test' as any)} style={styles.diagnosticsButton}>
+          <View style={styles.diagnosticsIcon}><MaterialIcons name="shopping-bag" size={24} color="#111111" /></View>
+          <View style={{ flex: 1, gap: 3 }}>
+            <Text style={styles.diagnosticsTitle}>Reiss single-item eBay test</Text>
+            <Text style={styles.diagnosticsSubtitle}>Load the Reiss jacket, inspect populated fields, then submit, revise and delete a separate test listing</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={24} color={Colors.textPrimary} />
+        </Pressable>
+
         <Pressable accessibilityRole="button" onPress={() => router.push('/master-diagnostics' as any)} style={styles.diagnosticsButton}>
           <View style={styles.diagnosticsIcon}><MaterialIcons name="health-and-safety" size={24} color="#111111" /></View>
           <View style={{ flex: 1, gap: 3 }}>
