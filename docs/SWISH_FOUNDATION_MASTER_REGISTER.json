@@ -517,6 +517,12 @@
     {
       "date": "2026-11-02",
       "change": "PR #136 merged as 9f3180092bb4025c62dd2504eb3e5a486280b47a. Fixed eBay listing end reconciliation to transition inventory through the existing atomic swish_transition_item RPC, ensuring lifecycle/audit event creation and explicit RPC acknowledgement. Added regression coverage. Full S2-S3 (including TypeScript and 1,053-test suite), Master Admin, ten niche Android JS bundles, ten web exports and niche routing passed. Live OnSpace deployment and authenticated eBay acceptance remain outstanding."
+    },
+    {
+      "date": "2026-11-02",
+      "summary": "Execution-first S1-S7 update: recorded OnSpace deployment-access blockers; merged eBay finance diagnostics and OTA runtime-only gate; verified the OTA replacement run skipped publication; recorded order reconciliation, owner-authorization and Test Lab evidence without promoting live backend or device acceptance.",
+      "sourceCommit": "79c7c77d281bac8005d8fdb5989113ebb9f012e6",
+      "pullRequest": 149
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"
