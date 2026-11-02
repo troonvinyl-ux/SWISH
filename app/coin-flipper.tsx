@@ -158,6 +158,21 @@ function GoldDivider() {
   return <View style={{ height: 1, backgroundColor: CF.border, marginHorizontal: Spacing.base }} />;
 }
 
+// Compact result row for the Islamic batch identification review list.
+function IslamicBatchMiniCard({ item, onPress }: { item: IslamicBatchItem; onPress: () => void }) {
+  const title = item.result?.canonicalTitle ?? item.label ?? 'Islamic coin';
+  const detail = item.result
+    ? `${Math.round(item.result.confidence * 100)}% confidence · ${item.result.identificationState.replace(/_/g, ' ')}`
+    : item.status === 'error' ? (item.error ?? 'Identification failed')
+      : item.status === 'processing' ? 'Identification in progress…' : 'Awaiting identification';
+  return <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`Review ${title}`}
+    style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md, borderRadius: Radius.lg, backgroundColor: CF.surface, borderWidth: 1, borderColor: CF.border, opacity: pressed ? 0.75 : 1 }]}>
+    <MaterialIcons name="toll" size={22} color={CF.islamic} />
+    <View style={{ flex: 1, gap: 3 }}><Text numberOfLines={1} style={{ color: CF.textPrimary, fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold }}>{title}</Text><Text numberOfLines={2} style={{ color: CF.textSub, fontSize: Typography.size.xs }}>{detail}</Text></View>
+    <MaterialIcons name="chevron-right" size={20} color={CF.textSub} />
+  </Pressable>;
+}
+
 // ── Period browser ────────────────────────────────────────────────────────────
 function PeriodBrowser({ onSelect, selectedId }: { onSelect: (id: string) => void; selectedId: string | null }) {
   return (
@@ -2184,7 +2199,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
     <View style={main.container}>
       <StatusBar style="light" />
 
-      {activeTab !== 'capture' ? <>
+      {activeTab !== 'home' ? <>
       {/* ── Header ── */}
       <View style={[main.header, { paddingTop: insets.top + Spacing.sm }]}>
         {!isHomeTab ? (
