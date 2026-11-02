@@ -24,4 +24,51 @@ describe('Source boundary contracts (not substitutes for RLS integration tests)'
   test('cache cannot be written by clients; expiry and racing revocations are guarded',()=>{ const sql=read('supabase/migrations/20261030_paid_niche_authorization.sql');expect(sql).toContain('as restrictive for select to authenticated');expect(sql).toContain('pg_advisory_xact_lock');expect(sql).toContain('v_last>=p_checked_at');expect(sql).toContain('from public,anon,authenticated');expect(sql).toContain('expires_at>now()'); });
   test('both specialist APIs use the same paid guard and structured error response',()=>{ const identify=read('supabase/functions/swish-identify/index.ts'),islamic=read('supabase/functions/swish-islamic-identify/index.ts');expect(identify).toContain('return requirePaidNiche(');expect(islamic).toContain('await requirePaidNiche(');expect(islamic).not.toContain("specialist_id: 'islamic_silver',");expect(identify).toContain('nicheAccessResponse(err)'); });
   test('local metrics and diagnostics cannot invoke AI during navigation',()=>{ for(const file of ['services/photoQualityService.ts','services/imageQualityMetrics.ts','services/photoQualityDeviceTests.ts'])expect(read(file)).not.toMatch(/functions\.invoke|chat\/completions/);expect(read('services/aiIdentificationService.ts').indexOf('preflightPhotos([')).toBeLessThan(read('services/aiIdentificationService.ts').indexOf("functions.invoke('swish-identify'")); });
+
+  test('server-side listing verification enforces paid entitlement for normal and human-override paths',()=>{
+    const verify=read('supabase/functions/swish-verify/index.ts');
+    expect(verify).toContain("from '../_shared/paidNicheAuthorization.ts'");
+    expect(verify).toContain("from '../_shared/specialistRegistry.ts'");
+    expect(verify).toContain('await requirePaidNiche(supabaseAdmin');
+    expect(verify).toContain('specialistNiche(String(item.specialist_id))');
+    expect(verify.indexOf('await requirePaidNiche(supabaseAdmin')).toBeLessThan(verify.indexOf('if (human_override)'));
+  });
+  test('repricing enforces canonical niche ownership and paid entitlement before suggestions or writes',()=>{
+    const reprice=read('supabase/functions/swish-reprice/index.ts');
+    expect(reprice).toContain('specialistNiche(String(item?.specialist_id ?? \'\')) !== niche_id');
+    expect(reprice).toContain('await requirePaidNiche(supabaseAdmin');
+    expect(reprice.indexOf('await requirePaidNiche(supabaseAdmin')).toBeLessThan(reprice.indexOf("if (body.action === 'apply')"));
+    expect(reprice.indexOf('await requirePaidNiche(supabaseAdmin')).toBeLessThan(reprice.indexOf('const systemPrompt'));
+  });
+
+
+  test('authenticated eBay publication enforces paid access from the stored item specialist',()=>{
+    const publish=read('supabase/functions/swish-ebay-list/index.ts');
+    expect(publish).toContain("from '../_shared/paidNicheAuthorization.ts'");
+    expect(publish).toContain("from '../_shared/specialistRegistry.ts'");
+    expect(publish).toContain('specialistNiche(String(item?.specialist_id ?? \'\'))');
+    expect(publish).toContain('await requirePaidNiche(supabase');
+    expect(publish.indexOf('await requirePaidNiche(supabase')).toBeLessThan(publish.indexOf('const confidenceGate'));
+    expect(publish).toContain('auth.userId');
+  });
+
+
+  test('server-side listing generation enforces entitlement from the stored item specialist before AI work',()=>{
+    const generate=read('supabase/functions/swish-list-generate/index.ts');
+    expect(generate).toContain("from '../_shared/paidNicheAuthorization.ts'");
+    expect(generate).toContain("from '../_shared/specialistRegistry.ts'");
+    expect(generate).toContain('specialistNiche(String(item.specialist_id ?? \'\'))');
+    expect(generate).toContain('await requirePaidNiche(supabaseAdmin');
+    expect(generate.indexOf('await requirePaidNiche(supabaseAdmin')).toBeLessThan(generate.indexOf('const profile = profileForSpecialist'));
+  });
+
+
+  test('all market valuation routes require a paid entitlement for the requested canonical specialist',()=>{
+    const market=read('supabase/functions/swish-market-value/index.ts');
+    expect(market).toContain('const requestedNiche = specialistNiche(specialistId)');
+    expect(market).toContain('await requirePaidNiche(supabase, sec.account, tenantId, requestedNiche)');
+    expect(market.indexOf('await requirePaidNiche(supabase, sec.account, tenantId, requestedNiche)')).toBeLessThan(market.indexOf("if (body.route === 'manifest_sold_comparisons')"));
+    expect(market).toContain('Item and valuation specialist belong to different products.');
+  });
+
 });

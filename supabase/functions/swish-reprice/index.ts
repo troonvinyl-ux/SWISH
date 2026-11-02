@@ -5,6 +5,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { isSpecialistAllowedForReprice, REPRICE_NICHE_SPECIALISTS } from '../_shared/repriceNicheAccess.ts';
+import { requirePaidNiche, nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
+import { specialistNiche } from '../_shared/specialistRegistry.ts';
 
 interface RepriceRequest {
   listing_id: string;
@@ -101,9 +103,16 @@ Deno.serve(async (req) => {
     }
 
     const item = Array.isArray(listing.items) ? listing.items[0] : listing.items;
-    if (!isSpecialistAllowedForReprice(niche_id, item?.specialist_id)) {
+    if (!isSpecialistAllowedForReprice(niche_id, item?.specialist_id) || specialistNiche(String(item?.specialist_id ?? '')) !== niche_id) {
       console.warn('[SWISH Security] swish-reprice denied listing outside requested niche.');
       return new Response(JSON.stringify({ error: 'Listing is not available in the requested niche.' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    try {
+      await requirePaidNiche(supabaseAdmin, { id: user.id, email: user.email }, tenant_id, niche_id);
+    } catch (error) {
+      const denied = nicheAccessResponse(error);
+      if (denied) return denied;
+      throw error;
     }
 
     const currentPrice = Number(listing.price ?? 0);

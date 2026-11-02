@@ -7,6 +7,8 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
+import { requirePaidNiche, nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
+import { specialistNiche } from '../_shared/specialistRegistry.ts';
 
 interface VerifyRequest {
   listing_id: string;
@@ -103,6 +105,19 @@ Deno.serve(async (req) => {
       );
     }
 
+    const item = Array.isArray(listing.items) ? listing.items[0] : listing.items;
+    if (!item?.specialist_id) {
+      return new Response(JSON.stringify({ error: 'Listing item has no registered specialist.' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const nicheId = specialistNiche(String(item.specialist_id));
+    try {
+      await requirePaidNiche(supabaseAdmin, { id: user.id, email: user.email }, tenant_id, nicheId);
+    } catch (error) {
+      const denied = nicheAccessResponse(error);
+      if (denied) return denied;
+      throw error;
+    }
+
     // Human override path
     if (human_override) {
       await supabaseAdmin.from('listing_verifications').insert({
@@ -130,7 +145,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    const item = listing.items;
     const failureReasons: string[] = [];
     const warnings: string[] = [];
 
