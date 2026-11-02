@@ -37,6 +37,6 @@ describe('all ten niche capture contracts', () => {
     expect(profile).not.toBeNull();
     expect(niche.captureInstructions.length).toBeGreaterThanOrEqual(4);
     expect(niche.keyAttributes.length).toBeGreaterThanOrEqual(3);
-    expect(nicheToScannerRoute(nicheId)).toMatch(/^\\//);
+    expect(nicheToScannerRoute(nicheId).startsWith('/')).toBe(true);
   });
 });
