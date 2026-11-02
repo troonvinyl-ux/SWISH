@@ -45,7 +45,6 @@ export default function AntiqueCaptureScreen() {
 
   const activeSlot = capture.slots.find((slot) => slot.id === activeSlotId) ?? capture.slots[0];
   const activeImage = capture.images.find((image) => image.slotId === activeSlot?.id);
-  const preview = activeImage ?? capture.images[capture.images.length - 1];
   const completedSlots = capture.slots.filter((slot) => capture.images.some((image) => image.slotId === slot.id)).length;
   const requiredSlots = capture.slots.filter((slot) => slot.required).length;
 
