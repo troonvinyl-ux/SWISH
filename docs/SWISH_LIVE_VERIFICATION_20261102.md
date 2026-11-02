@@ -138,13 +138,13 @@ Small corrections saved:
 
 | Issue | Correction | Retest / status |
 |---|---|---|
-| Broken/out-of-tree dependency graph | Local imports, deployable canonical mirrors, registry-derived repricing adapter and dependency/parity gate | Source repair merged in PR #134; all source CI passed. Four earlier live retests remain inconclusive because deployment revision was not acknowledged; full boot diagnostics/revision acknowledgement still needed |
+| Broken/out-of-tree dependency graph | Local imports, deployable canonical mirrors, registry-derived repricing adapter and dependency/parity gate | Source repair merged in PR #134; eBay publish internal-secret bypass closed in PR #135; all source CI passed. Four earlier live retests remain inconclusive because deployment revision was not acknowledged; full boot diagnostics/revision acknowledgement still needed |
 | SQL probe auth-schema instrumentation failure | Remove direct auth-schema reference; retain actual RLS count query | Two corrected read-only probes PASSED; no permissions relaxed |
 | Ten failing endpoint probes | Record real 500/BootFailure evidence, retain failures | OPEN, not promoted |
 | Repeated order/item identities | Aggregate evidence and review blocker retained | No cleanup; allocation/duplicate diagnosis unverified |
 | Missing live test fixtures / device access | Record precise access requirements | BLOCKED; no mock replacement |
 
-Additional source-only risks retained, not silently modified: global internal-secret listing bypass and unknown callers; required-aspect name normalization in the listing adapter; direct item status write in the listing `end` branch; draft diagnostic creation/import limitations and tenant-only gates; header-only messages/no body route; unresolved actual fee/allocation/partial-success defects. A separate approved, tested remediation is required. The public privacy document still contains a placeholder business contact and statements about messaging/direct database access that need owner/legal reconciliation; no business contact or policy was invented.
+Additional source-only risks retained, not silently modified: required-aspect name normalization in the listing adapter; direct item status write in the listing `end` branch; draft diagnostic creation/import limitations and tenant-only gates; header-only messages/no body route; unresolved actual fee/allocation/partial-success defects. A separate approved, tested remediation is required. The public privacy document still contains a placeholder business contact and statements about messaging/direct database access that need owner/legal reconciliation; no business contact or policy was invented.
 
 ### Unchanged architecture and data
 
@@ -158,7 +158,7 @@ Installed-device tests: **0**. Hosted app screens tested: **0**. Screenshots cap
 
 ## 7. Automated test status and approved next execution
 
-PR #134 was merged to `main` as `2145b4c72d0eb111ff3c9a0bf95871af0cabd4db` after all required source CI workflows passed. The S2–S3 foundation workflow passed 53 Jest suites / 1,053 tests, TypeScript, lint (0 errors; 327 warnings), canonical registry validation, Edge dependency containment/parity and four Deno paid-niche authorization tests. Master Admin readiness passed 560 tests across 15 suites, Edge syntax/secret-boundary checks and all ten Android JavaScript bundles plus Master Admin. All ten branded web exports and niche routing passed. The live authenticated workflow was skipped because the protected fixtures were not configured/approved. These results prove source/CI readiness only, not deployed revision parity or authenticated production acceptance.
+PR #134 was merged to `main` as `2145b4c72d0eb111ff3c9a0bf95871af0cabd4db` and PR #135 as `d5e876a96139325cfb27e8a9c85361a92cb90c01` after all required source CI workflows passed. The S2–S3 foundation workflow passed 53 Jest suites / 1,053 tests, TypeScript, lint (0 errors; 327 warnings), canonical registry validation, Edge dependency containment/parity and four Deno paid-niche authorization tests. Master Admin readiness passed 560 tests across 15 suites, Edge syntax/secret-boundary checks and all ten Android JavaScript bundles plus Master Admin. All ten branded web exports and niche routing passed. The live authenticated workflow was skipped because the protected fixtures were not configured/approved. These results prove source/CI readiness only, not deployed revision parity or authenticated production acceptance.
 
 On an approved runner, execute:
 
