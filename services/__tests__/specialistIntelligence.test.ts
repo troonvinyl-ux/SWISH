@@ -26,6 +26,16 @@ describe('Shared researched specialist contracts',()=>{
     const specs=mappedSpecialistSpecifics(SPECIALIST_PROFILES.clothing,{ department:"Women's",style:'Vintage',outer_shell_material:'Leather' });
     expect(specs.Department).toBe("Women's");expect(specs.Style).toBe('Vintage');expect(specs['Outer Shell Material']).toBe('Leather');
   });
+  test.each(PRODUCTION_NICHE_IDS)('%s maps every configured seller-evidenced field to its canonical eBay specific',id=>{
+    const profile=SPECIALIST_PROFILES[id];
+    const descriptors=profile.fields.filter(descriptor=>descriptor.specific);
+    const observed=Object.fromEntries(descriptors.map(descriptor=>[descriptor.key,`Observed ${descriptor.key}`]));
+    const expected=Object.fromEntries(descriptors.map(descriptor=>[descriptor.specific!,`Observed ${descriptor.key}`]));
+    expect(mappedSpecialistSpecifics(profile,observed)).toEqual(expected);
+    for(const descriptor of descriptors){
+      expect(mappedSpecialistSpecifics(profile,{[descriptor.key]:`Guessed ${descriptor.key}`,[`_inferred_${descriptor.key}`]:`Guessed ${descriptor.key}`})[descriptor.specific!]).toBeUndefined();
+    }
+  });
   test('beauty exclusions and tech locks do not depend on a high model score',()=>{
     expect(evaluateSpecialistSafety('beauty',{ tester:true }).blocked).toBe(true);
     expect(evaluateSpecialistSafety('beauty',{ opened:true }).blocked).toBe(true);
