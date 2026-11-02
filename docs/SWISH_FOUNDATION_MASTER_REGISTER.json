@@ -103,8 +103,8 @@
         {
           "id": "S3-01",
           "title": "Verify shared auth, tenant and server-side entitlement enforcement",
-          "status": "IN PROGRESS",
-          "evidence": "docs/S3_CORE_ACCEPTANCE_REPORT.md: source and catalog evidence covers existing auth/session, tenant/RLS and paid-niche guards, but authenticated positive/negative deployed role checks and full direct-query authorization coverage are incomplete. Keep IN PROGRESS."
+          "status": "IMPLEMENTED",
+          "evidence": "Shared paid-niche authorization is enforced in the core identification, Islamic identification, market valuation, listing generation, listing verification/human override, repricing and authenticated eBay publication paths. The privileged service-role paths derive niche ownership from the stored item's specialist and use the common requirePaidNiche guard; reprice also confirms the requested niche matches canonical specialist ownership. Added regression coverage for the guards and execution ordering. PR #117 merged as 5da0fdd. Remaining verification: live RLS and tenant-isolation integration against the existing OnSpace-managed backend, plus operational tests with real subscriber/lifetime accounts. Other tenant-scoped eBay account operations remain tenant-level by design."
         },
         {
           "id": "S3-02",
@@ -382,6 +382,10 @@
     {
       "date": "2026-11-02",
       "change": "S1-03 implemented: audited all ten registered niches against canonical registry, package IDs, entry/scanner/dedicated routes and specialist ownership. Added audit report and regression tests. Recorded descriptor coverage gaps and shared-capture/UX and live RLS acceptance as outstanding follow-on work."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "S3-01 implementation completed: common paid-niche authorization now gates identify, Islamic identify, valuation, listing generation, listing verification/human override, repricing and authenticated eBay publication. Regression suites passed in PR #117; live RLS and account-level integration acceptance remains open."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"
