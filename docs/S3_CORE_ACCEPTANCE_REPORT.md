@@ -41,11 +41,11 @@ No tables/columns/buckets were added and applying the DDL did not execute either
 
 ## API/service / AI / marketplace changes
 
-Existing client lifecycle helpers now call the atomic transition command. The new message service/hook call the existing Edge Function plus existing message table. The eBay message server uses the service-only ingestion RPC and persisted tenant-owned recipient/item metadata. CORS in the two edited functions reuses `_shared/cors.ts`.
+Existing client lifecycle helpers now call the atomic transition command. The new message service/hook call the existing Edge Function plus existing message table; GetMyMessages pagination is bounded to ten pages and partial sync is surfaced rather than marked successful. The eBay message server uses the service-only ingestion RPC and persisted tenant-owned recipient/item metadata. CORS in the two edited functions reuses `_shared/cors.ts`.
 
 No new model/provider/AI request. Unknown AI source metadata now stays `unknown`, not automatically `researched`. Capture/evidence/valuation engines remain the existing ones.
 
-Marketplace send/publish success is not fabricated. Message send timeouts require checking eBay before retry. Full provider message parsing/pagination/body retrieval and production 400/499 diagnosis still require provider acceptance. A source repair is not proof that eBay permissions/keyset/remote service are working.
+Marketplace send/publish success is not fabricated. Message send timeouts require checking eBay before retry. Message summary pagination is now implemented and covered by CI; full provider response/seller permission acceptance, body retrieval, reply concurrency/idempotency, remote acknowledgements and production 400/499 diagnosis still require live provider acceptance. A source repair is not proof that eBay permissions/keyset/remote service are working.
 
 ## eBay message pagination follow-up
 
@@ -65,6 +65,16 @@ Source: https://www.ebay.co.uk/help/selling/fees-credits-invoices/store-selling-
 
 All item mutations through updateItem now reject missing tenant scope. Atomic transitions are invoker/RLS scoped, and actor metadata is determined from the session, not a client supplied automation label. Marketplace-only status requires retained external-ID evidence. Message flags are tenant scoped and update only on confirmed persistence. Provider message ingestion cannot be invoked by client roles. Credentials remain server-only; no keys were requested or exposed.
 
+## Latest CI evidence — PR #132
+
+On commit `85b71f99ecf1ac03e6e67bb2cf638d1e8ac95377`, GitHub Actions completed successfully:
+- Master readiness run `41464111798`: 14/14 jobs passed. The regression job passed lint, register validation, TypeScript and 539 tests across 11 suites; Edge Function syntax/secret-boundary guard passed; all ten branded Android JavaScript bundles and the private Master Admin bundle passed.
+- Branded web run `41464111686`: 10/10 niche exports passed.
+- Niche routing/config run `41464111678`: passed.
+- Production register validation run `41464111570`: passed.
+
+The `Live integration checks (explicitly gated)` job reports success because the live-check gate was not enabled; it did not execute live OnSpace Cloud/eBay checks. Android JavaScript bundling is not a native APK/AAB build, and web export is not proof of hosted deployment.
+
 ## Tests performed and results (actually executed)
 
 Read-only catalog queries on the connected backend returned:
@@ -81,9 +91,9 @@ Read-only catalog queries on the connected backend returned:
 
 ## Tests authored, NOT executed here
 
-`foundationContracts.test.ts`, `coreAtomicCommands.test.ts`, `ebayMessageService.test.ts`, updated isolation/readiness tests, foundation validator, full regression/type/lint/server CI and `verify-s3-live.mjs`.
+`foundationContracts.test.ts`, `coreAtomicCommands.test.ts`, `ebayMessageService.test.ts` and `verify-s3-live.mjs` remain outside the targeted 11-suite run. The pagination and fee-model test files are now included in CI.
 
-This editor has no shell/test runner. No new Jest/type/lint pass, real login/media upload, authenticated row mutation, eBay transaction or installed device result is claimed.
+CI has now executed the targeted regression suite, TypeScript and lint successfully (539 tests across 11 suites). This is not the complete repository-wide test suite. No real login/media upload, authenticated row mutation, eBay transaction or installed-device result is claimed.
 
 Run:
 ```
@@ -111,7 +121,7 @@ The runner logs only check names/statuses, authenticates with the existing passw
 - Existing multiple-message duplicates are preserved. Future ingestion selects the earliest existing scoped row and serializes future repeats; external writers must use the command.
 - Sale-time full fee allocation across multiple lines/quantities is not solved here; existing aggregate-to-sales logic remains a release risk. Currency, fee credits and race-safe note merges need separate ledger acceptance.
 - eBay finance HTTP 400/499 cannot be declared fixed without a reproduced production request/keyset/signature check.
-- Fees remain versioned estimates except when supplied explicitly; current rate schedules/seller-specific rates still need validation. No real notification delivery service was added.
+- Fees remain versioned estimates except when supplied explicitly; the UK fee model is now refreshed to the official September 2026 schedule, but seller-specific terms, actual account fees and multi-line allocation still need validation. No real notification delivery service was added.
 - Historical verification on a different Supabase deployment does not certify this connected OnSpace Cloud. Record deployment origins and revision evidence separately.
 - Signed release, Google Play API/AAB compliance and installed-device acceptance remain S7 blockers; no APK build was triggered.
 
