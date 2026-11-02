@@ -12,6 +12,7 @@ describe('eBay GetMyMessages API helpers', () => {
   test('builds ReturnHeaders request with pagination and escaped token', () => {
     const request = buildGetEbayMessagesRequest('token<&', '2026-11-01T00:00:00.000Z', '2026-11-02T00:00:00.000Z', 2);
     expect(request).toContain('<DetailLevel>ReturnHeaders</DetailLevel>');
+    expect(request.indexOf('<RequesterCredentials>')).toBeLessThan(request.indexOf('<DetailLevel>'));
     expect(request).toContain('<eBayAuthToken>token&lt;&amp;</eBayAuthToken>');
     expect(request).toContain('<EntriesPerPage>50</EntriesPerPage><PageNumber>2</PageNumber>');
   });
@@ -60,4 +61,10 @@ describe('eBay GetMyMessages API helpers', () => {
     expect(() => buildGetEbayMessagesRequest('token', 'start', 'end', 0)).toThrow(RangeError);
     expect(() => buildGetEbayMessagesRequest('token', 'start', 'end', MAX_EBAY_MESSAGE_PAGES + 1)).toThrow(RangeError);
   });
+});
+
+
+test('prefers eBay plain-text Content when both body representations are returned', () => {
+  const xml = '<GetMyMessagesResponse><Messages><Message><Content>Plain &amp; readable</Content><Text><![CDATA[<p>HTML version</p>]]></Text></Message></Messages></GetMyMessagesResponse>';
+  expect(extractEbayMessageBody(xml)).toBe('Plain & readable');
 });
