@@ -126,9 +126,11 @@ async function verifyTenantMembership(
   internalSecretHeader: string | null,
 ): Promise<{ ok: boolean; userId?: string; userEmail?: string; error?: string }> {
 
-  if (internalSecretHeader && INTERNAL_SECRET && internalSecretHeader === INTERNAL_SECRET) {
-    console.log('[SWISH Security] Internal server-to-server call verified via SWISH_INTERNAL_SECRET');
-    return { ok: true };
+  // A shared server secret is not a user identity and cannot prove tenant membership.
+  // If supplied, validate it as an additional server-to-server check, then still require
+  // the caller's user JWT and a matching tenant_memberships row below.
+  if (internalSecretHeader && (!INTERNAL_SECRET || internalSecretHeader !== INTERNAL_SECRET)) {
+    return { ok: false, error: 'Invalid internal request authorization.' };
   }
 
   if (!authHeader) {
