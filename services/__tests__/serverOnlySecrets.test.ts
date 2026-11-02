@@ -869,6 +869,7 @@ describe('SWISH eBay message body retrieval boundary', () => {
     expect(messageFunction).toContain(".eq('id', localMessageId)");
     expect(messageFunction).toContain(".eq('tenant_id', tenantId)");
     expect(messageFunction).toContain('buildGetEbayMessageBodyRequest(accessToken, message.ebay_message_id)');
+    expect(messageFunction).toContain('message.ebay_message_id.length > 200');
     expect(messageFunction).toContain('extractEbayMessageBody(responseXml)');
   });
 
