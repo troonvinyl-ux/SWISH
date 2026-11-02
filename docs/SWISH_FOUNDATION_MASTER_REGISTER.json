@@ -65,61 +65,70 @@
     {
       "id": "S2",
       "name": "Implement foundation architecture and registry",
-      "status": "NOT STARTED",
+      "status": "IMPLEMENTED",
       "goal": "Make existing architecture boundaries explicit and enforceable without creating duplicate registries or services.",
       "tasks": [
         {
           "id": "S2-01",
           "title": "Define shared core/module boundaries against existing code",
-          "status": "NOT STARTED"
+          "status": "IMPLEMENTED",
+          "evidence": "docs/S3_CORE_ACCEPTANCE_REPORT.md (2026-11-02): shared core/module boundaries and dependency validator implemented; canonical niche registry extended with typed contracts and ten scanner routes; typed extension/scope/evidence contracts and dependency rules added; architecture and cross-niche regression tests authored. Tests in this report are explicitly NOT executed in the editor. Status IMPLEMENTED, not VERIFIED; full acceptance CI and runtime/device checks remain open."
         },
         {
           "id": "S2-02",
           "title": "Extend existing niche-modules.json as the canonical module registry",
-          "status": "NOT STARTED"
+          "status": "IMPLEMENTED",
+          "evidence": "docs/S3_CORE_ACCEPTANCE_REPORT.md (2026-11-02): shared core/module boundaries and dependency validator implemented; canonical niche registry extended with typed contracts and ten scanner routes; typed extension/scope/evidence contracts and dependency rules added; architecture and cross-niche regression tests authored. Tests in this report are explicitly NOT executed in the editor. Status IMPLEMENTED, not VERIFIED; full acceptance CI and runtime/device checks remain open."
         },
         {
           "id": "S2-03",
           "title": "Define typed contracts and dependency rules for niche extensions",
-          "status": "NOT STARTED"
+          "status": "IMPLEMENTED",
+          "evidence": "docs/S3_CORE_ACCEPTANCE_REPORT.md (2026-11-02): shared core/module boundaries and dependency validator implemented; canonical niche registry extended with typed contracts and ten scanner routes; typed extension/scope/evidence contracts and dependency rules added; architecture and cross-niche regression tests authored. Tests in this report are explicitly NOT executed in the editor. Status IMPLEMENTED, not VERIFIED; full acceptance CI and runtime/device checks remain open."
         },
         {
           "id": "S2-04",
           "title": "Add architecture and cross-niche regression tests",
-          "status": "NOT STARTED"
+          "status": "IMPLEMENTED",
+          "evidence": "docs/S3_CORE_ACCEPTANCE_REPORT.md (2026-11-02): shared core/module boundaries and dependency validator implemented; canonical niche registry extended with typed contracts and ten scanner routes; typed extension/scope/evidence contracts and dependency rules added; architecture and cross-niche regression tests authored. Tests in this report are explicitly NOT executed in the editor. Status IMPLEMENTED, not VERIFIED; full acceptance CI and runtime/device checks remain open."
         }
       ]
     },
     {
       "id": "S3",
       "name": "Foundation 1 — SWISH Core",
-      "status": "NOT STARTED",
+      "status": "IN PROGRESS",
       "goal": "Complete shared authentication, tenancy, storage, AI, capture, inventory, eBay, lifecycle, pricing, notifications and navigation foundations.",
       "tasks": [
         {
           "id": "S3-01",
           "title": "Verify shared auth, tenant and server-side entitlement enforcement",
-          "status": "NOT STARTED"
+          "status": "IN PROGRESS",
+          "evidence": "docs/S3_CORE_ACCEPTANCE_REPORT.md: source and catalog evidence covers existing auth/session, tenant/RLS and paid-niche guards, but authenticated positive/negative deployed role checks and full direct-query authorization coverage are incomplete. Keep IN PROGRESS."
         },
         {
           "id": "S3-02",
           "title": "Verify shared storage, image capture and AI service contracts",
-          "status": "NOT STARTED"
+          "status": "IN PROGRESS",
+          "evidence": "docs/S3_CORE_ACCEPTANCE_REPORT.md: existing storage, image capture and AI service contracts remain in place; no full authenticated media/AI end-to-end acceptance or deployed revision parity was run. Keep IN PROGRESS."
         },
         {
           "id": "S3-03",
           "title": "Verify shared inventory and lifecycle services",
-          "status": "NOT STARTED"
+          "status": "IN PROGRESS",
+          "evidence": "docs/S3_CORE_ACCEPTANCE_REPORT.md: atomic inventory lifecycle command and acknowledgement-based helpers implemented for covered transitions; remaining direct screen/table status writes and legacy detail paths still need migration and acceptance. Keep IN PROGRESS."
         },
         {
           "id": "S3-04",
           "title": "Verify secure eBay OAuth, listing, orders, messages and sync flows",
-          "status": "NOT STARTED"
+          "status": "IN PROGRESS",
+          "evidence": "docs/S3_CORE_ACCEPTANCE_REPORT.md: service-side eBay message ingestion and inbox acknowledgement fixes implemented; live OAuth/token refresh, listing, order, message pagination/body, provider send and sync acceptance remain open. Keep IN PROGRESS."
         },
         {
           "id": "S3-05",
           "title": "Verify pricing, fees, profit, notifications and settings foundations",
-          "status": "NOT STARTED"
+          "status": "IN PROGRESS",
+          "evidence": "docs/S3_CORE_ACCEPTANCE_REPORT.md: fee aggregation and profit presentation hardening exists, but finance 400/499, complete multi-line fee allocation, settings/notification delivery and live reconciliation remain unverified. Keep IN PROGRESS."
         }
       ]
     },
@@ -349,6 +358,10 @@
     {
       "date": "2026-11-02",
       "change": "Added a static source-level security matrix for all 25 deployable Edge Function directories and linked it to S1-02 evidence. Explicitly retained S1-02 as IMPLEMENTED pending deployed revision, RLS/grants, internal-secret caller, direct-query and live call-path verification."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "Reconciled the seven-stage register with the existing S2/S3 implementation and acceptance report. S2 tasks are IMPLEMENTED (not VERIFIED) because tests were authored but not executed in the report; S3 tasks are IN PROGRESS with deployed auth/media/lifecycle/eBay/finance acceptance gaps retained. No release, database or auth changes."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"
