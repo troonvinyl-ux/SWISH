@@ -37,10 +37,10 @@ export function summarizeEbayFinanceError(body: string): string {
   if (!first || typeof first !== 'object') return 'Provider returned an unstructured error response';
   const error = first as Record<string, unknown>;
   const safeText = (value: unknown, max: number): string => typeof value === 'string'
-    ? value.replace(/[\\r\\n\\t]+/g, ' ')
-      .replace(/Bearer\\s+[A-Za-z0-9._~+\\/-]+=*/gi, 'Bearer [redacted]')
-      .replace(/\\b(access_token|refresh_token|client_secret|clientId|password)\\b\\s*[:=]\\s*["']?[^"'\\s,}]+/gi, '$1=[redacted]')
-      .replace(/\\beyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\b/g, '[redacted]')
+    ? value.replace(/[\r\n\t]+/g, ' ')
+      .replace(/Bearer\s+[A-Za-z0-9._~+\/-]+=*/gi, 'Bearer [redacted]')
+      .replace(/\b(access_token|refresh_token|client_secret|clientId|password)\b\s*[:=]\s*["']?[^"'\s,}]+/gi, '$1=[redacted]')
+      .replace(/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g, '[redacted]')
       .slice(0, max)
     : '';
   const id = Number(error.errorId);
