@@ -94,6 +94,10 @@ jobs:
           services/__tests__/productionControlService.test.ts
           services/__tests__/productionRegisterValidation.test.ts
           services/__tests__/androidApi36Compliance.test.ts
+          services/__tests__/ebayMessagePagination.test.ts
+          services/__tests__/profitEngineFees.test.ts
+          services/__tests__/foundationContracts.test.ts
+          services/__tests__/ebayFinancePayoutFilter.test.ts
 
   edge-function-syntax:
     name: Edge Function syntax and secret-boundary guard
@@ -143,6 +147,11 @@ jobs:
           NODE
       - name: Run client secret-boundary regression test
         run: pnpm dlx jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/serverOnlySecrets.test.ts
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Run Deno paid-niche authorization regression tests
+        run: deno test supabase/tests/paidNicheAuthorization.test.ts
 
   niche-builds:
     name: Branded configuration and Android bundle

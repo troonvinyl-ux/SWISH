@@ -122,13 +122,13 @@
           "id": "S3-04",
           "title": "Verify secure eBay OAuth, listing, orders, messages and sync flows",
           "status": "IN PROGRESS",
-          "evidence": "docs/S3_CORE_ACCEPTANCE_REPORT.md: service-side eBay message ingestion and inbox acknowledgement fixes implemented; live OAuth/token refresh, listing, order, message pagination/body, provider send and sync acceptance remain open. Keep IN PROGRESS."
+          "evidence": "Source implementation includes bounded sequential GetMyMessages pagination (10 pages × 50), namespace-tolerant XML parsing, explicit partial-sync reporting and inbox handling. PR #130 merged as 0f24568; PR #132 CI run 41465023973 passed the five pagination tests within the 554-test/13-suite regression suite. Still IN PROGRESS: actual eBay response/seller permission acceptance, message bodies, remote send, deployed OnSpace Cloud revision and mailbox-over-cap retrieval."
         },
         {
           "id": "S3-05",
           "title": "Verify pricing, fees, profit, notifications and settings foundations",
           "status": "IN PROGRESS",
-          "evidence": "docs/S3_CORE_ACCEPTANCE_REPORT.md: fee aggregation and profit presentation hardening exists, but finance 400/499, complete multi-line fee allocation, settings/notification delivery and live reconciliation remain unverified. Keep IN PROGRESS."
+          "evidence": "Source implementation includes fee aggregation sign handling and finance partial/incomplete reporting (`docs/S3_CORE_ACCEPTANCE_REPORT.md`), plus profit engine v1.3 with current UK business/private seller estimates, category tiers, regulatory fee, order fixed fee and separate buyer/seller postage. Ten focused fee tests passed in PR #132 CI run 41465023973 (554 tests/13 suites total); four Deno authorization tests, lint, TypeScript, register validation and Edge Function syntax/secret-boundary checks passed. Still IN PROGRESS: exact seller/account fee acceptance, multi-line/quantity allocation, historical finance 400/499 diagnosis and live order/finance reconciliation; no notification delivery service has been added."
         }
       ]
     },
@@ -205,7 +205,7 @@
     {
       "id": "S6",
       "name": "Foundations 4–6 — Optional specialist capabilities",
-      "status": "NOT STARTED",
+      "status": "IN PROGRESS",
       "goal": "Add advanced intelligence, specialist business tools and unique niche engines only where justified by the niche.",
       "tasks": [
         {
@@ -244,25 +244,25 @@
           "id": "S7-01",
           "title": "Run full type, lint, unit, integration and regression suites",
           "status": "IMPLEMENTED",
-          "evidence": "PR #110 commit 64aae9d2b1cf6b99a547ff996a7d290461e5c81a: lint, TypeScript diagnostics, Edge Function transpile syntax, complete regression suite, Deno server authorization boundaries and Android bundle checks all passed. Automated checks are implemented and passing; live external integrations and real-device acceptance remain separate."
+          "evidence": "PR #132 CI run 41465023973: lint, production register validation, shared app/Master Admin TypeScript, 554 tests across 13 suites, four Deno paid-niche authorization tests, Edge Function syntax/secret-boundary guard, all ten branded Android JavaScript bundles and private Master Admin bundle passed. Web exports 10/10 passed in run 41465024074; niche routing/config passed in 41465023802. Live integration gate was disabled and is not counted as live acceptance."
         },
         {
           "id": "S7-02",
           "title": "Verify tenant, niche, entitlement and credential security",
           "status": "IMPLEMENTED",
-          "evidence": "PR #110 commit 64aae9d2b1cf6b99a547ff996a7d290461e5c81a: server-only secret-boundary guard, Deno authorization boundary tests and niche isolation regression tests passed. Deployed RLS/grants and live role/tenant/entitlement verification remain outstanding."
+          "evidence": "PR #132 CI run 41465023973 passed the Edge Function syntax/secret-boundary guard, four Deno paid-niche authorization tests and 554-test regression/niche isolation suite; ten niche Android JS bundles and Master Admin bundle passed. This is source/CI evidence only; deployed OnSpace Cloud RLS/grants and live tenant/role/entitlement verification remain outstanding."
         },
         {
           "id": "S7-03",
           "title": "Verify web parity and production deployment",
           "status": "IN PROGRESS",
-          "evidence": "PR #110 commit 64aae9d2b1cf6b99a547ff996a7d290461e5c81a: production web export jobs passed for all ten niche variants. Actual hosted deployment, domain routing, authenticated web parity and production smoke tests remain outstanding."
+          "evidence": "PR #132 branded web run 41465024074 passed production exports for all ten niche variants; niche routing/config run 41465023802 passed. Actual hosted deployment, domain routing, authenticated web parity and production smoke tests remain outstanding."
         },
         {
           "id": "S7-04",
           "title": "Build and inspect release APKs only at release milestones",
           "status": "IN PROGRESS",
-          "evidence": "PR #110 commit 64aae9d2b1cf6b99a547ff996a7d290461e5c81a: Android JavaScript bundles and branded configurations passed for all ten niches and the private Master Admin launcher. A separate clothing APK build was triggered on main; remaining nine niche APKs and the signed owner APK have not yet been built and inspected. PR #120 merged (2619f7f): removed automatic push-triggered single-niche APK builds; individual APK builds are now manual-dispatch only, while the ten-niche suite remains a controlled release workflow. This prevents test-only and ordinary source commits from repeatedly producing a default Threads Flip APK. Three earlier default Threads APK jobs were already in flight from commits before this trigger fix and are not release certification."
+          "evidence": "PR #132 run 41465023973 passed Android JavaScript bundles and branded configurations for all ten niches plus the private Master Admin launcher. No native APK/AAB was produced by these checks. Native release artifacts, persistent signing and owner APK/AAB inspection remain outstanding; continue to reserve builds for release milestones."
         },
         {
           "id": "S7-05",
@@ -427,6 +427,26 @@
     {
       "date": "2026-11-02",
       "change": "Merged PR #128 as 02e970167e8d17dad0c281f1cb6d28d17955677e after workflow run 41461306201 passed all 14 jobs (including secret-boundary/syntax, regression/isolation, Master Admin and ten niche Android JS bundles). Reconciled stale S4-S6 NOT STARTED labels to IMPLEMENTED where existing source/report/test evidence demonstrates implementation. S4-S6 remain IN PROGRESS: all ten niches still need real-image, live marketplace, cross-tenant, hosted web and device acceptance; optional unintegrated external data integrations remain explicitly deferred. No live OnSpace Cloud or eBay production acceptance is inferred from CI."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "Merged PR #130 as 0f24568 after all 25 checks passed, including Edge Function syntax/secret-boundary, regression/isolation, ten branded Android bundles and ten web exports. eBay message sync now paginates and reports incomplete results explicitly; deployed OnSpace Cloud/eBay acceptance remains open. S3-04 evidence updated."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "S3-05 source update: profit engine v1.3 aligns estimates to the official UK eBay business fee schedule checked 2026-11-02, supports UK private seller treatment, adds category thresholds and separates buyer-paid from seller-paid postage. Eight focused tests added. Exact account fees, VAT/shop/performance adjustments, international destination rates, multi-line fee allocation and live finance reconciliation remain unverified."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "PR #132 CI on commit 85b71f9 passed: 14/14 Master readiness jobs including lint, register validation, TypeScript, 539 tests across 11 suites, Edge Function syntax/secret boundary and ten niche Android JS bundles plus Master Admin; web exports passed 10/10; niche routing/config and production register validation passed. Both new eBay pagination and fee tests are now included in the regression command. Live integration gate remained disabled; no live OnSpace/eBay or native release acceptance is inferred."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "Expanded PR #132 CI on commit 812c3b1: 14/14 Master readiness jobs passed including lint, register validation, TypeScript, 554 tests across 13 Jest suites, four Deno paid-niche authorization tests, Edge Function syntax/secret-boundary and ten niche Android JS bundles plus Master Admin. Web exports passed 10/10, niche routing/config and register validation passed. Live integration gate remained disabled; no live OnSpace/eBay or native release acceptance is inferred."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "Reconciled S6 stage roll-up: all four S6 task records are IMPLEMENTED at source level, so the stage is IN PROGRESS rather than stale NOT STARTED. Live niche-specific acceptance and verification remain outstanding; no VERIFIED status inferred."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"

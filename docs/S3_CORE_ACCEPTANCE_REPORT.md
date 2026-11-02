@@ -41,11 +41,11 @@ No tables/columns/buckets were added and applying the DDL did not execute either
 
 ## API/service / AI / marketplace changes
 
-Existing client lifecycle helpers now call the atomic transition command. The new message service/hook call the existing Edge Function plus existing message table. The eBay message server uses the service-only ingestion RPC and persisted tenant-owned recipient/item metadata. CORS in the two edited functions reuses `_shared/cors.ts`.
+Existing client lifecycle helpers now call the atomic transition command. The new message service/hook call the existing Edge Function plus existing message table; GetMyMessages pagination is bounded to ten pages and partial sync is surfaced rather than marked successful. The eBay message server uses the service-only ingestion RPC and persisted tenant-owned recipient/item metadata. CORS in the two edited functions reuses `_shared/cors.ts`.
 
 No new model/provider/AI request. Unknown AI source metadata now stays `unknown`, not automatically `researched`. Capture/evidence/valuation engines remain the existing ones.
 
-Marketplace send/publish success is not fabricated. Message send timeouts require checking eBay before retry. Full provider message parsing/pagination/body retrieval and production 400/499 diagnosis still require provider acceptance. A source repair is not proof that eBay permissions/keyset/remote service are working.
+Marketplace send/publish success is not fabricated. Message send timeouts require checking eBay before retry. Message summary pagination is now implemented and covered by CI; full provider response/seller permission acceptance, body retrieval, reply concurrency/idempotency, remote acknowledgements and production 400/499 diagnosis still require live provider acceptance. A source repair is not proof that eBay permissions/keyset/remote service are working.
 
 ## eBay message pagination follow-up
 
@@ -53,9 +53,27 @@ The existing `swish-ebay-messages` sync previously requested only page 1 of `Get
 
 This is source implementation only. It does not verify the eBay Trading API response shape, seller permissions, message body retrieval (still unavailable in this summary route), remote send acknowledgements or the deployed OnSpace Cloud function revision. A mailbox exceeding ten pages needs a narrower date-range retrieval path; the function reports this condition rather than claiming complete sync.
 
+## eBay UK fee and postage model follow-up
+
+The canonical profit engine is now version `v1.3`. Its prior generic 2025-era 12.8% + £0.30 estimate did not represent the current UK business-seller schedule. The revised model uses the official eBay UK business fee table (last updated 30 September 2026): category-specific rates for supported specialist families, the 0.35% regulatory operating fee, £0.30 per order up to £10 / £0.40 above £10, and published high-value tiers for coins, jewellery, watches, retro consoles and trainers. UK private sellers can be modelled separately (no domestic final-value/regulatory fee; 3% for international delivery). Business international fee rates accept destination-specific overrides; when a UK business sale is marked international but no destination rate is supplied, the estimate uses the conservative 2% 'all other countries' rate. Exact fees from eBay Finances bypass estimates.
+
+Buyer-paid postage is now separate from seller postage and included in both the fee base and revenue. Estimated fees correctly make the overall profit result `isEstimate=true`. Ten focused tests cover the UK business default, low-order fixed fee, coin tier, niche rates, trainer threshold, private domestic/international, explicit fee-rate override, exact fee override and versioning.
+
+Source: https://www.ebay.co.uk/help/selling/fees-credits-invoices/store-selling-fees?id=4809. This remains an estimate: seller shop terms, account performance surcharges, fee VAT treatment, promoted listings, listing upgrades, taxes, destination-specific international rates and actual category leaf selection can change fees. No live seller account fee schedule was queried; the eBay Finances API remains the actual-fee source of truth.
+
 ## Security changes
 
 All item mutations through updateItem now reject missing tenant scope. Atomic transitions are invoker/RLS scoped, and actor metadata is determined from the session, not a client supplied automation label. Marketplace-only status requires retained external-ID evidence. Message flags are tenant scoped and update only on confirmed persistence. Provider message ingestion cannot be invoked by client roles. Credentials remain server-only; no keys were requested or exposed.
+
+## Latest CI evidence — PR #132
+
+On commit `812c3b191f8e9e1ec7fbd6b007395f8091223737`, GitHub Actions completed successfully:
+- Master readiness run `41465023973`: 14/14 jobs passed. The regression job passed lint, register validation, TypeScript and **554 tests across 13 suites**; Edge Function syntax/secret-boundary guard and **4 Deno paid-niche authorization tests** passed; all ten branded Android JavaScript bundles and the private Master Admin bundle passed.
+- Branded web run `41465024074`: 10/10 niche exports passed.
+- Niche routing/config run `41465023802`: passed.
+- Production register validation run `41465023780`: passed.
+
+The `Live integration checks (explicitly gated)` job reports success because the live-check gate was not enabled; it did not execute live OnSpace Cloud/eBay checks. Android JavaScript bundling is not a native APK/AAB build, and web export is not proof of hosted deployment.
 
 ## Tests performed and results (actually executed)
 
@@ -71,11 +89,9 @@ Read-only catalog queries on the connected backend returned:
 - Backend/network log tools returned no recent errors/requests. This is absence of observations, not proof of healthy provider workflows.
 - GitHub reported the pre-change production register workflow `41374815746` success at commit `14bb1abf6a97780c0cbe3169164c8a94b00093c3`. This does not verify this session's code. Complete CI failure logs were not available through the fetched responses, so identified source defects are not represented as all CI failures resolved.
 
-## Tests authored, NOT executed here
+## Live acceptance not executed
 
-`foundationContracts.test.ts`, `coreAtomicCommands.test.ts`, `ebayMessageService.test.ts`, updated isolation/readiness tests, foundation validator, full regression/type/lint/server CI and `verify-s3-live.mjs`.
-
-This editor has no shell/test runner. No new Jest/type/lint pass, real login/media upload, authenticated row mutation, eBay transaction or installed device result is claimed.
+`verify-s3-live.mjs` was not run because the live integration gate was not enabled. It requires explicit opt-in and the protected `swish-s3-verification` environment. The targeted 13-suite Jest run and four Deno authorization tests are now executed in CI; this is not the complete repository-wide test suite. No real login/media upload, authenticated cross-tenant mutation, AI accuracy, live eBay transaction/finance reconciliation, notification delivery or installed-device result is claimed.
 
 Run:
 ```
@@ -103,7 +119,7 @@ The runner logs only check names/statuses, authenticates with the existing passw
 - Existing multiple-message duplicates are preserved. Future ingestion selects the earliest existing scoped row and serializes future repeats; external writers must use the command.
 - Sale-time full fee allocation across multiple lines/quantities is not solved here; existing aggregate-to-sales logic remains a release risk. Currency, fee credits and race-safe note merges need separate ledger acceptance.
 - eBay finance HTTP 400/499 cannot be declared fixed without a reproduced production request/keyset/signature check.
-- Fees remain versioned estimates except when supplied explicitly; current rate schedules/seller-specific rates still need validation. No real notification delivery service was added.
+- Fees remain versioned estimates except when supplied explicitly; the UK fee model is now refreshed to the official September 2026 schedule, but seller-specific terms, actual account fees and multi-line allocation still need validation. No real notification delivery service was added.
 - Historical verification on a different Supabase deployment does not certify this connected OnSpace Cloud. Record deployment origins and revision evidence separately.
 - Signed release, Google Play API/AAB compliance and installed-device acceptance remain S7 blockers; no APK build was triggered.
 
