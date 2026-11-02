@@ -329,19 +329,21 @@ async function reconcileSoldOrder(
     .eq('id', itemId).eq('tenant_id', tenantId).maybeSingle();
   if (readError || !item) return 'Sold inventory could not be verified';
   if (Number(item.quantity ?? 1) > 1) return null;
-  const { error: listingError } = await supabase.from('listings').update({status:'sold', ended_at:soldAt,updated_at:new Date().toISOString()})
-    .eq('id',listingId).eq('item_id',itemId).eq('tenant_id',tenantId).eq('marketplace_id','ebay');
-  if (listingError) return 'Sold listing status could not be saved';
-  const { data: transitioned, error: itemError } = await supabase.rpc('swish_transition_item', {
+  // One server-side transaction updates both canonical item and listing. This avoids
+  // leaving a listing marked sold when the item transition/audit insert fails.
+  const { data: reconciled, error: reconcileError } = await supabase.rpc('swish_reconcile_ebay_sold_order', {
     p_tenant_id: tenantId,
     p_item_id: itemId,
-    p_status: 'sold',
-    p_notes: `eBay order confirmed for listing ${listingId}`,
-    p_sold_price: salePrice,
+    p_listing_id: listingId,
     p_sold_at: soldAt,
-    p_marketplace: 'ebay',
+    p_sold_price: salePrice,
   });
-  return itemError || transitioned !== true ? 'Sold inventory status could not be saved' : null;
+  if (reconcileError) {
+    // Keep diagnostics actionable without exposing credentials or provider payloads.
+    const code = reconcileError.code ? ` (${reconcileError.code})` : '';
+    return `Sold inventory reconciliation failed${code}: ${String(reconcileError.message ?? 'database rejected the transition').slice(0, 240)}`;
+  }
+  return reconciled === true ? null : 'Sold inventory remains unchanged because the listing has multiple units';
 }
 
 async function importFulfillmentOrders(
@@ -687,6 +689,7 @@ Deno.serve(async (req: Request) => {
 
     let totalImported = 0, totalSkipped = 0;
     const allErrors: string[] = [];
+    const apiWarnings: string[] = [];
     let ffApiUsed = false, tradingApiUsed = false;
 
     // ── Try Fulfillment REST API first ──────────────────────────────────────
@@ -701,7 +704,9 @@ Deno.serve(async (req: Request) => {
         console.log(`[SWISH Orders] Fulfillment API: fetched=${ffOrders.length} imported=${result.imported} skipped=${result.skipped}`);
       } else if (apiError) {
         console.log(`[SWISH Orders] Fulfillment API unavailable: ${apiError} — will try Trading API`);
-        allErrors.push(`Fulfillment API: ${apiError}`);
+        // The supported Trading API fallback can complete the same sync. Keep this
+        // provider warning separate so a successful fallback is not reported as a failed sync.
+        apiWarnings.push(`Fulfillment API: ${apiError}`);
       }
     }
 
@@ -738,6 +743,7 @@ Deno.serve(async (req: Request) => {
       total: totalImported + totalSkipped,
       matched: totalImported, // All imports are potentially matched
       errors: allErrors.slice(0, 10),
+      warnings: apiWarnings.slice(0, 5),
       apiUsed: ffApiUsed ? 'fulfillment_rest' : tradingApiUsed ? 'trading_xml' : 'none',
       feeNote: 'Marketplace fees are ESTIMATED at ~12.8%. Actual eBay fees vary by category, item price, and seller subscription level. Use Finances sync for exact figures.',
     });
