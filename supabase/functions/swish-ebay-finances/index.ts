@@ -227,6 +227,9 @@ Deno.serve(async (req: Request) => {
           const txId = String(tx.transactionId ?? ''); if (!txId) continue;
           const txType = String(tx.transactionType ?? 'UNKNOWN');
           const amount = parseFloat(tx.amount?.value ?? '0') || 0;
+          const bookingEntry = tx.bookingEntry === 'DEBIT' || tx.bookingEntry === 'CREDIT'
+            ? tx.bookingEntry
+            : amount < 0 ? 'DEBIT' : 'CREDIT';
           const currency = (tx.amount?.currency ?? 'GBP').toUpperCase();
           const ebayOrderId = tx.orderId ?? tx.legacyOrderId ?? null;
           let swishOrderId: string | null = null;
@@ -250,7 +253,7 @@ Deno.serve(async (req: Request) => {
             order_id: swishOrderId, ebay_order_id: ebayOrderId, amount,
             fee_type: feeTypeMap[txType] ?? txType.toLowerCase(),
             currency, description: tx.feeType ?? txType,
-            booking_entry: amount >= 0 ? 'CREDIT' : 'DEBIT',
+            booking_entry: bookingEntry,
             payout_id: tx.payoutId ?? null, payout_status: tx.payoutStatus ?? null,
             transaction_date: tx.transactionDate ?? new Date().toISOString(),
           }, { onConflict: 'ebay_transaction_id,tenant_id', ignoreDuplicates: false });
@@ -275,8 +278,7 @@ Deno.serve(async (req: Request) => {
               .eq('tenant_id', tenantId)
               .eq('order_id', swishOrderId)
               .eq('currency', currency)
-              .in('transaction_type', [...FINAL_VALUE_FEE_TYPES])
-              .lt('amount', 0);
+              .in('transaction_type', [...FINAL_VALUE_FEE_TYPES]);
             if (feeReadError) {
               errors.push(`TX ${txId}: persisted fees could not be aggregated for the order.`);
               continue;
@@ -354,17 +356,25 @@ Deno.serve(async (req: Request) => {
     }
 
     if (route === 'get_summary') {
-      const { data: txData } = await supabase.from('ebay_financials').select('transaction_type, amount').eq('tenant_id', tenantId).gte('transaction_date', fromDate);
+      const { data: txData, error: txReadError } = await supabase.from('ebay_financials')
+        .select('transaction_type, amount, booking_entry').eq('tenant_id', tenantId).gte('transaction_date', fromDate);
+      if (txReadError) return jr({ success: false, error: 'Financial summary could not be loaded. Please retry.' }, 503);
       const rows = txData ?? [];
-      const s = (f: (r: any) => boolean, abs = false) => rows.filter(f).reduce((t: number, r: any) => t + (abs ? Math.abs(Number(r.amount)) : Number(r.amount)), 0);
+      const total = (predicate: (row: any) => boolean) => Math.round(rows.filter(predicate)
+        .reduce((sum: number, row: any) => sum + Math.abs(Number(row.amount) || 0), 0) * 100) / 100;
+      const grossSales = total(r => r.transaction_type === 'SALE' && r.booking_entry === 'CREDIT');
+      const actualFees = total(r => FINAL_VALUE_FEE_TYPES.includes(r.transaction_type) && r.booking_entry === 'DEBIT');
+      const refundsDebit = total(r => r.transaction_type === 'REFUND' && r.booking_entry === 'DEBIT');
+      const refundsCredit = total(r => r.transaction_type === 'REFUND' && r.booking_entry === 'CREDIT');
+      const credits = total(r => r.transaction_type === 'CREDIT' && r.booking_entry === 'CREDIT');
       return jr({ success: true, financesApiAvailable: true, summary: {
-        grossSales: Math.round(s(r => r.transaction_type === 'SALE' && r.amount > 0) * 100) / 100,
-        actualFees: Math.round(s(r => r.transaction_type?.includes('FINAL_VALUE_FEE') && r.amount < 0, true) * 100) / 100,
-        refunds: Math.round(s(r => r.transaction_type === 'REFUND') * 100) / 100,
-        payouts: Math.round(s(r => r.transaction_type === 'PAYOUT', true) * 100) / 100,
-        credits: Math.round(s(r => r.transaction_type === 'CREDIT' && r.amount > 0) * 100) / 100,
-        shippingLabels: Math.round(s(r => r.transaction_type === 'SHIPPING_LABEL' && r.amount < 0, true) * 100) / 100,
-        netAfterFees: Math.round((s(r => r.transaction_type === 'SALE' && r.amount > 0) - s(r => r.transaction_type?.includes('FINAL_VALUE_FEE') && r.amount < 0, true) + s(r => r.transaction_type === 'REFUND') + s(r => r.transaction_type === 'CREDIT' && r.amount > 0)) * 100) / 100,
+        grossSales,
+        actualFees,
+        refunds: Math.round((refundsDebit + refundsCredit) * 100) / 100,
+        payouts: total(r => r.transaction_type === 'PAYOUT'),
+        credits,
+        shippingLabels: total(r => r.transaction_type === 'SHIPPING_LABEL' && r.booking_entry === 'DEBIT'),
+        netAfterFees: Math.round((grossSales - actualFees - refundsDebit + refundsCredit + credits) * 100) / 100,
         transactionCount: rows.length, daysBack,
       }});
     }
