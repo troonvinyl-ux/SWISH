@@ -466,6 +466,7 @@ describe('Production configuration', () => {
   });
 
   test('tenantId is passed to edge function for quota tracking', async () => {
+    mockInvoke.mockClear();
     mockInvoke.mockResolvedValue({
       data: {
         identification: {
