@@ -16,12 +16,12 @@ export function extractEbayXmlTag(xml: string, tag: string): string {
 }
 
 export function extractEbayMessageBlocks(xml: string): string[] {
-  const pattern = /<(?:[A-Za-z0-9_.-]+:)?Message\\b[^>]*>([\\s\\S]*?)<\\/(?:[A-Za-z0-9_.-]+:)?Message\\s*>/gi;
+  const pattern = /<(?:[A-Za-z0-9_.-]+:)?Message\b[^>]*>([\s\S]*?)<\/(?:[A-Za-z0-9_.-]+:)?Message\s*>/gi;
   return Array.from(xml.matchAll(pattern), match => match[1]);
 }
 
 function decodeEbayMessageText(value: string): string {
-  const cdata = value.trim().match(/^<!\\[CDATA\\[([\\s\\S]*)\\]\\]>$/);
+  const cdata = value.trim().match(/^<!\[CDATA\[([\s\S]*)\]\]>$/);
   const decoded = (cdata?.[1] ?? value)
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
@@ -30,11 +30,11 @@ function decodeEbayMessageText(value: string): string {
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&');
   return decoded
-    .replace(/<br\\s*\\/?\\s*>/gi, '\\n')
-    .replace(/<\\/(?:p|div|li|tr)\\s*>/gi, '\\n')
+    .replace(/<br\s*\/?\s*>/gi, '\n')
+    .replace(/<\/(?:p|div|li|tr)\s*>/gi, '\n')
     .replace(/<[^>]*>/g, '')
-    .replace(/[ \\t]+\\n/g, '\\n')
-    .replace(/\\n{3,}/g, '\\n\\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
