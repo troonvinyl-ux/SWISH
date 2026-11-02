@@ -39,7 +39,10 @@ test('eBay publish route enforces the server-side gate before requesting eBay cr
   const source = fs.readFileSync(path.resolve(__dirname, '../../supabase/functions/swish-ebay-list/index.ts'), 'utf8');
   expect(source).toContain('assessListingConfidence');
   expect(source).toContain('identification_confidence');
-  expect(source.indexOf('if (!confidenceGate.allowed)')).toBeLessThan(source.indexOf('getEbayCredentials(supabase, tenantId, true)'));
+  const gateIndex = source.indexOf('if (!confidenceGate.allowed)');
+  const publishCredentialsIndex = source.indexOf('getEbayCredentials(supabase, tenantId, true)', gateIndex);
+  expect(gateIndex).toBeGreaterThan(-1);
+  expect(publishCredentialsIndex).toBeGreaterThan(gateIndex);
 });
 
 test('coin listing UI explains the 95% publication lock before a draft is generated', () => {
