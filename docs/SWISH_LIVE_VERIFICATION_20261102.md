@@ -131,14 +131,14 @@ These defects correlate with the boot-failing dependency paths, but the logs exp
 
 Small corrections saved:
 1. Point subscription, identify, messages, listing-status and server entitlement/specialist adapters at local `_shared` deployment assets.
-2. Extend the existing `sync-backend-registry.mjs` generator with byte-identical assets from the **existing canonical** `shared/nicheAuthorization.ts`, `shared/specialistIntelligence.ts`, `shared/ebayMessagePagination.ts`. These are generated deployment copies, not independently maintained AI/entitlement engines. `--check` fails on drift; author rules only in `shared/`.
+2. The repository did not contain the referenced `sync-backend-registry.mjs` generator. PR #134 instead makes the validator self-contained and checks byte-for-byte parity between canonical `shared/` assets and their deployable `_shared/` mirrors. Author rules remain canonical in `shared/`; mirror drift fails CI.
 3. Restore the missing repricing adapter using existing canonical registry specialist/alias ownership, not a hard-coded replacement list.
-4. Add a read-only dependency-containment/parity gate and regression fixtures for escaped, missing and stale dependencies. Wire it and Deno graph resolution into the existing foundation workflow. Transpile-only syntax tests cannot detect missing deployed modules.
+4. Add a read-only dependency-containment/parity gate and regression fixtures for escaped, missing and stale dependencies. Wire it and Deno graph resolution into the existing foundation workflow. PR #134 verifies the gate against all 25 Edge Function entrypoints.
 5. Add a manual-only, approval-gated credential-free Edge smoke runner/workflow that records HTTP/timestamps and fails on 500, without builds or provider mutations. Its `productionReady` is always false.
 
 | Issue | Correction | Retest / status |
 |---|---|---|
-| Broken/out-of-tree dependency graph | Local imports plus generated assets and missing registry adapter | Source repaired; four deployed retests STILL FAILED; full boot diagnostics/revision acknowledgement needed |
+| Broken/out-of-tree dependency graph | Local imports, deployable canonical mirrors, registry-derived repricing adapter and dependency/parity gate | Source repair merged in PR #134; all source CI passed. Four earlier live retests remain inconclusive because deployment revision was not acknowledged; full boot diagnostics/revision acknowledgement still needed |
 | SQL probe auth-schema instrumentation failure | Remove direct auth-schema reference; retain actual RLS count query | Two corrected read-only probes PASSED; no permissions relaxed |
 | Ten failing endpoint probes | Record real 500/BootFailure evidence, retain failures | OPEN, not promoted |
 | Repeated order/item identities | Aggregate evidence and review blocker retained | No cleanup; allocation/duplicate diagnosis unverified |
@@ -158,7 +158,7 @@ Installed-device tests: **0**. Hosted app screens tested: **0**. Screenshots cap
 
 ## 7. Automated test status and approved next execution
 
-No terminal, compiler, Jest/Deno execution or authenticated GitHub Actions dispatch is exposed to this editor. New dependency/runner unit tests were authored, **NOT EXECUTED here**. Earlier PR #132 CI evidence remains historical and cannot certify these changes. No CI pass, deployment success, commit, PR or merge is claimed.
+PR #134 was merged to `main` as `2145b4c72d0eb111ff3c9a0bf95871af0cabd4db` after all required source CI workflows passed. The S2–S3 foundation workflow passed 53 Jest suites / 1,053 tests, TypeScript, lint (0 errors; 327 warnings), canonical registry validation, Edge dependency containment/parity and four Deno paid-niche authorization tests. Master Admin readiness passed 560 tests across 15 suites, Edge syntax/secret-boundary checks and all ten Android JavaScript bundles plus Master Admin. All ten branded web exports and niche routing passed. The live authenticated workflow was skipped because the protected fixtures were not configured/approved. These results prove source/CI readiness only, not deployed revision parity or authenticated production acceptance.
 
 On an approved runner, execute:
 
@@ -182,7 +182,7 @@ The last command performs real safe GET requests only. A smoke pass is not full 
 
 1. **OnSpace deployment control:** deployment manifest/revision IDs and complete sanitized boot error details for the ten failing endpoints; permission to deploy reviewed function/shared assets. Current tools expose SQL, source and 20-entry logs, not an authenticated deployment API.
 2. **Approved subscriber fixtures:** two distinct designated test accounts/tenants/items and their paid niche grants, supplied through a secure runner environment, never chat. Existing protected GitHub environment `swish-s3-verification` expects `S3_BACKEND_URL`, `S3_ANON_KEY`, `S3_ACCOUNT_A_EMAIL`, `S3_ACCOUNT_A_PASSWORD`, `S3_ACCOUNT_B_EMAIL`, `S3_ACCOUNT_B_PASSWORD`, `S3_TENANT_A`, `S3_TENANT_B`, `S3_ITEM_A`, `S3_ITEM_B`, `S3_NICHE_A`, `S3_NICHE_B`. No service-role key or eBay secret needs to reach the client/runner for the existing read-only script.
-3. **GitHub permissions:** authenticated `actions:write` to dispatch approved workflows, plus `contents:write`/`pull_requests:write` for a reviewed branch/PR. Existing source is edited in OnSpace only; no GitHub commit/PR operation was available. Fresh main/PR reconciliation is still required.
+3. **GitHub/live workflow:** source changes are now committed and merged through PR #134; required source CI is green. The protected `swish-s3-verification` workflow still needs approved test fixtures and an authorized manual dispatch. The current connector cannot dispatch that protected workflow.
 4. **eBay authorization:** Nick designates an authorized sandbox account or the connected production seller and a safe unpublished offer fixture. No production reply/publish/end/buy permission is implied. Current draft diagnostic only reads/updates existing offers; do not call the publish route to create a supposed draft.
 5. **Media/web/device:** approved ten-niche photo fixtures with independently known identification basis, hosted app URLs/build revision, browser session/testing access, and an installed Android test build/device. Do not request plaintext credentials or a rebuild as a substitute.
 6. **Order data review:** owner-approved analysis/export of the 69 repeated order-ID / 70 repeated order-item groups before changing identity/uniqueness/allocation logic. Never delete records automatically. Any cleanup belongs in the Cloud Data dashboard under owner control.
@@ -204,4 +204,4 @@ No task or niche certificate was promoted to VERIFIED. S7-05 now records that li
 
 The ten-niche certificate matrix remains **0/140 explicitly verified acceptance areas** in the register. Real database and HTTP evidence advances execution/discovery only. Source implementation, a 405, RLS enabled, a generated file, or an earlier CI pass is not certification of a production subscriber workflow.
 
-**Recommended immediate next step:** obtain acknowledged deployment/import diagnostics, run the new graph gate on an authorized runner, deploy only reviewed assets through OnSpace, repeat failed live boot probes, then use the existing protected read-only fixture workflow before controlled authenticated eBay/media tests.
+**Recommended immediate next step:** deploy the reviewed `2145b4c` source/shared assets through OnSpace Cloud, capture the exact deployed function revision IDs and full sanitized import/boot diagnostics, then repeat the four previously failed probes. After deployment parity is established, run the protected two-account read-only acceptance workflow and proceed to controlled eBay/media tests.
