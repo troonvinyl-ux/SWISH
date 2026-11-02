@@ -1705,11 +1705,12 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({ identification: result }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
-  } catch (err: any) {
-    const accessError=nicheAccessResponse(err);if(accessError) return accessError;
-    console.error('[swish-islamic-identify] Error:', err);
+  } catch (err: unknown) {
+    const accessError = nicheAccessResponse(err);
+    if (accessError) return accessError;
+    console.error('[swish-islamic-identify] Request failed:', err instanceof Error ? err.name : 'UnknownError');
     return new Response(
-      JSON.stringify({ error: err.message ?? 'Internal error' }),
+      JSON.stringify({ error: 'Identification could not be completed. Please try again.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }
