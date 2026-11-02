@@ -8,6 +8,7 @@ import { useApp } from '@/hooks/useApp';
 import { useInventory } from '@/hooks/useInventory';
 import { Spacing, Typography, Radius } from '@/constants/theme';
 import { BrandArtwork } from '@/components/feature/BrandArtwork';
+import { nicheToScannerRoute } from '@/services/nicheRouting';
 
 const GOLD = '#D8AD52';
 const ACTIONS = [
@@ -26,6 +27,10 @@ export default function AntiqueFlipperHome() {
   const inventory = useInventory();
   const openAction = (title: string, route: string) => {
     const firstItem = inventory.items[0];
+    if (title === 'Scan & Identify') {
+      router.push(nicheToScannerRoute('antiques') as any);
+      return;
+    }
     if (title === 'Create eBay Listing') {
       router.push(firstItem ? ('/create-listing?id=' + firstItem.id) as any : ('/(tabs)/inventory' as any));
       return;
