@@ -8,6 +8,9 @@ on:
       - '.github/workflows/test-lab-apk.yml'
       - 'package.json'
       - 'pnpm-lock.yaml'
+      - 'niche-modules.json'
+      - 'services/**'
+      - 'constants/niches.ts'
   workflow_dispatch:
 permissions:
   contents: read
@@ -28,14 +31,25 @@ jobs:
       - name: Install dependencies
         run: bash scripts/install-dependencies.sh
       - name: Configure isolated Test Lab app
-        run: |
-          SWISH_TEST_LAB=1 EXPO_NO_DOTENV=1 pnpm exec expo config --type public
+        env:
+          SWISH_TEST_LAB: '1'
+          EXPO_NO_DOTENV: '1'
+        run: pnpm exec expo config --type public
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
-      - name: Generate Test Lab Android project
+      # GitHub-hosted Ubuntu images already provide ANDROID_HOME and current
+      # command-line tools. Do not use setup-android@v3: it tries to install
+      # the removed legacy SDK package named "tools", which breaks the job.
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      - name: Generate isolated Test Lab Android project
         env:
           SWISH_TEST_LAB: '1'
           EXPO_NO_DOTENV: '1'
