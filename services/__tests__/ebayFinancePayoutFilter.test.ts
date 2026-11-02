@@ -7,5 +7,7 @@ describe('eBay Finances payout filter contract', () => {
     expect(source).toContain('payoutDate:[');
     expect(source).not.toContain('lastAttemptedPayoutDate:[');
     expect(source).toContain('payoutStatus:RETRYABLE_FAILED');
+    expect(source).toContain('resp.status === 204');
+    expect(source).toContain('noPayouts: true');
   });
 });
