@@ -65,32 +65,32 @@
     {
       "id": "S2",
       "name": "Implement foundation architecture and registry",
-      "status": "IMPLEMENTED",
+      "status": "VERIFIED",
       "goal": "Make existing architecture boundaries explicit and enforceable without creating duplicate registries or services.",
       "tasks": [
         {
           "id": "S2-01",
           "title": "Define shared core/module boundaries against existing code",
-          "status": "IMPLEMENTED",
-          "evidence": "docs/S3_CORE_ACCEPTANCE_REPORT.md (2026-11-02): shared core/module boundaries and dependency validator implemented; canonical niche registry extended with typed contracts and ten scanner routes; typed extension/scope/evidence contracts and dependency rules added; architecture and cross-niche regression tests authored. Tests in this report are explicitly NOT executed in the editor. Status IMPLEMENTED, not VERIFIED; full acceptance CI and runtime/device checks remain open."
+          "status": "VERIFIED",
+          "evidence": "Verified on main source snapshot e8fec5fdb6ed262556c9b84499ec956ad0a2f385 by https://github.com/troonvinyl-ux/SWISH/actions/runs/41458231817: regression and niche isolation job passed locked dependency install, lint, production-register validation, shared app/Master Admin typecheck and targeted SWISH regression tests; Edge Function syntax and client secret-boundary regression job passed; all ten niche branded configuration and Android JS bundle jobs passed. PR #124 foundation contract gate also passed and was merged as 79dbf7724b0e2d559a4e524780ec06616a481044. Verification covers repository contracts and CI; live OnSpace Cloud deployment/RLS, authenticated integration and installed-device acceptance remain S7 checks and are not implied."
         },
         {
           "id": "S2-02",
           "title": "Extend existing niche-modules.json as the canonical module registry",
-          "status": "IMPLEMENTED",
-          "evidence": "docs/S3_CORE_ACCEPTANCE_REPORT.md (2026-11-02): shared core/module boundaries and dependency validator implemented; canonical niche registry extended with typed contracts and ten scanner routes; typed extension/scope/evidence contracts and dependency rules added; architecture and cross-niche regression tests authored. Tests in this report are explicitly NOT executed in the editor. Status IMPLEMENTED, not VERIFIED; full acceptance CI and runtime/device checks remain open."
+          "status": "VERIFIED",
+          "evidence": "Verified on main source snapshot e8fec5fdb6ed262556c9b84499ec956ad0a2f385 by https://github.com/troonvinyl-ux/SWISH/actions/runs/41458231817: regression and niche isolation job passed locked dependency install, lint, production-register validation, shared app/Master Admin typecheck and targeted SWISH regression tests; Edge Function syntax and client secret-boundary regression job passed; all ten niche branded configuration and Android JS bundle jobs passed. PR #124 foundation contract gate also passed and was merged as 79dbf7724b0e2d559a4e524780ec06616a481044. Verification covers repository contracts and CI; live OnSpace Cloud deployment/RLS, authenticated integration and installed-device acceptance remain S7 checks and are not implied."
         },
         {
           "id": "S2-03",
           "title": "Define typed contracts and dependency rules for niche extensions",
-          "status": "IMPLEMENTED",
-          "evidence": "docs/S3_CORE_ACCEPTANCE_REPORT.md (2026-11-02): shared core/module boundaries and dependency validator implemented; canonical niche registry extended with typed contracts and ten scanner routes; typed extension/scope/evidence contracts and dependency rules added; architecture and cross-niche regression tests authored. Tests in this report are explicitly NOT executed in the editor. Status IMPLEMENTED, not VERIFIED; full acceptance CI and runtime/device checks remain open."
+          "status": "VERIFIED",
+          "evidence": "Verified on main source snapshot e8fec5fdb6ed262556c9b84499ec956ad0a2f385 by https://github.com/troonvinyl-ux/SWISH/actions/runs/41458231817: regression and niche isolation job passed locked dependency install, lint, production-register validation, shared app/Master Admin typecheck and targeted SWISH regression tests; Edge Function syntax and client secret-boundary regression job passed; all ten niche branded configuration and Android JS bundle jobs passed. PR #124 foundation contract gate also passed and was merged as 79dbf7724b0e2d559a4e524780ec06616a481044. Verification covers repository contracts and CI; live OnSpace Cloud deployment/RLS, authenticated integration and installed-device acceptance remain S7 checks and are not implied."
         },
         {
           "id": "S2-04",
           "title": "Add architecture and cross-niche regression tests",
-          "status": "IMPLEMENTED",
-          "evidence": "docs/S3_CORE_ACCEPTANCE_REPORT.md (2026-11-02): shared core/module boundaries and dependency validator implemented; canonical niche registry extended with typed contracts and ten scanner routes; typed extension/scope/evidence contracts and dependency rules added; architecture and cross-niche regression tests authored. Tests in this report are explicitly NOT executed in the editor. Status IMPLEMENTED, not VERIFIED; full acceptance CI and runtime/device checks remain open."
+          "status": "VERIFIED",
+          "evidence": "Verified on main source snapshot e8fec5fdb6ed262556c9b84499ec956ad0a2f385 by https://github.com/troonvinyl-ux/SWISH/actions/runs/41458231817: regression and niche isolation job passed locked dependency install, lint, production-register validation, shared app/Master Admin typecheck and targeted SWISH regression tests; Edge Function syntax and client secret-boundary regression job passed; all ten niche branded configuration and Android JS bundle jobs passed. PR #124 foundation contract gate also passed and was merged as 79dbf7724b0e2d559a4e524780ec06616a481044. Verification covers repository contracts and CI; live OnSpace Cloud deployment/RLS, authenticated integration and installed-device acceptance remain S7 checks and are not implied."
         }
       ]
     },
