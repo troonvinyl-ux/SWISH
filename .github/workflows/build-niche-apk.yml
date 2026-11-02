@@ -5,6 +5,8 @@ on:
     paths:
       - 'app/**'
       - 'services/**'
+      - '!services/__tests__/**'
+      - '!services/__mocks__/**'
       - 'hooks/**'
       - 'contexts/**'
       - 'components/**'
@@ -17,7 +19,6 @@ on:
       - 'scripts/verify-apk.sh'
       - 'scripts/**'
       - '.github/workflows/_niche-android.yml'
-      - '.github/workflows/build-niche-apk.yml'
   workflow_dispatch:
     inputs:
       niche:
