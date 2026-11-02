@@ -324,12 +324,16 @@ function parseTradingOrder(block: string): TradingOrder | null {
 // Multi-quantity listings stay available until GetItem confirms no units remain.
 async function reconcileSoldOrder(
   supabase: ReturnType<typeof adminClient>, tenantId: string, itemId: string, listingId: string,
-  soldAt: string, salePrice: number,
+  soldAt: string, salePrice: number, multiQuantityStatusChecks: Map<string, string>, nicheId: string | null,
 ): Promise<string | null> {
   const { data: item, error: readError } = await supabase.from('items').select('status, quantity')
     .eq('id', itemId).eq('tenant_id', tenantId).maybeSingle();
   if (readError || !item) return 'Sold inventory could not be verified';
-  if (Number(item.quantity ?? 1) > 1) return null;
+  if (Number(item.quantity ?? 1) > 1) {
+    if (!nicheId) return 'Multi-quantity inventory has no registered niche; status refresh was not scheduled';
+    multiQuantityStatusChecks.set(listingId, nicheId);
+    return null;
+  }
   // One server-side transaction updates both canonical item and listing. This avoids
   // leaving a listing marked sold when the item transition/audit insert fails.
   const { data: reconciled, error: reconcileError } = await supabase.rpc('swish_reconcile_ebay_sold_order', {
@@ -353,6 +357,7 @@ async function importFulfillmentOrders(
   ffOrders: FulfillmentOrder[],
   listingByEbayId: Map<string, ListingMatch>,
   existingOrderIds: Set<string>,
+  multiQuantityStatusChecks: Map<string, string>,
   logId: string,
 ): Promise<{ imported: number; skipped: number; errors: string[] }> {
   let imported = 0, skipped = 0;
@@ -427,7 +432,7 @@ async function importFulfillmentOrders(
           .eq('id', existingRow.id).eq('tenant_id', tenantId);
         if (updateErr) errors.push(`Order ${orderId} status refresh: ${updateErr.message}`);
         else {
-          const reconcileError = await reconcileSoldOrder(supabase, tenantId, matchedItemId, matchedListingId, order.createdAt, salePrice);
+          const reconcileError = await reconcileSoldOrder(supabase, tenantId, matchedItemId, matchedListingId, order.createdAt, salePrice, multiQuantityStatusChecks, matchedListingMeta?.nicheId ?? null);
           if (reconcileError) errors.push(`Order ${orderId}: ${reconcileError}`);
           skipped++;
         }
@@ -459,7 +464,7 @@ async function importFulfillmentOrders(
       if (matchedItemId) {
         const { data: curItem } = await supabase.from('items').select('status, acquired_cost').eq('id', matchedItemId).eq('tenant_id', tenantId).maybeSingle();
         const acquiredCost = Number(curItem?.acquired_cost ?? 0);
-        const reconcileError = await reconcileSoldOrder(supabase, tenantId, matchedItemId, matchedListingId!, order.createdAt, salePrice);
+        const reconcileError = await reconcileSoldOrder(supabase, tenantId, matchedItemId, matchedListingId!, order.createdAt, salePrice, multiQuantityStatusChecks, matchedListingMeta?.nicheId ?? null);
         if (reconcileError) errors.push(`Order reconciliation: ${reconcileError}`);
         await supabase.from('sales').insert({
           tenant_id: tenantId, item_id: matchedItemId, listing_id: matchedListingId,
@@ -490,6 +495,7 @@ async function importTradingOrders(
   tradingOrders: TradingOrder[],
   listingByEbayId: Map<string, ListingMatch>,
   existingOrderIds: Set<string>,
+  multiQuantityStatusChecks: Map<string, string>,
 ): Promise<{ imported: number; skipped: number; errors: string[] }> {
   let imported = 0, skipped = 0;
   const errors: string[] = [];
@@ -541,7 +547,7 @@ async function importTradingOrders(
           .eq('id', existingRow.id).eq('tenant_id', tenantId);
         if (updateErr) errors.push(`Order ${order.orderId} status refresh: ${updateErr.message}`);
         else {
-          const reconcileError = await reconcileSoldOrder(supabase, tenantId, matchedItemId, matchedListingId, order.createdAt, salePrice);
+          const reconcileError = await reconcileSoldOrder(supabase, tenantId, matchedItemId, matchedListingId, order.createdAt, salePrice, multiQuantityStatusChecks, matchedListingMeta?.nicheId ?? null);
           if (reconcileError) errors.push(`Order ${order.orderId}: ${reconcileError}`);
           skipped++;
         }
@@ -572,7 +578,7 @@ async function importTradingOrders(
         const { data: curItem } = await supabase.from('items').select('status, acquired_cost').eq('id', matchedItemId).eq('tenant_id', tenantId).maybeSingle();
         const acquiredCost = Number(curItem?.acquired_cost ?? 0);
         const profit = Math.round((netRevenue - acquiredCost) * 100) / 100;
-        const reconcileError = await reconcileSoldOrder(supabase, tenantId, matchedItemId, matchedListingId!, order.createdAt, salePrice);
+        const reconcileError = await reconcileSoldOrder(supabase, tenantId, matchedItemId, matchedListingId!, order.createdAt, salePrice, multiQuantityStatusChecks, matchedListingMeta?.nicheId ?? null);
         if (reconcileError) errors.push(`Order reconciliation: ${reconcileError}`);
         await supabase.from('sales').insert({
           tenant_id: tenantId, item_id: matchedItemId, listing_id: matchedListingId,
@@ -594,6 +600,57 @@ async function importTradingOrders(
   }
 
   return { imported, skipped, errors };
+}
+
+// Refresh current eBay quantities for multi-unit listings touched by imported orders.
+// Reuse the existing authenticated, niche-scoped status endpoint rather than duplicating
+// credential decryption or GetItem parsing in the order importer.
+async function refreshMultiQuantityListingStatuses(
+  authHeader: string,
+  tenantId: string,
+  checks: Map<string, string>,
+): Promise<{ checked: number; errors: string[] }> {
+  if (!checks.size) return { checked: 0, errors: [] };
+  const baseUrl = (Deno.env.get('SUPABASE_URL') ?? '').replace(/\\/+$/, '');
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+  if (!baseUrl || !anonKey) {
+    return { checked: 0, errors: ['Multi-quantity eBay status refresh could not run because backend invocation configuration is missing.'] };
+  }
+
+  const grouped = new Map<string, string[]>();
+  for (const [listingId, nicheId] of checks) {
+    const ids = grouped.get(nicheId) ?? [];
+    ids.push(listingId);
+    grouped.set(nicheId, ids);
+  }
+
+  let checked = 0;
+  const errors: string[] = [];
+  for (const [nicheId, listingIds] of grouped) {
+    for (let start = 0; start < listingIds.length; start += 12) {
+      const batch = listingIds.slice(start, start + 12);
+      try {
+        const response = await fetch(`${baseUrl}/functions/v1/swish-ebay-listing-status`, {
+          method: 'POST',
+          headers: {
+            Authorization: authHeader,
+            apikey: anonKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ tenantId, nicheId, listingIds: batch }),
+          signal: AbortSignal.timeout(45_000),
+        });
+        const payload = await response.json().catch(() => null);
+        if (Number.isSafeInteger(payload?.checked)) checked += payload.checked;
+        if (!response.ok || payload?.success !== true) {
+          errors.push(`Multi-quantity eBay status refresh for ${nicheId} was not confirmed (HTTP ${response.status}).`);
+        }
+      } catch {
+        errors.push(`Multi-quantity eBay status refresh for ${nicheId} could not be reached.`);
+      }
+    }
+  }
+  return { checked, errors };
 }
 
 // ── Main handler ───────────────────────────────────────────────────────────────
@@ -678,6 +735,7 @@ Deno.serve(async (req: Request) => {
     const existingOrderIds = new Set<string>((existingOrdersData ?? []).map(o => o.external_order_id).filter(Boolean));
 
     let totalImported = 0, totalSkipped = 0;
+    const multiQuantityStatusChecks = new Map<string, string>();
     const allErrors: string[] = [];
     const apiWarnings: string[] = [];
     let ffApiUsed = false, tradingApiUsed = false;
@@ -687,7 +745,7 @@ Deno.serve(async (req: Request) => {
       const { orders: ffOrders, apiError } = await fetchFulfillmentOrders(creds.accessToken, daysBack);
       if (!apiError) {
         ffApiUsed = true;
-        const result = await importFulfillmentOrders(supabase, tenantId, ffOrders, listingByEbayId, existingOrderIds, logId);
+        const result = await importFulfillmentOrders(supabase, tenantId, ffOrders, listingByEbayId, existingOrderIds, multiQuantityStatusChecks, logId);
         totalImported += result.imported;
         totalSkipped += result.skipped;
         allErrors.push(...result.errors);
@@ -705,7 +763,7 @@ Deno.serve(async (req: Request) => {
       const { orders: tradingOrders, error: tradingErr } = await fetchTradingOrders(creds.accessToken, creds.clientId, daysBack);
       if (!tradingErr) {
         tradingApiUsed = true;
-        const result = await importTradingOrders(supabase, tenantId, tradingOrders, listingByEbayId, existingOrderIds);
+        const result = await importTradingOrders(supabase, tenantId, tradingOrders, listingByEbayId, existingOrderIds, multiQuantityStatusChecks);
         totalImported += result.imported;
         totalSkipped += result.skipped;
         allErrors.push(...result.errors);
@@ -715,6 +773,9 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    const quantityStatusResult = await refreshMultiQuantityListingStatuses(authHeader, tenantId, multiQuantityStatusChecks);
+    allErrors.push(...quantityStatusResult.errors);
+
     // Update sync log
     if (logId) {
       await supabase.from('ebay_sync_log').update({
@@ -722,7 +783,7 @@ Deno.serve(async (req: Request) => {
         records_created: totalImported, records_skipped: totalSkipped,
         errors: allErrors.slice(0, 20),
         completed_at: new Date().toISOString(),
-        metadata: { daysBack, mode, ffApiUsed, tradingApiUsed },
+        metadata: { daysBack, mode, ffApiUsed, tradingApiUsed, quantityStatusChecked: quantityStatusResult.checked, quantityStatusRequested: multiQuantityStatusChecks.size },
       }).eq('id', logId);
     }
 
@@ -734,6 +795,8 @@ Deno.serve(async (req: Request) => {
       matched: totalImported, // All imports are potentially matched
       errors: allErrors.slice(0, 10),
       warnings: apiWarnings.slice(0, 5),
+      quantityStatusChecked: quantityStatusResult.checked,
+      quantityStatusPending: Math.max(0, multiQuantityStatusChecks.size - quantityStatusResult.checked),
       apiUsed: ffApiUsed ? 'fulfillment_rest' : tradingApiUsed ? 'trading_xml' : 'none',
       feeNote: 'Marketplace fees are ESTIMATED at ~12.8%. Actual eBay fees vary by category, item price, and seller subscription level. Use Finances sync for exact figures.',
     });
