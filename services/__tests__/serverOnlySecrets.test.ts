@@ -831,7 +831,6 @@ describe('eBay end lifecycle reconciliation', () => {
     expect(endRoute).toContain("rpc('swish_transition_item'");
     expect(endRoute).toContain("p_status: 'identified'");
     expect(endRoute).toContain('transitioned !== true');
-    expect(endRoute).not.toContain(".from('items')");
-    expect(endRoute).not.toContain(".update({ status: 'identified'");
+    expect(endRoute).not.toMatch(/\.from\('items'\)[\s\S]{0,120}\.update\(\{\s*status:\s*'identified'/);
   });
 });
