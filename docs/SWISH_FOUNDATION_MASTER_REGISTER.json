@@ -4,7 +4,7 @@
   "sourcePrompt": "SWISH Modular Production Readiness Master Directive",
   "repository": "troonvinyl-ux/SWISH",
   "defaultBranch": "main",
-  "lastReviewed": "2026-11-01",
+  "lastReviewed": "2026-11-02",
   "rules": {
     "noRebuild": true,
     "noNewDatabase": true,
@@ -247,6 +247,12 @@
           "id": "S7-06",
           "title": "Close all critical/high defects and publish evidence-backed release verdict",
           "status": "NOT STARTED"
+        },
+        {
+          "id": "S7-07",
+          "title": "Meet Google Play release requirements for each published niche app",
+          "status": "BLOCKED",
+          "evidence": "Current repository audit (2026-11-02): .github/workflows/build-swish-release-apk.yml installs Android platform 34/build-tools 34.0.0 and builds assembleRelease APK; eas.json production profile and five niche profiles are APK-only, with no profiles yet for Cards, Antiques, Fossils, Beauty or Tech. app.config.js does not explicitly set targetSdkVersion/compileSdkVersion. API 36 targeting, compatible Android Gradle/Expo toolchain, signed AAB generation for all ten package identities, per-app Play Console declarations and policy acceptance are not yet evidenced. Keep Java 17/setup-java@v4 pending compatibility verification."
         }
       ]
     }
@@ -267,7 +273,8 @@
       "web-parity",
       "native-device",
       "security-and-entitlements",
-      "regression-tests"
+      "regression-tests",
+      "google-play-store-compliance"
     ]
   },
   "mergePolicy": {
@@ -324,7 +331,11 @@
     },
     {
       "date": "2026-11-01",
-      "change": "Merged PR #87 (ea7b35a): added a read-only production register validator and focused GitHub Actions evidence gate. The validator checks schema/status integrity, verified-task evidence, all ten canonical niche registrations and mandatory programme guardrails. Current follow-up PR #88 adds live ten-niche web build, GitHub artifact, regression, server-authorization and native-bundle evidence to the existing owner-only Production Control screen; it remains unmerged pending fresh CI."
+      "change": "Merged PR #87 (ea7b35a): added a read-only production register validator and focused GitHub Actions evidence gate. The validator checks schema/status integrity, verified-task evidence, all ten canonical niche registrations and mandatory programme guardrails."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "Merged PR #88 (719b7c3): Production Control now displays live ten-niche web export, artifact, regression, authorization and Android JS bundle evidence with explicit limits. Merged PR #89 (89ed4c3): added a selectable ten-niche certification matrix; all 140 niche-specific acceptance areas remain NOT VERIFIED until evidence is recorded. No app release, database, auth or eBay architecture changes."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"

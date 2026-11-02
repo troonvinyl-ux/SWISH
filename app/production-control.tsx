@@ -216,7 +216,7 @@ export default function ProductionControlScreen() {
         <Text style={styles.muted}>Registration, successful exports and JavaScript bundles do not certify a niche. The matrix below exposes every required acceptance area and leaves it unverified until niche-specific evidence is recorded.</Text>
       </Section>
 
-      <Section title="TEN-NICHE CERTIFICATION MATRIX" subtitle="14 required areas per niche · 140 evidence gates">
+      <Section title="TEN-NICHE CERTIFICATION MATRIX" subtitle={`${certificationAreas.length} required areas per niche · ${snapshot.niches.length * certificationAreas.length} evidence gates`}>
         <View style={styles.nextCard}>
           <View style={styles.prTop}><Text style={styles.taskTitle}>CERTIFICATION RECORD</Text><Pill label="EVIDENCE REQUIRED" tone="warn"/></View>
           <Text style={styles.nextTitle}>0 / {snapshot.niches.length * certificationAreas.length} verified in the register</Text>
