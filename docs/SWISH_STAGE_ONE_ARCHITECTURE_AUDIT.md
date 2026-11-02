@@ -2,7 +2,7 @@
 
 **Audit date:** 2026-11-02 (refreshed against main after PR #127)  
 **Audited ref:** `main`  
-**Audited commit:** `b1f805e22139ba89c3267dbf9c7b21f50582a9f9`  
+**Audited commit:** `463d6706e85e77bcf185f05004fbbe1ea4dc3252`  
 **Scope:** S1-01 through S1-05 in `docs/SWISH_FOUNDATION_MASTER_REGISTER.json`.
 
 ## Executive result
@@ -58,7 +58,7 @@ Stage S1 is **partially complete**. The canonical route/build map and PR reconci
 - Native and Expo web source consume the same service modules and the canonical OnSpace Cloud backend through its Supabase-compatible client/API; no separate website source workspace was identified in this repository.
 - The service layer is not yet the exclusive data-access boundary: GitHub source search on this baseline returns at least 43 files containing direct `supabase.from(...)` access and another five `getSupabaseClient().from(...)` call sites (some overlap). Direct-query call sites are present in screens and services, so UI/service ownership alone cannot be used as proof of authorization. The indexed search is an inventory aid, not a guarantee that every dynamic query was discovered.
 - Existing canonical item UUIDs, tenant membership/RLS, storage, connector records and eBay architecture are retained. No second database or auth system is proposed.
-- The handover documents the existing Edge Function families and applied security hardening. The refreshed security matrix identified a global `x-swish-internal-secret` bypass in `swish-ebay-list`: secret-only calls have no user identity/tenant membership check and skip the conditional paid-niche gate. No in-repository caller was found in source search; external callers/deployed configuration remain unknown. `swish-ebay-sync` is JWT+membership-only in current source despite an unused secret variable/comment. A full function-by-function authorization, schema, input-validation, idempotency and redaction review is still required before S3/S7 acceptance.
+- The handover documents the existing Edge Function families and applied security hardening. PR #135 closed the source-level `x-swish-internal-secret` bypass in `swish-ebay-list`: a supplied secret is only an additional server-to-server check; a valid user JWT and tenant membership are still required before the paid-niche gate. No in-repository caller was found; external callers and deployed secret configuration remain unknown. `swish-ebay-sync` is JWT+membership-only in current source despite an unused secret variable/comment. A full function-by-function authorization, schema, input-validation, idempotency and redaction review is still required before S3/S7 acceptance.
 - A source inventory is not a live dependency graph: deployed OnSpace Cloud Edge Function revisions, effective database grants/RLS policies, external callers and secret configuration, and the separate website deployment must be checked in their respective environments.
 
 ## S1-03 — Ten-niche functionality and isolation audit
@@ -92,9 +92,9 @@ Stage S1 is **partially complete**. The canonical route/build map and PR reconci
 
 - Paid niche entitlement is not yet enforced across every API/RLS path; client-selected niche preferences are not trusted authorization.
 - Some inventory/detail paths still use tenant-only authorization rather than trusted niche authorization.
-- eBay finance has recurring HTTP 400/499 observations; fee aggregation, sign conventions and notes preservation require repair and live verification.
+- eBay finance has recurring historical HTTP 400/499 observations whose production cause remains unknown. PR #138 corrected fee-component projection and truthful partial/incomplete sync reporting; exact seller-account fees, multi-line/multi-quantity allocation, historical error correlation and live reconciliation remain open.
 - eBay messaging must not report a successful send when the provider send failed; message schema/contract reconciliation remains required.
-- Localized eBay category aspects, allowed values and category-specific item specifics need live verification and save/reopen/publish acceptance.
+- PR #138 now prefers localized eBay Taxonomy aspect names with a compatibility fallback; allowed values and category-specific item specifics still need live verification and save/reopen/publish acceptance.
 - Multi-line/multi-quantity order allocation, actual fee aggregation and interrupted-import recovery remain incomplete.
 - Publish timeouts/unknown outcomes require operator-led marketplace reconciliation; claims must not be cleared just because time elapsed.
 - Some connector credentials are encrypted at rest in the observed audit; encryption prefixes do not prove decrypt/refresh success. Keep all secrets server-only and out of client responses/logs.
@@ -182,3 +182,14 @@ Direct database query source files found:
 **Backend dependency inventory:** 25 deployable Edge Function entry points and 12 tracked SQL migrations exist at this baseline. The 25-function source gate inventory is in `docs/SWISH_EDGE_FUNCTION_SECURITY_MATRIX.md`. The migration inventory is the twelve tracked files under `supabase/migrations/`; tracked migrations are not proof they are applied to OnSpace Cloud.
 
 **Remaining S1-02 boundary:** no authenticated OnSpace Cloud deployment session was available in this repository audit. Deployed function parity, effective RLS/grants, production secrets, live cross-tenant tests and actual call origins remain unverified. These are deployment acceptance evidence, not claims inferred from source search.
+
+
+## S1-02 — Post-audit source security update (2026-11-02)
+
+- PR #135 merged and removed the `swish-ebay-list` secret-only authorization bypass. Current source requires a valid user JWT and tenant membership even when the optional internal header is supplied; the paid-niche guard remains in the authenticated publish path.
+- No in-repository caller of the optional header was found. External/OnSpace callers, configured secret state and deployed revision parity remain unknown and must be checked against the acknowledged OnSpace deployment.
+- PR #138 corrected the eBay finance fee-row projection and made partial transaction reconciliation return an incomplete result rather than unconditional success. Historical 400/499 root cause and account-level/multi-line reconciliation remain unverified.
+- PR #138 also normalizes Taxonomy aspects using `localizedAspectName` first. Live category/aspect acceptance remains open.
+- PR #136 moved the eBay listing-end inventory transition through the existing atomic lifecycle RPC; live acknowledgement and reconciliation remain unverified.
+
+This section updates source findings only. It does not alter the historical live-probe results or claim a successful OnSpace deployment.
