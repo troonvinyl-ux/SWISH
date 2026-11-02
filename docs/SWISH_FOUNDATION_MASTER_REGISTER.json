@@ -58,7 +58,7 @@
           "id": "S1-05",
           "title": "Reconcile open PRs, branches and current main before implementation",
           "status": "VERIFIED",
-          "evidence": "GitHub API rechecked 2026-11-02 against main 44ad21c126bd1eab561b62b364172dcfdbf19222. PRs #115-#121 are merged; there are currently no open pull requests. Main workflows and subsequent main changes remain subject to fresh checks before any release or future PR merge."
+          "evidence": "GitHub API rechecked 2026-11-02 after PR #122 merge: main 46a412d9d589a3bcf5c819d9a31d1db0e4fa8ee4; PRs #115-#122 are merged and no open pull requests remain. Recheck current main workflows before the next release or new PR merge."
         }
       ]
     },
@@ -116,7 +116,7 @@
           "id": "S3-03",
           "title": "Verify shared inventory and lifecycle services",
           "status": "IN PROGRESS",
-          "evidence": "docs/S3_CORE_ACCEPTANCE_REPORT.md: atomic inventory lifecycle command and acknowledgement-based helpers implemented for covered transitions; remaining direct screen/table status writes and legacy detail paths still need migration and acceptance. Keep IN PROGRESS."
+          "evidence": "Existing swish_transition_item RPC is now used by manual Stock Listing sales, order creation, CSV sold-history import, eBay order ingestion, eBay listing publication and eBay listing sync. Generic updateItem rejects status mutations and requires transitionItemStatus/markItemSold. PR #122 merged as 46a412d with passing lint, TypeScript, Edge Function syntax, 1,030-test regression, shared authorization, Android JS bundle and ten-niche configuration checks. Remaining: review other server-side status writers, reconcile quantity/partial-sale semantics and perform live inventory lifecycle tests against the existing backend."
         },
         {
           "id": "S3-04",
@@ -404,6 +404,10 @@
     {
       "date": "2026-11-02",
       "change": "Merged PR #121 with 25/25 checks: verified required capture slots and server-supported capture modes for every canonical specialist across all ten niches. S5-01 remains IN PROGRESS pending prompt/output-schema and real-image acceptance. Reconciled S1-05: main 44ad21c and no open PRs."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "Merged PR #122 with passing validation: direct inventory status writes in manual sales, order creation, CSV sales import, eBay order ingestion, listing publication and listing sync now use the existing atomic lifecycle RPC. Generic updateItem status mutations are rejected. S3-03 remains IN PROGRESS for remaining path audit, quantity reconciliation and live backend acceptance. S1-05 rechecked: main 46a412d, no open PRs."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"
