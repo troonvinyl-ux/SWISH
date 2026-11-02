@@ -11,7 +11,7 @@
 //  - Fee calculations are category/marketplace-aware where possible
 
 // ── Model version — increment when calculation changes ───────────────────────
-export const PROFIT_ENGINE_VERSION = 'v1.2';
+export const PROFIT_ENGINE_VERSION = 'v1.3';
 
 // ── eBay UK Fee Structure (2025) ─────────────────────────────────────────────
 // Source: ebay.co.uk/help/selling/fees-credits-invoices/selling-fees
@@ -19,32 +19,62 @@ export const PROFIT_ENGINE_VERSION = 'v1.2';
 
 interface EbayFeeRate {
   categoryHint: string;
-  finalValueFee: number;      // % of total amount (sale + shipping)
-  fixedFee: number;           // per-transaction fixed fee (GBP)
-  internationalFeeExtra: number; // additional % for international sales
-  insertionFeePerMonth: number;  // GBP — 0 for first N listings/month
+  finalValueFee: number;
+  fixedFee: number;
+  fixedFeeUnderThreshold: number;
+  fixedFeeThreshold: number;
+  regulatoryOperatingFee: number;
+  internationalFeeExtra: number;
+  insertionFeePerMonth: number;
+  tierThreshold?: number;
+  aboveThresholdRate?: number;
+  highValueThreshold?: number;
+  highValueRate?: number;
 }
 
+// eBay UK business-seller rates, checked against the official fee table
+// last updated 30 September 2026. Fees exclude VAT on the fee itself.
+// The seller's actual category, shop terms, performance surcharges, VAT and
+// international destination can change the result; estimates must stay labelled.
 const EBAY_UK_FEE_DEFAULTS: EbayFeeRate = {
   categoryHint: 'general',
-  finalValueFee: 0.128,        // 12.8% default
-  fixedFee: 0.30,              // £0.30 per transaction
-  internationalFeeExtra: 0.017, // +1.7% for international buyers
-  insertionFeePerMonth: 0,     // first 1,000 listings/month free for most sellers
+  finalValueFee: 0.129,       // Everything Else / Wholesale & Job Lots
+  fixedFee: 0.40,             // orders over £10
+  fixedFeeUnderThreshold: 0.30,
+  fixedFeeThreshold: 10,
+  regulatoryOperatingFee: 0.0035,
+  internationalFeeExtra: 0,
+  insertionFeePerMonth: 0,    // listing/shop fees are not transaction profit fees
 };
 
-// Category-specific overrides where eBay charges differently
 const EBAY_CATEGORY_FEE_OVERRIDES: Record<string, Partial<EbayFeeRate>> = {
-  coins:              { finalValueFee: 0.128, categoryHint: 'coins' },
-  stamps:             { finalValueFee: 0.128, categoryHint: 'stamps' },
-  trading_cards:      { finalValueFee: 0.128, categoryHint: 'trading_cards' },
-  books:              { finalValueFee: 0.128, categoryHint: 'books' },
-  clothing:           { finalValueFee: 0.128, categoryHint: 'clothing' },
-  jewellery:          { finalValueFee: 0.128, categoryHint: 'jewellery' },
-  watches:            { finalValueFee: 0.128, categoryHint: 'watches' },
-  antiques:           { finalValueFee: 0.128, categoryHint: 'antiques' },
-  art:                { finalValueFee: 0.128, categoryHint: 'art' },
-  motors:             { finalValueFee: 0.075, categoryHint: 'motors', fixedFee: 1.00 }, // lower for vehicles
+  coins: { finalValueFee: 0.109, categoryHint: 'coins', tierThreshold: 450, aboveThresholdRate: 0.03 },
+  coins_uk: { finalValueFee: 0.109, categoryHint: 'coins', tierThreshold: 450, aboveThresholdRate: 0.03 },
+  coins_world: { finalValueFee: 0.109, categoryHint: 'coins', tierThreshold: 450, aboveThresholdRate: 0.03 },
+  coins_currency: { finalValueFee: 0.109, categoryHint: 'coins', tierThreshold: 450, aboveThresholdRate: 0.03 },
+  islamic_silver: { finalValueFee: 0.109, categoryHint: 'coins', tierThreshold: 450, aboveThresholdRate: 0.03 },
+  banknotes: { finalValueFee: 0.109, categoryHint: 'coins', tierThreshold: 450, aboveThresholdRate: 0.03 },
+  gold: { finalValueFee: 0.109, categoryHint: 'coins', tierThreshold: 450, aboveThresholdRate: 0.03 },
+  silver: { finalValueFee: 0.109, categoryHint: 'coins', tierThreshold: 450, aboveThresholdRate: 0.03 },
+  ancient_artefacts: { finalValueFee: 0.109, categoryHint: 'collectables' },
+  trading_cards: { finalValueFee: 0.109, categoryHint: 'collectables' },
+  antiques: { finalValueFee: 0.109, categoryHint: 'antiques' },
+  books: { finalValueFee: 0.099, categoryHint: 'books' },
+  clothing: { finalValueFee: 0.119, categoryHint: 'clothing' },
+  trainers_sneakers: { finalValueFee: 0.119, categoryHint: 'clothing / trainers', highValueThreshold: 100, highValueRate: 0.07 },
+  beauty: { finalValueFee: 0.109, categoryHint: 'health and beauty' },
+  tech: { finalValueFee: 0.099, categoryHint: 'computers / sound and vision' },
+  bicycles: { finalValueFee: 0.109, categoryHint: 'sporting goods' },
+  fossils: { finalValueFee: 0.109, categoryHint: 'collectables' },
+  surplus_flip: { finalValueFee: 0.129, categoryHint: 'wholesale and job lots' },
+  motocross: { finalValueFee: 0.129, categoryHint: 'general / motorsport item; verify leaf category' },
+  stamps: { finalValueFee: 0.109, categoryHint: 'stamps' },
+  jewellery: { finalValueFee: 0.149, categoryHint: 'jewellery', tierThreshold: 1000, aboveThresholdRate: 0.04 },
+  jewellery_precious_metals: { finalValueFee: 0.149, categoryHint: 'jewellery', tierThreshold: 1000, aboveThresholdRate: 0.04 },
+  watches: { finalValueFee: 0.129, categoryHint: 'watches', tierThreshold: 750, aboveThresholdRate: 0.03 },
+  retro_games: { finalValueFee: 0.099, categoryHint: 'video games' },
+  retro_consoles: { finalValueFee: 0.069, categoryHint: 'video game consoles', tierThreshold: 400, aboveThresholdRate: 0.02 },
+  surplus_trader: { finalValueFee: 0.129, categoryHint: 'wholesale and job lots' },
 };
 
 export function getEbayFeeRate(specialistId?: string): EbayFeeRate {
@@ -57,10 +87,15 @@ export function getEbayFeeRate(specialistId?: string): EbayFeeRate {
 export interface ProfitInputs {
   salePrice: number;
   acquisitionCost: number;
-  shippingCost?: number;         // cost to seller (postage, packaging)
+  shippingCost?: number;         // postage cost paid by seller
+  shippingRevenue?: number;      // postage/handling paid by buyer; included in eBay fee base and revenue
   packagingCost?: number;
   marketplaceFee?: number;        // if known exactly (e.g., from eBay financial API)
-  marketplaceFeeRate?: number;    // 0-1, used when exact fee unknown
+  marketplaceFeeRate?: number;    // 0-1, overrides the category final-value percentage only
+  ebaySellerType?: 'business' | 'private'; // defaults to UK business estimate; private UK domestic sales have no final-value fee
+  isInternationalSale?: boolean; // UK private sellers pay 3% on overseas delivery; business rates depend on destination
+  internationalFeeRate?: number; // explicit destination-specific international rate for business/private estimates
+  regulatoryOperatingFeeRate?: number; // optional UK business override; defaults to 0.35%
   otherCosts?: number;            // customs, storage, repairs, etc.
   labourHours?: number;           // estimated hours to source/clean/list/pack
   labourRatePerHour?: number;     // default £15/h if not specified
@@ -72,6 +107,7 @@ export interface ProfitInputs {
 export interface ProfitResult {
   // Core financials
   salePrice: number;
+  shippingRevenue: number;
   acquisitionCost: number;
   marketplaceFee: number;
   shippingCost: number;
@@ -114,6 +150,7 @@ export function calculateProfit(inputs: ProfitInputs): ProfitResult {
     salePrice,
     acquisitionCost,
     shippingCost = 0,
+    shippingRevenue = 0,
     packagingCost = 0,
     otherCosts = 0,
     labourHours,
@@ -126,26 +163,51 @@ export function calculateProfit(inputs: ProfitInputs): ProfitResult {
   // ── Determine marketplace fee ────────────────────────────────────────────
   let marketplaceFee: number;
   let feeRateUsed: number;
+  const grossRevenue = salePrice + shippingRevenue;
+  const feeBase = Math.max(0, grossRevenue);
+  const estimatedFees = inputs.marketplaceFee == null;
 
-  if (inputs.marketplaceFee != null) {
-    // Exact fee known (e.g., from eBay API)
-    marketplaceFee = inputs.marketplaceFee;
-    feeRateUsed = salePrice > 0 ? marketplaceFee / salePrice : 0;
+  if (!estimatedFees) {
+    // Exact fee known (e.g., from eBay Finances API); do not add estimated components.
+    marketplaceFee = inputs.marketplaceFee!;
+    feeRateUsed = feeBase > 0 ? marketplaceFee / feeBase : 0;
   } else {
-    // Estimate from rates
-    const feeStructure = getEbayFeeRate(specialistId);
-    feeRateUsed = inputs.marketplaceFeeRate ?? feeStructure.finalValueFee;
-    // Fee applies to sale price + shipping (eBay rule)
-    marketplaceFee = (salePrice + shippingCost) * feeRateUsed + feeStructure.fixedFee;
+    const sellerType = inputs.ebaySellerType ?? 'business';
+    const internationalRate = inputs.internationalFeeRate ??
+      (sellerType === 'private' && inputs.isInternationalSale ? 0.03 : 0);
+
+    if (sellerType === 'private') {
+      // UK private sellers pay no domestic final-value or regulatory operating fee.
+      // Overseas delivery attracts the 3% international fee; listing upgrades are excluded.
+      feeRateUsed = internationalRate;
+      marketplaceFee = feeBase * internationalRate;
+    } else {
+      const feeStructure = getEbayFeeRate(specialistId);
+      const finalValueRate = inputs.marketplaceFeeRate ?? feeStructure.finalValueFee;
+      const highValueRate = feeStructure.highValueThreshold != null && feeStructure.highValueRate != null && salePrice >= feeStructure.highValueThreshold
+        ? feeStructure.highValueRate
+        : finalValueRate;
+      const tierThreshold = feeStructure.tierThreshold;
+      const aboveThresholdRate = feeStructure.aboveThresholdRate;
+      const finalValueFee = tierThreshold != null && aboveThresholdRate != null
+        ? Math.min(feeBase, tierThreshold) * highValueRate + Math.max(0, feeBase - tierThreshold) * aboveThresholdRate
+        : feeBase * highValueRate;
+      const regulatoryRate = inputs.regulatoryOperatingFeeRate ?? feeStructure.regulatoryOperatingFee;
+      const fixedFee = feeBase <= feeStructure.fixedFeeThreshold
+        ? feeStructure.fixedFeeUnderThreshold
+        : feeStructure.fixedFee;
+      feeRateUsed = highValueRate + regulatoryRate + internationalRate;
+      marketplaceFee = finalValueFee + feeBase * (regulatoryRate + internationalRate) + fixedFee;
+    }
   }
 
   // ── Core calculations ────────────────────────────────────────────────────
-  const netRevenue     = salePrice - marketplaceFee - shippingCost;
+  const netRevenue     = grossRevenue - marketplaceFee - shippingCost;
   const totalCosts     = acquisitionCost + marketplaceFee + shippingCost + packagingCost + otherCosts;
-  const grossProfit    = salePrice - totalCosts;
+  const grossProfit    = grossRevenue - totalCosts;
   const netProfit      = netRevenue - acquisitionCost - packagingCost - otherCosts;
 
-  const grossMarginPct = salePrice > 0 ? grossProfit / salePrice : 0;
+  const grossMarginPct = grossRevenue > 0 ? grossProfit / grossRevenue : 0;
   const roi            = acquisitionCost > 0 ? grossProfit / acquisitionCost : 0;
 
   // ── Labour efficiency ────────────────────────────────────────────────────
@@ -157,11 +219,13 @@ export function calculateProfit(inputs: ProfitInputs): ProfitResult {
 
   // ── Confidence ───────────────────────────────────────────────────────────
   let confidence: ProfitResult['confidence'] = 'high';
-  if (isEstimate || inputs.marketplaceFee == null) confidence = 'medium';
+  const isEstimateResult = isEstimate || estimatedFees;
+  if (isEstimateResult) confidence = 'medium';
   if (!acquisitionCost || acquisitionCost === 0) confidence = 'low';
 
   return {
     salePrice,
+    shippingRevenue,
     acquisitionCost,
     marketplaceFee,
     shippingCost,
@@ -178,7 +242,7 @@ export function calculateProfit(inputs: ProfitInputs): ProfitResult {
     labourCost,
     profitAfterLabour,
     capitalVelocityMonthly: null, // requires daysInStock — computed separately
-    isEstimate,
+    isEstimate: isEstimateResult,
     confidence,
     feeRateUsed,
     modelVersion: PROFIT_ENGINE_VERSION,
