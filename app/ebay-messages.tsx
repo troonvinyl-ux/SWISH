@@ -77,7 +77,11 @@ async function syncEbayMessages(
       return { synced: 0, error: errorMessage };
     }
 
-    return { synced: data?.synced ?? 0, error: null };
+    const synced = Number.isFinite(data?.synced) ? data.synced : 0;
+    if (data?.success === false) {
+      return { synced, error: data?.error ?? 'Message sync was incomplete. Some messages may still need to be retrieved.' };
+    }
+    return { synced, error: null };
   } catch (e: any) {
     return { synced: 0, error: e?.message ?? 'Failed to sync messages' };
   }
@@ -544,7 +548,9 @@ export default function EbayMessagesScreen() {
     const { synced, error } = await syncEbayMessages(tenant.id);
     setSyncing(false);
     if (error) {
-      showAlert('Sync Failed', error);
+      if (synced > 0) load();
+      showAlert(synced > 0 ? 'Sync Incomplete' : 'Sync Failed',
+        synced > 0 ? `${synced} messages were saved, but the mailbox sync did not finish. ${error}` : error);
     } else if (synced === 0) {
       showAlert('No New Messages', 'No new messages found in the last 30 days.');
     } else {
