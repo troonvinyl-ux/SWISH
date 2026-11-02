@@ -55,3 +55,14 @@ test('Android 16 native builds receive a new OTA runtime and native config canno
   expect(ota).not.toContain("'app.json'");
   expect(ota).not.toContain("'plugins/**'");
 });
+
+test('Android SDK licence acceptance handles sdkmanager early exit without masking errors', () => {
+  for (const file of ['.github/workflows/_niche-android.yml', '.github/workflows/build-swish-suite.yml', '.github/workflows/build-swish-release-apk.yml']) {
+    const workflow = read(file);
+    expect(workflow).toContain('set +o pipefail');
+    expect(workflow).toContain('set -o pipefail');
+  }
+  const pkg = JSON.parse(read('package.json'));
+  const release = read('.github/workflows/build-swish-release-apk.yml');
+  expect(release).toContain('version: ' + pkg.packageManager.replace('pnpm@', ''));
+});
