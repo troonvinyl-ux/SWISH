@@ -110,6 +110,17 @@ The S2-S3 workflow's `run_live_checks` defaults false; skipped is not passed. Co
 
 The runner logs only check names/statuses, authenticates with the existing password API, refreshes sessions, checks positive owned-item reads, negative cross-tenant item/membership reads, trusted niche access and credential-column denial, then signs out its sessions. It creates a commit-bound JSON artifact. Its explicit `notCovered` list excludes OTP, media, AI accuracy, live eBay, fee/order reconciliation and device/notifications. It does not automatically promote register tasks.
 
+## eBay Finances 400/499 source-path diagnosis (not a production root-cause finding)
+
+A source review of `swish-ebay-finances` narrows what the historical 99 HTTP 400 responses can mean:
+- The function itself returns HTTP 400 for malformed request JSON/object, invalid `tenantId`, unsupported `route`, invalid `daysBack`, or when `getToken` reports `requiresReauth`.
+- `getToken` sets `requiresReauth` when the connector is missing/disconnected, stored credentials cannot be decrypted, the access token is missing/expired without usable refresh credentials, or eBay's OAuth refresh endpoint returns 400/401/403.
+- A non-authentication HTTP 400 from the upstream eBay `/transaction` endpoint is not returned as an Edge Function 400 in the current handler: it is recorded as a fetch error and mapped to a 403 when no transaction rows were retrieved (or returned as a partial result if rows were already received).
+- The current finance screen and Seller Hub call the valid `get_funds_summary` route with the tenant ID; those call sites do not send an invalid `daysBack` value. This makes the `requiresReauth` branch a plausible explanation for the historical 400s, but it is not proven without the sanitized invocation response and matching timestamp.
+- The function does not explicitly emit HTTP 499. A 499 in platform logs therefore needs gateway/request-cancellation evidence; do not attribute it to eBay without the ingress trace.
+
+No token, credential payload or raw provider body should be logged to diagnose this. A controlled reauthorisation and one finance-summary request, correlated with safe status/error-code telemetry, is still required. The historical 400/499 issue remains OPEN and is not represented as fixed.
+
 ## Known limitations / architectural risks
 
 - S2 implementation is ready for automated acceptance; tests have not run in this editor, so S2 stays IMPLEMENTED rather than VERIFIED.
