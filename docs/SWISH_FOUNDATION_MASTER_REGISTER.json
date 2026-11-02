@@ -58,7 +58,7 @@
           "id": "S1-05",
           "title": "Reconcile open PRs, branches and current main before implementation",
           "status": "IN PROGRESS",
-          "evidence": "Rechecked on 2026-11-02 against main 8630b9c976f590af8254210c2ce56f32fd1f912c. PR #139 and PR #140 are open. PR #139 latest head ebd5cd635abc65401d663be01b5a4344cfbc608b: the stale repricing test assertion has been aligned with current main; S2-S3 foundation CI passed and niche-routing/web workflows are still running. PR #140 head f8c96eaef640246d76ce34ba328226544e159ff4: all four required workflows passed, but physical Android Back and narrow-screen device acceptance remain open. Neither PR is merged. Keep S1-05 IN PROGRESS until both branches are resolved and main/open-PR state is rechecked before integration."
+          "evidence": "Rechecked on 2026-11-02 against main bcfe039b0f9980c10eeaac01d7d0a9f00da90eb0. Three open PRs are reconciled and all branches are up to date with main: PR #139 head 46230da96e6a339122c965a61d3732e8967acd17 passed all four required workflows; PR #140 head e86e973853bf82b9345dad7a3a8ec70f77e97849 passed all four required workflows; PR #141 head f2ea4001d5d31fc96652594ea111796673197456 passed all five required workflows. All three PRs are mergeable and remain open/unmerged. Physical Android acceptance remains open for #139/#140; live eBay and OnSpace deployment acceptance remains open for #141. Keep S1-05 IN PROGRESS until merges are explicitly authorised and main/open-PR state is rechecked before each integration."
         }
       ]
     },
@@ -122,7 +122,7 @@
           "id": "S3-04",
           "title": "Verify secure eBay OAuth, listing, orders, messages and sync flows",
           "status": "IN PROGRESS",
-          "evidence": "Source implementation includes bounded sequential GetMyMessages pagination (10 pages × 50), namespace-tolerant XML parsing, explicit partial-sync reporting and inbox handling. PR #130 merged as 0f24568; PR #132 CI run 41465023973 passed the five pagination tests within the 554-test/13-suite regression suite. Still IN PROGRESS: actual eBay response/seller permission acceptance, message bodies, remote send, deployed OnSpace Cloud revision and mailbox-over-cap retrieval. Additional source repair in branch fix/ebay-message-body-retrieval: GetMyMessages now sends required DetailLevel=ReturnHeaders and parses documented Message nodes; a JWT+tenant-membership protected get_message_body route retrieves one body with ReturnMessages using the tenant-owned local message row, sanitizes HTML to plain text and caches it. Client loads body on opening a message. Focused helper/service/security tests added. Live seller-account permissions, real provider payloads, send acknowledgements and deployed OnSpace revision remain unverified."
+          "evidence": "Source implementation includes bounded sequential GetMyMessages pagination (10 pages × 50), namespace-tolerant XML parsing, explicit partial-sync reporting and inbox handling. PR #130 merged as 0f24568; PR #132 CI run 41465023973 passed the five pagination tests within the 554-test/13-suite regression suite. Still IN PROGRESS: actual eBay response/seller permission acceptance, message bodies, remote send, deployed OnSpace Cloud revision and mailbox-over-cap retrieval. Additional source repair in branch fix/ebay-message-body-retrieval: GetMyMessages now sends required DetailLevel=ReturnHeaders and parses documented Message nodes; a JWT+tenant-membership protected get_message_body route retrieves one body with ReturnMessages using the tenant-owned local message row, sanitizes HTML to plain text and caches it. Client loads body on opening a message. Focused helper/service/security tests added. Live seller-account permissions, real provider payloads, send acknowledgements and deployed OnSpace revision remain unverified. PR #141 opened on head f2ea4001d5d31fc96652594ea111796673197456; all five required GitHub Actions workflows passed, including the full regression/TypeScript/lint, server authorization, Edge Function syntax/secret boundary, all ten Android bundles, all ten web exports, niche routing and register validation. This remains source/CI evidence only, not live eBay or deployed OnSpace acceptance."
         },
         {
           "id": "S3-05",
@@ -244,7 +244,7 @@
           "id": "S7-01",
           "title": "Run full type, lint, unit, integration and regression suites",
           "status": "IMPLEMENTED",
-          "evidence": "PR #132 CI run 41465023973: lint, production register validation, shared app/Master Admin TypeScript, 554 tests across 13 suites, four Deno paid-niche authorization tests, Edge Function syntax/secret-boundary guard, all ten branded Android JavaScript bundles and private Master Admin bundle passed. Web exports 10/10 passed in run 41465024074; niche routing/config passed in 41465023802. Live integration gate was disabled and is not counted as live acceptance. Additional latest-head evidence: PR #140 commit f8c96eaef640246d76ce34ba328226544e159ff4 passed all four GitHub Actions workflows (S2-S3 foundation, Master Admin readiness, branded web production exports and niche-routing/config). This is CI/source evidence only; PR remains open and device/deployment/live acceptance are not implied."
+          "evidence": "PR #132 CI run 41465023973: lint, production register validation, shared app/Master Admin TypeScript, 554 tests across 13 suites, four Deno paid-niche authorization tests, Edge Function syntax/secret-boundary guard, all ten branded Android JavaScript bundles and private Master Admin bundle passed. Web exports 10/10 passed in run 41465024074; niche routing/config passed in 41465023802. Live integration gate was disabled and is not counted as live acceptance. Additional latest-head evidence: PR #140 commit f8c96eaef640246d76ce34ba328226544e159ff4 passed all four GitHub Actions workflows (S2-S3 foundation, Master Admin readiness, branded web production exports and niche-routing/config). This is CI/source evidence only; PR remains open and device/deployment/live acceptance are not implied. Latest-head CI: PR #139 (46230da) passed all four required workflows; PR #140 (e86e973) passed all four; PR #141 (f2ea400) passed all five. Ten niche Android JS bundle checks and ten web exports passed on #141; these are not signed APK/AAB release artifacts and do not replace physical device acceptance."
         },
         {
           "id": "S7-02",
@@ -268,7 +268,7 @@
           "id": "S7-05",
           "title": "Complete real-device, live integration and operational acceptance",
           "status": "IN PROGRESS",
-          "evidence": "docs/SWISH_LIVE_VERIFICATION_20261102.md and docs/SWISH_LIVE_VERIFICATION_20261102.json: actual OnSpace Cloud catalog/grant checks, two corrected identity-free read-only RLS probes, all 25 deployed endpoint GET probes and four failed post-source-edit retests executed on 2026-11-02. Ten endpoints returned 500, nine with BootFailure logs. Source deployability defects repaired; live recovery/deployed revision parity NOT verified. No approved account login, seller-provider workflow, real-image or device acceptance executed; all remain blocked. No VERIFIED promotion."
+          "evidence": "docs/SWISH_LIVE_VERIFICATION_20261102.md and docs/SWISH_LIVE_VERIFICATION_20261102.json: actual OnSpace Cloud catalog/grant checks, two corrected identity-free read-only RLS probes, all 25 deployed endpoint GET probes and four failed post-source-edit retests executed on 2026-11-02. Ten endpoints returned 500, nine with BootFailure logs. Source deployability defects repaired; live recovery/deployed revision parity NOT verified. No approved account login, seller-provider workflow, real-image or device acceptance executed; all remain blocked. No VERIFIED promotion. Rechecked 2026-11-02: the only linked Supabase project is INACTIVE and is not the live OnSpace backend; no OnSpace deployment connector/credential is available in this session. No deployment was attempted. Live function revision parity and the previously observed HTTP 500/BootFailure responses therefore remain unresolved and must be checked in OnSpace Cloud."
         },
         {
           "id": "S7-06",
@@ -355,6 +355,10 @@
     "Real APK/device launches, signing, web parity, deployment and external CI billing constraints require evidence."
   ],
   "changeLog": [
+    {
+      "date": "2026-11-02",
+      "change": "Final S1-S7 reconciliation: PR #139 and #140 remain open, mergeable and fully CI-green; PR #141 adds the eBay GetMyMessages ReturnHeaders/ReturnMessages repair and also passed all five required workflows. All three branches are up to date with main. No PR was merged and no APK, signed AAB or OnSpace deployment was produced. Live seller-account, physical Android and OnSpace deployment acceptance remain outstanding."
+    },
     {
       "date": "2026-11-02",
       "change": "Started S3-04 eBay inbox repair in branch fix/ebay-message-body-retrieval: corrected mandatory GetMyMessages detail level and response node parser; added tenant-scoped ReturnMessages on-demand body retrieval and cache, client loading UI, and focused XML/service/security tests. Not deployed or live-verified."
