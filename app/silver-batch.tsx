@@ -727,7 +727,8 @@ export default function SilverBatchScreen() {
           const { data: itemRow, error: itemErr } = await supabase.from('items').insert({
             tenant_id: tenant.id,
             canonical_title: cap.userTitle ?? cap.listingTitle ?? cap.aiTitle ?? 'Unidentified Silver Coin',
-            specialist_id: 'curiosities_collectibles',
+            // Silver Batch is a coin-niche workflow; use the registered canonical specialist so paid access and coin confidence gates apply.
+            specialist_id: 'silver',
             status: 'identified',
             identification_confidence: cap.aiConfidence ?? 0.3,
             identification_source: 'detected',
