@@ -6,6 +6,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials, isEncrypted } from '../_shared/credentialCrypto.ts';
 import { ebayFinancesSignatureHeaders } from '../_shared/ebayDigitalSignature.ts';
+import { aggregateActualEbayFees, withActualEbayFeeNote, FINAL_VALUE_FEE_TYPES } from '../_shared/ebayFinance.ts';
 
 const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const EBAY_FINANCES_API = 'https://apiz.ebay.com/sell/finances/v1';
@@ -201,7 +202,6 @@ Deno.serve(async (req: Request) => {
         const signatureHeaders = await ebayFinancesSignatureHeaders(url, 'GET');
         const resp = await fetch(url.toString(), { headers: { ...hdrs, ...signatureHeaders }, signal: AbortSignal.timeout(20000) });
         if (!resp.ok) {
-          const et = await resp.text().catch(() => '');
           if (resp.status === 403 || resp.status === 401) {
             const payments = await checkManagedPayments(accessToken);
             const diagnosis = payments.status === 'OPTED_IN'
@@ -210,7 +210,7 @@ Deno.serve(async (req: Request) => {
                 ? `eBay Managed Payments status: ${payments.status}. Check seller payments onboarding and re-authorise eBay in SWISH.`
                 : 'SWISH could not verify Managed Payments status. Re-authorise eBay in SWISH and check the Production keyset scopes.';
             fetchErr = `eBay Finances API HTTP ${resp.status}. ${diagnosis}`;
-          } else fetchErr = `Finances API HTTP ${resp.status}: ${et.slice(0, 200)}`;
+          } else fetchErr = `Finances API HTTP ${resp.status}. The eBay service did not complete the request; retry shortly.`;
           hasMore = false; break;
         }
         const data = await resp.json();
@@ -227,6 +227,9 @@ Deno.serve(async (req: Request) => {
           const txId = String(tx.transactionId ?? ''); if (!txId) continue;
           const txType = String(tx.transactionType ?? 'UNKNOWN');
           const amount = parseFloat(tx.amount?.value ?? '0') || 0;
+          const bookingEntry = tx.bookingEntry === 'DEBIT' || tx.bookingEntry === 'CREDIT'
+            ? tx.bookingEntry
+            : amount < 0 ? 'DEBIT' : 'CREDIT';
           const currency = (tx.amount?.currency ?? 'GBP').toUpperCase();
           const ebayOrderId = tx.orderId ?? tx.legacyOrderId ?? null;
           let swishOrderId: string | null = null;
@@ -250,7 +253,7 @@ Deno.serve(async (req: Request) => {
             order_id: swishOrderId, ebay_order_id: ebayOrderId, amount,
             fee_type: feeTypeMap[txType] ?? txType.toLowerCase(),
             currency, description: tx.feeType ?? txType,
-            booking_entry: amount >= 0 ? 'CREDIT' : 'DEBIT',
+            booking_entry: bookingEntry,
             payout_id: tx.payoutId ?? null, payout_status: tx.payoutStatus ?? null,
             transaction_date: tx.transactionDate ?? new Date().toISOString(),
           }, { onConflict: 'ebay_transaction_id,tenant_id', ignoreDuplicates: false });
@@ -265,14 +268,51 @@ Deno.serve(async (req: Request) => {
             inserted++;
           }
 
-          // Update actual fees on orders with real eBay data
-          if ((txType === 'FINAL_VALUE_FEE' || txType === 'FINAL_VALUE_FEE_FIXED_PER_ORDER') && swishOrderId && amount < 0) {
-            const actualFee = Math.abs(amount);
-            const { data: ord } = await supabase.from('orders').select('sale_price, shipping_cost').eq('id', swishOrderId).eq('tenant_id', tenantId).maybeSingle();
-            if (ord) {
+          // Recalculate the complete order fee from all persisted final-value-fee
+          // components. A fixed-per-order fee and percentage fee may arrive as
+          // separate transactions; applying only the latest component undercounts.
+          if (FINAL_VALUE_FEE_TYPES.includes(txType as typeof FINAL_VALUE_FEE_TYPES[number]) && swishOrderId) {
+            const { data: feeRows, error: feeReadError } = await supabase
+              .from('ebay_financials')
+              .select('transaction_type, amount')
+              .eq('tenant_id', tenantId)
+              .eq('order_id', swishOrderId)
+              .eq('currency', currency)
+              .in('transaction_type', [...FINAL_VALUE_FEE_TYPES]);
+            if (feeReadError) {
+              errors.push(`TX ${txId}: persisted fees could not be aggregated for the order.`);
+              continue;
+            }
+            const actualFee = aggregateActualEbayFees(feeRows ?? []);
+            const { data: ord, error: orderReadError } = await supabase
+              .from('orders')
+              .select('sale_price, shipping_cost, notes')
+              .eq('id', swishOrderId)
+              .eq('tenant_id', tenantId)
+              .maybeSingle();
+            if (orderReadError) {
+              errors.push(`TX ${txId}: order totals could not be read for fee reconciliation.`);
+              continue;
+            }
+            if (ord && actualFee > 0) {
               const netRev = Math.round((Number(ord.sale_price) - actualFee - Number(ord.shipping_cost)) * 100) / 100;
-              await supabase.from('orders').update({ marketplace_fee: actualFee, net_revenue: netRev, notes: 'fee_note:ACTUAL_EBAY', updated_at: new Date().toISOString() }).eq('id', swishOrderId).eq('tenant_id', tenantId);
-              if (ebayOrderId) await supabase.from('sales').update({ marketplace_fee: actualFee, net_revenue: netRev }).eq('tenant_id', tenantId).eq('external_order_id', ebayOrderId);
+              const { error: orderUpdateError } = await supabase.from('orders').update({
+                marketplace_fee: actualFee,
+                net_revenue: netRev,
+                notes: withActualEbayFeeNote(ord.notes),
+                updated_at: new Date().toISOString(),
+              }).eq('id', swishOrderId).eq('tenant_id', tenantId);
+              if (orderUpdateError) {
+                errors.push(`TX ${txId}: order fee totals could not be saved.`);
+                continue;
+              }
+              if (ebayOrderId) {
+                const { error: salesUpdateError } = await supabase.from('sales').update({
+                  marketplace_fee: actualFee,
+                  net_revenue: netRev,
+                }).eq('tenant_id', tenantId).eq('external_order_id', ebayOrderId);
+                if (salesUpdateError) errors.push(`TX ${txId}: sales fee totals could not be saved.`);
+              }
             }
           }
         } catch (e: any) { errors.push(e.message); }
@@ -316,17 +356,25 @@ Deno.serve(async (req: Request) => {
     }
 
     if (route === 'get_summary') {
-      const { data: txData } = await supabase.from('ebay_financials').select('transaction_type, amount').eq('tenant_id', tenantId).gte('transaction_date', fromDate);
+      const { data: txData, error: txReadError } = await supabase.from('ebay_financials')
+        .select('transaction_type, amount, booking_entry').eq('tenant_id', tenantId).gte('transaction_date', fromDate);
+      if (txReadError) return jr({ success: false, error: 'Financial summary could not be loaded. Please retry.' }, 503);
       const rows = txData ?? [];
-      const s = (f: (r: any) => boolean, abs = false) => rows.filter(f).reduce((t: number, r: any) => t + (abs ? Math.abs(Number(r.amount)) : Number(r.amount)), 0);
+      const total = (predicate: (row: any) => boolean) => Math.round(rows.filter(predicate)
+        .reduce((sum: number, row: any) => sum + Math.abs(Number(row.amount) || 0), 0) * 100) / 100;
+      const grossSales = total(r => r.transaction_type === 'SALE' && r.booking_entry === 'CREDIT');
+      const actualFees = total(r => FINAL_VALUE_FEE_TYPES.includes(r.transaction_type) && r.booking_entry === 'DEBIT');
+      const refundsDebit = total(r => r.transaction_type === 'REFUND' && r.booking_entry === 'DEBIT');
+      const refundsCredit = total(r => r.transaction_type === 'REFUND' && r.booking_entry === 'CREDIT');
+      const credits = total(r => r.transaction_type === 'CREDIT' && r.booking_entry === 'CREDIT');
       return jr({ success: true, financesApiAvailable: true, summary: {
-        grossSales: Math.round(s(r => r.transaction_type === 'SALE' && r.amount > 0) * 100) / 100,
-        actualFees: Math.round(s(r => r.transaction_type?.includes('FINAL_VALUE_FEE') && r.amount < 0, true) * 100) / 100,
-        refunds: Math.round(s(r => r.transaction_type === 'REFUND') * 100) / 100,
-        payouts: Math.round(s(r => r.transaction_type === 'PAYOUT', true) * 100) / 100,
-        credits: Math.round(s(r => r.transaction_type === 'CREDIT' && r.amount > 0) * 100) / 100,
-        shippingLabels: Math.round(s(r => r.transaction_type === 'SHIPPING_LABEL' && r.amount < 0, true) * 100) / 100,
-        netAfterFees: Math.round((s(r => r.transaction_type === 'SALE' && r.amount > 0) - s(r => r.transaction_type?.includes('FINAL_VALUE_FEE') && r.amount < 0, true) + s(r => r.transaction_type === 'REFUND') + s(r => r.transaction_type === 'CREDIT' && r.amount > 0)) * 100) / 100,
+        grossSales,
+        actualFees,
+        refunds: Math.round((refundsDebit + refundsCredit) * 100) / 100,
+        payouts: total(r => r.transaction_type === 'PAYOUT'),
+        credits,
+        shippingLabels: total(r => r.transaction_type === 'SHIPPING_LABEL' && r.booking_entry === 'DEBIT'),
+        netAfterFees: Math.round((grossSales - actualFees - refundsDebit + refundsCredit + credits) * 100) / 100,
         transactionCount: rows.length, daysBack,
       }});
     }
