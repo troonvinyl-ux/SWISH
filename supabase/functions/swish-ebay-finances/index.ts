@@ -6,7 +6,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials, isEncrypted } from '../_shared/credentialCrypto.ts';
 import { ebayFinancesSignatureHeaders } from '../_shared/ebayDigitalSignature.ts';
-import { aggregateActualEbayFees, withActualEbayFeeNote, FINAL_VALUE_FEE_TYPES } from '../_shared/ebayFinance.ts';
+import { aggregateActualEbayFees, withActualEbayFeeNote, summarizeEbayFinanceError, FINAL_VALUE_FEE_TYPES } from '../_shared/ebayFinance.ts';
 
 const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const EBAY_FINANCES_API = 'https://apiz.ebay.com/sell/finances/v1';
@@ -200,8 +200,22 @@ Deno.serve(async (req: Request) => {
         url.searchParams.set('filter', `transactionDate:[${fromDate}..]`);
         url.searchParams.set('limit', '200'); url.searchParams.set('offset', String(offset));
         const signatureHeaders = await ebayFinancesSignatureHeaders(url, 'GET');
-        const resp = await fetch(url.toString(), { headers: { ...hdrs, ...signatureHeaders }, signal: AbortSignal.timeout(20000) });
+        let resp: Response;
+        try {
+          resp = await fetch(url.toString(), { headers: { ...hdrs, ...signatureHeaders }, signal: AbortSignal.timeout(20000) });
+        } catch (requestError) {
+          const timedOut = requestError instanceof Error && (requestError.name === 'TimeoutError' || /timeout/i.test(requestError.message));
+          fetchErr = timedOut
+            ? 'eBay Finances API request timed out after 20 seconds.'
+            : 'eBay Finances API request failed before an HTTP response was received.';
+          console.error(`[SWISH Finances] ${fetchErr}`);
+          hasMore = false;
+          break;
+        }
         if (!resp.ok) {
+          const providerBody = await resp.text().catch(() => '');
+          const providerSummary = summarizeEbayFinanceError(providerBody);
+          console.error(`[SWISH Finances] eBay Finances API HTTP ${resp.status}: ${providerSummary}`);
           if (resp.status === 403 || resp.status === 401) {
             const payments = await checkManagedPayments(accessToken);
             const diagnosis = payments.status === 'OPTED_IN'
@@ -209,8 +223,8 @@ Deno.serve(async (req: Request) => {
               : payments.status
                 ? `eBay Managed Payments status: ${payments.status}. Check seller payments onboarding and re-authorise eBay in SWISH.`
                 : 'SWISH could not verify Managed Payments status. Re-authorise eBay in SWISH and check the Production keyset scopes.';
-            fetchErr = `eBay Finances API HTTP ${resp.status}. ${diagnosis}`;
-          } else fetchErr = `Finances API HTTP ${resp.status}. The eBay service did not complete the request; retry shortly.`;
+            fetchErr = `eBay Finances API HTTP ${resp.status}. ${diagnosis} Provider detail: ${providerSummary}.`;
+          } else fetchErr = `Finances API HTTP ${resp.status}. Provider detail: ${providerSummary}. The eBay service did not complete the request; retry shortly.`;
           hasMore = false; break;
         }
         const data = await resp.json();
