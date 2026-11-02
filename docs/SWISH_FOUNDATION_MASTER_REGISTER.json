@@ -40,7 +40,7 @@
           "id": "S1-02",
           "title": "Map shared services, hooks, backend functions and database dependencies",
           "status": "IMPLEMENTED",
-          "evidence": "docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md#s1-02 maps app/components/contexts/hooks/services/constants, canonical registry, Expo build preparation, Supabase-compatible backend, Edge Function inventory, SQL migration count, workflows and current direct-query/runtime verification gaps. Per-function authorization and deployed call-path matrix remains outstanding."
+          "evidence": "docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md#s1-02 maps app/components/contexts/hooks/services/constants, canonical registry, Expo build preparation, Supabase-compatible backend, Edge Function inventory, SQL migration count, workflows and current direct-query/runtime verification gaps. Per-function authorization and deployed call-path matrix remains outstanding. Static 2026-11-02 source matrix added at docs/SWISH_EDGE_FUNCTION_SECURITY_MATRIX.md: inventories all 25 deployable Edge Function directories and records source-observed JWT, tenant, paid-niche, owner/admin, public-read and internal-secret gates. This does not verify deployed function parity, live RLS/grants, internal-secret callers, direct-query authorization or runtime call paths; S1-02 remains IMPLEMENTED, not VERIFIED."
         },
         {
           "id": "S1-03",
@@ -344,6 +344,10 @@
     {
       "date": "2026-11-02",
       "change": "Merged PR #97 (069308bf): refreshed production register and Stage S1 evidence. Merged PR #98 (d168e99) with 25/25 checks: added ten-niche canonical item-specific mapping and inferred-value exclusion contract tests. Merged PR #99 (dd0ff10) with 15/15 checks: hardened swish-list-generate against absent/null/malformed AI item_specifics before specialist enrichment. Latest main checks restarted after merges; earlier OTA publication runs on 069308bf were superseded/cancelled and latest-main OTA publication is not yet evidenced. No APK, database, auth, UI or eBay architecture changes."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "Added a static source-level security matrix for all 25 deployable Edge Function directories and linked it to S1-02 evidence. Explicitly retained S1-02 as IMPLEMENTED pending deployed revision, RLS/grants, internal-secret caller, direct-query and live call-path verification."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"
