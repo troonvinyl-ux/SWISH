@@ -126,6 +126,8 @@ describe('SWISH eBay Finances input and refresh safety', () => {
     expect(source).toContain(".select('transaction_type, amount, booking_entry')\n              .eq('tenant_id', tenantId)");
     expect(source).toContain('const complete = !partialError && errors.length === 0;');
     expect(source).toContain('success: complete');
+    expect(source).not.toContain('errors.push(e.message)');
+    expect(source).toContain('A transaction could not be reconciled because an unexpected processing error occurred.');
     expect(source).toContain("booking_entry === 'DEBIT'");
   });
 
