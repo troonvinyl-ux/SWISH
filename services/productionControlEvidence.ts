@@ -1,5 +1,5 @@
 export type ProductionWorkflowJobState = 'PASSED' | 'FAILED' | 'RUNNING' | 'QUEUED' | 'SKIPPED';
-export type ProductionWorkflowJobLike = { status: string; conclusion: string | null };
+export type ProductionWorkflowJobLike = { status: string; conclusion: string | null; id?: number; name?: string; display_title?: string; html_url?: string; head_branch?: string; head_sha?: string; created_at?: string; event?: string; head_repository?: { full_name: string }; steps?: Array<ProductionWorkflowJobLike & { name: string }> };
 export type ProductionWorkflowJobSummary = { passed: number; failed: number; running: number; queued: number; skipped: number };
 export const PRODUCTION_STATUSES = ['NOT STARTED', 'IN PROGRESS', 'IMPLEMENTED', 'TESTING', 'VERIFIED', 'BLOCKED'] as const;
 export type ProductionStatus = typeof PRODUCTION_STATUSES[number];

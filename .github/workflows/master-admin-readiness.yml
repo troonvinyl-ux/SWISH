@@ -117,7 +117,8 @@ jobs:
             });
             for (const d of result.diagnostics ?? []) {
               if (d.category === ts.DiagnosticCategory.Error) {
-                failures.push(file + ': ' + ts.flattenDiagnosticMessageText(d.messageText, '\n'));
+                const location = d.start === undefined ? null : source.getLineAndCharacterOfPosition(d.start);
+                failures.push(file + (location ? ':' + (location.line + 1) + ':' + (location.character + 1) : '') + ': ' + ts.flattenDiagnosticMessageText(d.messageText, '\n'));
               }
             }
           }
