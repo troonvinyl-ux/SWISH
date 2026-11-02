@@ -792,7 +792,7 @@ const EVIDENCE_SOURCES: EvidenceSource[] = ['detected', 'inferred', 'researched'
 const CONFIDENCE_TIERS: ConfidenceTier[] = ['very_high', 'high', 'medium', 'low', 'very_low', 'unknown'];
 
 function toEvidenceSource(v: string | null | undefined): EvidenceSource {
-  return EVIDENCE_SOURCES.includes(v as EvidenceSource) ? (v as EvidenceSource) : 'unknown';
+  return EVIDENCE_SOURCES.includes(v as EvidenceSource) ? (v as EvidenceSource) : 'researched';
 }
 
 function toConfidenceTier(v: string | null | undefined): ConfidenceTier {
