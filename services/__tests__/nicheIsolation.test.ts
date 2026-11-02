@@ -643,6 +643,20 @@ describe('Mutation tenant guard', () => {
     expect(csv).toContain('markItemSold(itemId, tenantId');
     expect(csv).not.toContain("status: 'sold',\n          sold_price: salePrice");
   });
+
+  test('eBay publish, order and sync server paths use the atomic lifecycle RPC', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const publish = fs.readFileSync(path.resolve(__dirname, '../../supabase/functions/swish-ebay-list/index.ts'), 'utf8');
+    const orders = fs.readFileSync(path.resolve(__dirname, '../../supabase/functions/swish-ebay-orders/index.ts'), 'utf8');
+    const sync = fs.readFileSync(path.resolve(__dirname, '../../supabase/functions/swish-ebay-sync/index.ts'), 'utf8');
+    expect(publish).toContain("rpc('swish_transition_item'");
+    expect(publish).not.toContain(".from('items').update({\n        status: 'listed'");
+    expect(orders).toContain("rpc('swish_transition_item'");
+    expect(orders).not.toContain(".from('items').update({status:'sold'");
+    expect(sync).toContain("rpc('swish_transition_item'");
+    expect(sync).not.toContain(".from('items').update({ status: newStatus");
+  });
 });
 
 // ── 12. All production niches have valid config ──────────────────────────────
