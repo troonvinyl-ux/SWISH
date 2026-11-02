@@ -11,6 +11,15 @@ on:
     paths:
       - 'app/master-admin.tsx'
       - 'app/production-control.tsx'
+      - 'app.json'
+      - 'app.config.js'
+      - '.github/workflows/publish-ota-update.yml'
+      - 'eas.json'
+      - 'plugins/**'
+      - 'scripts/verify-android-sdk-config.mjs'
+      - 'scripts/verify-apk.sh'
+      - 'scripts/verify-master-admin-apk.sh'
+      - 'services/__tests__/androidApi36Compliance.test.ts'
       - 'master-admin-app/**'
       - 'services/productionControl*.ts'
       - 'hooks/useProductionControl.ts'
@@ -26,6 +35,13 @@ on:
     paths:
       - 'app/master-admin.tsx'
       - 'app/production-control.tsx'
+      - 'app.json'
+      - 'app.config.js'
+      - '.github/workflows/publish-ota-update.yml'
+      - 'plugins/**'
+      - 'scripts/verify-android-sdk-config.mjs'
+      - 'scripts/verify-apk.sh'
+      - 'scripts/verify-master-admin-apk.sh'
       - 'master-admin-app/**'
       - 'services/productionControl*.ts'
       - 'hooks/useProductionControl.ts'
@@ -77,6 +93,7 @@ jobs:
           services/__tests__/productionControlEvidence.test.ts
           services/__tests__/productionControlService.test.ts
           services/__tests__/productionRegisterValidation.test.ts
+          services/__tests__/androidApi36Compliance.test.ts
 
   edge-function-syntax:
     name: Edge Function syntax and secret-boundary guard
@@ -150,6 +167,13 @@ jobs:
         env:
           SWISH_NICHE: ${{ matrix.niche }}
         run: npx expo config --type public
+      - name: Generate isolated Android Gradle project
+        env:
+          SWISH_NICHE: ${{ matrix.niche }}
+          EXPO_NO_DOTENV: '1'
+        run: npx expo prebuild --platform android --clean
+      - name: Verify Android API 36 configuration
+        run: node scripts/verify-android-sdk-config.mjs
       - name: Bundle Android JavaScript
         env:
           SWISH_NICHE: ${{ matrix.niche }}
@@ -172,6 +196,13 @@ jobs:
         env:
           SWISH_MASTER_ADMIN: '1'
         run: npx expo config --type public
+      - name: Generate private Master Admin Android Gradle project
+        env:
+          SWISH_MASTER_ADMIN: '1'
+          EXPO_NO_DOTENV: '1'
+        run: npx expo prebuild --platform android --clean
+      - name: Verify private Master Admin API 36 configuration
+        run: node scripts/verify-android-sdk-config.mjs
       - name: Bundle private launcher Android JavaScript
         env:
           SWISH_MASTER_ADMIN: '1'

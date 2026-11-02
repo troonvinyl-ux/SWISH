@@ -10,7 +10,7 @@ module.exports = ({ config }) => {
   if (selected && !niche) throw new Error(`Unsupported SWISH_NICHE "${selected}".`);
   const easProjectId = process.env.EXPO_PROJECT_ID || process.env.EAS_PROJECT_ID || config.extra?.eas?.projectId;
   const otaConfig = easProjectId ? {
-    runtimeVersion: niche ? `${config.version || '1.0.0'}-${selected}-isolated-v1` : { policy: 'appVersion' },
+    runtimeVersion: niche ? `${config.version || '1.0.0'}-${selected}-isolated-api36-v1` : { policy: 'appVersion' },
     updates: { ...config.updates, url: `https://u.expo.dev/${easProjectId}`, checkAutomatically: 'ON_LOAD', fallbackToCacheTimeout: 0,
       requestHeaders: { 'expo-channel-name': `production-${selected || 'default'}` } },
     extra: { ...(config.extra || {}), eas: { ...(config.extra?.eas || {}), projectId: easProjectId } },
@@ -35,6 +35,7 @@ module.exports = ({ config }) => {
       name: 'SWISH Master Admin',
       slug: process.env.SWISH_OTA_PUBLISH === '1' ? 'swish' : 'swish-master-admin',
       scheme: 'swishmasteradmin',
+      runtimeVersion: `${config.version || '1.0.0'}-master-admin-api36-v1`,
       ios: { ...baseConfig.ios, bundleIdentifier: baseConfig.ios?.bundleIdentifier ?? 'com.swish.inventory' },
       // Preserve the existing Master Admin package so this release upgrades
       // the installed control-centre APK instead of creating a duplicate app.

@@ -7,28 +7,199 @@
     },
     "coins": {
       "extends": "production",
-      "env": { "SWISH_NICHE": "coins" },
-      "android": { "buildType": "apk" }
+      "env": {
+        "SWISH_NICHE": "coins"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     },
     "motocross": {
       "extends": "production",
-      "env": { "SWISH_NICHE": "motocross" },
-      "android": { "buildType": "apk" }
+      "env": {
+        "SWISH_NICHE": "motocross"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     },
     "bicycles": {
       "extends": "production",
-      "env": { "SWISH_NICHE": "bicycles" },
-      "android": { "buildType": "apk" }
+      "env": {
+        "SWISH_NICHE": "bicycles"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     },
     "clothing": {
       "extends": "production",
-      "env": { "SWISH_NICHE": "clothing" },
-      "android": { "buildType": "apk" }
+      "env": {
+        "SWISH_NICHE": "clothing"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     },
     "surplus_flip": {
       "extends": "production",
-      "env": { "SWISH_NICHE": "surplus_flip" },
-      "android": { "buildType": "apk" }
+      "env": {
+        "SWISH_NICHE": "surplus_flip"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "trading_cards": {
+      "extends": "production",
+      "env": {
+        "SWISH_NICHE": "trading_cards"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "antiques": {
+      "extends": "production",
+      "env": {
+        "SWISH_NICHE": "antiques"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "fossils": {
+      "extends": "production",
+      "env": {
+        "SWISH_NICHE": "fossils"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "beauty": {
+      "extends": "production",
+      "env": {
+        "SWISH_NICHE": "beauty"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "tech": {
+      "extends": "production",
+      "env": {
+        "SWISH_NICHE": "tech"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production-play": {
+      "extends": "production",
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
+    "coins-play": {
+      "extends": "production-play",
+      "env": {
+        "SWISH_NICHE": "coins"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
+    "motocross-play": {
+      "extends": "production-play",
+      "env": {
+        "SWISH_NICHE": "motocross"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
+    "bicycles-play": {
+      "extends": "production-play",
+      "env": {
+        "SWISH_NICHE": "bicycles"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
+    "clothing-play": {
+      "extends": "production-play",
+      "env": {
+        "SWISH_NICHE": "clothing"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
+    "surplus_flip-play": {
+      "extends": "production-play",
+      "env": {
+        "SWISH_NICHE": "surplus_flip"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
+    "trading_cards-play": {
+      "extends": "production-play",
+      "env": {
+        "SWISH_NICHE": "trading_cards"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
+    "antiques-play": {
+      "extends": "production-play",
+      "env": {
+        "SWISH_NICHE": "antiques"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
+    "fossils-play": {
+      "extends": "production-play",
+      "env": {
+        "SWISH_NICHE": "fossils"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
+    "beauty-play": {
+      "extends": "production-play",
+      "env": {
+        "SWISH_NICHE": "beauty"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
+    "tech-play": {
+      "extends": "production-play",
+      "env": {
+        "SWISH_NICHE": "tech"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
+    "master-admin": {
+      "extends": "production",
+      "env": {
+        "SWISH_MASTER_ADMIN": "1",
+        "EXPO_NO_DOTENV": "1"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     }
   }
 }

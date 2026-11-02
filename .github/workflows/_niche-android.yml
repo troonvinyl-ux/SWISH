@@ -45,8 +45,21 @@ jobs:
           if (config.extra.swishNicheId !== product.id || config.android.package !== product.androidPackage) throw new Error('Build identity mismatch');
           if (router?.[1]?.root !== `.swish-build/${product.id}/app`) throw new Error('Router isolation root mismatch');
           NODE
+      - name: Install Android 16 SDK platform and Build Tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "$SDK_ROOT"
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then SDKMANAGER="$(command -v sdkmanager || true)"; fi
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses >/dev/null
+          "$SDKMANAGER" --sdk_root="$SDK_ROOT" "platforms;android-36" "build-tools;36.0.0"
       - name: Generate Android project
         run: npx expo prebuild --platform android --clean
+      - name: Verify Android 16 SDK configuration
+        run: node scripts/verify-android-sdk-config.mjs
       - uses: actions/cache@v4
         with:
           path: |

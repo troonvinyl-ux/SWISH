@@ -4,6 +4,20 @@ on:
   push:
     branches:
       - main
+    # Publish only JavaScript/assets that remain compatible with an installed native runtime.
+    # Native config, SDK, dependency and release-workflow changes require a new APK first.
+    paths:
+      - 'app/**'
+      - 'components/**'
+      - 'contexts/**'
+      - 'constants/**'
+      - 'hooks/**'
+      - 'services/**'
+      - 'shared/**'
+      - 'template/**'
+      - 'utils/**'
+      - 'assets/**'
+      - 'niche-modules.json'
   workflow_dispatch:
 
 permissions:

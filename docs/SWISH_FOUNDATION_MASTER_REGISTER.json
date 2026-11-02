@@ -224,28 +224,32 @@
     {
       "id": "S7",
       "name": "Full production verification",
-      "status": "NOT STARTED",
+      "status": "IN PROGRESS",
       "goal": "Certify supported niches through automated, security, web, native, deployment and real-device evidence.",
       "tasks": [
         {
           "id": "S7-01",
           "title": "Run full type, lint, unit, integration and regression suites",
-          "status": "NOT STARTED"
+          "status": "IMPLEMENTED",
+          "evidence": "PR #110 commit 64aae9d2b1cf6b99a547ff996a7d290461e5c81a: lint, TypeScript diagnostics, Edge Function transpile syntax, complete regression suite, Deno server authorization boundaries and Android bundle checks all passed. Automated checks are implemented and passing; live external integrations and real-device acceptance remain separate."
         },
         {
           "id": "S7-02",
           "title": "Verify tenant, niche, entitlement and credential security",
-          "status": "NOT STARTED"
+          "status": "IMPLEMENTED",
+          "evidence": "PR #110 commit 64aae9d2b1cf6b99a547ff996a7d290461e5c81a: server-only secret-boundary guard, Deno authorization boundary tests and niche isolation regression tests passed. Deployed RLS/grants and live role/tenant/entitlement verification remain outstanding."
         },
         {
           "id": "S7-03",
           "title": "Verify web parity and production deployment",
-          "status": "NOT STARTED"
+          "status": "IN PROGRESS",
+          "evidence": "PR #110 commit 64aae9d2b1cf6b99a547ff996a7d290461e5c81a: production web export jobs passed for all ten niche variants. Actual hosted deployment, domain routing, authenticated web parity and production smoke tests remain outstanding."
         },
         {
           "id": "S7-04",
           "title": "Build and inspect release APKs only at release milestones",
-          "status": "NOT STARTED"
+          "status": "IN PROGRESS",
+          "evidence": "PR #110 commit 64aae9d2b1cf6b99a547ff996a7d290461e5c81a: Android JavaScript bundles and branded configurations passed for all ten niches and the private Master Admin launcher. A separate clothing APK build was triggered on main; remaining nine niche APKs and the signed owner APK have not yet been built and inspected."
         },
         {
           "id": "S7-05",
@@ -261,7 +265,7 @@
           "id": "S7-07",
           "title": "Meet Google Play release requirements for each published niche app",
           "status": "BLOCKED",
-          "evidence": "Current repository audit (2026-11-02): .github/workflows/build-swish-release-apk.yml installs Android platform 34/build-tools 34.0.0 and builds assembleRelease APK; eas.json production profile and five niche profiles are APK-only, with no profiles yet for Cards, Antiques, Fossils, Beauty or Tech. app.config.js does not explicitly set targetSdkVersion/compileSdkVersion. API 36 targeting, compatible Android Gradle/Expo toolchain, signed AAB generation for all ten package identities, per-app Play Console declarations and policy acceptance are not yet evidenced. Keep Java 17/setup-java@v4 pending compatibility verification."
+          "evidence": "Google Play policy requires Android 16 (API 36) for new apps and app updates from 31 August 2026. PR #112 adds a shared Expo config plugin, generated Gradle property verification, SDK 36/Build Tools 36.0.0 installation and APK target-SDK assertions. It also adds EAS APK profiles for all ten niches, matching `*-play` Android App Bundle profiles, and a separate owner-only Master Admin APK profile. This remains BLOCKED until API 36 native builds and target manifests pass, persistent release signing is confirmed, signed AABs are generated for all published niche package IDs, and per-app Play Console declarations/policy review are completed. The owner-only Master Admin launcher remains a separate internal-distribution artifact. PR #112 also increments niche and Master Admin runtime versions for the native API 36 rebuild and restricts automatic OTA publication to JS/assets-only paths; native app config, plugins, dependencies and Gradle changes no longer trigger OTA publication without a rebuilt APK."
         }
       ]
     }
@@ -362,6 +366,18 @@
     {
       "date": "2026-11-02",
       "change": "Reconciled the seven-stage register with the existing S2/S3 implementation and acceptance report. S2 tasks are IMPLEMENTED (not VERIFIED) because tests were authored but not executed in the report; S3 tasks are IN PROGRESS with deployed auth/media/lifecycle/eBay/finance acceptance gaps retained. No release, database or auth changes."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "PR #110 merged with passing lint, TypeScript, Edge Function syntax, regression, Deno authorization, ten-niche Android bundle, private Master Admin bundle and ten-niche web export workflows. S7 evidence updated conservatively. Google Play API 36 compliance remains BLOCKED pending native target verification, signed AABs for each published niche, release signing and Play Console declarations."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "PR #112 adds Android 16 API 36 Gradle configuration and fail-closed APK target verification across niche and owner builds; all ten niche and private Master Admin prebuilds report API 36 properties successfully. Added complete EAS APK profiles for all ten niches, matching Play AAB profiles, and a separate Master Admin APK profile. S7-07 remains BLOCKED pending native API 36 compilation/manifest verification, persistent signing, actual AAB artifacts and Play Console declarations."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "PR #112 separates native API 36 runtime versions from prior installed builds and gates automatic OTA publishing to JavaScript/assets-only changes. Native app config, plugin, dependency and Gradle changes now require a rebuilt native artifact before OTA compatibility resumes. Play AAB/signing and Play Console acceptance remain open."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"

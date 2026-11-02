@@ -58,7 +58,8 @@
           "microphonePermission": false,
           "recordAudioAndroid": false
         }
-      ]
+      ],
+      "./plugins/withAndroidSdk36"
     ],
     "experiments": {
       "typedRoutes": true

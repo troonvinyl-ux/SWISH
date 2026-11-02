@@ -1,5 +1,8 @@
 name: Build SWISH Complete APK Suite
 on:
+  push:
+    branches:
+      - 'release/apk-suite-*'
   workflow_dispatch:
     inputs:
       include_master_admin:
@@ -49,6 +52,17 @@ jobs:
         run: npx tsc --noEmit
       - name: Regression tests (mandatory release gate)
         run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand
+      - name: Install Android 16 SDK platform and Build Tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "$SDK_ROOT"
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then SDKMANAGER="$(command -v sdkmanager || true)"; fi
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses >/dev/null
+          "$SDKMANAGER" --sdk_root="$SDK_ROOT" "platforms;android-36" "build-tools;36.0.0"
       - name: Confirm lightweight Master Admin route tree is present
         run: |
           test -f app/master-admin.tsx
@@ -63,6 +77,8 @@ jobs:
           SWISH_MASTER_ADMIN: '1'
           EXPO_NO_DOTENV: '1'
         run: npx expo prebuild --platform android --clean
+      - name: Verify Android 16 SDK configuration
+        run: node scripts/verify-android-sdk-config.mjs
       - uses: actions/cache@v4
         with:
           path: |
