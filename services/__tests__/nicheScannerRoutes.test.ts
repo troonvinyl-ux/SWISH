@@ -22,7 +22,7 @@ describe('One-tap niche scanner routing', () => {
   test('legacy aliases resolve to the same scanner as their canonical niche', () => {
     expect(nicheToScannerRoute('threads_flip')).toBe('/threads-flip?tab=identify');
     expect(nicheToScannerRoute('mx')).toBe('/flipper-mx');
-    expect(nicheToScannerRoute('books')).toBe('/capture');
+    expect(nicheToScannerRoute('books')).toBe('/antique-capture');
   });
 
   test('Antiques capture, AI profile and inventory specialist are connected', () => {

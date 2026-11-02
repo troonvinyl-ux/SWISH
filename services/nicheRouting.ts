@@ -7,7 +7,7 @@ export function resolveProductionNiche(value: string | null | undefined): Produc
   if (typeof value !== 'string') return null;
   const id = value.trim().toLowerCase();
   for (const [niche, config] of Object.entries(NICHE_MODULES)) {
-    if (id === niche || config.aliases.includes(id)) return niche as ProductionNicheId;
+    if (id === niche || config.aliases.includes(id) || config.specialists.includes(id) || config.legacySpecialists.includes(id)) return niche as ProductionNicheId;
   }
   return null;
 }

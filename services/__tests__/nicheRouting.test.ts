@@ -35,6 +35,13 @@ describe('production niche scanner routing', () => {
     },
   );
 
+  test.each(Object.keys(NICHE_MODULES))('%s registered specialists resolve back to their owning niche', (nicheId) => {
+    const niche = NICHE_MODULES[nicheId as keyof typeof NICHE_MODULES];
+    for (const specialistId of [...niche.specialists, ...niche.legacySpecialists]) {
+      expect(resolveProductionNiche(specialistId)).toBe(nicheId);
+    }
+  });
+
   test('unknown niche does not resolve to a registered product', () => {
     expect(resolveProductionNiche('not-a-swish-niche')).toBeNull();
     expect(nicheToScannerRoute('not-a-swish-niche')).toBe('/capture');
