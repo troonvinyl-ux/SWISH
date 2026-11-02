@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions, type CameraType } from 'expo-camera';
 import { Image } from 'expo-image';
 import { useGenericCapture } from '@/hooks/useGenericCapture';
 import { SpecialistReview } from '@/components/feature/SpecialistReview';
@@ -25,8 +27,15 @@ const PANEL = Colors.surface;
 export default function AntiqueCaptureScreen() {
   const capture = useGenericCapture();
   const router = useRouter();
+  const cameraRef = useRef<CameraView>(null);
+  const [permission, requestPermission] = useCameraPermissions();
   const [activeSlotId, setActiveSlotId] = useState('front');
   const [gridVisible, setGridVisible] = useState(true);
+  const [facing, setFacing] = useState<CameraType>('back');
+  const [flashEnabled, setFlashEnabled] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [takingPhoto, setTakingPhoto] = useState(false);
+  const [cameraError, setCameraError] = useState('');
 
   useEffect(() => {
     if (!capture.slots.some((slot) => slot.id === activeSlotId)) {
@@ -39,6 +48,35 @@ export default function AntiqueCaptureScreen() {
   const preview = activeImage ?? capture.images[capture.images.length - 1];
   const completedSlots = capture.slots.filter((slot) => capture.images.some((image) => image.slotId === slot.id)).length;
   const requiredSlots = capture.slots.filter((slot) => slot.required).length;
+
+  const takePhoto = async () => {
+    if (!activeSlot || capture.busy || capture.savedId || takingPhoto) return;
+    if (Platform.OS === 'web') {
+      void capture.capture(activeSlot.id, false);
+      return;
+    }
+    if (!permission?.granted) {
+      await requestPermission();
+      return;
+    }
+    if (!cameraReady) return;
+    setTakingPhoto(true);
+    setCameraError('');
+    try {
+      const photo = await cameraRef.current?.takePictureAsync({ quality: 0.9 });
+      if (!photo?.uri) throw new Error('The camera did not return a photograph. Please try again.');
+      await capture.addCapturedPhoto(activeSlot.id, { uri: photo.uri, width: photo.width, height: photo.height });
+    } catch (error: any) {
+      setCameraError(error?.message ?? 'The photo could not be captured. Please try again.');
+    } finally {
+      setTakingPhoto(false);
+    }
+  };
+
+  const flipCamera = () => {
+    setCameraReady(false);
+    setFacing((current) => current === 'back' ? 'front' : 'back');
+  };
 
   if (capture.activeNiche.id !== 'antiques') {
     return (
@@ -102,13 +140,24 @@ export default function AntiqueCaptureScreen() {
             <Text style={styles.frameHint}>{activeImage ? 'PHOTO CAPTURED' : 'FRAME THE OBJECT'}</Text>
           </View>
           <View style={styles.viewfinder}>
-            {preview ? (
-              <Image source={{ uri: preview.uri }} contentFit="contain" transition={180} style={styles.preview} />
+            {Platform.OS !== 'web' && permission?.granted ? (
+              <CameraView
+                ref={cameraRef}
+                style={StyleSheet.absoluteFillObject}
+                facing={facing}
+                flash={flashEnabled ? 'on' : 'off'}
+                onCameraReady={() => setCameraReady(true)}
+              />
             ) : (
               <View style={styles.placeholder}>
                 <MaterialIcons name="photo-camera" size={48} color={GOLD} />
-                <Text style={styles.placeholderTitle}>Position the whole object</Text>
-                <Text style={styles.placeholderText}>Use even light and keep the camera steady. Avoid reflections over marks and signatures.</Text>
+                <Text style={styles.placeholderTitle}>{Platform.OS === 'web' ? 'Choose a photo of your antique' : 'Allow camera access'}</Text>
+                <Text style={styles.placeholderText}>{Platform.OS === 'web' ? 'Use the gallery or camera picker to add each evidence view.' : 'Antique Flipper uses the camera on this device to capture each angle directly.'}</Text>
+                {Platform.OS !== 'web' ? (
+                  <Pressable onPress={() => void requestPermission()} style={styles.permissionButton}>
+                    <Text style={styles.permissionButtonText}>Enable camera</Text>
+                  </Pressable>
+                ) : null}
               </View>
             )}
             {gridVisible ? (
@@ -119,6 +168,12 @@ export default function AntiqueCaptureScreen() {
                 <View style={[styles.corner, styles.cornerTopRight]} />
                 <View style={[styles.corner, styles.cornerBottomLeft]} />
                 <View style={[styles.corner, styles.cornerBottomRight]} />
+              </View>
+            ) : null}
+            {activeImage ? (
+              <View pointerEvents="none" style={styles.capturedBadge}>
+                <MaterialIcons name="check-circle" size={15} color={GOLD} />
+                <Text style={styles.capturedBadgeText}>ANGLE CAPTURED</Text>
               </View>
             ) : null}
           </View>
@@ -135,16 +190,26 @@ export default function AntiqueCaptureScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={activeImage ? 'Retake photo' : 'Take photo'}
-              disabled={capture.busy || Boolean(capture.savedId) || !activeSlot}
-              onPress={() => activeSlot && void capture.capture(activeSlot.id, false)}
-              style={({ pressed }) => [styles.shutterOuter, pressed ? styles.pressed : null]}
+              disabled={capture.busy || Boolean(capture.savedId) || !activeSlot || takingPhoto || (Platform.OS !== 'web' && permission?.granted && !cameraReady)}
+              onPress={() => void takePhoto()}
+              style={({ pressed }) => [styles.shutterOuter, pressed ? styles.pressed : null, takingPhoto ? styles.disabledButton : null]}
             >
-              <View style={styles.shutterInner} />
+              {takingPhoto ? <ActivityIndicator color={INK} /> : <View style={styles.shutterInner} />}
             </Pressable>
-            <View style={styles.photoMode}>
-              <Text style={styles.photoModeActive}>PHOTO</Text>
-              <Text style={styles.photoModeSub}>MULTI-ANGLE</Text>
-            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Switch camera"
+              disabled={Platform.OS === 'web' || capture.busy || Boolean(capture.savedId)}
+              onPress={flipCamera}
+              style={styles.galleryButton}
+            >
+              <MaterialIcons name="flip-camera-android" size={24} color={Platform.OS === 'web' ? Colors.textTertiary : GOLD} />
+              <Text style={styles.controlText}>Flip</Text>
+            </Pressable>
+          </View>
+          <View style={styles.photoMode}>
+            <Text style={styles.photoModeActive}>PHOTO</Text>
+            <Text style={styles.photoModeSub}>MULTI-ANGLE CAPTURE</Text>
           </View>
           <Text style={styles.captureTip}>{activeImage ? 'Retake this angle or choose another view below.' : 'Tap the gold shutter to photograph this view.'}</Text>
         </View>
@@ -181,6 +246,8 @@ export default function AntiqueCaptureScreen() {
             );
           })}
         </ScrollView>
+
+        {cameraError ? <View style={styles.errorBox}><MaterialIcons name="error-outline" size={21} color={Colors.danger} /><Text style={styles.errorText}>{cameraError}</Text></View> : null}
 
         {capture.error ? (
           <View style={styles.errorBox}>
@@ -284,6 +351,10 @@ const styles = StyleSheet.create({
   placeholder: { alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
   placeholderTitle: { color: Colors.textPrimary, fontSize: 17, fontWeight: Typography.weight.semibold, textAlign: 'center' },
   placeholderText: { color: Colors.textSecondary, fontSize: 12, lineHeight: 19, textAlign: 'center', maxWidth: 270 },
+  permissionButton: { marginTop: 4, minHeight: 42, paddingHorizontal: 18, borderRadius: Radius.pill, backgroundColor: Colors.gold, alignItems: 'center', justifyContent: 'center' },
+  permissionButtonText: { color: INK, fontSize: 12, fontWeight: Typography.weight.bold },
+  capturedBadge: { position: 'absolute', left: 12, bottom: 12, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 7, borderRadius: Radius.pill, backgroundColor: Colors.overlay80 },
+  capturedBadgeText: { color: Colors.gold, fontSize: 9, fontWeight: Typography.weight.bold, letterSpacing: 1 },
   gridOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   gridVertical: { position: 'absolute', top: 0, bottom: 0, left: '50%', width: 1, backgroundColor: Colors.gold, opacity: 0.25 },
   gridHorizontal: { position: 'absolute', left: 0, right: 0, top: '50%', height: 1, backgroundColor: Colors.gold, opacity: 0.25 },
@@ -297,7 +368,7 @@ const styles = StyleSheet.create({
   controlText: { color: Colors.textSecondary, fontSize: 10 },
   shutterOuter: { width: 74, height: 74, borderRadius: 37, borderWidth: 4, borderColor: GOLD, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.goldDim },
   shutterInner: { width: 54, height: 54, borderRadius: 27, backgroundColor: Colors.gold, borderWidth: 2, borderColor: Colors.textPrimary },
-  photoMode: { width: 76, alignItems: 'center', gap: 3 },
+  photoMode: { alignItems: 'center', gap: 3 },
   photoModeActive: { color: GOLD, fontSize: 11, fontWeight: Typography.weight.bold, letterSpacing: 1.2 },
   photoModeSub: { color: Colors.textTertiary, fontSize: 8, letterSpacing: 1 },
   captureTip: { color: Colors.textSecondary, fontSize: 11, textAlign: 'center' },
