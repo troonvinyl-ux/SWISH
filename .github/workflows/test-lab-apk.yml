@@ -1,0 +1,51 @@
+name: Build isolated SWISH Test Lab APK
+on:
+  push:
+    branches: [feature/swish-test-lab-apk]
+    paths:
+      - 'app.config.js'
+      - 'test-lab-app/**'
+      - '.github/workflows/test-lab-apk.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write
+jobs:
+  build-test-lab:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: bash scripts/install-dependencies.sh
+      - name: Configure isolated Test Lab app
+        run: |
+          SWISH_TEST_LAB=1 EXPO_NO_DOTENV=1 pnpm exec expo config --type public
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Generate Test Lab Android project
+        env:
+          SWISH_TEST_LAB: '1'
+          EXPO_NO_DOTENV: '1'
+        run: pnpm exec expo prebuild --platform android --clean
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: swish-test-lab-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
