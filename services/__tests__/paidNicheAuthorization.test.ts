@@ -41,4 +41,15 @@ describe('Source boundary contracts (not substitutes for RLS integration tests)'
     expect(reprice.indexOf('await requirePaidNiche(supabaseAdmin')).toBeLessThan(reprice.indexOf('const systemPrompt'));
   });
 
+
+  test('authenticated eBay publication enforces paid access from the stored item specialist',()=>{
+    const publish=read('supabase/functions/swish-ebay-list/index.ts');
+    expect(publish).toContain("from '../_shared/paidNicheAuthorization.ts'");
+    expect(publish).toContain("from '../_shared/specialistRegistry.ts'");
+    expect(publish).toContain('specialistNiche(String(item?.specialist_id ?? \'\'))');
+    expect(publish).toContain('await requirePaidNiche(supabase');
+    expect(publish.indexOf('await requirePaidNiche(supabase')).toBeLessThan(publish.indexOf('const confidenceGate'));
+    expect(publish).toContain('auth.userId');
+  });
+
 });
