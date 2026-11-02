@@ -13,7 +13,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
 import { corsHeaders } from '../_shared/cors.ts';
-import { buildGetEbayMessagesRequest, extractEbayMessageSummaryBlocks, getEbayMessagePagePlan } from '../../../shared/ebayMessagePagination.ts';
+import { buildGetEbayMessagesRequest, extractEbayMessageSummaryBlocks, getEbayMessagePagePlan } from '../_shared/ebayMessagePagination.ts';
 
 const EBAY_TRADING_API_URL = 'https://api.ebay.com/ws/api.dll';
 const EBAY_TOKEN_URL       = 'https://api.ebay.com/identity/v1/oauth2/token';
