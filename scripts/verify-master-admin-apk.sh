@@ -23,6 +23,7 @@ const [pkg, label] = process.argv.slice(2);
 const badging = fs.readFileSync('/tmp/swish-master-apk-badging.txt', 'utf8');
 if (!badging.includes("package: name='" + pkg + "'")) throw new Error('Master Admin package identity mismatch');
 if (!badging.includes("application-label:'" + label + "'")) throw new Error('Master Admin app label mismatch');
+if (!badging.includes("targetSdkVersion:'36'")) throw new Error('Master Admin APK must target Android 16 (API 36)');
 if (!badging.includes('launchable-activity:')) throw new Error('Master Admin APK has no launcher activity');
 console.log('APK ZIP, signature, package, label and launcher verified for Master Admin');
 NODE

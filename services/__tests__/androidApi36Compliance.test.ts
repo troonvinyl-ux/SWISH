@@ -1,0 +1,33 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
+const root = path.resolve(__dirname, '../..');
+const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
+
+test('all Android prebuilds install the canonical API 36 config plugin', () => {
+  const app = JSON.parse(read('app.json'));
+  expect(app.expo.plugins).toContain('./plugins/withAndroidSdk36');
+  const plugin = read('plugins/withAndroidSdk36.js');
+  expect(plugin).toContain("'android.compileSdkVersion': '36'");
+  expect(plugin).toContain("'android.targetSdkVersion': '36'");
+  expect(plugin).toContain("'android.buildToolsVersion': '36.0.0'");
+});
+
+test('isolated niche and Master Admin APK builds install and verify Android 16 SDK', () => {
+  for (const workflow of ['.github/workflows/_niche-android.yml', '.github/workflows/build-swish-suite.yml']) {
+    const source = read(workflow);
+    expect(source).toContain('platforms;android-36');
+    expect(source).toContain('build-tools;36.0.0');
+    expect(source).toContain('scripts/verify-android-sdk-config.mjs');
+  }
+  expect(read('scripts/verify-apk.sh')).toContain("targetSdkVersion:'36'");
+  expect(read('scripts/verify-master-admin-apk.sh')).toContain("targetSdkVersion:'36'");
+});
+
+test('generated Gradle properties are checked fail-closed before native compilation', () => {
+  const verifier = read('scripts/verify-android-sdk-config.mjs');
+  expect(verifier).toContain("'android.compileSdkVersion': '36'");
+  expect(verifier).toContain("'android.targetSdkVersion': '36'");
+  expect(verifier).toContain("'android.buildToolsVersion': '36.0.0'");
+  expect(verifier).toContain('process.exit(1)');
+});

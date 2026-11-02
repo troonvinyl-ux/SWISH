@@ -24,6 +24,7 @@ if (!product) throw new Error('Unknown niche');
 const badging = fs.readFileSync('/tmp/swish-apk-badging.txt', 'utf8');
 if (!badging.includes("package: name='" + product.androidPackage + "'")) throw new Error('APK package identity mismatch');
 if (!badging.includes("application-label:'" + product.name + "'")) throw new Error('APK app label mismatch');
+if (!badging.includes("targetSdkVersion:'36'")) throw new Error('APK must target Android 16 (API 36) for Google Play submissions');
 if (!badging.includes('launchable-activity:')) throw new Error('APK has no launcher activity');
 console.log('APK ZIP, signature, package, label and launcher verified for ' + product.id);
 NODE
