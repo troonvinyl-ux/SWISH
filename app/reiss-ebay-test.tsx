@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth, getSupabaseClient } from '@/template';
 import { useApp } from '@/hooks/useApp';
 import { isSwishMasterAdmin } from '@/contexts/AppContext';
-import { createManualListing, submitListingToMarketplace, updateListingTitle, updateListingPrice, updateListingDescription, endListing, deleteListing, type SavedListing } from '@/services/listingService';
+import { updateListingTitle, updateListingPrice, updateListingDescription, endListing, type SavedListing } from '@/services/listingService';
 import { Colors, Spacing, Radius, Typography } from '@/constants/theme';
 
 const TARGET_TITLE = "REISS Men's Khaki Hooded Parka Jacket";
@@ -35,7 +35,8 @@ export default function ReissEbayTestConsole() {
   const load = useCallback(async () => {
     if (!tenant?.id) return;
     setLoading(true);
-    const { data, error } = await getSupabaseClient().from('items').select('id,canonical_title,description,expected_selling_price,condition,condition_notes,media,specialist_id,attributes,quantity,inventory_id,status')
+    const client = getSupabaseClient();
+    const { data, error } = await client.from('items').select('id,canonical_title,description,expected_selling_price,condition,condition_notes,media,specialist_id,attributes,quantity,inventory_id,status')
       .eq('tenant_id', tenant.id).ilike('canonical_title', TARGET_TITLE).order('updated_at', { ascending: false }).limit(5);
     if (error) { setStatus('Database query failed: ' + error.message); setItem(null); }
     else {
@@ -43,48 +44,29 @@ export default function ReissEbayTestConsole() {
       const exact = found.find(row => row.canonical_title?.trim().toLowerCase() === TARGET_TITLE.toLowerCase()) ?? found[0] ?? null;
       setItem(exact);
       if (exact) {
-        setTitle(exact.canonical_title);
-        setDescription(exact.description ?? '');
-        setPrice(String(exact.expected_selling_price ?? ''));
-        setStatus(found.length > 1 ? 'Matching inventory records found. The closest exact title is loaded.' : 'Original inventory record loaded. No changes have been made to it.');
-      } else setStatus('No matching Reiss jacket was found in this tenant inventory.');
+        const { data: liveRows, error: listingError } = await client.from('listings').select('*')
+          .eq('tenant_id', tenant.id).eq('item_id', exact.id).eq('marketplace_id', 'ebay')
+          .in('status', ['active', 'live']).order('updated_at', { ascending: false }).limit(5);
+        const activeRow = (liveRows ?? []).find((row: any) => row.external_listing_id) ?? null;
+        if (listingError) {
+          setListing(null); setExternalId('');
+          setStatus('Inventory loaded, but its eBay listing relationship could not be verified: ' + listingError.message + '. Publishing and ending are disabled until this is resolved.');
+        } else if (activeRow) {
+          const mapped: SavedListing = { id: activeRow.id, itemId: activeRow.item_id, tenantId: activeRow.tenant_id, marketplaceId: activeRow.marketplace_id, externalListingId: activeRow.external_listing_id, title: activeRow.title ?? '', description: activeRow.description ?? '', price: Number(activeRow.price ?? 0), floorPrice: Number(activeRow.floor_price ?? 0), ceilingPrice: Number(activeRow.ceiling_price ?? 0), shippingCost: Number(activeRow.shipping_cost ?? 0), status: activeRow.status ?? 'active', views: Number(activeRow.views ?? 0), watchers: Number(activeRow.watchers ?? 0), publishedAt: activeRow.published_at ?? undefined, endedAt: activeRow.ended_at ?? undefined, categoryId: activeRow.category_id ?? undefined, createdAt: activeRow.created_at, updatedAt: activeRow.updated_at };
+          setListing(mapped); setExternalId(String(activeRow.external_listing_id));
+          setTitle(mapped.title || exact.canonical_title); setDescription(mapped.description); setPrice(String(mapped.price));
+          setStatus('Existing live eBay listing matched to this inventory item. Revise or end this listing; Submit is blocked to prevent a duplicate.');
+        } else {
+          setListing(null); setExternalId(''); setTitle(exact.canonical_title); setDescription(exact.description ?? ''); setPrice(String(exact.expected_selling_price ?? ''));
+          setStatus('Inventory record loaded, but no active linked eBay listing was found. Submit remains disabled in this single-item safety console until the listing relationship is reconciled.');
+        }
+      } else { setListing(null); setExternalId(''); setStatus('No matching Reiss jacket was found in this tenant inventory.'); }
     }
     setLoading(false);
   }, [tenant?.id]);
 
   useEffect(() => { void load(); }, [load]);
   if (!isSwishMasterAdmin(user?.email)) return <Redirect href="/" />;
-
-  const submit = () => {
-    if (!tenant?.id || !item) return;
-    const parsed = Number(price);
-    if (!title.trim() || !description.trim() || !Number.isFinite(parsed) || parsed <= 0) {
-      Alert.alert('Complete the listing fields', 'Enter a title, description and positive price before submitting.');
-      return;
-    }
-    Alert.alert('Publish a new live eBay listing?', 'This creates a separate SWISH listing record linked to the Reiss inventory item. It does not edit the original inventory record. The listing will be public on eBay.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Create & publish', style: 'destructive', onPress: () => void doSubmit(parsed) },
-    ]);
-  };
-
-  const doSubmit = async (parsedPrice: number) => {
-    if (!tenant?.id || !item) return;
-    setBusy(true); setStatus('Creating a separate SWISH listing record…');
-    const created = await createManualListing({ tenantId: tenant.id, itemId: item.id, marketplaceId: 'ebay', title: title.trim(), description: description.trim(), price: parsedPrice });
-    if (created.error || !created.listing) { setStatus('Could not create the new listing record: ' + (created.error ?? 'No record returned')); setBusy(false); return; }
-    setListing(created.listing);
-    setStatus('New listing record created. Sending it through the existing eBay publish pipeline…');
-    const result = await submitListingToMarketplace(tenant.id, created.listing.id);
-    if (!result.success || !result.externalListingId) {
-      setStatus('Publish was not confirmed: ' + (result.error ?? 'No eBay listing ID returned') + '. The separate SWISH draft has been retained for inspection; do not submit again until reconciled.');
-      setBusy(false); return;
-    }
-    setExternalId(result.externalListingId);
-    setListing({ ...created.listing, status: 'active', externalListingId: result.externalListingId });
-    setStatus('Published. eBay listing ID: ' + result.externalListingId + '. The original inventory record remains unchanged.');
-    setBusy(false);
-  };
 
   const revise = () => {
     if (!tenant?.id || !item || !listing || !externalId) return;
@@ -108,7 +90,12 @@ export default function ReissEbayTestConsole() {
     ]);
     if (a.error || b.error || c.error) { setStatus('Could not save revised SWISH listing fields: ' + (a.error ?? b.error ?? c.error)); setBusy(false); return; }
     const attrs = item.attributes ?? {};
-    const itemSpecifics = Object.entries(attrs).filter(([k,v]) => !k.startsWith('_') && ['string','number','boolean'].includes(typeof v) && String(v).trim()).slice(0, 50).map(([name,value]) => ({ name, value: String(value) }));
+    const savedSpecifics = Array.isArray((attrs as any).ebay_item_specifics) ? (attrs as any).ebay_item_specifics : [];
+    const itemSpecifics = [...savedSpecifics, ...Object.entries(attrs)
+      .filter(([k,v]) => k !== 'ebay_item_specifics' && !k.startsWith('_') && ['string','number','boolean'].includes(typeof v) && String(v).trim())
+      .map(([name,value]) => ({ name: name.replace(/_/g, ' ').replace(/\\b\\w/g, (ch: string) => ch.toUpperCase()), value: String(value) }))]
+      .filter((entry: any, index: number, all: any[]) => entry?.name && entry?.value && all.findIndex((candidate: any) => String(candidate.name).toLowerCase() === String(entry.name).toLowerCase()) === index)
+      .slice(0, 25);
     const { data, error } = await getSupabaseClient().functions.invoke('swish-ebay-list', { body: {
       route: 'revise', tenantId: tenant.id, listingId: listing.id, externalListingId: externalId,
       title: title.trim(), description: description.trim(), price: parsedPrice,
@@ -135,10 +122,9 @@ export default function ReissEbayTestConsole() {
     setBusy(true); setStatus('Ending the listing on eBay…');
     const ended = await endListing(listing.id, item.id, tenant.id, externalId);
     if (ended.error) { setStatus('eBay could not confirm the end: ' + ended.error); setBusy(false); return; }
-    const deleted = await deleteListing(listing.id, tenant.id);
-    if (deleted.error) { setStatus('eBay listing ended, but the SWISH test record could not be deleted: ' + deleted.error); setBusy(false); return; }
-    setListing(null); setExternalId('');
-    setStatus('Complete. eBay listing ended and the separate SWISH listing record deleted. Original inventory item untouched.');
+    setListing({ ...listing, status: 'ended', externalListingId: externalId });
+    setExternalId('');
+    setStatus('Complete. eBay confirmed the existing listing was ended. Its SWISH listing record is retained for history, and the original inventory item is untouched.');
     setBusy(false);
   };
 
@@ -159,11 +145,11 @@ export default function ReissEbayTestConsole() {
       <View style={styles.readBox}><Text style={styles.label}>Source protection</Text><Text style={styles.value}>Inventory row is read-only in this console. Submit creates a new listings row linked by item_id.</Text></View>
     </View> : null}
     <View style={styles.panel}><Text style={styles.section}>eBay actions</Text><Text style={styles.notice}>{status}</Text>
-      <Pressable disabled={busy||!item||Boolean(listing)} onPress={submit} style={[styles.action,(busy||!item||listing)&&styles.disabled]}><Text style={styles.actionText}>SUBMIT · CREATE NEW LISTING</Text></Pressable>
-      <Pressable disabled={busy||!listing||!externalId} onPress={revise} style={[styles.action,styles.revise,(busy||!listing||!externalId)&&styles.disabled]}><Text style={styles.actionText}>REVISE LIVE LISTING</Text></Pressable>
-      <Pressable disabled={busy||!listing||!externalId} onPress={remove} style={[styles.action,styles.remove,(busy||!listing||!externalId)&&styles.disabled]}><Text style={styles.actionText}>DELETE TEST LISTING</Text></Pressable>
+      <Pressable disabled style={[styles.action,styles.disabled]}><Text style={styles.actionText}>SUBMIT · BLOCKED TO PREVENT DUPLICATE</Text></Pressable>
+      <Pressable disabled={busy||!listing||!externalId} onPress={revise} style={[styles.action,styles.revise,(busy||!listing||!externalId)&&styles.disabled]}><Text style={styles.actionText}>REVISE EXISTING EBAY LISTING</Text></Pressable>
+      <Pressable disabled={busy||!listing||!externalId} onPress={remove} style={[styles.action,styles.remove,(busy||!listing||!externalId)&&styles.disabled]}><Text style={styles.actionText}>END EXISTING EBAY LISTING</Text></Pressable>
       {busy ? <ActivityIndicator color={Colors.primary}/> : null}
-      {listing ? <Text selectable style={styles.muted}>SWISH listing ID: {listing.id}{externalId ? '\n eBay listing ID: '+externalId : '\n eBay publication not yet confirmed'}</Text> : null}
+      {listing ? <Text selectable style={styles.muted}>SWISH listing ID: {listing.id}{externalId ? '\neBay listing ID: '+externalId : '\neBay listing ended; SWISH history retained'}{'\nCurrent listing status: '+listing.status}</Text> : null}
     </View>
   </ScrollView></View>;
 }
