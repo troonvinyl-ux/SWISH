@@ -94,6 +94,8 @@ jobs:
           services/__tests__/productionControlService.test.ts
           services/__tests__/productionRegisterValidation.test.ts
           services/__tests__/androidApi36Compliance.test.ts
+          services/__tests__/ebayMessagePagination.test.ts
+          services/__tests__/profitEngineFees.test.ts
 
   edge-function-syntax:
     name: Edge Function syntax and secret-boundary guard
