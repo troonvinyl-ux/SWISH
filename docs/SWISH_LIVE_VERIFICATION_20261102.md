@@ -188,7 +188,7 @@ The last command performs real safe GET requests only. A smoke pass is not full 
 
 ## 9. S1–S7 register reconciliation
 
-No task or niche certificate was promoted to VERIFIED. S7-05 now records that limited live execution has started, not that operational acceptance passed. Counts are unweighted task-state counts, **not feature coverage, accuracy or production readiness**. IMPLEMENTED-or-VERIFIED describes historical source implementation; VERIFIED here includes historical repository/CI checks.
+S1-04 was promoted to VERIFIED solely for completion of the blocker-audit artifact (architecture audit, engineering audit/handover and 25-entry Edge Function security matrix). No live security, deployment, eBay or production acceptance is implied. No niche certificate was promoted. S7-05 records that limited live execution has started, not that operational acceptance passed. Counts are unweighted task-state counts, **not feature coverage, accuracy or production readiness**. IMPLEMENTED-or-VERIFIED describes historical source implementation; VERIFIED includes evidence-backed audit/repository checks, not necessarily live production acceptance.
 
 | Stage | Task records | IMPLEMENTED or VERIFIED | VERIFIED | Full live-stage acceptance this session |
 |---|---:|---:|---:|---|
@@ -199,7 +199,7 @@ No task or niche certificate was promoted to VERIFIED. S7-05 now records that li
 | S5 | 4 | 4/4 (100%) | 0/4 (0%) | Not passed |
 | S6 | 4 | 4/4 (100%) | 0/4 (0%) | Not passed |
 | S7 | 7 | 2/7 (28.57%) | 0/7 (0%) | Not passed |
-| Total | 34 | 26/34 (76.47%) | 6/34 (17.65%) | 0/7 stages passed full live acceptance |
+| Total | 34 | 26/34 (76.47%) | 7/34 (20.59%) | 0/7 stages passed full live acceptance |
 
 The ten-niche certificate matrix remains **0/140 explicitly verified acceptance areas** in the register. Real database and HTTP evidence advances execution/discovery only. Source implementation, a 405, RLS enabled, a generated file, or an earlier CI pass is not certification of a production subscriber workflow.
 
