@@ -1911,23 +1911,31 @@ async function handleRequest(req: Request): Promise<Response> {
       .update({ status: 'ended', ended_at: now, updated_at: now })
       .eq('id', ownedListing.id)
       .eq('tenant_id', tenantId);
-    const { data: transitioned, error: itemUpdateError } = await supabase.rpc('swish_transition_item', {
-      p_tenant_id: tenantId,
-      p_item_id: ownedItem.id,
-      p_status: 'identified',
-      p_notes: `eBay listing ended: ${savedExternalListingId}`,
-      p_marketplace: 'ebay',
-    });
+    // The single-item owner test console can end the marketplace listing while
+    // preserving the linked inventory row exactly as it was. Normal end flows
+    // retain the existing lifecycle transition behaviour.
+    const preserveInventoryStatus = body.preserveInventoryStatus === true;
+    const { data: transitioned, error: itemUpdateError } = preserveInventoryStatus
+      ? { data: true, error: null }
+      : await supabase.rpc('swish_transition_item', {
+          p_tenant_id: tenantId,
+          p_item_id: ownedItem.id,
+          p_status: 'identified',
+          p_notes: `eBay listing ended: ${savedExternalListingId}`,
+          p_marketplace: 'ebay',
+        });
 
     if (listingUpdateError || itemUpdateError || transitioned !== true) {
       console.error(`[SWISH end] eBay listing ended but local state update failed (tenant scoped): listingError=${listingUpdateError?.message ?? 'none'} itemError=${itemUpdateError?.message ?? 'none'}`);
       return jsonResponse({
         success: true,
         externalListingId: savedExternalListingId,
-        warning: 'The eBay listing was ended, but SWISH could not fully update its local status. Run eBay sync to reconcile.',
+        warning: preserveInventoryStatus
+          ? 'The eBay listing was ended, but SWISH could not update the listing row. Run eBay sync to reconcile; inventory status was preserved.'
+          : 'The eBay listing was ended, but SWISH could not fully update its local status. Run eBay sync to reconcile.',
       });
     }
-    return jsonResponse({ success: true, externalListingId: savedExternalListingId });
+    return jsonResponse({ success: true, externalListingId: savedExternalListingId, inventoryStatusPreserved: preserveInventoryStatus });
   }
 
   // ── Route: revise ─────────────────────────────────────────────────────────
