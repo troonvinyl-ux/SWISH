@@ -272,14 +272,15 @@ async function handleSendReply(
     return jsonResponse({ error: 'Message not found or does not belong to your account.' }, 404);
   }
 
+  if (!ebayItemId) {
+    return jsonResponse({ success: false, ebaySuccess: false, error: 'An active eBay item ID is required to send this reply.' }, 422);
+  }
+
   const credsResult = await getEbayAccessToken(supabase, tenantId);
   if ('error' in credsResult) return jsonResponse({ error: credsResult.error }, 400);
   const { accessToken, clientId } = credsResult;
 
-  let ebaySuccess = false;
-
-  if (ebayItemId) {
-    const xml = `<?xml version="1.0" encoding="utf-8"?>
+  const xml = `<?xml version="1.0" encoding="utf-8"?>
 <AddMemberMessageAAQToPartnerRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <RequesterCredentials><eBayAuthToken>${accessToken}</eBayAuthToken></RequesterCredentials>
   <ItemID>${xmlEscape(ebayItemId)}</ItemID>
@@ -289,48 +290,52 @@ async function handleSendReply(
   </MemberMessage>
 </AddMemberMessageAAQToPartnerRequest>`;
 
-    try {
-      const resp = await fetch(EBAY_TRADING_API_URL, {
-        method: 'POST',
-        headers: {
-          'X-EBAY-API-SITEID': '3',
-          'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
-          'X-EBAY-API-CALL-NAME': 'AddMemberMessageAAQToPartner',
-          'X-EBAY-API-APP-NAME': clientId,
-          'Content-Type': 'text/xml',
-        },
-        body: xml,
-        signal: AbortSignal.timeout(20000),
-      });
-      const responseXml = await resp.text();
-      const ack = parseAck(responseXml);
-      ebaySuccess = ack === 'Success' || ack === 'Warning';
-      if (!ebaySuccess) {
-        const errMsg = responseXml.match(/<LongMessage>([\s\S]*?)<\/LongMessage>/)?.[1] ?? 'eBay API error';
-        console.log(`[SWISH] eBay send reply failed for message ${messageId}: ${errMsg}`);
-      }
-    } catch (e: any) {
-      console.log(`[SWISH] eBay send reply network error: ${e.message}`);
-    }
+  let ebaySuccess = false;
+  let responseStatus = 0;
+  let ack = '';
+  try {
+    const resp = await fetch(EBAY_TRADING_API_URL, {
+      method: 'POST',
+      headers: {
+        'X-EBAY-API-SITEID': '3',
+        'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
+        'X-EBAY-API-CALL-NAME': 'AddMemberMessageAAQToPartner',
+        'X-EBAY-API-APP-NAME': clientId,
+        'Content-Type': 'text/xml',
+      },
+      body: xml,
+      signal: AbortSignal.timeout(20000),
+    });
+    responseStatus = resp.status;
+    const responseXml = await resp.text();
+    ack = resp.ok ? parseAck(responseXml) : '';
+    ebaySuccess = resp.ok && (ack === 'Success' || ack === 'Warning');
+  } catch {
+    console.warn('[SWISH] eBay reply request failed before acceptance was confirmed.', { messageId });
   }
 
-  await supabase.from('ebay_messages')
+  if (!ebaySuccess) {
+    console.warn('[SWISH] eBay did not confirm message reply.', { messageId, responseStatus, ack });
+    return jsonResponse({ success: false, ebaySuccess: false, error: 'eBay did not confirm the reply. Nothing was marked as sent; please retry after checking the eBay connection.' }, 502);
+  }
+
+  const { error: markError } = await supabase.from('ebay_messages')
     .update({ is_replied: true, replied_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq('id', messageId).eq('tenant_id', tenantId);
+  if (markError) {
+    return jsonResponse({ success: true, ebaySuccess: true, localSyncPending: true, message: 'eBay accepted the reply, but SWISH could not update its local message status. Refresh messages.' });
+  }
 
-  await supabase.from('ebay_messages').insert({
+  const { error: transcriptError } = await supabase.from('ebay_messages').insert({
     tenant_id: tenantId, conversation_id: conversationId ?? null,
     buyer_username: buyerUsername, subject: '(outbound reply)', body: replyText,
-    direction: 'outbound', is_read: true, is_replied: true, ebay_item_id: ebayItemId ?? null,
+    direction: 'outbound', is_read: true, is_replied: true, ebay_item_id: ebayItemId,
   });
+  if (transcriptError) {
+    return jsonResponse({ success: true, ebaySuccess: true, localSyncPending: true, message: 'eBay accepted the reply, but SWISH could not save the local conversation copy. Refresh messages.' });
+  }
 
-  const message = ebaySuccess
-    ? 'Reply sent via eBay successfully.'
-    : (ebayItemId
-      ? 'Reply saved locally. Note: eBay send requires an active item ID and connected account.'
-      : 'Reply saved locally. No eBay item ID was available to send via eBay messaging.');
-
-  return jsonResponse({ success: true, ebaySuccess, message });
+  return jsonResponse({ success: true, ebaySuccess: true, message: 'Reply sent via eBay successfully.' });
 }
 
 // ── Entry point ───────────────────────────────────────────────────────────────
