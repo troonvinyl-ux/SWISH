@@ -115,8 +115,8 @@
         {
           "id": "S3-03",
           "title": "Verify shared inventory and lifecycle services",
-          "status": "IN PROGRESS",
-          "evidence": "Existing swish_transition_item RPC is now used by manual Stock Listing sales, order creation, CSV sold-history import, eBay order ingestion, eBay listing publication and eBay listing sync. Generic updateItem rejects status mutations and requires transitionItemStatus/markItemSold. PR #122 merged as 46a412d with passing lint, TypeScript, Edge Function syntax, 1,030-test regression, shared authorization, Android JS bundle and ten-niche configuration checks. Remaining: review other server-side status writers, reconcile quantity/partial-sale semantics and perform live inventory lifecycle tests against the existing backend."
+          "status": "IMPLEMENTED",
+          "evidence": "All identified item-status transition paths now use the existing atomic `swish_transition_item` RPC or the shared `markItemSold`/`transitionItemStatus` helpers: generic `updateItem` rejects status changes; Stock Listing manual sale, manual order creation, eBay CSV sold-history import, eBay order ingestion, eBay listing publication and eBay listing sync all use the lifecycle command. PR #122 merged as 46a412d with passing lint, TypeScript, Edge Function syntax, 1,030-test regression, shared authorization, Android JS bundle and ten-niche Expo configuration checks. Static audit of the remaining `items` updates found only non-status field updates and initial record creation. Status IMPLEMENTED, not VERIFIED: quantity/partial-sale semantics, live RLS and end-to-end backend lifecycle/reconciliation tests remain open."
         },
         {
           "id": "S3-04",
@@ -408,6 +408,10 @@
     {
       "date": "2026-11-02",
       "change": "Merged PR #122 with passing validation: direct inventory status writes in manual sales, order creation, CSV sales import, eBay order ingestion, listing publication and listing sync now use the existing atomic lifecycle RPC. Generic updateItem status mutations are rejected. S3-03 remains IN PROGRESS for remaining path audit, quantity reconciliation and live backend acceptance. S1-05 rechecked: main 46a412d, no open PRs."
+    },
+    {
+      "date": "2026-11-02",
+      "change": "S3-03 advanced to IMPLEMENTED after PR #122: all identified item status transitions now use the atomic lifecycle RPC/shared helpers; generic updateItem status changes are blocked. Regression and build checks passed. Live RLS, quantity/partial-sale and real order reconciliation remain unverified."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"
