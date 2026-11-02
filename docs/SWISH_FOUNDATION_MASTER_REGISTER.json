@@ -128,7 +128,7 @@
           "id": "S3-05",
           "title": "Verify pricing, fees, profit, notifications and settings foundations",
           "status": "IN PROGRESS",
-          "evidence": "Source implementation includes fee aggregation sign handling and finance partial/incomplete reporting (`docs/S3_CORE_ACCEPTANCE_REPORT.md`), plus profit engine v1.3 with current UK business/private seller estimates, category tiers, regulatory fee, order fixed fee and separate buyer/seller postage. Eight focused tests added in PR #132. Still IN PROGRESS: run checks, exact seller/account fee acceptance, multi-line/quantity allocation, historical finance 400/499 diagnosis and live order/finance reconciliation; no notification delivery service has been added."
+          "evidence": "Source implementation includes fee aggregation sign handling and finance partial/incomplete reporting (`docs/S3_CORE_ACCEPTANCE_REPORT.md`), plus profit engine v1.3 with current UK business/private seller estimates, category tiers, regulatory fee, order fixed fee and separate buyer/seller postage. Nine focused tests added in PR #132. Still IN PROGRESS: run checks, exact seller/account fee acceptance, multi-line/quantity allocation, historical finance 400/499 diagnosis and live order/finance reconciliation; no notification delivery service has been added."
         }
       ]
     },
