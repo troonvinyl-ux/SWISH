@@ -40,25 +40,25 @@
           "id": "S1-02",
           "title": "Map shared services, hooks, backend functions and database dependencies",
           "status": "IMPLEMENTED",
-          "evidence": "docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md#s1-02 maps app/components/contexts/hooks/services/constants, canonical registry, Expo build preparation, OnSpace Cloud canonical backend using Supabase-compatible APIs, Edge Function inventory, SQL migration count, workflows and current direct-query/runtime verification gaps. Per-function authorization and deployed call-path matrix remains outstanding. Static 2026-11-02 source matrix added at docs/SWISH_EDGE_FUNCTION_SECURITY_MATRIX.md: inventories all 25 deployable Edge Function directories and records source-observed JWT, tenant, paid-niche, owner/admin, public-read and internal-secret gates. This does not verify deployed function parity, live RLS/grants, internal-secret callers, direct-query authorization or runtime call paths; S1-02 remains IMPLEMENTED, not VERIFIED."
+          "evidence": "Updated after PR #126 merged to main as e3df8fe19b1d3444919ddac77dadd41a5429acf1. docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md maps app/services/hooks, OnSpace Cloud canonical backend, 47 unique files with direct database query matches (43 supabase.from plus five getSupabaseClient().from matches, one overlap), 29 Edge Function invocation files, 25 deployable Edge Function entry points and 12 tracked SQL migrations. docs/SWISH_EDGE_FUNCTION_SECURITY_MATRIX.md inventories source-observed auth/tenant/entitlement/privileged gates. PR #126 CI passed: master-admin-readiness run 41460220912 (14/14 jobs), branded-web-builds run 41460220448 (10/10 exports), niche-config-checks run 41460220384. These are repository/source checks only. Deployed OnSpace Cloud function revision parity, effective RLS/grants, internal-secret callers, direct-query authorization mapping and live runtime tests remain outstanding; keep IMPLEMENTED, not VERIFIED."
         },
         {
           "id": "S1-03",
           "title": "Audit every registered niche for real functionality and isolation",
           "status": "IMPLEMENTED",
-          "evidence": "Completed a static audit of all ten canonical niche entries, distinct Android/iOS package identities, entry files, scanner routes, dedicated routes and specialist/legacy specialist ownership. Added docs/SWISH_S1-03_NICHE_AUDIT.md and services/__tests__/registeredNicheAudit.test.ts. Findings remain explicit: only Coins and Clothing descriptor files currently exist; Card/Fossil/Beauty/Tech still use shared capture and have no dedicated home route; static tests do not replace live RLS/tenant isolation acceptance. These are follow-on S3/S5/S7 tasks and are not falsely marked verified."
+          "evidence": "Static audit covers all ten canonical niche identities and now all ten descriptor files, including tech and surplus_flip added in PR #126 (merged as e3df8fe19b1d3444919ddac77dadd41a5429acf1). services/__tests__/registeredNicheAudit.test.ts checks descriptor parity against canonical registry fields. PR #126 CI passed niche-config-checks (run 41460220384), regression/niche isolation and all ten branded Android bundle jobs (run 41460220912), and all ten web exports (run 41460220448). This verifies source/config/build contracts, not real scanner-to-listing workflows or live tenant/RLS isolation. Shared-capture niches and bespoke-home gaps remain; keep IMPLEMENTED, not VERIFIED."
         },
         {
           "id": "S1-04",
           "title": "Record security, entitlement, eBay, finance, sync and release blockers",
           "status": "IMPLEMENTED",
-          "evidence": "docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md#s1-04; docs/SWISH_ENGINEERING_AUDIT.md; docs/SWISH_ENGINEERING_HANDOVER.md. Security, entitlement, eBay finance/messages/sync, category specifics, order allocation, Play Store, device and deployment blockers consolidated. Remediation and live acceptance remain open in downstream stages."
+          "evidence": "docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md#s1-04, docs/SWISH_ENGINEERING_AUDIT.md, docs/SWISH_ENGINEERING_HANDOVER.md and docs/SWISH_EDGE_FUNCTION_SECURITY_MATRIX.md consolidate security, entitlement, eBay finance/messages/sync, category specifics, order allocation, Android API 36, device, deployment and live-backend blockers. PR #126 refreshed the source security inventory for all 25 deployable Edge Function entry points. This verifies the blocker register as an audit artifact only; remediation and live acceptance remain open in downstream stages."
         },
         {
           "id": "S1-05",
           "title": "Reconcile open PRs, branches and current main before implementation",
           "status": "VERIFIED",
-          "evidence": "GitHub API rechecked 2026-11-02 after PR #122 merge: main 46a412d9d589a3bcf5c819d9a31d1db0e4fa8ee4; PRs #115-#122 are merged and no open pull requests remain. Recheck current main workflows before the next release or new PR merge."
+          "evidence": "Reconciled after PR #126 merge on 2026-11-02. GitHub API confirms main at e3df8fe19b1d3444919ddac77dadd41a5429acf1 and zero open pull requests at the time of check. PR #126 merged only after all required workflows passed: run 41460220912 (14/14 jobs), run 41460220448 (10/10 web exports), run 41460220384 (niche-routing). Repeat the open-PR/main check before every subsequent merge or release."
         }
       ]
     },

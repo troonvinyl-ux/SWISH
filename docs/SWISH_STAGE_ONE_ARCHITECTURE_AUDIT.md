@@ -2,7 +2,7 @@
 
 **Audit date:** 2026-11-02 (refreshed against main after PR #125)  
 **Audited ref:** `main`  
-**Audited commit:** `f95affc8d1295d70adc1e4cf7b00a2d7db76864c`  
+**Audited commit:** `e3df8fe19b1d3444919ddac77dadd41a5429acf1`  
 **Scope:** S1-01 through S1-05 in `docs/SWISH_FOUNDATION_MASTER_REGISTER.json`.
 
 ## Executive result
