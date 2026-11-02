@@ -106,13 +106,27 @@ jobs:
           fi
           git commit -m "chore: update ten SWISH niche web exports"
           git push --force origin "$branch"
-          if gh pr view "$branch" --repo troonvinyl-ux/SwishWeb >/dev/null 2>&1; then
-            echo "Updated existing SwishWeb deployment PR."
-          else
+          create_deployment_pr() {
             gh pr create \
               --repo troonvinyl-ux/SwishWeb \
               --base main \
               --head "$branch" \
               --title "Update all ten SWISH niche web apps" \
               --body "Automated static exports from SWISH commit $SOURCE_SHA. The ten niche apps are staged under public/niche-apps/ without replacing SwishWeb source files. Merge after the SwishWeb build checks pass."
+          }
+
+          if pr_json=$(gh pr view "$branch" --repo troonvinyl-ux/SwishWeb --json state,mergedAt 2>/dev/null); then
+            pr_state=$(printf '%s' "$pr_json" | jq -r '.state')
+            pr_merged_at=$(printf '%s' "$pr_json" | jq -r '.mergedAt // empty')
+            if [[ "$pr_state" == "OPEN" ]]; then
+              echo "Updated existing open SwishWeb deployment PR."
+            elif [[ -n "$pr_merged_at" ]]; then
+              echo "Previous deployment PR was merged; opening a fresh PR for this export batch."
+              create_deployment_pr
+            else
+              echo "Reopening the previously closed SwishWeb deployment PR."
+              gh pr reopen "$branch" --repo troonvinyl-ux/SwishWeb
+            fi
+          else
+            create_deployment_pr
           fi
