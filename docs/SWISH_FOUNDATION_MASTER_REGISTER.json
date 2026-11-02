@@ -46,7 +46,7 @@
           "id": "S1-03",
           "title": "Audit every registered niche for real functionality and isolation",
           "status": "IN PROGRESS",
-          "evidence": "docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md#s1-03; all ten registered entry routes and specialist/capture configuration inspected. Static findings: Cards/Fossils/Beauty/Tech use shared /capture fallback; Cards/Fossils/Beauty/Tech use generic overview (Cards has one dedicated grading route); no full scanner-to-sale, niche data-isolation, web or device acceptance evidence yet."
+          "evidence": "docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md#s1-03; all ten registered entry routes and specialist/capture configuration inspected. Static findings: Cards/Fossils/Beauty/Tech use shared /capture fallback; Cards/Fossils/Beauty/Tech use generic overview (Cards has one dedicated grading route); no full scanner-to-sale, niche data-isolation, web or device acceptance evidence yet. PR #94 merged 9c18466: canonical/legacy specialist IDs resolve to owning niche; all 25 checks passed. PR #95 merged e4c1a8c: Threads Flip Department/Style/Outer Shell Material specialist-specific mapping regression test; 25/25 checks passed. PR #96 merged 04fd59d: eBay publish mapping now prefers canonical department over legacy gender_category and explicitly maps outer_shell_material; 15/15 checks passed. These are source/CI proofs only; live eBay save/reopen/publish and device acceptance remain outstanding."
         },
         {
           "id": "S1-04",
@@ -58,7 +58,7 @@
           "id": "S1-05",
           "title": "Reconcile open PRs, branches and current main before implementation",
           "status": "VERIFIED",
-          "evidence": "docs/SWISH_STAGE_ONE_ARCHITECTURE_AUDIT.md#s1-05; GitHub GET /repos/troonvinyl-ux/SWISH/pulls?state=open returned []; main confirmed at 8d84f319cb778c84cf1ba1152c8a2b56c2680dd0; PR #88/#89/#90 merged as 719b7c3/89ed4c3/8d84f31; PR #90 pre-merge compare was 4 ahead, 0 behind and all three workflow runs succeeded. Recheck before every future merge."
+          "evidence": "GitHub API rechecked 2026-11-02 after PR #95/#96: open PR query returned []; PR #95 merged as e4c1a8c249bab6d206c633151327ea534eb0e581; PR #96 merged as 04fd59d2150b9421e30dce906940fc3eadec599d. PR #95 completed 25/25 checks; PR #96 completed 15/15 checks. Post-merge main workflows are running: niche-routing plus 11 niche/master OTA JavaScript publish jobs. No APK build was triggered. Recheck latest main workflows and compare against main before future merges."
         }
       ]
     },
