@@ -1757,9 +1757,18 @@ export default function EbayAdminScreen() {
         }
         showAlert('Import Failed', msg); return;
       }
-      const { imported = 0, matched = 0, skipped = 0, total = 0 } = data ?? {};
-      showAlert('Import Complete', `${total} orders processed:\n• ${imported} imported\n• ${matched} matched to inventory\n• ${skipped} skipped`);
-      if (imported > 0) await load();
+      if (!data?.success) {
+        showAlert('Import Failed', data?.error ?? 'eBay order sync was not confirmed.');
+        return;
+      }
+      const { imported = 0, matched = 0, skipped = 0, total = 0, partial = false, errors = [], quantityStatusChecked = 0, quantityStatusPending = 0 } = data;
+      const lines = [`${total} orders processed:`, `• ${imported} imported`, `• ${matched} matched to inventory`, `• ${skipped} skipped`];
+      if (quantityStatusChecked > 0) lines.push(`• ${quantityStatusChecked} multi-quantity listing status check(s) confirmed`);
+      if (quantityStatusPending > 0) lines.push(`• ${quantityStatusPending} listing quantity check(s) still pending`);
+      if (Array.isArray(errors) && errors.length > 0) lines.push(`• Reconciliation: ${errors.filter((entry: unknown) => typeof entry === 'string').slice(0, 3).join(' | ')}`);
+      await load();
+      const isPartial = partial || quantityStatusPending > 0 || (Array.isArray(errors) && errors.length > 0);
+      showAlert(isPartial ? 'Import Partially Complete' : 'Import Complete', lines.join('\n'));
     } finally { setImportingOrders(false); }
   }, [tenant, showAlert, load]);
 

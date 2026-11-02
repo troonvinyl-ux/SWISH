@@ -656,15 +656,21 @@ export default function OrdersScreen() {
         showAlert('Import Failed', msg);
         return;
       }
-      const { imported = 0, matched = 0, markedSold = 0, skipped = 0, total = 0 } = data ?? {};
+      if (!data?.success) {
+        showAlert('Import Failed', data?.error ?? 'eBay order sync was not confirmed.');
+        return;
+      }
+      const { imported = 0, skipped = 0, total = 0, partial = false, errors = [], quantityStatusChecked = 0, quantityStatusPending = 0 } = data;
       const lines = [`Processed ${total} eBay order${total === 1 ? '' : 's'}:`];
       if (imported > 0) lines.push(`• ${imported} new order${imported === 1 ? '' : 's'} imported`);
-      if (markedSold > 0) lines.push(`• ${markedSold} item${markedSold === 1 ? '' : 's'} marked as sold`);
-      if (skipped > 0) lines.push(`• ${skipped} already imported`);
-      if (imported === 0 && total > 0) lines.push('• No new orders to import');
-      showAlert('Sync Complete', lines.join('\n'));
-      // The sync also refreshes existing order statuses/tracking, so always reload.
+      if (skipped > 0) lines.push(`• ${skipped} already imported or skipped`);
+      if (quantityStatusChecked > 0) lines.push(`• ${quantityStatusChecked} multi-quantity listing status check(s) confirmed`);
+      if (quantityStatusPending > 0) lines.push(`• ${quantityStatusPending} listing quantity check(s) still pending`);
+      if (Array.isArray(errors) && errors.length > 0) lines.push(`• Reconciliation: ${errors.filter((entry: unknown) => typeof entry === 'string').slice(0, 3).join(' | ')}`);
+      // Order rows may have been committed even when a later status refresh failed.
       await load();
+      const isPartial = partial || quantityStatusPending > 0 || (Array.isArray(errors) && errors.length > 0);
+      showAlert(isPartial ? 'Import Partially Complete' : 'Sync Complete', lines.join('\n'));
     } finally {
       setImportingOrders(false);
     }
