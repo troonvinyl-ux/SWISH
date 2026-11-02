@@ -34,7 +34,7 @@ for (const [id, product] of Object.entries(products)) {
   packages.add(product.androidPackage);
   if (schemes.has(product.scheme)) fail('duplicate deep-link scheme: ' + product.scheme);
   schemes.add(product.scheme);
-  if (!fs.existsSync(path.join(root, product.entry))) fail(id + ' entry file is missing: ' + product.entry);
+  if (!fs.existsSync(path.join(root, 'app', product.entry))) fail(id + ' entry file is missing: ' + product.entry);
   if (product.home && !fs.existsSync(path.join(root, 'app', product.home))) fail(id + ' home route is missing: ' + product.home);
   if (typeof product.scannerRoute !== 'string' || !product.scannerRoute.startsWith('/')) fail(id + ' scannerRoute must be an absolute app route');
   else {
