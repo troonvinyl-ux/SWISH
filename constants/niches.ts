@@ -426,7 +426,7 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     keyAttributes: ['brand', 'model', 'specifications', 'condition', 'tested'],
     acquisitionSources: ['Clearance stock', 'Auctions', 'Local listings'],
     marketplaces: ['eBay'],
-    captureInstructions: ['Photograph the device and model label', 'Show included accessories', 'Record tested condition and any locks or damage'],
+    captureInstructions: ['Photograph the device and model label', 'Show included accessories', 'Record tested condition and any locks or damage', 'Capture ports, connectors and serial / regulatory labels', 'Photograph the power-on screen, charging status and any visible error messages', 'Confirm factory-reset and activation-lock status without exposing account credentials'],
     hasMeasurements: false, version: '1.0.0',
   },
 
