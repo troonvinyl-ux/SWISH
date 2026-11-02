@@ -18,6 +18,7 @@ import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { useAlert } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
+import { getEbayMessageBody, updateEbayMessageFlag } from '@/services/ebayMessageService';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -280,6 +281,7 @@ function ReplyModal({
   onSent,
   tenantId,
   showAlert,
+  bodyLoading,
 }: {
   visible: boolean;
   message: EbayMessage | null;
@@ -287,6 +289,7 @@ function ReplyModal({
   onSent: (msgId: string) => void;
   tenantId: string;
   showAlert: (t: string, m?: string, b?: any[]) => void;
+  bodyLoading: boolean;
 }) {
   const [replyText, setReplyText] = useState('');
   const [generatingDraft, setGeneratingDraft] = useState(false);
@@ -378,7 +381,14 @@ function ReplyModal({
           {/* Original message */}
           <View style={rm.originalCard}>
             <Text style={rm.originalLabel}>BUYER&apos;S MESSAGE</Text>
-            <Text style={rm.originalText}>{message.body}</Text>
+            {bodyLoading ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={rm.originalText}>Retrieving the full message from eBay…</Text>
+              </View>
+            ) : (
+              <Text style={rm.originalText}>{message.body || 'The full message body is not available. Check the conversation on eBay before replying.'}</Text>
+            )}
             {message.ebayItemId ? (
               <Text style={rm.itemRef}>eBay Item #{message.ebayItemId}</Text>
             ) : null}
@@ -504,6 +514,7 @@ export default function EbayMessagesScreen() {
   const [activeTab, setActiveTab] = useState<FilterTab>('unread');
   const [search, setSearch] = useState('');
   const [replyMessage, setReplyMessage] = useState<EbayMessage | null>(null);
+  const [bodyLoadingMessageId, setBodyLoadingMessageId] = useState<string | null>(null);
 
   // Load messages from local DB (already synced from eBay server-side)
   const load = useCallback(async () => {
@@ -560,21 +571,41 @@ export default function EbayMessagesScreen() {
   }, [tenant, showAlert, load]);
 
   const handleMarkRead = useCallback(async (id: string) => {
-    const supabase = getSupabaseClient();
-    await supabase.from('ebay_messages').update({ is_read: true }).eq('id', id);
+    if (!tenant?.id) return;
+    const result = await updateEbayMessageFlag(tenant.id, id, 'is_read');
+    if (result.error) {
+      showAlert('Could not mark message as read', result.error);
+      return;
+    }
     setMessages(prev => prev.map(m => m.id === id ? { ...m, isRead: true } : m));
-  }, []);
+  }, [tenant?.id, showAlert]);
 
   const handleArchive = useCallback(async (id: string) => {
-    const supabase = getSupabaseClient();
-    await supabase.from('ebay_messages').update({ is_archived: true }).eq('id', id);
+    if (!tenant?.id) return;
+    const result = await updateEbayMessageFlag(tenant.id, id, 'is_archived');
+    if (result.error) {
+      showAlert('Could not archive message', result.error);
+      return;
+    }
     setMessages(prev => prev.map(m => m.id === id ? { ...m, isArchived: true } : m));
-  }, []);
+  }, [tenant?.id, showAlert]);
 
-  const handleMessagePress = useCallback((m: EbayMessage) => {
+  const handleMessagePress = useCallback(async (m: EbayMessage) => {
     if (!m.isRead) handleMarkRead(m.id);
     setReplyMessage(m);
-  }, [handleMarkRead]);
+    if (m.body?.trim() || !tenant?.id) return;
+
+    setBodyLoadingMessageId(m.id);
+    const result = await getEbayMessageBody(tenant.id, m.id);
+    setBodyLoadingMessageId(current => current === m.id ? null : current);
+
+    if (result.body) {
+      setMessages(prev => prev.map(message => message.id === m.id ? { ...message, body: result.body! } : message));
+      setReplyMessage(current => current?.id === m.id ? { ...current, body: result.body! } : current);
+    } else if (result.error) {
+      showAlert('Message body unavailable', result.error);
+    }
+  }, [handleMarkRead, tenant?.id, showAlert]);
 
   const displayed = messages.filter(m => {
     if (activeTab === 'unread') return !m.isRead && !m.isArchived && m.direction === 'inbound';
@@ -705,6 +736,7 @@ export default function EbayMessagesScreen() {
         }}
         tenantId={tenant?.id ?? ''}
         showAlert={showAlert}
+        bodyLoading={bodyLoadingMessageId === replyMessage?.id}
       />
     </View>
   );
