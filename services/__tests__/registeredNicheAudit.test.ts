@@ -67,7 +67,7 @@ describe('S1-03 registered niche audit', () => {
       expect(descriptor.id).toBe(id);
       expect(descriptor.androidPackage).toBe(product.androidPackage);
       expect(descriptor.iosBundleIdentifier).toBe(product.iosBundleIdentifier);
-      expect(descriptor.entryRoute).toBe('/' + String(product.entry).replace(/\\.tsx$/, ''));
+      expect(descriptor.entryRoute).toBe('/' + String(product.entry).replace(/\.tsx$/, ''));
       expect(descriptor.scannerRoute).toBe(product.scannerRoute);
       expect(descriptor.defaultSpecialistId).toBe(product.defaultSpecialist);
       expect(descriptor.specialistIds).toEqual(product.specialists);
