@@ -7,7 +7,7 @@
 
 ## Executive result
 
-Stage S1 is **partially complete**. The canonical route/build map and PR reconciliation have current, reproducible evidence. The shared architecture and blocker maps are documented. The ten-niche source audit is complete at a static/configuration level, but functional, data-isolation, deployed-backend, web-parity and device acceptance are not complete. No task is promoted to VERIFIED on the strength of source inspection alone.
+Stage S1 is **partially complete**. The canonical route/build map and PR reconciliation have current, reproducible evidence. The shared architecture and blocker maps are documented. The ten-niche source audit is complete at a static/configuration level, including descriptor coverage and direct-query inventories; functional, data-isolation, deployed-backend, web-parity and device acceptance are not complete. No task is promoted to VERIFIED on the strength of source inspection alone.
 
 ## S1-01 — App entry points, routes and build identities
 
