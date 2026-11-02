@@ -18,7 +18,8 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
-import { profileForSpecialist } from '../_shared/specialistRegistry.ts';
+import { profileForSpecialist, specialistNiche } from '../_shared/specialistRegistry.ts';
+import { requirePaidNiche, nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
 import { mappedSpecialistSpecifics, evaluateSpecialistSafety } from '../_shared/specialistIntelligence.ts';
 
 interface ListingRequest {
@@ -424,6 +425,15 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: 'Item not found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    const nicheId = specialistNiche(String(item.specialist_id ?? ''));
+    try {
+      await requirePaidNiche(supabaseAdmin, { id: user.id, email: user.email }, tenant_id, nicheId);
+    } catch (error) {
+      const denied = nicheAccessResponse(error);
+      if (denied) return denied;
+      throw error;
     }
 
     const isCoin = ['coins','coins_uk','coins_world','coins_currency','islamic_silver','banknotes','gold','silver'].includes(item.specialist_id);
