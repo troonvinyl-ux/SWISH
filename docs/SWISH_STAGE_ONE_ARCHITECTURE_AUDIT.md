@@ -41,7 +41,7 @@ Stage S1 is **partially complete**. The canonical route/build map and PR reconci
 | Canonical product identity | `niche-modules.json` | Product IDs, package/scheme identity, routes, aliases and specialist ownership |
 | Native/web configuration | `app.config.js`, `scripts/prepare-niche-routes.js` | Expo configuration and isolated route-root preparation |
 | Backend functions | `supabase/functions/` | Existing server-side auth/entitlement, AI, eBay OAuth/listing/orders/messages/finance/sync, billing and privacy operations |
-| Database and object storage | `supabase/migrations/`, existing OnSpace/Supabase-compatible project | Existing tenant, membership, item, listing, connector, order, finance and storage records/policies |
+| Database and object storage | OnSpace Cloud (canonical SWISH backend; Supabase-compatible APIs), `supabase/migrations/` | Existing tenant, membership, item, listing, connector, order, finance and storage records/policies |
 | CI/release | `.github/workflows/` | Niche routing, web export, Android packaging, OTA, Master Admin and readiness validation |
 
 ### Repository inventory at audited commit
@@ -55,7 +55,7 @@ Stage S1 is **partially complete**. The canonical route/build map and PR reconci
 
 ### Shared service/data-flow observations
 
-- Native and Expo web source consume the same service modules and existing Supabase-compatible client/backend; no separate website source workspace was identified in this repository.
+- Native and Expo web source consume the same service modules and the canonical OnSpace Cloud backend through its Supabase-compatible client/API; no separate website source workspace was identified in this repository.
 - The service layer is not yet the exclusive data-access boundary: several screens/pages still issue direct Supabase queries. This increases the number of authorization paths that must be audited.
 - Existing canonical item UUIDs, tenant membership/RLS, storage, connector records and eBay architecture are retained. No second database or auth system is proposed.
 - The handover documents the existing Edge Function families and applied security hardening. A full function-by-function authorization, schema, input-validation, idempotency and redaction review is still required before S3/S7 acceptance.
