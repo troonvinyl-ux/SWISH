@@ -6,7 +6,7 @@ const root = path.resolve(__dirname, '../..');
 describe('Master Admin Production Control route', () => {
   test('the isolated Master Admin Expo Router tree exposes Production Control', () => {
     const route = fs.readFileSync(path.join(root, 'master-admin-app/production-control.tsx'), 'utf8');
-    expect(route).toContain("export { default } from '../app/production-control'");
+    expect(route.includes("export { default } from '../app/production-control'") || route.includes("export { default } from '@/app/production-control'")).toBe(true);
   });
 
   test('the owner dashboard links to the registered Production Control route', () => {
