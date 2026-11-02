@@ -780,7 +780,7 @@ describe('SWISH eBay message send-state integrity', () => {
 
   test('requires an active eBay item ID and a confirmed HTTP-success acknowledgement', () => {
     expect(source).toContain("An active eBay item ID is required to send this reply.");
-    expect(source).toContain("const ack = resp.ok ? parseAck(responseXml) : '';");
+    expect(source).toContain("ack = resp.ok ? parseAck(responseXml) : '';");
     expect(source).toContain("ebaySuccess = resp.ok && (ack === 'Success' || ack === 'Warning')");
   });
 
