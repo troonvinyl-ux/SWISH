@@ -28,6 +28,12 @@ describe('server-side repricing niche authorization', () => {
     expect(isSpecialistAllowedForReprice(niche, specialist)).toBe(true);
   });
 
+  test('rejects legacy specialist IDs for server-side repricing', () => {
+    expect(isSpecialistAllowedForReprice('coins', 'coins_uk')).toBe(false);
+    expect(isSpecialistAllowedForReprice('coins', 'numismatic')).toBe(false);
+    expect(isSpecialistAllowedForReprice('clothing', 'clothing_specialist')).toBe(false);
+  });
+
   test('rejects cross-niche and missing specialist identities', () => {
     expect(isSpecialistAllowedForReprice('antiques', 'coins')).toBe(false);
     expect(isSpecialistAllowedForReprice('clothing', 'motocross')).toBe(false);
