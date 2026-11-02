@@ -25,7 +25,7 @@ All ten package IDs are distinct. All ten registered entry files exist. Scanner 
 
 1. **Only two niche descriptor files exist:** `niches/coins/module.json` and `niches/clothing/module.json`. The other eight registered niches do not yet have a descriptor under `niches/<id>/module.json`.
 2. All ten descriptors describe a shared-core-with-registered-niche-configuration model and explicitly state that end-to-end runtime isolation still requires live verification. The products are branded entry/configuration layers over the shared SWISH engine, not independently extracted code bundles.
-3. Card, Fossil, Beauty and Tech point to the shared `/capture` route; the registry has no dedicated home for these four products. In addition, `app/(tabs)/scan.tsx` currently maps only Fossils to a named capture-card config; Cards, Beauty and Tech fall through to the generic capture-card presentation. The shared capture route may still resolve specialist data elsewhere, but this scan-tab presentation fallback is a source-observed UX gap requiring a separate implementation/acceptance task.
+3. Card, Fossil, Beauty and Tech point to the shared `/capture` route; the registry has no dedicated home for these four products. `app/(tabs)/scan.tsx` uses the canonical niche and specialist profile to derive title, accent, capture instructions and AI capability text for products that use the shared capture card; Cards, Beauty and Tech are handled through this dynamic profile branch rather than a dedicated hard-coded card object. Their shared `/capture` route and end-to-end identification/persistence still require runtime acceptance.
 4. Static registry ownership and route tests do not prove database isolation. Tenant/niche RLS and server-side authorization still require live integration evidence for every niche.
 5. Specialist aliases must always resolve to one canonical product owner. In particular, the legacy `books` alias is assigned to Antique Flipper; it must not become a second product or cross-niche inventory path.
 
@@ -42,5 +42,5 @@ All ten package IDs are distinct. All ten registered entry files exist. Scanner 
 
 - Main commit: `f95affc8d1295d70adc1e4cf7b00a2d7db76864c`.
 - Descriptor coverage: 10/10. `niches/tech/module.json` and `niches/surplus_flip/module.json` were added and are now covered by a canonical-registry parity regression test.
-- The scan tab has named capture configurations for Coins, MX, Bikes, Clothing, Antiques, Fossils and Surplus. Cards, Beauty and Tech currently use its generic presentation fallback; this is separate from the canonical scanner route declared in `niche-modules.json`.
+- The scan tab has named capture configurations for core products and a dynamic canonical-profile branch for Cards, Beauty and Tech; the latter derives niche title, colour, capture instructions and AI capabilities from the registered specialist. This is separate from live acceptance of the shared `/capture` route.
 - These are audit findings, not assertions that live capture, identification accuracy, persistence or isolation passed.
