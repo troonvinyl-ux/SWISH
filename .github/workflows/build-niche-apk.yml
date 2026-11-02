@@ -1,32 +1,6 @@
 name: Build isolated SWISH niche APK
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'app/**'
-      - 'services/**'
-      - '!services/__tests__/**'
-      - '!services/__mocks__/**'
-      - 'hooks/**'
-      - 'contexts/**'
-      - 'components/**'
-      - 'constants/**'
-      - 'niche-modules.json'
-      - 'app.config.js'
-      - 'app.json'
-      - 'plugins/**'
-      - 'scripts/verify-android-sdk-config.mjs'
-      - 'scripts/verify-apk.sh'
-      - 'scripts/**'
-      - '.github/workflows/_niche-android.yml'
   workflow_dispatch:
-    inputs:
-      niche:
-        description: Canonical branded application
-        required: true
-        type: choice
-        default: clothing
-        options: [coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech]
 permissions:
   contents: read
 jobs:
