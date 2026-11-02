@@ -123,6 +123,9 @@ describe('SWISH eBay Finances input and refresh safety', () => {
     expect(source).toContain(".eq('currency', currency)");
     expect(source).toContain("tx.bookingEntry === 'DEBIT' || tx.bookingEntry === 'CREDIT'");
     expect(source).toContain("select('transaction_type, amount, booking_entry')");
+    expect(source).toContain(".select('transaction_type, amount, booking_entry')\n              .eq('tenant_id', tenantId)");
+    expect(source).toContain('const complete = !partialError && errors.length === 0;');
+    expect(source).toContain('success: complete');
     expect(source).toContain("booking_entry === 'DEBIT'");
   });
 
@@ -832,5 +835,14 @@ describe('eBay end lifecycle reconciliation', () => {
     expect(endRoute).toContain("p_status: 'identified'");
     expect(endRoute).toContain('transitioned !== true');
     expect(endRoute).not.toMatch(/\.from\('items'\)[\s\S]{0,120}\.update\(\{\s*status:\s*'identified'/);
+  });
+});
+
+
+describe('eBay category aspect name normalization', () => {
+  const source = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-ebay-list/index.ts'), 'utf8');
+
+  test('prefers the Taxonomy API localizedAspectName and retains aspectName compatibility', () => {
+    expect(source).toContain('aspectName: a.localizedAspectName ?? a.aspectName ?? \'\'');
   });
 });
