@@ -12,6 +12,7 @@ on:
       - 'app/master-admin.tsx'
       - 'app/production-control.tsx'
       - 'app.json'
+      - 'eas.json'
       - 'plugins/**'
       - 'scripts/verify-android-sdk-config.mjs'
       - 'scripts/verify-apk.sh'
