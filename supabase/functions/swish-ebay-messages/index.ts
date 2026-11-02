@@ -238,7 +238,7 @@ async function handleSyncMessages(
   const errors = [
     ...(failed ? ['Some eBay messages could not be saved. Existing messages were retained; retry sync.'] : []),
     ...(pageError ? [pageError] : []),
-    ...(pagePlan.truncated ? [`Mailbox has ${pagePlan.reportedPages} pages; this sync is capped at ${pagePlan.pagesToFetch}. Run a narrower date window or retry after older messages are reconciled.`] : []),
+    ...(pagePlan.truncated ? [`Mailbox has ${pagePlan.reportedPages} pages; this sync is capped at ${pagePlan.pagesToFetch}. The remaining messages were not fetched; contact support to retrieve the remaining date range.`] : []),
   ];
   return jsonResponse({
     success: failed === 0 && !incomplete,
