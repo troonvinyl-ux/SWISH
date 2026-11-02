@@ -1,5 +1,8 @@
 name: Build SWISH Complete APK Suite
 on:
+  push:
+    branches:
+      - 'release/apk-suite-*'
   workflow_dispatch:
     inputs:
       include_master_admin:
