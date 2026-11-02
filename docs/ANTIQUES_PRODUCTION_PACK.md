@@ -20,8 +20,8 @@ Deliver Antique Flipper as a specialist experience on the existing SWISH engine.
 | 1 | Splash | Existing native splash + `entry/antiques` | Branded app entry and existing auth gate |
 | 2 | Sign in / Sign up | Existing `login` | Existing SWISH authentication |
 | 3 | Home dashboard | `app/antique-flipper.tsx` | Bespoke gold dashboard, inventory counters, scan and specialist shortcuts |
-| 4 | Scanner / Capture | `app/capture.tsx` via central Scan tab | Existing multi-angle photo capture, camera and gallery, evidence slots |
-| 5 | AI Identification | `app/capture.tsx` + `useGenericCapture` | Existing shared identification pipeline and progress state |
+| 4 | Scanner / Capture | `app/antique-capture.tsx` via central Scan tab and Antique Flipper dashboard | Dedicated camera-first antique capture, multi-angle evidence slots, gallery, retakes and photo review |
+| 5 | AI Identification | `app/antique-capture.tsx` + `useGenericCapture` | Shared identification pipeline using the active Antique Flipper niche and canonical antique specialist; review and follow-up answers |
 | 6 | Identification Result | `SpecialistReview` in capture | Evidence review, editable title and specialist follow-up answers |
 | 7 | Condition Assessment | `app/antique-condition.tsx` | Loads an antique inventory item, saves condition grade and location-specific notes through the shared item service |
 | 8 | Market Value | `app/antique-value.tsx` | Calls shared market value service and displays verified sold evidence separately from active asking prices; applies returned valuation to the existing item |
@@ -77,6 +77,6 @@ Valuation uses the existing shared market value Edge Function. Completed-sale ev
 
 ## Current implementation notes
 
-This pack adds the bespoke Antique Flipper home and More experience, dedicated guides and restoration pages, gold niche styling, an explicit five-tab More entry for Antique Flipper, and expanded antique specialist capture/intelligence guidance. The existing shared capture, identification, valuation, inventory, listing and order services are reused.
+This pack adds the bespoke Antique Flipper home and More experience, dedicated guides and restoration pages, gold niche styling, an explicit five-tab More entry for Antique Flipper, and expanded antique specialist capture/intelligence guidance. The dedicated `app/antique-capture.tsx` screen is the entry point from both the Antique Flipper dashboard and central Scan tab. It uses the existing shared capture and identification hook; valuation, inventory, listing and order services remain shared.
 
 The release is not production-certified until GitHub checks, the isolated APK build, and real-device acceptance have passed. No real eBay listing is published by these code changes.
