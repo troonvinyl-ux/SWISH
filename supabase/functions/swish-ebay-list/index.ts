@@ -868,7 +868,7 @@ async function getEbayCategoryAspects(
 
     const data = await res.json();
     const aspects: CategoryAspect[] = (data.aspects ?? []).map((a: any) => ({
-      aspectName: a.aspectName ?? '',
+      aspectName: a.localizedAspectName ?? a.aspectName ?? '',
       aspectConstraint: {
         aspectRequired: a.aspectConstraint?.aspectRequired === true,
         aspectUsage: a.aspectConstraint?.aspectUsage ?? 'OPTIONAL',
