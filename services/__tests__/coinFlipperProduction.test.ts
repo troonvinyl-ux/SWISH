@@ -488,4 +488,15 @@ describe('Production configuration', () => {
     const callBody = mockInvoke.mock.calls[0][1].body;
     expect(callBody.tenantId).toBe(MY_TENANT);
   });
+
+  test('Silver Batch persists under the canonical coin specialist, not the generic catch-all', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const source = fs.readFileSync(path.resolve(__dirname, '../../app/silver-batch.tsx'), 'utf8');
+    const registry = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../niche-modules.json'), 'utf8'));
+    expect(source).toContain("specialist_id: 'silver'");
+    expect(source).not.toContain("specialist_id: 'curiosities_collectibles'");
+    expect(registry.products.coins.specialists).toContain('silver');
+  });
+
 });
