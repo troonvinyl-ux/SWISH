@@ -315,7 +315,7 @@ Deno.serve(async (req: Request) => {
               }
             }
           }
-        } catch (e: any) { errors.push(e.message); }
+        } catch { errors.push('A transaction could not be reconciled because an unexpected processing error occurred.'); }
       }
       const partialError = fetchErr ?? (errors.length ? 'One or more finance transactions could not be fully reconciled.' : null);
       const complete = !partialError && errors.length === 0;
