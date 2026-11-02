@@ -24,6 +24,11 @@ describe('UK eBay fee estimates and profit accounting', () => {
     expect(result.marketplaceFee).toBeCloseTo(450 * 0.109 + 50 * 0.03 + 500 * 0.0035 + 0.4, 6);
   });
 
+  test('an explicit fee-rate override replaces category tiering', () => {
+    const result = calculateProfit({ salePrice: 500, acquisitionCost: 100, specialistId: 'coins', marketplaceFeeRate: 0.1 });
+    expect(result.marketplaceFee).toBeCloseTo(500 * 0.1 + 500 * 0.0035 + 0.4, 6);
+  });
+
   test('uses documented category rates and the high-value trainer rate', () => {
     expect(getEbayFeeRate('antiques').finalValueFee).toBe(0.109);
     expect(getEbayFeeRate('clothing').finalValueFee).toBe(0.119);
