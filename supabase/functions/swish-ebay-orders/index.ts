@@ -470,12 +470,6 @@ async function importFulfillmentOrders(
           profit: Math.round((netRevenue - acquiredCost) * 100) / 100,
           predicted_profit: 0, sold_at: order.createdAt, external_order_id: orderId,
         });
-        // Record lifecycle event
-        await supabase.from('item_lifecycle_events').insert({
-          tenant_id: tenantId, item_id: matchedItemId,
-          from_status: curItem?.status ?? 'listed', to_status: 'sold',
-          triggered_by: 'ebay_orders_sync', notes: `eBay order ${orderId} · £${salePrice.toFixed(2)}`,
-        });
       }
 
       existingOrderIds.add(orderId);
@@ -587,11 +581,6 @@ async function importTradingOrders(
           marketplace_id: 'ebay', sale_price: salePrice, marketplace_fee: marketplaceFee,
           shipping_cost: shippingCost, net_revenue: netRevenue, profit,
           predicted_profit: 0, sold_at: order.createdAt, external_order_id: order.orderId,
-        });
-        await supabase.from('item_lifecycle_events').insert({
-          tenant_id: tenantId, item_id: matchedItemId,
-          from_status: curItem?.status ?? 'listed', to_status: 'sold',
-          triggered_by: 'ebay_orders_trading_sync', notes: `eBay order ${order.orderId} · £${salePrice.toFixed(2)}`,
         });
       }
 
