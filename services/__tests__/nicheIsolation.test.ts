@@ -654,7 +654,12 @@ describe('Mutation tenant guard', () => {
     expect(publish).not.toContain(".from('items').update({\n        status: 'listed'");
     expect(orders).toContain("rpc('swish_reconcile_ebay_sold_order'");
     expect(orders).not.toContain(".from('items').update({status:'sold'");
-    expect(orders).not.toContain(".from('items').update({status:'sold'");
+    expect(orders).toContain("functions/v1/swish-ebay-listing-status");
+    expect(orders).toContain("multiQuantityStatusChecks.set(listingId, nicheId)");
+    expect(orders).toContain("quantityStatusPending:");
+    const status = fs.readFileSync(path.resolve(__dirname, '../../supabase/functions/swish-ebay-listing-status/index.ts'), 'utf8');
+    expect(status).toContain('Every listing must belong to this account and niche');
+    expect(status).toContain("rpc('swish_apply_ebay_listing_status'");
     expect(sync).toContain("rpc('swish_transition_item'");
     expect(sync).not.toContain(".from('items').update({ status: newStatus");
   });
