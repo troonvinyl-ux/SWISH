@@ -73,8 +73,8 @@ export default function AntiqueCaptureScreen() {
   };
 
   const flipCamera = () => {
-    setCameraReady(false);
     setFacing((current) => current === 'back' ? 'front' : 'back');
+    setFlashEnabled(false);
   };
 
   if (capture.activeNiche.id !== 'antiques') {
