@@ -13,6 +13,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
 import { corsHeaders } from '../_shared/cors.ts';
+import { buildGetEbayMessagesRequest, extractEbayMessageSummaryBlocks, getEbayMessagePagePlan } from '../../../shared/ebayMessagePagination.ts';
 
 const EBAY_TRADING_API_URL = 'https://api.ebay.com/ws/api.dll';
 const EBAY_TOKEN_URL       = 'https://api.ebay.com/identity/v1/oauth2/token';
@@ -167,48 +168,53 @@ async function handleSyncMessages(
   const { accessToken, clientId } = credsResult;
 
   const startTime = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString();
-  const endTime   = new Date().toISOString();
+  const endTime = new Date().toISOString();
+  let pagePlan = { reportedPages: 1, pagesToFetch: 1, truncated: false };
+  let pagesFetched = 0;
+  let pageError: string | null = null;
+  const msgBlocks: string[] = [];
 
-  const xml = `<?xml version="1.0" encoding="utf-8"?>
-<GetMyMessagesRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-  <RequesterCredentials><eBayAuthToken>${accessToken}</eBayAuthToken></RequesterCredentials>
-  <FolderID>0</FolderID>
-  <StartCreationTime>${startTime}</StartCreationTime>
-  <EndCreationTime>${endTime}</EndCreationTime>
-  <Pagination><EntriesPerPage>50</EntriesPerPage><PageNumber>1</PageNumber></Pagination>
-</GetMyMessagesRequest>`;
+  // GetMyMessages is paginated. Fetch pages in order and cap the request count
+  // so a busy mailbox cannot exhaust the Edge Function execution window.
+  for (let page = 1; page <= pagePlan.pagesToFetch; page++) {
+    let responseXml: string;
+    try {
+      const resp = await fetch(EBAY_TRADING_API_URL, {
+        method: 'POST',
+        headers: {
+          'X-EBAY-API-SITEID': '3',
+          'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
+          'X-EBAY-API-CALL-NAME': 'GetMyMessages',
+          'X-EBAY-API-APP-NAME': clientId,
+          'Content-Type': 'text/xml',
+        },
+        body: buildGetEbayMessagesRequest(accessToken, startTime, endTime, page),
+        signal: AbortSignal.timeout(10000),
+      });
+      responseXml = await resp.text();
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    } catch {
+      if (page === 1) return jsonResponse({ error: 'Unable to complete the eBay messages request.' }, 503);
+      pageError = 'eBay stopped responding before all message pages were retrieved.';
+      break;
+    }
 
-  let responseXml: string;
-  try {
-    const resp = await fetch(EBAY_TRADING_API_URL, {
-      method: 'POST',
-      headers: {
-        'X-EBAY-API-SITEID': '3',
-        'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
-        'X-EBAY-API-CALL-NAME': 'GetMyMessages',
-        'X-EBAY-API-APP-NAME': clientId,
-        'Content-Type': 'text/xml',
-      },
-      body: xml,
-      signal: AbortSignal.timeout(20000),
-    });
-    responseXml = await resp.text();
-  } catch (e: any) {
-    return jsonResponse({ error: 'Unable to complete the eBay messages request.' }, 503);
+    const ack = parseAck(responseXml);
+    if (!['Success', 'Warning'].includes(ack)) {
+      if (page === 1) return jsonResponse({ error: 'eBay could not complete the messages request. Please retry.' }, 502);
+      pageError = 'eBay rejected a later message page; the pages already received were retained.';
+      break;
+    }
+
+    if (page === 1) pagePlan = getEbayMessagePagePlan(responseXml);
+    msgBlocks.push(...extractEbayMessageSummaryBlocks(responseXml));
+    pagesFetched = page;
   }
 
-  const ack = parseAck(responseXml);
-  if (!['Success', 'Warning'].includes(ack)) {
-    const errMsg = responseXml.match(/<LongMessage>([\s\S]*?)<\/LongMessage>/)?.[1] ?? 'eBay API error';
-    return jsonResponse({ error: 'eBay could not complete the messages request. Please retry.' }, 502);
-  }
-
-  const msgMatches = Array.from(responseXml.matchAll(/<MessageSummary>([\s\S]*?)<\/MessageSummary>/g));
   let synced = 0;
   let failed = 0;
 
-  for (const match of msgMatches) {
-    const msgXml = match[1];
+  for (const msgXml of msgBlocks) {
     const msgId        = msgXml.match(/<MessageID>([^<]+)<\/MessageID>/)?.[1];
     const sender       = msgXml.match(/<Sender>([^<]+)<\/Sender>/)?.[1] ?? '';
     const subject      = msgXml.match(/<Subject>([^<]+)<\/Subject>/)?.[1] ?? '(no subject)';
@@ -227,9 +233,22 @@ async function handleSyncMessages(
     if (!error && persisted) synced++; else failed++;
   }
 
-  console.log(`[SWISH] Messages synced: ${synced} for tenant ${tenantId}`);
-  return jsonResponse({ success: failed === 0, synced, failed, bodyAvailable: false,
-    ...(failed ? { error: 'Some eBay messages could not be saved. Existing messages were retained; retry sync.' } : {}),
+  console.log(`[SWISH] Messages synced: ${synced} for tenant ${tenantId}; pages ${pagesFetched}/${pagePlan.reportedPages}`);
+  const incomplete = Boolean(pageError) || pagePlan.truncated;
+  const errors = [
+    ...(failed ? ['Some eBay messages could not be saved. Existing messages were retained; retry sync.'] : []),
+    ...(pageError ? [pageError] : []),
+    ...(pagePlan.truncated ? [`Mailbox has ${pagePlan.reportedPages} pages; this sync is capped at ${pagePlan.pagesToFetch}. Run a narrower date window or retry after older messages are reconciled.`] : []),
+  ];
+  return jsonResponse({
+    success: failed === 0 && !incomplete,
+    synced,
+    failed,
+    pagesFetched,
+    pagesTotal: pagePlan.reportedPages,
+    truncated: pagePlan.truncated,
+    bodyAvailable: false,
+    ...(errors.length ? { error: errors.join(' ') } : {}),
   });
 }
 
