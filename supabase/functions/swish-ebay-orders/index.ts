@@ -167,7 +167,8 @@ async function fetchFulfillmentOrders(
   while (hasMore) {
     try {
       const url = new URL(`${EBAY_FULFILLMENT_API}/order`);
-      url.searchParams.set('filter', `creationdate:[${fromDate}..],orderfulfillmentstatus:{NOT_STARTED|IN_PROGRESS|FULFILLED}`);
+      // Retrieve all order states by creation date. The former combined status filter was rejected by eBay (HTTP 400) for this seller; SWISH needs completed and unfulfilled orders alike.
+      url.searchParams.set('filter', `creationdate:[${fromDate}..]`);
       url.searchParams.set('limit', String(limit));
       url.searchParams.set('offset', String(offset));
 
