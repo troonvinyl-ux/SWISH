@@ -30,6 +30,9 @@ name: Build signed SWISH APK (persistent keystore)
 # ──────────────────────────────────────────────────────────────────────────────
 
 on:
+  push:
+    branches:
+      - 'release/master-admin-*'
   workflow_dispatch:
 
 jobs:
