@@ -33,6 +33,8 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 import { assessListingConfidence } from '../_shared/listingConfidencePolicy.ts';
+import { requirePaidNiche, nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
+import { specialistNiche } from '../_shared/specialistRegistry.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -122,7 +124,7 @@ async function verifyTenantMembership(
   authHeader: string | null,
   tenantId: string,
   internalSecretHeader: string | null,
-): Promise<{ ok: boolean; userId?: string; error?: string }> {
+): Promise<{ ok: boolean; userId?: string; userEmail?: string; error?: string }> {
 
   if (internalSecretHeader && INTERNAL_SECRET && internalSecretHeader === INTERNAL_SECRET) {
     console.log('[SWISH Security] Internal server-to-server call verified via SWISH_INTERNAL_SECRET');
@@ -162,7 +164,7 @@ async function verifyTenantMembership(
       return { ok: false, error: 'Access denied: you are not a member of this organisation.' };
     }
 
-    return { ok: true, userId: user.id };
+    return { ok: true, userId: user.id, userEmail: user.email ?? undefined };
   } catch (e: any) {
     console.error(`[SWISH Security] JWT verification error: ${e.message}`);
     return { ok: false, error: 'Authentication verification failed. Please sign in again.' };
@@ -2095,6 +2097,18 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 
   const item = (listingRow as any).items as any;
+  // Service-role access bypasses RLS; authenticated buyer-facing publication must
+  // independently enforce the stored item's canonical niche entitlement.
+  if (auth.userId) {
+    const nicheId = specialistNiche(String(item?.specialist_id ?? ''));
+    try {
+      await requirePaidNiche(supabase, { id: auth.userId, email: auth.userEmail }, tenantId, nicheId);
+    } catch (error) {
+      const denied = nicheAccessResponse(error);
+      if (denied) return denied;
+      throw error;
+    }
+  }
   const confidenceGate = assessListingConfidence(
     item?.specialist_id,
     item?.identification_confidence,
