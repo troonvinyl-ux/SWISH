@@ -97,6 +97,8 @@ jobs:
           services/__tests__/ebayMessagePagination.test.ts
           services/__tests__/profitEngineFees.test.ts
           services/__tests__/foundationContracts.test.ts
+          services/__tests__/edgeDeploymentAssets.test.ts
+          services/__tests__/edgeSmokeRunner.test.ts
           services/__tests__/ebayFinancePayoutFilter.test.ts
 
   edge-function-syntax:
@@ -114,6 +116,8 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
       - name: Install locked dependencies
         run: bash scripts/install-dependencies.sh
+      - name: Validate Edge deployment dependencies and canonical generated assets
+        run: node scripts/validate-edge-deployment.mjs
       - name: Transpile-check every Supabase Edge Function
         run: |
           node <<'NODE'

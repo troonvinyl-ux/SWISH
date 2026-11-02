@@ -267,7 +267,8 @@
         {
           "id": "S7-05",
           "title": "Complete real-device, live integration and operational acceptance",
-          "status": "NOT STARTED"
+          "status": "IN PROGRESS",
+          "evidence": "docs/SWISH_LIVE_VERIFICATION_20261102.md and docs/SWISH_LIVE_VERIFICATION_20261102.json: actual OnSpace Cloud catalog/grant checks, two corrected identity-free read-only RLS probes, all 25 deployed endpoint GET probes and four failed post-source-edit retests executed on 2026-11-02. Ten endpoints returned 500, nine with BootFailure logs. Source deployability defects repaired; live recovery/deployed revision parity NOT verified. No approved account login, seller-provider workflow, real-image or device acceptance executed; all remain blocked. No VERIFIED promotion."
         },
         {
           "id": "S7-06",
@@ -313,7 +314,33 @@
     "noAutomaticMerge": true,
     "noForcePush": true
   },
+  "liveVerification": {
+    "report": "docs/SWISH_LIVE_VERIFICATION_20261102.md",
+    "evidence": "docs/SWISH_LIVE_VERIFICATION_20261102.json",
+    "backendOrigin": "https://iwgaqieyoahmcjfziwga.backend.onspace.ai",
+    "repositoryReference": "316cdaabdcb4af742f7e6dbd50259a73f56b8dba",
+    "deployedVersionParity": "BLOCKED",
+    "logicalEndpointGetProbes": 25,
+    "failedEndpointGetProbes": 10,
+    "postSourceEditRetests": 4,
+    "failedPostSourceEditRetests": 4,
+    "authenticatedSellerTestsCompleted": 0,
+    "realImageTestsCompleted": 0,
+    "deviceTestsCompleted": 0,
+    "productionReady": false,
+    "taskStateTotals": {
+      "taskRecords": 34,
+      "implementedOrVerified": 26,
+      "verified": 6,
+      "implementedOrVerifiedPercent": 76.47,
+      "verifiedPercent": 17.65,
+      "meaning": "Unweighted historical task-state counts; not live feature coverage or production certification."
+    }
+  },
   "knownReleaseRisks": [
+    "Live 2026-11-02 GET probes returned HTTP 500 for ten endpoints, nine with BootFailure; four post-source-edit retests still failed. Acknowledged deployment parity and complete boot/import diagnostics are required.",
+    "Live catalog found 69 repeated tenant/order-ID groups and 70 repeated tenant/order/item groups with no order UNIQUE constraints; diagnose allocation/duplication without automatic data cleanup.",
+    "Authorized test sessions, authenticated runtime/Actions execution, hosted app revisions and installed-device access are not available to this editor; no full live acceptance is claimed.",
     "Paid niche access and trusted server-side entitlement enforcement require complete API/RLS coverage.",
     "eBay finance recurring 400/499 and fee aggregation/sign conventions remain unresolved.",
     "eBay messaging must not report success after a failed provider send.",
@@ -324,6 +351,10 @@
     "Real APK/device launches, signing, web parity, deployment and external CI billing constraints require evidence."
   ],
   "changeLog": [
+    {
+      "date": "2026-11-02",
+      "change": "Executed live OnSpace Cloud SQL/grant/identity-free RLS checks and GET probes for all 25 existing Edge endpoints. Recorded ten HTTP 500 failures (nine BootFailure logs) and four still-failed live retests. Corrected out-of-deployment-tree imports, supplied generated canonical shared assets and restored a missing registry-derived repricing adapter; added dependency-containment/parity and manual safe HTTP smoke checks. No database/data/credential/UI/native changes, no authenticated eBay/AI/device acceptance, no CI or deployment verification and no VERIFIED promotion. S7-05 moved only to IN PROGRESS. Full results and required access recorded in docs/SWISH_LIVE_VERIFICATION_20261102.md."
+    },
     {
       "date": "2026-11-01",
       "change": "Created initial evidence-based control register from the seven-stage master directive and existing repository handover."

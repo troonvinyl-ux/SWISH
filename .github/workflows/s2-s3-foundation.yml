@@ -1,0 +1,101 @@
+name: SWISH S2-S3 foundation acceptance
+on:
+  push:
+    branches: [main]
+    paths: ['app/**', 'components/**', 'constants/**', 'services/**', 'hooks/**', 'shared/**', 'supabase/**', 'niche-modules.json', 'scripts/**', 'docs/SWISH_FOUNDATION_MASTER_REGISTER.json', '.github/workflows/s2-s3-foundation.yml']
+  pull_request:
+    paths: ['app/**', 'components/**', 'constants/**', 'services/**', 'hooks/**', 'shared/**', 'supabase/**', 'niche-modules.json', 'scripts/**', 'docs/SWISH_FOUNDATION_MASTER_REGISTER.json', '.github/workflows/s2-s3-foundation.yml']
+  workflow_dispatch:
+    inputs:
+      run_live_checks:
+        description: Run approved read-only login/tenant/niche checks against configured test fixtures
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: swish-foundation-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  contracts:
+    name: Canonical registry and module boundaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/validate-foundation.mjs
+      - run: node scripts/validate-production-register.mjs
+      - name: Validate contained Edge dependencies and generated shared assets
+        run: node scripts/validate-edge-deployment.mjs
+  regression:
+    name: Core regression and TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: bash scripts/install-dependencies.sh
+      # Independent steps ensure a type/lint failure does not hide the regression result.
+      - name: Full regression suite
+        run: pnpm dlx jest@29.7.0 --config jest.config.ci.js --runInBand
+      - name: Full TypeScript check
+        if: ${{ !cancelled() }}
+        run: npx tsc --noEmit
+      - name: Lint
+        if: ${{ !cancelled() }}
+        run: pnpm lint
+  server-tests:
+    name: Server authorization boundaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Resolve every deployable Deno module graph without running handlers
+        shell: bash
+        run: |
+          set -euo pipefail
+          for entry in supabase/functions/*/index.ts; do
+            echo "Resolving ${entry}"
+            deno info --json "$entry" > /dev/null
+          done
+      - run: deno test --allow-read --allow-env supabase/tests/paidNicheAuthorization.test.ts
+  live-read-only:
+    name: Deployed auth and tenant/niche read isolation
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_live_checks }}
+    environment: swish-s3-verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify approved test accounts and fixtures
+        env:
+          S3_BACKEND_URL: ${{ secrets.S3_BACKEND_URL }}
+          S3_ANON_KEY: ${{ secrets.S3_ANON_KEY }}
+          S3_ACCOUNT_A_EMAIL: ${{ secrets.S3_ACCOUNT_A_EMAIL }}
+          S3_ACCOUNT_A_PASSWORD: ${{ secrets.S3_ACCOUNT_A_PASSWORD }}
+          S3_ACCOUNT_B_EMAIL: ${{ secrets.S3_ACCOUNT_B_EMAIL }}
+          S3_ACCOUNT_B_PASSWORD: ${{ secrets.S3_ACCOUNT_B_PASSWORD }}
+          S3_TENANT_A: ${{ secrets.S3_TENANT_A }}
+          S3_TENANT_B: ${{ secrets.S3_TENANT_B }}
+          S3_ITEM_A: ${{ secrets.S3_ITEM_A }}
+          S3_ITEM_B: ${{ secrets.S3_ITEM_B }}
+          S3_NICHE_A: ${{ secrets.S3_NICHE_A }}
+          S3_NICHE_B: ${{ secrets.S3_NICHE_B }}
+        run: node scripts/verify-s3-live.mjs
+      - name: Retain commit-bound read-only evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: s3-read-only-${{ github.sha }}
+          path: s3-read-only-evidence.json
+          if-no-files-found: error

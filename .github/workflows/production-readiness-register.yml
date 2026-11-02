@@ -7,6 +7,12 @@ on:
       - 'docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md'
       - 'niche-modules.json'
       - 'scripts/validate-production-register.mjs'
+      - 'services/productionControlEvidence.ts'
+      - 'services/productionControlService.ts'
+      - 'hooks/useProductionControl.ts'
+      - 'app/production-control.tsx'
+      - 'services/__tests__/productionControl*.test.ts'
+      - 'services/__tests__/productionRegisterValidation.test.ts'
       - '.github/workflows/production-readiness-register.yml'
   push:
     branches: [main]
@@ -15,6 +21,12 @@ on:
       - 'docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md'
       - 'niche-modules.json'
       - 'scripts/validate-production-register.mjs'
+      - 'services/productionControlEvidence.ts'
+      - 'services/productionControlService.ts'
+      - 'hooks/useProductionControl.ts'
+      - 'app/production-control.tsx'
+      - 'services/__tests__/productionControl*.test.ts'
+      - 'services/__tests__/productionRegisterValidation.test.ts'
       - '.github/workflows/production-readiness-register.yml'
   workflow_dispatch:
 
