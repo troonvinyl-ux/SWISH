@@ -3,7 +3,7 @@
  * Kept outside the Edge Function so request construction and XML page parsing
  * can be covered by the shared Jest regression suite.
  */
-export const MAX_EBAY_MESSAGE_PAGES = 20;
+export const MAX_EBAY_MESSAGE_PAGES = 10;
 export const EBAY_MESSAGE_PAGE_SIZE = 50;
 
 export function extractEbayXmlTag(xml: string, tag: string): string {
