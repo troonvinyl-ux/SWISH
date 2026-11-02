@@ -251,7 +251,7 @@
           "id": "S7-04",
           "title": "Build and inspect release APKs only at release milestones",
           "status": "IN PROGRESS",
-          "evidence": "PR #110 commit 64aae9d2b1cf6b99a547ff996a7d290461e5c81a: Android JavaScript bundles and branded configurations passed for all ten niches and the private Master Admin launcher. A separate clothing APK build was triggered on main; remaining nine niche APKs and the signed owner APK have not yet been built and inspected. PR #120 merged (2619f7f): removed automatic push-triggered single-niche APK builds; individual APK builds are now manual-dispatch only, while the ten-niche suite remains a controlled release workflow. This prevents test-only and ordinary source commits from repeatedly producing a default Threads Flip APK. Two earlier default Threads APK jobs were already in flight from commits before this trigger fix and are not release certification."
+          "evidence": "PR #110 commit 64aae9d2b1cf6b99a547ff996a7d290461e5c81a: Android JavaScript bundles and branded configurations passed for all ten niches and the private Master Admin launcher. A separate clothing APK build was triggered on main; remaining nine niche APKs and the signed owner APK have not yet been built and inspected. PR #120 merged (2619f7f): removed automatic push-triggered single-niche APK builds; individual APK builds are now manual-dispatch only, while the ten-niche suite remains a controlled release workflow. This prevents test-only and ordinary source commits from repeatedly producing a default Threads Flip APK. Three earlier default Threads APK jobs were already in flight from commits before this trigger fix and are not release certification."
         },
         {
           "id": "S7-05",
