@@ -72,3 +72,12 @@ describe('Experience source contracts (not device/render tests)',()=>{
     expect(source('app/niche-select.tsx')).toContain('DESIGN PREVIEW · NOT AVAILABLE YET');
   });
 });
+
+
+describe('Antique Flipper valuation context',()=>{
+  test('passes the saved item specialist to shared market valuation rather than forcing the antiques specialist',()=>{
+    const screen=source('app/antique-value.tsx');
+    expect(screen).toContain('specialistId:item.specialistId');
+    expect(screen).not.toContain("specialistId:'antiques'");
+  });
+});
