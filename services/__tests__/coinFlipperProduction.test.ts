@@ -20,6 +20,8 @@ jest.mock('@/template', () => ({
   useAlert: jest.fn(() => ({ showAlert: jest.fn() })),
 }));
 
+jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
+
 // ── Mock Supabase client ──────────────────────────────────────────────────────
 const mockInvoke = jest.fn();
 const mockFrom = jest.fn();

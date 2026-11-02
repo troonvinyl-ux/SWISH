@@ -36,7 +36,8 @@ export default function ProductionControlScreen() {
   const { user, loading: authLoading } = useAuth();
   const { isMasterAdmin, tenantLoading, nichePreferencesLoading } = useApp();
   const accessLoading = authLoading || tenantLoading || nichePreferencesLoading;
-  const allowed = !accessLoading && isSwishMasterAdmin(user?.email) && isMasterAdmin;
+  const ownerAccessDenied = !isSwishMasterAdmin(user?.email) || !isMasterAdmin;
+  const allowed = !accessLoading && !ownerAccessDenied;
   // Hook is always mounted, but it cannot fetch repository data before owner authorization.
   const control = useProductionControl(allowed);
   const router = useRouter();
@@ -53,7 +54,7 @@ export default function ProductionControlScreen() {
   }, [showAlert]);
 
   if (accessLoading) return <SafeAreaView style={styles.loading}><ActivityIndicator color={Colors.primary}/><Text style={styles.body}>Checking owner access…</Text></SafeAreaView>;
-  if (!allowed) return <Redirect href={'/master-admin' as any}/>;
+  if (!allowed) return <Redirect href={"/master-admin" as any} />;
   const sourceLabel = snapshot.source === 'LIVE' ? 'LIVE REGISTER' : snapshot.source === 'CACHED' ? 'CACHED EVIDENCE' : 'BUNDLED / OFFLINE';
 
   const renderSection = ({ item }: { item: SectionId }) => {

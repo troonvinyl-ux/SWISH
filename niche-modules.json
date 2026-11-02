@@ -46,7 +46,8 @@
         "islamic-batch.tsx",
         "silver-batch.tsx",
         "deep-id-lab.tsx"
-      ]
+      ],
+      "scannerRoute": "/coin-flipper?tab=capture"
     },
     "motocross": {
       "id": "motocross",
@@ -72,7 +73,8 @@
       "dedicatedRoutes": [
         "flipper-mx.tsx",
         "mx-acquisition.tsx"
-      ]
+      ],
+      "scannerRoute": "/flipper-mx"
     },
     "bicycles": {
       "id": "bicycles",
@@ -99,7 +101,8 @@
       "defaultSpecialist": "bicycles",
       "dedicatedRoutes": [
         "bike-flipper.tsx"
-      ]
+      ],
+      "scannerRoute": "/bike-flipper"
     },
     "clothing": {
       "id": "clothing",
@@ -131,7 +134,8 @@
       "defaultSpecialist": "clothing",
       "dedicatedRoutes": [
         "threads-flip.tsx"
-      ]
+      ],
+      "scannerRoute": "/threads-flip?tab=identify"
     },
     "trading_cards": {
       "id": "trading_cards",
@@ -157,7 +161,8 @@
       "defaultSpecialist": "pokemon_cards",
       "dedicatedRoutes": [
         "card-grading.tsx"
-      ]
+      ],
+      "scannerRoute": "/capture"
     },
     "antiques": {
       "id": "antiques",
@@ -180,14 +185,13 @@
       ],
       "defaultSpecialist": "antiques",
       "dedicatedRoutes": [
-        "antique-flipper.tsx",
+        "antique-capture.tsx",
         "antique-guides.tsx",
-        "antique-restoration.tsx",
-        "(tabs)/antique-more.tsx",
         "antique-condition.tsx",
         "antique-value.tsx",
-        "antique-capture.tsx"
-      ]
+        "(tabs)/antique-more.tsx"
+      ],
+      "scannerRoute": "/antique-capture"
     },
     "fossils": {
       "id": "fossils",
@@ -206,7 +210,8 @@
       ],
       "legacySpecialists": [],
       "defaultSpecialist": "fossils",
-      "dedicatedRoutes": []
+      "dedicatedRoutes": [],
+      "scannerRoute": "/capture"
     },
     "beauty": {
       "id": "beauty",
@@ -225,7 +230,8 @@
       ],
       "legacySpecialists": [],
       "defaultSpecialist": "beauty",
-      "dedicatedRoutes": []
+      "dedicatedRoutes": [],
+      "scannerRoute": "/capture"
     },
     "tech": {
       "id": "tech",
@@ -249,7 +255,8 @@
       ],
       "legacySpecialists": [],
       "defaultSpecialist": "tech",
-      "dedicatedRoutes": []
+      "dedicatedRoutes": [],
+      "scannerRoute": "/capture"
     },
     "surplus_flip": {
       "id": "surplus_flip",
@@ -275,7 +282,17 @@
       "defaultSpecialist": "surplus_trader",
       "dedicatedRoutes": [
         "surplus-flip.tsx"
-      ]
+      ],
+      "scannerRoute": "/surplus-flip"
     }
-  }
+  },
+  "contractVersion": 1,
+  "coreServices": [
+    "identification",
+    "valuation",
+    "inventory",
+    "listings",
+    "marketplace",
+    "analytics"
+  ]
 }

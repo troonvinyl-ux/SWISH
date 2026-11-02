@@ -31,7 +31,7 @@ afterEach(() => { jest.useRealTimers(); global.fetch = originalFetch; });
 
 test('discovers workflow by filename even when it has fallen outside the recent run list', async () => {
   const snapshot = await service.fetchProductionSnapshot();
-  expect(snapshot.source).toBe('LIVE'); expect(snapshot.workflows).toHaveLength(3);
+  expect(snapshot.source).toBe('LIVE'); expect(snapshot.workflows).toHaveLength(4);
   expect(snapshot.workflows[0].run?.name).toBe('Renamed workflow');
   expect(mockFetch.mock.calls.some(([url]) => url.includes('/workflows/branded-web-builds.yml/runs?branch=main'))).toBe(true);
   const rawUrls = mockFetch.mock.calls.map(([url]) => url).filter(url => url.includes('raw.githubusercontent.com'));
