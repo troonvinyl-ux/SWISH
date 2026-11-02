@@ -41,3 +41,12 @@ test('eBay publish route enforces the server-side gate before requesting eBay cr
   expect(source).toContain('identification_confidence');
   expect(source.indexOf('if (!confidenceGate.allowed)')).toBeLessThan(source.indexOf('getEbayCredentials(supabase, tenantId, true)'));
 });
+
+test('coin listing UI explains the 95% publication lock before a draft is generated', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const source = fs.readFileSync(path.resolve(__dirname, '../../app/create-listing.tsx'), 'utf8');
+  expect(source).toContain('coinPublishBlocked');
+  expect(source).toContain('Coin eBay publication is locked below 95% identification confidence');
+  expect(source).toContain('Prepare Review Draft · eBay Locked');
+});
