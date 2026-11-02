@@ -24,7 +24,7 @@ All ten package IDs are distinct. All ten registered entry files exist. Scanner 
 ## Gaps and release risks
 
 1. **Only two niche descriptor files exist:** `niches/coins/module.json` and `niches/clothing/module.json`. The other eight registered niches do not yet have a descriptor under `niches/<id>/module.json`.
-2. The eight existing descriptors describe a shared-core-with-registered-niche-configuration model and explicitly state that end-to-end runtime isolation still requires live verification. The products are branded entry/configuration layers over the shared SWISH engine, not independently extracted code bundles.
+2. All ten descriptors describe a shared-core-with-registered-niche-configuration model and explicitly state that end-to-end runtime isolation still requires live verification. The products are branded entry/configuration layers over the shared SWISH engine, not independently extracted code bundles.
 3. Card, Fossil, Beauty and Tech point to the shared `/capture` route; the registry has no dedicated home for these four products. In addition, `app/(tabs)/scan.tsx` currently maps only Fossils to a named capture-card config; Cards, Beauty and Tech fall through to the generic capture-card presentation. The shared capture route may still resolve specialist data elsewhere, but this scan-tab presentation fallback is a source-observed UX gap requiring a separate implementation/acceptance task.
 4. Static registry ownership and route tests do not prove database isolation. Tenant/niche RLS and server-side authorization still require live integration evidence for every niche.
 5. Specialist aliases must always resolve to one canonical product owner. In particular, the legacy `books` alias is assigned to Antique Flipper; it must not become a second product or cross-niche inventory path.
@@ -33,7 +33,7 @@ All ten package IDs are distinct. All ten registered entry files exist. Scanner 
 
 - Static registry/entry/package/specialist/route integrity is covered by `services/__tests__/registeredNicheAudit.test.ts`.
 - The canonical registry remains the sole source of package, entry, specialist and scanner-route metadata.
-- Remaining production acceptance: create/maintain descriptors for all ten niches (currently eight of ten exist), complete specialist-specific UX for shared-capture niches, and execute live RLS/tenant-isolation tests with representative subscriber accounts.
+- Remaining production acceptance: keep all ten descriptors in parity with the canonical registry, complete specialist-specific UX for shared-capture niches, and execute live RLS/tenant-isolation tests with representative subscriber accounts.
 
 **S1-03 result: IMPLEMENTED — audit and regression guard added; identified isolation/UX gaps remain explicit and are not marked verified.**
 
@@ -41,6 +41,6 @@ All ten package IDs are distinct. All ten registered entry files exist. Scanner 
 ## Refreshed source baseline
 
 - Main commit: `f95affc8d1295d70adc1e4cf7b00a2d7db76864c`.
-- Descriptor coverage: 8/10; missing `niches/tech/module.json` and `niches/surplus_flip/module.json`.
+- Descriptor coverage: 10/10. `niches/tech/module.json` and `niches/surplus_flip/module.json` were added and are now covered by a canonical-registry parity regression test.
 - The scan tab has named capture configurations for Coins, MX, Bikes, Clothing, Antiques, Fossils and Surplus. Cards, Beauty and Tech currently use its generic presentation fallback; this is separate from the canonical scanner route declared in `niche-modules.json`.
 - These are audit findings, not assertions that live capture, identification accuracy, persistence or isolation passed.
