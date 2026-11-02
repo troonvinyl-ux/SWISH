@@ -347,9 +347,11 @@ Deno.serve(async (req: Request) => {
 
     if (route === 'get_payouts') {
       const url = new URL(`${EBAY_FINANCES_API}/payout`);
-      url.searchParams.set('filter', `lastAttemptedPayoutDate:[${fromDate}..]`); url.searchParams.set('limit', '100');
+      // Normal payout history uses payoutDate. lastAttemptedPayoutDate is only valid when paired with payoutStatus:RETRYABLE_FAILED.
+      url.searchParams.set('filter', `payoutDate:[${fromDate}..]`); url.searchParams.set('limit', '100');
       const signatureHeaders = await ebayFinancesSignatureHeaders(url, 'GET');
       const resp = await fetch(url.toString(), { headers: { ...hdrs, ...signatureHeaders }, signal: AbortSignal.timeout(15000) });
+      if (resp.status === 204) return jr({ success: true, payouts: [], financesApiAvailable: true, noPayouts: true });
       if (!resp.ok) return jr({ success: false, error: `Payouts API returned HTTP ${resp.status}.`, financesApiAvailable: false }, 400);
       const data = await resp.json();
       return jr({ success: true, payouts: data.payouts ?? [], financesApiAvailable: true });
