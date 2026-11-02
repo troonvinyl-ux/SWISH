@@ -614,7 +614,7 @@ async function searchNumistaIslamicSilver(
     const scoredCandidates = [...candidateMap.values()].map(t => scoreNumistaIslamic(t, aiOutput, physicalData)).sort((a, b) => b.matchScore - a.matchScore);
     const directCandidate = suppliedReferenceId ? scoredCandidates.find(candidate => candidate.typeId === suppliedReferenceId) : undefined;
     const candidates = directCandidate ? [directCandidate, ...scoredCandidates.filter(candidate => candidate.typeId !== suppliedReferenceId)] : scoredCandidates;
-    return { available: successfulQueries > 0, query, candidates: candidates.slice(0, 12), error: `Numista error: ${e.message}`, totalFound: candidateMap.size };
+    return { available: successfulQueries > 0, query, candidates: candidates.slice(0, 12), error: 'Numista search is temporarily unavailable.', totalFound: candidateMap.size };
   }
 }
 
@@ -1367,7 +1367,7 @@ Deno.serve(async (req: Request) => {
     if (!aiResp.ok) {
       const errText = await aiResp.text();
       return new Response(
-        JSON.stringify({ error: `OnSpace AI error: ${errText}` }),
+        JSON.stringify({ error: 'The identification model is temporarily unavailable.' }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
