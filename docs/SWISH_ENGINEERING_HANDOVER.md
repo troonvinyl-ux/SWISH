@@ -103,3 +103,15 @@ This session implemented the verified highest-priority security, identity, inven
 
 ## Adding another niche
 Add one canonical product entry in niche-modules.json with distinct package/scheme/routes and disjoint specialists; define capture/intelligence in the existing specialist configuration and presentation in NICHES; implement a dedicated experience only when it differs materially from shared capture/inventory. Add explicit entry route, billing entitlement metadata/server authorization and AI routing validation. Extend tests to prove specialist/alias/route/package isolation, then run actual build/device/backend integration checks. Never clone the AI/marketplace/auth/database engine.
+
+
+## Post-handover evidence reconciliation — 2026-11-02
+
+The 30 October notes above are a historical handover, not the current status. Subsequent main-branch changes include:
+- Message reply source now requires an HTTP-success response and a confirmed eBay `Ack` before setting local `is_replied` or writing an outbound transcript. Failed/unconfirmed sends do not claim local success; confirmed eBay sends with a local persistence problem are surfaced as `localSyncPending`.
+- `swish-ebay-messages` now retrieves bounded `GetMyMessages` pages (maximum ten pages per invocation), reports truncation/partial failures and reloads messages already persisted. The response still contains summary metadata only; message-body retrieval and live seller-account acceptance remain open.
+- The shared profit engine is v1.3 with current UK eBay fee estimates, explicit private/business seller treatment and buyer/seller postage separation. Exact eBay Finances transactions remain authoritative.
+- PR #132 CI passed 554 Jest tests across 13 suites, four Deno paid-niche authorization tests, lint, TypeScript, Edge Function syntax/secret-boundary checks, ten niche Android JavaScript bundles, the Master Admin bundle and ten niche web exports. These are repository/build checks, not live OnSpace Cloud, eBay, signed AAB or installed-device acceptance.
+
+The recurring finance 400/499 issue remains unresolved. Current source returns function-level 400 for request validation or `requiresReauth`; an upstream eBay `/transaction` HTTP 400 is mapped differently by the handler. See `docs/S3_CORE_ACCEPTANCE_REPORT.md` for the precise source-path distinction. A sanitized invocation response plus controlled reauthorisation is required before assigning a production root cause.
+
