@@ -57,8 +57,8 @@
         {
           "id": "S1-05",
           "title": "Reconcile open PRs, branches and current main before implementation",
-          "status": "VERIFIED",
-          "evidence": "Reconciled after PR #126 merge on 2026-11-02. GitHub API confirms main at e3df8fe19b1d3444919ddac77dadd41a5429acf1 and zero open pull requests at the time of check. PR #126 merged only after all required workflows passed: run 41460220912 (14/14 jobs), run 41460220448 (10/10 web exports), run 41460220384 (niche-routing). Repeat the open-PR/main check before every subsequent merge or release."
+          "status": "IN PROGRESS",
+          "evidence": "Rechecked on 2026-11-02 against main 8630b9c976f590af8254210c2ce56f32fd1f912c. PR #139 and PR #140 are open. PR #139 latest head ebd5cd635abc65401d663be01b5a4344cfbc608b: the stale repricing test assertion has been aligned with current main; S2-S3 foundation CI passed and niche-routing/web workflows are still running. PR #140 head f8c96eaef640246d76ce34ba328226544e159ff4: all four required workflows passed, but physical Android Back and narrow-screen device acceptance remain open. Neither PR is merged. Keep S1-05 IN PROGRESS until both branches are resolved and main/open-PR state is rechecked before integration."
         }
       ]
     },
@@ -128,7 +128,7 @@
           "id": "S3-05",
           "title": "Verify pricing, fees, profit, notifications and settings foundations",
           "status": "IN PROGRESS",
-          "evidence": "Source implementation includes fee aggregation sign handling and finance partial/incomplete reporting (`docs/S3_CORE_ACCEPTANCE_REPORT.md`), plus profit engine v1.3 with current UK business/private seller estimates, category tiers, regulatory fee, order fixed fee and separate buyer/seller postage. Ten focused fee tests passed in PR #132 CI run 41465023973 (554 tests/13 suites total); four Deno authorization tests, lint, TypeScript, register validation and Edge Function syntax/secret-boundary checks passed. Still IN PROGRESS: exact seller/account fee acceptance, multi-line/quantity allocation, historical finance 400/499 diagnosis and live order/finance reconciliation; no notification delivery service has been added. Source-path review distinguishes Edge Function HTTP 400 validation/reauthorisation responses from upstream eBay `/transaction` HTTP 400 (mapped to 403/partial response); 499 is not explicitly emitted by this function. Historical 99×400/499 logs remain undiagnosed without sanitized response correlation."
+          "evidence": "Source implementation includes fee aggregation sign handling and finance partial/incomplete reporting (`docs/S3_CORE_ACCEPTANCE_REPORT.md`), plus profit engine v1.3 with current UK business/private seller estimates, category tiers, regulatory fee, order fixed fee and separate buyer/seller postage. Ten focused fee tests passed in PR #132 CI run 41465023973 (554 tests/13 suites total); four Deno authorization tests, lint, TypeScript, register validation and Edge Function syntax/secret-boundary checks passed. Still IN PROGRESS: exact seller/account fee acceptance, multi-line/quantity allocation, historical finance 400/499 diagnosis and live order/finance reconciliation; no notification delivery service has been added. Source-path review distinguishes Edge Function HTTP 400 validation/reauthorisation responses from upstream eBay `/transaction` HTTP 400 (mapped to 403/partial response); 499 is not explicitly emitted by this function. Historical 99×400/499 logs remain undiagnosed without sanitized response correlation. PR #138 merged as a54af420: added booking_entry to the persisted fee-row projection, made finance sync return incomplete when fetch or persistence errors occur, sanitized transaction exception details, and normalized eBay Taxonomy localizedAspectName with compatibility fallback. These are source/CI repairs only. Historical 400/499 root cause, exact seller-account fees, multi-line/multi-quantity allocation, and live order/finance reconciliation remain open."
         }
       ]
     },
@@ -244,7 +244,7 @@
           "id": "S7-01",
           "title": "Run full type, lint, unit, integration and regression suites",
           "status": "IMPLEMENTED",
-          "evidence": "PR #132 CI run 41465023973: lint, production register validation, shared app/Master Admin TypeScript, 554 tests across 13 suites, four Deno paid-niche authorization tests, Edge Function syntax/secret-boundary guard, all ten branded Android JavaScript bundles and private Master Admin bundle passed. Web exports 10/10 passed in run 41465024074; niche routing/config passed in 41465023802. Live integration gate was disabled and is not counted as live acceptance."
+          "evidence": "PR #132 CI run 41465023973: lint, production register validation, shared app/Master Admin TypeScript, 554 tests across 13 suites, four Deno paid-niche authorization tests, Edge Function syntax/secret-boundary guard, all ten branded Android JavaScript bundles and private Master Admin bundle passed. Web exports 10/10 passed in run 41465024074; niche routing/config passed in 41465023802. Live integration gate was disabled and is not counted as live acceptance. Additional latest-head evidence: PR #140 commit f8c96eaef640246d76ce34ba328226544e159ff4 passed all four GitHub Actions workflows (S2-S3 foundation, Master Admin readiness, branded web production exports and niche-routing/config). This is CI/source evidence only; PR remains open and device/deployment/live acceptance are not implied."
         },
         {
           "id": "S7-02",
@@ -355,6 +355,10 @@
     "Real APK/device launches, signing, web parity, deployment and external CI billing constraints require evidence."
   ],
   "changeLog": [
+    {
+      "date": "2026-11-02",
+      "change": "Refreshed S1 audit artifacts after PRs #135/#136/#138: security matrix now reflects the closed swish-ebay-list secret-only bypass, the eBay listing-end lifecycle RPC repair, finance partial-success/fee projection repair and localized Taxonomy aspect normalization. Current main is 8630b9c after audit documentation refresh. Reconciled two open PRs: #139's stale repricing assertion was corrected on head ebd5cd6 and its CI is in progress; #140 head f8c96ea passed all four required workflows but still needs physical Android acceptance. S1-05 remains IN PROGRESS; no live OnSpace, authenticated eBay or release certification is inferred."
+    },
     {
       "date": "2026-11-02",
       "change": "Promoted S1-04 to VERIFIED after checking the complete Stage One blocker audit, engineering audit/handover and 25-entry Edge Function security matrix. Verification is limited to the audit artifact; no live security, OnSpace deployment, eBay or production acceptance is implied. Updated verified task count from 6/34 (17.65%) to 7/34 (20.59%); implemented-or-verified remains 26/34 (76.47%)."
