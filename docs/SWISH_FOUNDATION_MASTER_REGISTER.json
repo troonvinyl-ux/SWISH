@@ -122,7 +122,7 @@
           "id": "S3-04",
           "title": "Verify secure eBay OAuth, listing, orders, messages and sync flows",
           "status": "IN PROGRESS",
-          "evidence": "Source implementation includes bounded sequential GetMyMessages pagination (10 pages × 50), namespace-tolerant XML parsing, explicit partial-sync reporting and inbox handling. PR #130 merged as 0f24568; PR #132 CI run 41465023973 passed the five pagination tests within the 554-test/13-suite regression suite. Still IN PROGRESS: actual eBay response/seller permission acceptance, message bodies, remote send, deployed OnSpace Cloud revision and mailbox-over-cap retrieval."
+          "evidence": "Source implementation includes bounded sequential GetMyMessages pagination (10 pages × 50), namespace-tolerant XML parsing, explicit partial-sync reporting and inbox handling. PR #130 merged as 0f24568; PR #132 CI run 41465023973 passed the five pagination tests within the 554-test/13-suite regression suite. Still IN PROGRESS: actual eBay response/seller permission acceptance, message bodies, remote send, deployed OnSpace Cloud revision and mailbox-over-cap retrieval. Additional source repair in branch fix/ebay-message-body-retrieval: GetMyMessages now sends required DetailLevel=ReturnHeaders and parses documented Message nodes; a JWT+tenant-membership protected get_message_body route retrieves one body with ReturnMessages using the tenant-owned local message row, sanitizes HTML to plain text and caches it. Client loads body on opening a message. Focused helper/service/security tests added. Live seller-account permissions, real provider payloads, send acknowledgements and deployed OnSpace revision remain unverified."
         },
         {
           "id": "S3-05",
@@ -355,6 +355,10 @@
     "Real APK/device launches, signing, web parity, deployment and external CI billing constraints require evidence."
   ],
   "changeLog": [
+    {
+      "date": "2026-11-02",
+      "change": "Started S3-04 eBay inbox repair in branch fix/ebay-message-body-retrieval: corrected mandatory GetMyMessages detail level and response node parser; added tenant-scoped ReturnMessages on-demand body retrieval and cache, client loading UI, and focused XML/service/security tests. Not deployed or live-verified."
+    },
     {
       "date": "2026-11-02",
       "change": "Refreshed S1 audit artifacts after PRs #135/#136/#138: security matrix now reflects the closed swish-ebay-list secret-only bypass, the eBay listing-end lifecycle RPC repair, finance partial-success/fee projection repair and localized Taxonomy aspect normalization. Current main is 8630b9c after audit documentation refresh. Reconciled two open PRs: #139's stale repricing assertion was corrected on head ebd5cd6 and its CI is in progress; #140 head f8c96ea passed all four required workflows but still needs physical Android acceptance. S1-05 remains IN PROGRESS; no live OnSpace, authenticated eBay or release certification is inferred."
