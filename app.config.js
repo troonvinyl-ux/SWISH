@@ -5,6 +5,8 @@ const { prepareNicheRoutes } = require('./scripts/prepare-niche-routes');
 module.exports = ({ config }) => {
   const selected = process.env.SWISH_NICHE;
   const masterAdminBuild = process.env.SWISH_MASTER_ADMIN === '1';
+  const testLabBuild = process.env.SWISH_TEST_LAB === '1';
+  if ([masterAdminBuild, testLabBuild].filter(Boolean).length > 1) throw new Error('Only one SWISH build flavour may be selected.');
   if (masterAdminBuild && selected) throw new Error('SWISH_MASTER_ADMIN cannot be combined with SWISH_NICHE.');
   const niche = selected ? NICHE_BUILDS[selected] : null;
   if (selected && !niche) throw new Error(`Unsupported SWISH_NICHE "${selected}".`);
@@ -16,6 +18,33 @@ module.exports = ({ config }) => {
     extra: { ...(config.extra || {}), eas: { ...(config.extra?.eas || {}), projectId: easProjectId } },
   } : {};
   const baseConfig = Object.keys(otaConfig).length ? { ...config, ...otaConfig } : config;
+
+  // Independent diagnostic APK: separate Android identity, isolated route tree,
+  // and OTA disabled so update delivery cannot contaminate lifecycle testing.
+  if (testLabBuild) {
+    const plugins = (baseConfig.plugins || []).map(plugin => {
+      const name = Array.isArray(plugin) ? plugin[0] : plugin;
+      return name === 'expo-router'
+        ? ['expo-router', { ...(Array.isArray(plugin) ? plugin[1] : {}), root: 'test-lab-app' }]
+        : plugin;
+    });
+    if (!plugins.some(plugin => (Array.isArray(plugin) ? plugin[0] : plugin) === 'expo-router')) {
+      plugins.push(['expo-router', { root: 'test-lab-app' }]);
+    }
+    return {
+      ...baseConfig,
+      name: 'SWISH Test Lab',
+      slug: 'swish-test-lab',
+      scheme: 'swishtestlab',
+      runtimeVersion: `${config.version || '1.0.0'}-test-lab-v1`,
+      updates: { ...(baseConfig.updates || {}), enabled: false, checkAutomatically: 'NEVER' },
+      plugins,
+      android: { ...baseConfig.android, package: 'com.swish.testlab' },
+      ios: { ...baseConfig.ios, bundleIdentifier: 'com.swish.testlab' },
+      extra: { ...(baseConfig.extra || {}), swishTestLabBuild: true },
+    };
+  }
+
   if (masterAdminBuild) {
     // The Master Admin is a launcher shell, not a bundled copy of all ten
     // niche products. Its route tree contains only auth, owner console and
@@ -37,14 +66,11 @@ module.exports = ({ config }) => {
       scheme: 'swishmasteradmin',
       runtimeVersion: `${config.version || '1.0.0'}-master-admin-api36-v1`,
       ios: { ...baseConfig.ios, bundleIdentifier: baseConfig.ios?.bundleIdentifier ?? 'com.swish.inventory' },
-      // Preserve the existing Master Admin package so this release upgrades
-      // the installed control-centre APK instead of creating a duplicate app.
       android: { ...baseConfig.android, package: baseConfig.android?.package ?? 'com.swish.inventory' },
       extra: { ...(baseConfig.extra || {}), swishMasterAdminBuild: true },
     };
   }
   if (!niche) return baseConfig;
-  // Prepare for every Expo consumer (prebuild, EAS, export, OTA), not just one workflow.
   const routeRoot = prepareNicheRoutes(selected);
   const plugins = (config.plugins || []).map(plugin => {
     const name = Array.isArray(plugin) ? plugin[0] : plugin;
