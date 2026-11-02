@@ -74,13 +74,16 @@ begin
     );
   end if;
 
-  insert into public.audit_events(
-    tenant_id,entity_type,entity_id,action,before_state,after_state
-  ) values (
-    p_tenant_id,'listing',p_listing_id::text,'ebay_order_sold_reconciled',
-    jsonb_build_object('item_status',v_item.status,'listing_status',v_listing.status),
-    jsonb_build_object('item_status','sold','listing_status','sold','source','verified_ebay_order')
-  );
+  if lower(btrim(coalesce(v_item.status,''))) not in ('sold','fulfilled','completed')
+     or lower(btrim(coalesce(v_listing.status,''))) <> 'sold' then
+    insert into public.audit_events(
+      tenant_id,entity_type,entity_id,action,before_state,after_state
+    ) values (
+      p_tenant_id,'listing',p_listing_id::text,'ebay_order_sold_reconciled',
+      jsonb_build_object('item_status',v_item.status,'listing_status',v_listing.status),
+      jsonb_build_object('item_status','sold','listing_status','sold','source','verified_ebay_order')
+    );
+  end if;
 
   return true;
 end;
