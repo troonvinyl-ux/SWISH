@@ -124,7 +124,7 @@ export default function ReissEbayTestConsole() {
       route: 'end', tenantId: tenant.id, listingId: listing.id, externalListingId: externalId,
       preserveInventoryStatus: true,
     } });
-    if (error || !data?.success) { setStatus('eBay could not confirm the end: ' + (data?.error ?? error?.message ?? 'Unknown response')); setBusy(false); return; }
+    if (error || !data?.success || data?.inventoryStatusPreserved !== true) { setStatus('The eBay end operation was not fully verified: ' + (data?.error ?? data?.warning ?? error?.message ?? 'Inventory preservation was not confirmed') + '. Check eBay and SWISH before retrying.'); setBusy(false); return; }
     setListing({ ...listing, status: 'ended', externalListingId: externalId });
     setExternalId('');
     setStatus('Complete. eBay confirmed the existing listing was ended. Its SWISH listing record is retained for history, and the original inventory item is untouched.');
@@ -141,11 +141,11 @@ export default function ReissEbayTestConsole() {
       {loading ? <ActivityIndicator color={Colors.primary}/> : item ? <><Text style={styles.itemTitle}>{item.canonical_title}</Text><Text style={styles.muted}>Inventory ID: {item.id}</Text><Text style={styles.muted}>Specialist: {item.specialist_id ?? '—'} · Status: {item.status ?? '—'}</Text>{(item.media ?? []).map((url,i)=><Image key={url+i} source={{uri:url}} style={styles.photo}/>)}</> : <Text style={styles.muted}>No matching item loaded.</Text>}
       <Pressable onPress={()=>void load()} disabled={loading||busy} style={styles.secondary}><Text style={styles.secondaryText}>Refresh source record</Text></Pressable>
     </View>
-    {item ? <View style={styles.panel}><Text style={styles.section}>Listing fields</Text><Text style={styles.muted}>These fields are pre-populated from the inventory record. Editing them here changes only the separate test listing when submitted or revised.</Text>
+    {item ? <View style={styles.panel}><Text style={styles.section}>Listing fields</Text><Text style={styles.muted}>These fields are pre-populated from the existing live eBay listing. Revising changes the eBay listing and its SWISH listing row, not the original inventory fields.</Text>
       {field('eBay title',title,setTitle)}{field('Description',description,setDescription,true)}{field('Price (£)',price,setPrice,false,'decimal-pad')}
       <View style={styles.readBox}><Text style={styles.label}>Condition</Text><Text style={styles.value}>{item.condition ?? 'Not set'}{item.condition_notes ? ' · '+item.condition_notes : ''}</Text></View>
       <View style={styles.readBox}><Text style={styles.label}>Item attributes / specifics</Text><Text selectable style={styles.json}>{JSON.stringify(item.attributes ?? {},null,2)}</Text></View>
-      <View style={styles.readBox}><Text style={styles.label}>Source protection</Text><Text style={styles.value}>Inventory row is read-only in this console. Submit creates a new listings row linked by item_id.</Text></View>
+      <View style={styles.readBox}><Text style={styles.label}>Source protection</Text><Text style={styles.value}>Inventory row is read-only in this console. Revisions affect the linked SWISH listing and eBay listing only.</Text></View>
     </View> : null}
     <View style={styles.panel}><Text style={styles.section}>eBay actions</Text><Text style={styles.notice}>{status}</Text>
       <Pressable disabled style={[styles.action,styles.disabled]}><Text style={styles.actionText}>SUBMIT · BLOCKED TO PREVENT DUPLICATE</Text></Pressable>
