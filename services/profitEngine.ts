@@ -28,6 +28,8 @@ interface EbayFeeRate {
   insertionFeePerMonth: number;
   tierThreshold?: number;
   aboveThresholdRate?: number;
+  highValueThreshold?: number;
+  highValueRate?: number;
 }
 
 // eBay UK business-seller rates, checked against the official fee table
@@ -54,12 +56,12 @@ const EBAY_CATEGORY_FEE_OVERRIDES: Record<string, Partial<EbayFeeRate>> = {
   banknotes: { finalValueFee: 0.109, categoryHint: 'coins', tierThreshold: 450, aboveThresholdRate: 0.03 },
   gold: { finalValueFee: 0.109, categoryHint: 'coins', tierThreshold: 450, aboveThresholdRate: 0.03 },
   silver: { finalValueFee: 0.109, categoryHint: 'coins', tierThreshold: 450, aboveThresholdRate: 0.03 },
-  ancient_artefacts: { finalValueFee: 0.109, categoryHint: 'coins', tierThreshold: 450, aboveThresholdRate: 0.03 },
+  ancient_artefacts: { finalValueFee: 0.109, categoryHint: 'collectables' },
   trading_cards: { finalValueFee: 0.109, categoryHint: 'collectables' },
   antiques: { finalValueFee: 0.109, categoryHint: 'antiques' },
   books: { finalValueFee: 0.099, categoryHint: 'books' },
   clothing: { finalValueFee: 0.119, categoryHint: 'clothing' },
-  trainers_sneakers: { finalValueFee: 0.119, categoryHint: 'clothing / trainers' },
+  trainers_sneakers: { finalValueFee: 0.119, categoryHint: 'clothing / trainers', highValueThreshold: 100, highValueRate: 0.07 },
   beauty: { finalValueFee: 0.109, categoryHint: 'health and beauty' },
   tech: { finalValueFee: 0.099, categoryHint: 'computers / sound and vision' },
   bicycles: { finalValueFee: 0.109, categoryHint: 'sporting goods' },
@@ -68,7 +70,11 @@ const EBAY_CATEGORY_FEE_OVERRIDES: Record<string, Partial<EbayFeeRate>> = {
   motocross: { finalValueFee: 0.129, categoryHint: 'general / motorsport item; verify leaf category' },
   stamps: { finalValueFee: 0.109, categoryHint: 'stamps' },
   jewellery: { finalValueFee: 0.149, categoryHint: 'jewellery', tierThreshold: 1000, aboveThresholdRate: 0.04 },
+  jewellery_precious_metals: { finalValueFee: 0.149, categoryHint: 'jewellery', tierThreshold: 1000, aboveThresholdRate: 0.04 },
   watches: { finalValueFee: 0.129, categoryHint: 'watches', tierThreshold: 750, aboveThresholdRate: 0.03 },
+  retro_games: { finalValueFee: 0.099, categoryHint: 'video games' },
+  retro_consoles: { finalValueFee: 0.069, categoryHint: 'video game consoles', tierThreshold: 400, aboveThresholdRate: 0.02 },
+  surplus_trader: { finalValueFee: 0.129, categoryHint: 'wholesale and job lots' },
 };
 
 export function getEbayFeeRate(specialistId?: string): EbayFeeRate {
@@ -178,16 +184,19 @@ export function calculateProfit(inputs: ProfitInputs): ProfitResult {
     } else {
       const feeStructure = getEbayFeeRate(specialistId);
       const finalValueRate = inputs.marketplaceFeeRate ?? feeStructure.finalValueFee;
+      const highValueRate = feeStructure.highValueThreshold != null && feeStructure.highValueRate != null && salePrice >= feeStructure.highValueThreshold
+        ? feeStructure.highValueRate
+        : finalValueRate;
       const tierThreshold = feeStructure.tierThreshold;
       const aboveThresholdRate = feeStructure.aboveThresholdRate;
       const finalValueFee = tierThreshold != null && aboveThresholdRate != null
-        ? Math.min(feeBase, tierThreshold) * finalValueRate + Math.max(0, feeBase - tierThreshold) * aboveThresholdRate
-        : feeBase * finalValueRate;
+        ? Math.min(feeBase, tierThreshold) * highValueRate + Math.max(0, feeBase - tierThreshold) * aboveThresholdRate
+        : feeBase * highValueRate;
       const regulatoryRate = inputs.regulatoryOperatingFeeRate ?? feeStructure.regulatoryOperatingFee;
       const fixedFee = feeBase <= feeStructure.fixedFeeThreshold
         ? feeStructure.fixedFeeUnderThreshold
         : feeStructure.fixedFee;
-      feeRateUsed = finalValueRate + regulatoryRate + internationalRate;
+      feeRateUsed = highValueRate + regulatoryRate + internationalRate;
       marketplaceFee = finalValueFee + feeBase * (regulatoryRate + internationalRate) + fixedFee;
     }
   }
