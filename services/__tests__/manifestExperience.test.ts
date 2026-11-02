@@ -64,3 +64,44 @@ describe('Experience source contracts (not device/render tests)',()=>{
     expect(source('app/niche-select.tsx')).toContain('DESIGN PREVIEW · NOT AVAILABLE YET');
   });
 });
+
+
+describe('Antique Flipper dashboard and scanner routing',()=>{
+  test('the main Home tab mounts the bespoke Antique Flipper dashboard',()=>{
+    expect(source('app/(tabs)/index.tsx')).toContain("if (product === 'antiques') return <AntiqueFlipperHome key={effectiveNicheId} />;");
+    expect(source('app/(tabs)/index.tsx')).toContain("import AntiqueFlipperHome from '@/app/antique-flipper';");
+  });
+  test('Antique Flipper dashboard scan action uses the registered dedicated scanner route',()=>{
+    expect(source('app/antique-flipper.tsx')).toContain("nicheToScannerRoute('antiques')");
+    expect(source('services/nicheRouting.ts')).toContain('return NICHE_MODULES[niche].scannerRoute;');
+  });
+});
+
+describe('Antique Flipper valuation context',()=>{
+  test('passes the saved item specialist to shared market valuation rather than forcing the antiques specialist',()=>{
+    const screen=source('app/antique-value.tsx');
+    expect(screen).toContain('specialistId:item.specialistId');
+    expect(screen).not.toContain("specialistId:'antiques'");
+  });
+});
+
+
+describe('Antique Flipper dedicated scanner interface', () => {
+  test('scanner is a bespoke camera-first screen backed by the shared capture engine', () => {
+    const screen = source('app/antique-capture.tsx');
+
+    expect(screen).toContain('useGenericCapture');
+    expect(screen).toContain('Evidence checklist');
+    expect(screen).toContain('CameraView');
+    expect(screen).toContain('Allow camera access');
+    expect(screen).toContain('flashEnabled ? \'on\' : \'off\'');
+    expect(screen).toContain('flip-camera-android');
+    expect(screen).toContain('gridVisible');
+    expect(screen).toContain('capture.capture(activeSlot.id, false)');
+    expect(screen).toContain('capture.capture(activeSlot.id, true)');
+    expect(screen).toContain('capture.identify()');
+    expect(screen).toContain('capture.save()');
+    expect(screen).toContain("capture.activeNiche.id !== 'antiques'");
+    expect(screen).not.toContain("export { default } from '@/app/capture'");
+  });
+});

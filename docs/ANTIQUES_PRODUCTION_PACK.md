@@ -20,8 +20,8 @@ Deliver Antique Flipper as a specialist experience on the existing SWISH engine.
 | 1 | Splash | Existing native splash + `entry/antiques` | Branded app entry and existing auth gate |
 | 2 | Sign in / Sign up | Existing `login` | Existing SWISH authentication |
 | 3 | Home dashboard | `app/antique-flipper.tsx` | Bespoke gold dashboard, inventory counters, scan and specialist shortcuts |
-| 4 | Scanner / Capture | `app/capture.tsx` via central Scan tab | Existing multi-angle photo capture, camera and gallery, evidence slots |
-| 5 | AI Identification | `app/capture.tsx` + `useGenericCapture` | Existing shared identification pipeline and progress state |
+| 4 | Scanner / Capture | `app/antique-capture.tsx` via Antique Flipper dashboard and central Scan tab | Dedicated camera-first antique scanner, multi-angle evidence slots, retakes and gallery selection |
+| 5 | AI Identification | `app/antique-capture.tsx` + `useGenericCapture` | Dedicated antique capture entry using the shared niche-scoped identification pipeline and progress state |
 | 6 | Identification Result | `SpecialistReview` in capture | Evidence review, editable title and specialist follow-up answers |
 | 7 | Condition Assessment | `app/antique-condition.tsx` | Loads an antique inventory item, saves condition grade and location-specific notes through the shared item service |
 | 8 | Market Value | `app/antique-value.tsx` | Calls shared market value service and displays verified sold evidence separately from active asking prices; applies returned valuation to the existing item |
