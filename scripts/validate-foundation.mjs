@@ -43,7 +43,7 @@ for (const [id, product] of Object.entries(products)) {
   if (product.home && !fs.existsSync(path.join(root, 'app', product.home))) fail(id + ' home route is missing: ' + product.home);
   if (typeof product.scannerRoute !== 'string' || !product.scannerRoute.startsWith('/') || product.scannerRoute.startsWith('//')) fail(id + ' scannerRoute must be an absolute app route');
   else {
-    const routePath = product.scannerRoute.split('?')[0].replace(/^\\//, '');
+    const routePath = product.scannerRoute.split('?')[0].replace(/^\//, '');
     const routeFile = routePath + (routePath.endsWith('.tsx') ? '' : '.tsx');
     if (!fs.existsSync(path.join(root, 'app', routeFile))) fail(id + ' scanner route is missing: ' + routeFile);
   }
