@@ -1,8 +1,8 @@
 # SWISH Stage S1 — Full Architectural Audit
 
-**Audit date:** 2026-11-02  
+**Audit date:** 2026-11-02 (refreshed against main after PR #125)  
 **Audited ref:** `main`  
-**Audited commit:** `04fd59d2150b9421e30dce906940fc3eadec599d`  
+**Audited commit:** `f95affc8d1295d70adc1e4cf7b00a2d7db76864c`  
 **Scope:** S1-01 through S1-05 in `docs/SWISH_FOUNDATION_MASTER_REGISTER.json`.
 
 ## Executive result
@@ -46,20 +46,20 @@ Stage S1 is **partially complete**. The canonical route/build map and PR reconci
 
 ### Repository inventory at audited commit
 
-- 102 TypeScript service files under `services/`.
+- 102 TypeScript service files under `services/` (repository baseline inventory; exact count depends on tracked generated/test helpers).
 - 27 hook files under `hooks/`.
 - 25 deployable Edge Function directories plus the `_shared` function support directory.
-- 10 tracked SQL migration files.
+- 12 tracked SQL migration files.
 - 40 files matching the repository's test-file naming patterns.
 - 13 GitHub Actions workflow files.
 
 ### Shared service/data-flow observations
 
 - Native and Expo web source consume the same service modules and the canonical OnSpace Cloud backend through its Supabase-compatible client/API; no separate website source workspace was identified in this repository.
-- The service layer is not yet the exclusive data-access boundary: several screens/pages still issue direct Supabase queries. This increases the number of authorization paths that must be audited.
+- The service layer is not yet the exclusive data-access boundary: GitHub source search on this baseline returns at least 43 files containing direct `supabase.from(...)` access and another five `getSupabaseClient().from(...)` call sites (some overlap). Direct-query call sites are present in screens and services, so UI/service ownership alone cannot be used as proof of authorization. The indexed search is an inventory aid, not a guarantee that every dynamic query was discovered.
 - Existing canonical item UUIDs, tenant membership/RLS, storage, connector records and eBay architecture are retained. No second database or auth system is proposed.
 - The handover documents the existing Edge Function families and applied security hardening. A full function-by-function authorization, schema, input-validation, idempotency and redaction review is still required before S3/S7 acceptance.
-- A source inventory is not a live dependency graph: deployed function revisions, database grants/policies and the separate website deployment must be checked in their respective environments.
+- A source inventory is not a live dependency graph: deployed OnSpace Cloud Edge Function revisions, effective database grants/RLS policies, secret configuration and the separate website deployment must be checked in their respective environments.
 
 ## S1-03 — Ten-niche functionality and isolation audit
 
@@ -125,3 +125,60 @@ S1 is not complete until:
 - Open PR reconciliation is repeated before each merge (S1-05: snapshot verified, continuous requirement).
 
 **Overall S1 status: IN PROGRESS.** No production-readiness claim is made by this audit.
+
+
+### S1-02 — Direct database and Edge Function caller inventory (refreshed)
+
+The refreshed source search on `main` at `f95affc8d1295d70adc1e4cf7b00a2d7db76864c` returned 43 distinct files with `supabase.from(...)` matches. The five additional `getSupabaseClient().from(...)` matches are `services/inventoryTabQueryService.ts`, `app/master-diagnostics.tsx`, `services/listingEditorService.ts`, `services/watchedLotService.ts` and `services/listingService.ts` (the latter already appears in the 43-file set). A separate search returned 29 files invoking Edge Functions through `supabase.functions.invoke(...)`; calls are split between screens and shared services. These counts describe indexed source matches, not request counts or a complete runtime trace.
+
+Direct database query source files found:
+
+- `services/capitalService.ts`
+- `services/insightsService.ts`
+- `app/stock-check.tsx`
+- `app/tasks.tsx`
+- `app/ebay-log.tsx`
+- `app/ebay-finances.tsx`
+- `app/ebay-hub.tsx`
+- `app/ebay-cases.tsx`
+- `app/ebay-offers.tsx`
+- `app/ebay-csv.tsx`
+- `services/verificationService.ts`
+- `services/repricingService.ts`
+- `services/exceptionService.ts`
+- `app/onboarding.tsx`
+- `app/ebay-messages.tsx`
+- `app/settings.tsx`
+- `services/orderService.ts`
+- `app/ebay-import.tsx`
+- `app/ebay-admin.tsx`
+- `services/opportunityService.ts`
+- `services/acquisitionService.ts`
+- `supabase/functions/swish-ebay-orders/index.ts`
+- `app/silver-batch.tsx`
+- `app/coin-flipper.tsx`
+- `services/itemService.ts`
+- `app/listing-preflight.tsx`
+- `supabase/functions/swish-ebay-finances/index.ts`
+- `app/keen-on-coins.tsx`
+- `app/create-listing.tsx`
+- `services/commercialEngine.ts`
+- `services/listingService.ts`
+- `supabase/functions/swish-image-download/index.ts`
+- `services/predictionService.ts`
+- `services/coinInventoryService.ts`
+- `app/stock-listing/[id].tsx`
+- `supabase/functions/swish-ebay-post-order/index.ts`
+- `supabase/functions/swish-ebay-sync/index.ts`
+- `supabase/functions/swish-ebay-messages/index.ts`
+- `supabase/functions/swish-ebay-category/index.ts`
+- `components/feature/BulkReValueSheet.tsx`
+- `supabase/functions/swish-ebay-list/index.ts`
+- `supabase/functions/swish-market-value/index.ts`
+- `supabase/functions/swish-ebay-browse/index.ts`
+
+**Authorization review rule:** every direct query must be checked for authenticated caller context, tenant predicate, niche/specialist predicate where the resource is niche-owned, and matching database RLS/constraints. A tenant filter in client code is defense-in-depth, not an authorization boundary. Writes must be checked for row ownership and allowed-column constraints. Any privileged Edge Function path must independently derive/validate the caller and tenant, or document the narrow server-to-server trust boundary.
+
+**Backend dependency inventory:** 25 deployable Edge Function entry points and 12 tracked SQL migrations exist at this baseline. The 25-function source gate inventory is in `docs/SWISH_EDGE_FUNCTION_SECURITY_MATRIX.md`. The migration inventory is the twelve tracked files under `supabase/migrations/`; tracked migrations are not proof they are applied to OnSpace Cloud.
+
+**Remaining S1-02 boundary:** no authenticated OnSpace Cloud deployment session was available in this repository audit. Deployed function parity, effective RLS/grants, production secrets, live cross-tenant tests and actual call origins remain unverified. These are deployment acceptance evidence, not claims inferred from source search.
