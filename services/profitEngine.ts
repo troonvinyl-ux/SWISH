@@ -13,9 +13,9 @@
 // ── Model version — increment when calculation changes ───────────────────────
 export const PROFIT_ENGINE_VERSION = 'v1.3';
 
-// ── eBay UK Fee Structure (2025) ─────────────────────────────────────────────
-// Source: ebay.co.uk/help/selling/fees-credits-invoices/selling-fees
-// These are best-available public rates. Always label as estimates.
+// ── eBay UK Fee Structure (checked 2026-11-02) ─────────────────────────────────────────────
+// Official source: https://www.ebay.co.uk/help/selling/fees-credits-invoices/store-selling-fees?id=4809
+// Business rates last updated 30 September 2026. Always label estimates.
 
 interface EbayFeeRate {
   categoryHint: string;
