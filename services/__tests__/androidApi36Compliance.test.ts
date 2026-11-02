@@ -31,3 +31,13 @@ test('generated Gradle properties are checked fail-closed before native compilat
   expect(verifier).toContain("'android.buildToolsVersion': '36.0.0'");
   expect(verifier).toContain('process.exit(1)');
 });
+
+test('EAS exposes isolated APK and Android App Bundle profiles for all ten niches', () => {
+  const eas = JSON.parse(read('eas.json'));
+  const niches = ['coins', 'motocross', 'bicycles', 'clothing', 'surplus_flip', 'trading_cards', 'antiques', 'fossils', 'beauty', 'tech'];
+  for (const niche of niches) {
+    expect(eas.build[niche]).toMatchObject({ env: { SWISH_NICHE: niche }, android: { buildType: 'apk' } });
+    expect(eas.build[niche + '-play']).toMatchObject({ env: { SWISH_NICHE: niche }, android: { buildType: 'app-bundle' } });
+  }
+  expect(eas.build['master-admin']).toMatchObject({ env: { SWISH_MASTER_ADMIN: '1' }, android: { buildType: 'apk' } });
+});
