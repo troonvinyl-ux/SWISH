@@ -1,3 +1,5 @@
+const { SPECIALISTS } = require('../../constants/specialists');
+const { getSpecialistProfile } = require('../../shared/specialistIntelligence');
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -54,4 +56,22 @@ describe('S1-03 registered niche audit', () => {
       expect(product.scannerRoute.length).toBeGreaterThan(1);
     }
   });
+
+  test('every canonical specialist has required capture evidence and a server-supported mode', () => {
+    for (const [nicheId, product] of Object.entries(registry.products) as Array<[string, any]>) {
+      const profile = getSpecialistProfile(nicheId);
+      expect(profile).toBeTruthy();
+      expect(profile.modes.length).toBeGreaterThan(0);
+      for (const specialistId of product.specialists) {
+        const specialist = SPECIALISTS[specialistId];
+        expect(specialist).toBeTruthy();
+        expect(Array.isArray(specialist.captureRequirements)).toBe(true);
+        expect(specialist.captureRequirements.length).toBeGreaterThan(0);
+        expect(specialist.captureRequirements.some((requirement: any) => requirement.required)).toBe(true);
+      }
+      expect(product.defaultSpecialist).toBeTruthy();
+      expect(product.specialists).toContain(product.defaultSpecialist);
+    }
+  });
+
 });
