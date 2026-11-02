@@ -2,7 +2,7 @@
 
 **Audit date:** 2026-11-02  
 **Audited ref:** `main`  
-**Audited commit:** `8d84f319cb778c84cf1ba1152c8a2b56c2680dd0`  
+**Audited commit:** `04fd59d2150b9421e30dce906940fc3eadec599d`  
 **Scope:** S1-01 through S1-05 in `docs/SWISH_FOUNDATION_MASTER_REGISTER.json`.
 
 ## Executive result
@@ -108,11 +108,12 @@ The detailed prior audit and hardening evidence is in `docs/SWISH_ENGINEERING_AU
 
 **Result: VERIFIED at the audited snapshot.**
 
-- GitHub API query for open pull requests returned an empty list at the time of this audit.
-- Current `main` was confirmed as `8d84f319cb778c84cf1ba1152c8a2b56c2680dd0`.
-- PR #88 merged as `719b7c3`; PR #89 merged as `89ed4c3`; PR #90 merged as `8d84f31`.
-- PR #90's tested head was four commits ahead and zero behind `main` at the pre-merge comparison; its production-register, niche-routing and ten-niche web build workflows all completed successfully.
-- No open PR or stale branch was merged as part of this audit. Before any subsequent integration, repeat the open-PR query and compare the proposed branch against the latest `main`.
+- GitHub API query for open pull requests returned an empty list after PR #95 and PR #96 merged.
+- Current `main` is `04fd59d2150b9421e30dce906940fc3eadec599d`.
+- PR #94 merged as `9c184665`; PR #95 merged as `e4c1a8c2`; PR #96 merged as `04fd59d2`. PR #95 completed 25/25 checks and PR #96 completed 15/15 checks before merge.
+- Post-merge main workflows are running: niche-routing and eleven OTA JavaScript publish jobs (ten niches plus Master Admin). These must complete successfully before claiming OTA publication.
+- No APK build was triggered. OTA JavaScript publication, web exports, APK packaging and installed-device acceptance are distinct evidence types.
+- Before any subsequent integration, repeat the open-PR query and compare the proposed branch against latest `main`.
 
 ## Stage S1 exit criteria
 
