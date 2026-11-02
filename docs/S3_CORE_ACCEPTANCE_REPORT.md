@@ -67,11 +67,11 @@ All item mutations through updateItem now reject missing tenant scope. Atomic tr
 
 ## Latest CI evidence — PR #132
 
-On commit `85b71f99ecf1ac03e6e67bb2cf638d1e8ac95377`, GitHub Actions completed successfully:
-- Master readiness run `41464111798`: 14/14 jobs passed. The regression job passed lint, register validation, TypeScript and 539 tests across 11 suites; Edge Function syntax/secret-boundary guard passed; all ten branded Android JavaScript bundles and the private Master Admin bundle passed.
-- Branded web run `41464111686`: 10/10 niche exports passed.
-- Niche routing/config run `41464111678`: passed.
-- Production register validation run `41464111570`: passed.
+On commit `812c3b191f8e9e1ec7fbd6b007395f8091223737`, GitHub Actions completed successfully:
+- Master readiness run `41465023973`: 14/14 jobs passed. The regression job passed lint, register validation, TypeScript and **554 tests across 13 suites**; Edge Function syntax/secret-boundary guard and **4 Deno paid-niche authorization tests** passed; all ten branded Android JavaScript bundles and the private Master Admin bundle passed.
+- Branded web run `41465024074`: 10/10 niche exports passed.
+- Niche routing/config run `41465023802`: passed.
+- Production register validation run `41465023780`: passed.
 
 The `Live integration checks (explicitly gated)` job reports success because the live-check gate was not enabled; it did not execute live OnSpace Cloud/eBay checks. Android JavaScript bundling is not a native APK/AAB build, and web export is not proof of hosted deployment.
 
@@ -89,11 +89,9 @@ Read-only catalog queries on the connected backend returned:
 - Backend/network log tools returned no recent errors/requests. This is absence of observations, not proof of healthy provider workflows.
 - GitHub reported the pre-change production register workflow `41374815746` success at commit `14bb1abf6a97780c0cbe3169164c8a94b00093c3`. This does not verify this session's code. Complete CI failure logs were not available through the fetched responses, so identified source defects are not represented as all CI failures resolved.
 
-## Tests authored, NOT executed here
+## Live acceptance not executed
 
-`foundationContracts.test.ts`, `coreAtomicCommands.test.ts`, `ebayMessageService.test.ts` and `verify-s3-live.mjs` remain outside the targeted 11-suite run. The pagination and fee-model test files are now included in CI.
-
-CI has now executed the targeted regression suite, TypeScript and lint successfully (539 tests across 11 suites). This is not the complete repository-wide test suite. No real login/media upload, authenticated row mutation, eBay transaction or installed-device result is claimed.
+`verify-s3-live.mjs` was not run because the live integration gate was not enabled. It requires explicit opt-in and the protected `swish-s3-verification` environment. The targeted 13-suite Jest run and four Deno authorization tests are now executed in CI; this is not the complete repository-wide test suite. No real login/media upload, authenticated cross-tenant mutation, AI accuracy, live eBay transaction/finance reconciliation, notification delivery or installed-device result is claimed.
 
 Run:
 ```
