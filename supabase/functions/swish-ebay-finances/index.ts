@@ -6,6 +6,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials, isEncrypted } from '../_shared/credentialCrypto.ts';
 import { ebayFinancesSignatureHeaders } from '../_shared/ebayDigitalSignature.ts';
+import { aggregateActualEbayFees, withActualEbayFeeNote, FINAL_VALUE_FEE_TYPES } from '../_shared/ebayFinance.ts';
 
 const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const EBAY_FINANCES_API = 'https://apiz.ebay.com/sell/finances/v1';
@@ -201,7 +202,6 @@ Deno.serve(async (req: Request) => {
         const signatureHeaders = await ebayFinancesSignatureHeaders(url, 'GET');
         const resp = await fetch(url.toString(), { headers: { ...hdrs, ...signatureHeaders }, signal: AbortSignal.timeout(20000) });
         if (!resp.ok) {
-          const et = await resp.text().catch(() => '');
           if (resp.status === 403 || resp.status === 401) {
             const payments = await checkManagedPayments(accessToken);
             const diagnosis = payments.status === 'OPTED_IN'
@@ -210,7 +210,7 @@ Deno.serve(async (req: Request) => {
                 ? `eBay Managed Payments status: ${payments.status}. Check seller payments onboarding and re-authorise eBay in SWISH.`
                 : 'SWISH could not verify Managed Payments status. Re-authorise eBay in SWISH and check the Production keyset scopes.';
             fetchErr = `eBay Finances API HTTP ${resp.status}. ${diagnosis}`;
-          } else fetchErr = `Finances API HTTP ${resp.status}: ${et.slice(0, 200)}`;
+          } else fetchErr = `Finances API HTTP ${resp.status}. The eBay service did not complete the request; retry shortly.`;
           hasMore = false; break;
         }
         const data = await resp.json();
@@ -265,14 +265,52 @@ Deno.serve(async (req: Request) => {
             inserted++;
           }
 
-          // Update actual fees on orders with real eBay data
-          if ((txType === 'FINAL_VALUE_FEE' || txType === 'FINAL_VALUE_FEE_FIXED_PER_ORDER') && swishOrderId && amount < 0) {
-            const actualFee = Math.abs(amount);
-            const { data: ord } = await supabase.from('orders').select('sale_price, shipping_cost').eq('id', swishOrderId).eq('tenant_id', tenantId).maybeSingle();
-            if (ord) {
+          // Recalculate the complete order fee from all persisted final-value-fee
+          // components. A fixed-per-order fee and percentage fee may arrive as
+          // separate transactions; applying only the latest component undercounts.
+          if (FINAL_VALUE_FEE_TYPES.includes(txType as typeof FINAL_VALUE_FEE_TYPES[number]) && swishOrderId) {
+            const { data: feeRows, error: feeReadError } = await supabase
+              .from('ebay_financials')
+              .select('transaction_type, amount')
+              .eq('tenant_id', tenantId)
+              .eq('order_id', swishOrderId)
+              .eq('currency', currency)
+              .in('transaction_type', [...FINAL_VALUE_FEE_TYPES])
+              .lt('amount', 0);
+            if (feeReadError) {
+              errors.push(`TX ${txId}: persisted fees could not be aggregated for the order.`);
+              continue;
+            }
+            const actualFee = aggregateActualEbayFees(feeRows ?? []);
+            const { data: ord, error: orderReadError } = await supabase
+              .from('orders')
+              .select('sale_price, shipping_cost, notes')
+              .eq('id', swishOrderId)
+              .eq('tenant_id', tenantId)
+              .maybeSingle();
+            if (orderReadError) {
+              errors.push(`TX ${txId}: order totals could not be read for fee reconciliation.`);
+              continue;
+            }
+            if (ord && actualFee > 0) {
               const netRev = Math.round((Number(ord.sale_price) - actualFee - Number(ord.shipping_cost)) * 100) / 100;
-              await supabase.from('orders').update({ marketplace_fee: actualFee, net_revenue: netRev, notes: 'fee_note:ACTUAL_EBAY', updated_at: new Date().toISOString() }).eq('id', swishOrderId).eq('tenant_id', tenantId);
-              if (ebayOrderId) await supabase.from('sales').update({ marketplace_fee: actualFee, net_revenue: netRev }).eq('tenant_id', tenantId).eq('external_order_id', ebayOrderId);
+              const { error: orderUpdateError } = await supabase.from('orders').update({
+                marketplace_fee: actualFee,
+                net_revenue: netRev,
+                notes: withActualEbayFeeNote(ord.notes),
+                updated_at: new Date().toISOString(),
+              }).eq('id', swishOrderId).eq('tenant_id', tenantId);
+              if (orderUpdateError) {
+                errors.push(`TX ${txId}: order fee totals could not be saved.`);
+                continue;
+              }
+              if (ebayOrderId) {
+                const { error: salesUpdateError } = await supabase.from('sales').update({
+                  marketplace_fee: actualFee,
+                  net_revenue: netRev,
+                }).eq('tenant_id', tenantId).eq('external_order_id', ebayOrderId);
+                if (salesUpdateError) errors.push(`TX ${txId}: sales fee totals could not be saved.`);
+              }
             }
           }
         } catch (e: any) { errors.push(e.message); }
