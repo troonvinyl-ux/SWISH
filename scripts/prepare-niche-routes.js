@@ -71,7 +71,7 @@ function prepareNicheRoutes(niche, root = path.resolve(__dirname, '..')) {
   if (!kept.has(product.entry)) throw new Error('Missing entry route: ' + product.entry);
 
   const homeImport = product.home
-    ? "import ProductHome from '@/app/" + product.home.replace(/\.tsx$/, '') + "';"
+    ? "import ProductHome from '../" + product.home.replace(/\.tsx$/, '') + "';"
     : "import { NicheOverview as ProductHome } from '@/components/feature/NicheOverview';";
   const props = product.home ? ' isHomeTab' : '';
   save('(tabs)/index.tsx', homeImport + '\nexport default function NicheHomeScreen() { return <ProductHome' + props + ' />; }\n');
