@@ -8,6 +8,12 @@ module.exports = ({ config }) => {
   if (masterAdminBuild && selected) throw new Error('SWISH_MASTER_ADMIN cannot be combined with SWISH_NICHE.');
   const niche = selected ? NICHE_BUILDS[selected] : null;
   if (selected && !niche) throw new Error(`Unsupported SWISH_NICHE "${selected}".`);
+  // Supabase URL and anon key are public client configuration. Copy them into
+  // Expo's runtime manifest so native/OTA bundles do not depend on runtime
+  // process.env availability. Never place service-role or provider secrets here.
+  const publicSupabase = process.env.EXPO_PUBLIC_SUPABASE_URL && process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
+    ? { url: process.env.EXPO_PUBLIC_SUPABASE_URL, anonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY }
+    : config.extra?.supabase;
   const easProjectId = process.env.EXPO_PROJECT_ID || process.env.EAS_PROJECT_ID || config.extra?.eas?.projectId;
   const otaConfig = easProjectId ? {
     runtimeVersion: niche ? `${config.version || '1.0.0'}-${selected}-isolated-api36-v1` : { policy: 'appVersion' },
@@ -15,7 +21,9 @@ module.exports = ({ config }) => {
       requestHeaders: { 'expo-channel-name': `production-${selected || 'default'}` } },
     extra: { ...(config.extra || {}), eas: { ...(config.extra?.eas || {}), projectId: easProjectId } },
   } : {};
-  const baseConfig = Object.keys(otaConfig).length ? { ...config, ...otaConfig } : config;
+  const configuredExtra = { ...(config.extra || {}), ...(publicSupabase ? { supabase: publicSupabase } : {}) };
+  const withPublicSupabase = { ...config, extra: configuredExtra };
+  const baseConfig = Object.keys(otaConfig).length ? { ...withPublicSupabase, ...otaConfig, extra: { ...configuredExtra, ...(otaConfig.extra || {}) } } : withPublicSupabase;
   if (masterAdminBuild) {
     // The Master Admin is a launcher shell, not a bundled copy of all ten
     // niche products. Its route tree contains only auth, owner console and
