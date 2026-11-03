@@ -18,8 +18,11 @@ export default function AccountScreen() {
   const isThreadsFlip = (fixedNicheId ?? activeNicheId) === 'clothing';
   const threads = { background: '#0C080C', surface: '#160E16', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5', muted: '#9A7090' };
   const { signingOut, requestLogout, disabled: logoutDisabled } = useAccountLogout();
-  if ((fixedNicheId ?? activeNicheId) === 'antiques') return <Redirect href={"/(tabs)/antique-more" as any} />;
-  if (isThreadsFlip) return <SettingsScreen embedded />;
+  const effectiveNicheId = fixedNicheId ?? activeNicheId;
+  if (effectiveNicheId === 'antiques') return <Redirect href={"/(tabs)/antique-more" as any} />;
+  // Branded niche apps use More as their settings destination. Keep niche
+  // switching in the unbranded/master workspace only.
+  if (fixedNicheId || isThreadsFlip || (effectiveNicheId && !isMasterAdmin)) return <SettingsScreen embedded />;
   const owner = isMasterAdmin && isSwishMasterAdmin(user?.email);
 
   return (

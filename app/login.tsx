@@ -48,9 +48,15 @@ export default function LoginScreen() {
       showAlert('Please enter your email and password.', undefined, [{ text: 'OK' }]);
       return;
     }
-    const { error } = await signInWithPassword(email.trim().toLowerCase(), password);
-    if (error) showAlert('Login Failed', error, [{ text: 'OK', style: 'destructive' }]);
-  }, [email, password, isValidEmail, signInWithPassword, showAlert]);
+    const { error, user } = await signInWithPassword(email.trim().toLowerCase(), password);
+    if (error || !user) {
+      showAlert('Login Failed', error || 'Authentication returned no signed-in user. Please retry.', [{ text: 'OK', style: 'destructive' }]);
+      return;
+    }
+    // This screen is outside AuthRouter. Navigate here after confirmed login;
+    // the home route then performs tenant/niche routing.
+    router.replace('/');
+  }, [email, password, isValidEmail, signInWithPassword, showAlert, router]);
 
   // ── REGISTER STEP 1: Send OTP ─────────────────────────────────────────
   const handleSendOTP = useCallback(async () => {
@@ -81,13 +87,15 @@ export default function LoginScreen() {
       showAlert('Please enter the 4-digit verification code.');
       return;
     }
-    const { error } = await verifyOTPAndLogin(email.trim().toLowerCase(), otp, { password });
-    if (error) {
-      showAlert('Verification Failed', error, [{ text: 'OK', style: 'destructive' }]);
+    const { error, user } = await verifyOTPAndLogin(email.trim().toLowerCase(), otp, { password });
+    if (error || !user) {
+      showAlert('Verification Failed', error || 'Verification returned no signed-in user. Please retry.', [{ text: 'OK', style: 'destructive' }]);
       return;
     }
-    // AuthRouter handles navigation automatically
-  }, [email, otp, password, verifyOTPAndLogin, showAlert]);
+    // The login screen is not wrapped by AuthRouter, so complete navigation
+    // explicitly once OTP verification has returned an authenticated user.
+    router.replace('/');
+  }, [email, otp, password, verifyOTPAndLogin, showAlert, router]);
 
   const handleResendOTP = useCallback(async () => {
     const { error } = await sendOTP(email.trim().toLowerCase());

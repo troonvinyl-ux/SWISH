@@ -112,7 +112,7 @@ jobs:
           restore-keys: ${{ runner.os }}-gradle-
       - name: Compile APK
         working-directory: android
-        run: ./gradlew assembleRelease --console=plain -Dorg.gradle.workers.max=2 -Dkotlin.compiler.execution.strategy=in-process
+        run: ./gradlew assembleRelease --no-daemon --max-workers=1 --console=plain -Dorg.gradle.jvmargs="-Xmx5g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" -Dkotlin.compiler.execution.strategy=in-process
       - name: Inspect real APK before upload
         run: |
           APK=android/app/build/outputs/apk/release/app-release.apk
