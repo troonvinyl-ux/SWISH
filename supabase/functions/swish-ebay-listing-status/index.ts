@@ -1,11 +1,12 @@
 // Bounded, authenticated status-only reconciliation. Never creates listings or guesses sale prices.
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { decryptCredentials, encryptCredentials } from '../_shared/credentialCrypto.ts';
 import { parseEbayListingStatus } from '../_shared/listingStatus.ts';
 import registry from '../_shared/niche-modules.json' with { type: 'json' };
 const response = (data: unknown, status=200) => new Response(JSON.stringify(data), {status,headers:{...corsHeaders,'Content-Type':'application/json'}});
-Deno.serve(async req => {
+Deno.serve(withEdgeFunctionLogging('swish-ebay-listing-status', async req => {
   if(req.method==='OPTIONS') return new Response('ok',{headers:corsHeaders});
   if(req.method!=='POST') return response({error:'Method not allowed'},405);
   try {
@@ -70,4 +71,4 @@ Deno.serve(async req => {
     console.error('[eBay listing status] Request failed; no credential material logged');
     return response({error:'Unable to check eBay listing status. Existing unverified statuses were preserved.'},500);
   }
-});
+})))
