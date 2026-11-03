@@ -84,7 +84,7 @@ describe('Build uses a strict per-niche route and module boundary', () => {
       const product = registry.products[niche];
       const home = fs.readFileSync(path.join(temporary, output, '(tabs)/index.tsx'), 'utf8');
       if (product.home) {
-        expect(home).toContain('@/app/' + product.home.replace('.tsx', ''));
+        expect(home).toContain('../' + product.home.replace('.tsx', ''));
       } else {
         expect(home).toContain('NicheOverview as ProductHome');
       }
