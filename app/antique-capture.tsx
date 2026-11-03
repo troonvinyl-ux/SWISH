@@ -299,7 +299,7 @@ export default function AntiqueCaptureScreen() {
             style={styles.galleryButton}
           >
             <MaterialIcons name="refresh" size={20} color={GOLD} />
-            <Text style={styles.secondaryButtonText}>Retry photo uploads</Text>
+            <Text style={styles.resetText}>Retry photo uploads</Text>
           </Pressable>
         ) : null}
 
