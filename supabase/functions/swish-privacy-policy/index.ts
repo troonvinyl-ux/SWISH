@@ -1,3 +1,5 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
+
 // SWISH Privacy Policy — Public Edge Function
 // Serves a fully-rendered HTML privacy policy page at:
 //   GET https://iwgaqieyoahmcjfziwga.backend.onspace.ai/functions/v1/swish-privacy-policy
