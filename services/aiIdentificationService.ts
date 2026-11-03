@@ -663,16 +663,21 @@ export async function saveCoinReferenceImages(
     const attributes = item.attributes && typeof item.attributes === 'object' && !Array.isArray(item.attributes)
       ? item.attributes as Record<string, unknown>
       : {};
-    const existingReferences = attributes._prepared_image_references && typeof attributes._prepared_image_references === 'object' && !Array.isArray(attributes._prepared_image_references)
+    const existing = attributes._coin_reference_images &&
+      typeof attributes._coin_reference_images === 'object' &&
+      !Array.isArray(attributes._coin_reference_images)
+      ? attributes._coin_reference_images as Record<string, string>
+      : {};
+    const existingPrepared = attributes._prepared_image_references &&
+      typeof attributes._prepared_image_references === 'object' &&
+      !Array.isArray(attributes._prepared_image_references)
       ? attributes._prepared_image_references as Record<string, string>
-      : attributes._coin_reference_images && typeof attributes._coin_reference_images === 'object' && !Array.isArray(attributes._coin_reference_images)
-        ? attributes._coin_reference_images as Record<string, string>
-        : {};
-    const mergedReferences = { ...existingReferences, ...urls };
+      : existing;
+    const mergedReferences = { ...existing, ...existingPrepared, ...urls };
     const { error: updateError } = await supabase
       .from('items')
       .update({
-        attributes: { ...attributes, _coin_reference_images: mergedReferences, _prepared_image_references: mergedReferences },
+        attributes: { ...attributes, _coin_reference_images: { ...existing, ...urls }, _prepared_image_references: mergedReferences },
         updated_at: new Date().toISOString(),
       })
       .eq('id', itemId)
