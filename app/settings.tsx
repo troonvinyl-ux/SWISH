@@ -3070,7 +3070,6 @@ const nichStyles = StyleSheet.create({
 // ── Main Screen ────────────────────────────────────────────────────────────
 
 export default function SettingsScreen({ embedded = false }: { embedded?: boolean } = {}) {
-  void embedded;
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { tenant, businessConfig, reloadBusinessConfig, triggerInventoryReload, activeNiche, activeNicheId, setActiveNiche } = useApp();
@@ -3195,17 +3194,21 @@ export default function SettingsScreen({ embedded = false }: { embedded?: boolea
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 48 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Niche / Vertical ──────────────────────────────────────────── */}
-        <SectionHead title="Trading Vertical" />
-        <CardGroup>
-          <SettingRow
-            icon="storefront"
-            label="Switch Niche"
-            desc={`Currently: ${activeNiche?.name ?? 'SWISH'}`}
-            onPress={() => router.push('/niche-select' as any)}
-            color={activeNiche?.color ?? Colors.primary}
-          />
-        </CardGroup>
+        {!embedded ? (
+          <>
+            {/* Niche switching belongs to the unbranded/master workspace only. */}
+            <SectionHead title="Trading Vertical" />
+            <CardGroup>
+              <SettingRow
+                icon="storefront"
+                label="Switch Niche"
+                desc={`Currently: ${activeNiche?.name ?? 'SWISH'}`}
+                onPress={() => router.push('/niche-select' as any)}
+                color={activeNiche?.color ?? Colors.primary}
+              />
+            </CardGroup>
+          </>
+        ) : null}
 
         {/* ── Niche Switcher — visible to lifetime / master admin only ── */}
         {(() => {
