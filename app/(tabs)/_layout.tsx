@@ -1,6 +1,6 @@
-// SWISH V1 Tab Navigation — 4-tab layout (eBay-first, simplified)
-// Home | Scan | Stock | Listings
-// Acquisitions and Insights are hidden from V1 navigation.
+// Shared five-area navigation across all niche apps.
+// Home | Scan | Inventory | Listings | More
+// Niche-specific tools remain inside each product's own workspace.
 
 import { MaterialIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
@@ -69,9 +69,11 @@ export default function TabLayout() {
   const { activeNicheId, fixedNicheId } = useApp();
   const effectiveNicheId = fixedNicheId ?? activeNicheId;
   const isThreadsFlip = effectiveNicheId === 'clothing';
-  const nicheAccent = effectiveNicheId && NICHES[effectiveNicheId as keyof typeof NICHES]?.color
-    ? NICHES[effectiveNicheId as keyof typeof NICHES].color
-    : Colors.primary;
+  const nicheAccent = nicheHome.isAntiques
+    ? '#D8AD52'
+    : effectiveNicheId && NICHES[effectiveNicheId as keyof typeof NICHES]?.color
+      ? NICHES[effectiveNicheId as keyof typeof NICHES].color
+      : Colors.primary;
   const threads = { background: '#0C080C', surface: '#160E16', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5' };
 
   const tabBarStyle = {
@@ -108,7 +110,7 @@ export default function TabLayout() {
         name="index"
         options={{
           tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.tabItem, focused && styles.tabItemActive, focused && isThreadsFlip && { backgroundColor: '#E91E8C20' }]}>
+            <View style={[styles.tabItem, focused && styles.tabItemActive, focused && { backgroundColor: nicheAccent + '20' }]}>
               <MaterialIcons name={nicheHome.icon} size={22} color={color} />
               <TabLabel label="Home" focused={focused} accentColor={nicheAccent} />
             </View>
