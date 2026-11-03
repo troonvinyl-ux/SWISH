@@ -62,20 +62,49 @@ for (const [id, config] of Object.entries(registry.products)) {
   }
 }
 
-// Check every retained route's static app-route imports. A shared screen must
-// never pull another product's route module back into this bundle indirectly.
-const foreignRouteModules = new Set();
-for (const [id, config] of Object.entries(registry.products)) {
-  if (id === niche) continue;
-  for (const route of [config.entry, config.home, ...config.dedicatedRoutes].filter(Boolean)) {
-    foreignRouteModules.add(route.replace(/\.tsx$/, ''));
+// Traverse the complete local static dependency graph from the generated route
+// tree. A shared screen cannot pull a foreign niche route back into the bundle
+// indirectly through a component, hook, or service import.
+const extensions = ['.ts', '.tsx', '.js', '.jsx', '.json'];
+function resolveLocalImport(fromFile, specifier) {
+  let base;
+  if (specifier.startsWith('@/')) base = path.join(root, specifier.slice(2));
+  else if (specifier.startsWith('.')) base = path.resolve(path.dirname(fromFile), specifier);
+  else return null;
+  const candidates = [];
+  for (const candidate of [base, ...extensions.map(ext => base + ext)]) candidates.push(candidate);
+  for (const ext of extensions) candidates.push(path.join(base, 'index' + ext));
+  for (const candidate of candidates) if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return path.resolve(candidate);
+
+  // Generated route files are copied under .swish-build; relative imports
+  // which target a canonical app sibling can be resolved against app/ too.
+  if (fromFile.startsWith(generated + path.sep)) {
+    const relative = path.relative(generated, fromFile);
+    const canonicalFrom = path.join(root, 'app', relative);
+    const fallback = path.resolve(path.dirname(canonicalFrom), specifier);
+    const fallbackCandidates = [fallback, ...extensions.map(ext => fallback + ext)];
+    for (const ext of extensions) fallbackCandidates.push(path.join(fallback, 'index' + ext));
+    for (const candidate of fallbackCandidates) if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return path.resolve(candidate);
+  }
+  return null;
+}
+const visited = new Set();
+const pending = [...actual].map(route => path.join(generated, route));
+const canonicalApp = path.join(root, 'app') + path.sep;
+while (pending.length) {
+  const file = pending.pop();
+  if (visited.has(file) || !fs.existsSync(file)) continue;
+  visited.add(file);
+  if (file.startsWith(canonicalApp)) {
+    const relativeRoute = path.relative(path.join(root, 'app'), file).split(path.sep).join('/');
+    if (!allowed.has(relativeRoute)) throw new Error('Foreign niche route reached through a local import: ' + relativeRoute);
+  }
+  if (!/\.(?:ts|tsx|js|jsx)$/.test(file)) continue;
+  const source = fs.readFileSync(file, 'utf8');
+  const imports = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s*)['"]([^'"]+)['"]/g;
+  for (const match of source.matchAll(imports)) {
+    const resolved = resolveLocalImport(file, match[1]);
+    if (resolved) pending.push(resolved);
   }
 }
-for (const route of actual) {
-  const source = fs.readFileSync(path.join(generated, route), 'utf8');
-  for (const match of source.matchAll(/from\s+['"]@\/app\/([^'"]+)['"]/g)) {
-    const imported = match[1].replace(/\.tsx$/, '');
-    if (foreignRouteModules.has(imported)) throw new Error('Foreign niche module imported by ' + route + ': ' + imported);
-  }
-}
-console.log('Strict route and static app-module boundary verified for ' + niche + ' (' + actual.size + ' routes).');
+console.log('Strict route and transitive app-module boundary verified for ' + niche + ' (' + actual.size + ' routes, ' + visited.size + ' local modules).');
