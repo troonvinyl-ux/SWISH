@@ -17,6 +17,13 @@ describe('Tracked database security contracts', () => {
     expect(source).not.toMatch(/set\s+(?:inventory_id|specialist_id|tenant_id)\s*=/i);
     expect(source).toContain('as restrictive for update');
   });
+  test('authenticated listing editor can resolve auth.uid without auth table access', () => {
+    const source = migration('20261103210000_reaffirm_authenticated_editor_auth_uid.sql');
+    expect(source).toContain('grant usage on schema auth to authenticated');
+    expect(source).toContain('grant execute on function auth.uid() to authenticated');
+    expect(source).not.toMatch(/grant .* on all tables in schema auth/i);
+    expect(source).not.toMatch(/grant .* on auth\.users/i);
+  });
   test('publish claims are server-only and independent of the listing status enum', () => {
     const source = migration('20261030_publish_claim.sql');
     expect(source).toContain('publish_claim_id is null');
