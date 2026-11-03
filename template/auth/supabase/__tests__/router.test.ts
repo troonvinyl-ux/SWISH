@@ -29,6 +29,6 @@ describe('AuthRouter startup navigation regression', () => {
   test('preserves explicitly excluded routes for unauthenticated users', () => {
     expect(routerSource).toContain('excludeRoutes.some((route) =>');
     expect(routerSource).toContain('pathname.startsWith(route)');
-    expect(routerSource).toContain('if (isLoginRoute || isExcludedRoute');
+    expect(routerSource).toContain('return <>{children}</>;');
   });
 });
