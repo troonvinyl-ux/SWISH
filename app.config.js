@@ -3,8 +3,8 @@ const { products: NICHE_BUILDS } = require('./niche-modules.json');
 const { prepareNicheRoutes } = require('./scripts/prepare-niche-routes');
 
 module.exports = ({ config }) => {
-  const selected = process.env.SWISH_NICHE;
-  const masterAdminBuild = process.env.SWISH_MASTER_ADMIN === '1';
+  const selected = process.env['SWISH_NICHE'];
+  const masterAdminBuild = process.env['SWISH_MASTER_ADMIN'] === '1';
   if (masterAdminBuild && selected) throw new Error('SWISH_MASTER_ADMIN cannot be combined with SWISH_NICHE.');
   const niche = selected ? NICHE_BUILDS[selected] : null;
   if (selected && !niche) throw new Error(`Unsupported SWISH_NICHE "${selected}".`);
@@ -14,7 +14,7 @@ module.exports = ({ config }) => {
   const publicSupabase = process.env['EXPO_PUBLIC_SUPABASE_URL'] && process.env['EXPO_PUBLIC_SUPABASE_ANON_KEY']
     ? { url: process.env['EXPO_PUBLIC_SUPABASE_URL'], anonKey: process.env['EXPO_PUBLIC_SUPABASE_ANON_KEY'] }
     : config.extra?.supabase;
-  const easProjectId = process.env.EXPO_PROJECT_ID || process.env.EAS_PROJECT_ID || config.extra?.eas?.projectId;
+  const easProjectId = process.env['EXPO_PROJECT_ID'] || process.env['EAS_PROJECT_ID'] || config.extra?.eas?.projectId;
   if (!selected && !masterAdminBuild && !easProjectId && !publicSupabase) return config;
   const otaConfig = easProjectId ? {
     runtimeVersion: niche ? `${config.version || '1.0.0'}-${selected}-isolated-api36-v1` : { policy: 'appVersion' },
@@ -42,7 +42,7 @@ module.exports = ({ config }) => {
       ...baseConfig,
       plugins: masterPlugins,
       name: 'SWISH Master Admin',
-      slug: process.env.SWISH_OTA_PUBLISH === '1' ? 'swish' : 'swish-master-admin',
+      slug: process.env['SWISH_OTA_PUBLISH'] === '1' ? 'swish' : 'swish-master-admin',
       scheme: 'swishmasteradmin',
       runtimeVersion: `${config.version || '1.0.0'}-master-admin-api36-v1`,
       ios: { ...baseConfig.ios, bundleIdentifier: baseConfig.ios?.bundleIdentifier ?? 'com.swish.inventory' },
@@ -60,12 +60,12 @@ module.exports = ({ config }) => {
     return name === 'expo-router' ? ['expo-router', { ...(Array.isArray(plugin) ? plugin[1] : {}), root: routeRoot }] : plugin;
   });
   if (!plugins.some(plugin => (Array.isArray(plugin) ? plugin[0] : plugin) === 'expo-router')) plugins.push(['expo-router', { root: routeRoot }]);
-  const webBaseUrl = process.env.SWISH_WEB_BASE_URL;
+  const webBaseUrl = process.env['SWISH_WEB_BASE_URL'];
   return {
     ...baseConfig,
     ...(webBaseUrl ? { experiments: { ...(baseConfig.experiments || {}), baseUrl: webBaseUrl } } : {}),
     plugins, name: niche.name,
-    slug: process.env.SWISH_OTA_PUBLISH === '1' ? 'swish' : niche.slug,
+    slug: process.env['SWISH_OTA_PUBLISH'] === '1' ? 'swish' : niche.slug,
     scheme: niche.scheme,
     ios: { ...config.ios, bundleIdentifier: niche.iosBundleIdentifier },
     android: { ...config.android, package: niche.androidPackage },
