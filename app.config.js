@@ -1,6 +1,5 @@
 // One registry drives native identities, runtime aliases and route packaging.
 const { products: NICHE_BUILDS } = require('./niche-modules.json');
-const { prepareNicheRoutes } = require('./scripts/prepare-niche-routes');
 
 module.exports = ({ config }) => {
   const selected = process.env.SWISH_NICHE;
@@ -15,6 +14,7 @@ module.exports = ({ config }) => {
     ? { url: process.env.EXPO_PUBLIC_SUPABASE_URL, anonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY }
     : config.extra?.supabase;
   const easProjectId = process.env.EXPO_PROJECT_ID || process.env.EAS_PROJECT_ID || config.extra?.eas?.projectId;
+  if (!selected && !masterAdminBuild && !easProjectId && !publicSupabase) return config;
   const otaConfig = easProjectId ? {
     runtimeVersion: niche ? `${config.version || '1.0.0'}-${selected}-isolated-api36-v1` : { policy: 'appVersion' },
     updates: { ...config.updates, url: `https://u.expo.dev/${easProjectId}`, checkAutomatically: 'ON_LOAD', fallbackToCacheTimeout: 0,
@@ -53,6 +53,7 @@ module.exports = ({ config }) => {
   }
   if (!niche) return baseConfig;
   // Prepare for every Expo consumer (prebuild, EAS, export, OTA), not just one workflow.
+  const { prepareNicheRoutes } = require('./scripts/prepare-niche-routes');
   const routeRoot = prepareNicheRoutes(selected);
   const plugins = (config.plugins || []).map(plugin => {
     const name = Array.isArray(plugin) ? plugin[0] : plugin;
