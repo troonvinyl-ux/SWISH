@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { NICHE_MODULES, PRODUCTION_NICHE_IDS, NICHES } from '@/constants/niches';
-import { resolveProductionNiche, resolveNicheFromNativeAppId, getAuthenticatedHomeRoute, getProductionNicheSpecialistIds, isRouteAllowedForBuild } from '@/services/nicheRouting';
+import { resolveProductionNiche, resolveNicheFromNativeAppId, resolveNicheFromNativeAppScheme, getAuthenticatedHomeRoute, getProductionNicheSpecialistIds, isRouteAllowedForBuild } from '@/services/nicheRouting';
 import { isLiveListing, isDraftListing } from '@/services/listingLifecycle';
 import { classifyListing, isListingEligibleForNiche } from '@/services/nicheCategoryService';
 const root = path.resolve(__dirname, '../..');
@@ -20,6 +20,7 @@ describe('Production identity and route boundaries', () => {
   test.each(PRODUCTION_NICHE_IDS)('%s is resolved from its native package identity', niche => {
     expect(resolveNicheFromNativeAppId(NICHE_MODULES[niche].androidPackage)).toBe(niche);
     expect(resolveNicheFromNativeAppId(NICHE_MODULES[niche].iosBundleIdentifier)).toBe(niche);
+    expect(resolveNicheFromNativeAppScheme(NICHE_MODULES[niche].scheme)).toBe(niche);
   });
   test('a Surplus account cannot change a Threads installation home route', () => {
     expect(getAuthenticatedHomeRoute({
@@ -32,6 +33,7 @@ describe('Production identity and route boundaries', () => {
   test('unknown native package IDs never select a niche', () => {
     expect(resolveNicheFromNativeAppId('com.swish.inventory')).toBeNull();
     expect(resolveNicheFromNativeAppId('com.swish.not-a-product')).toBeNull();
+    expect(resolveNicheFromNativeAppScheme('not-a-product')).toBeNull();
   });
   test('Threads preserves only verified historical aliases', () => {
     expect(getProductionNicheSpecialistIds('threads')).toContain('clothing_specialist');
@@ -108,6 +110,7 @@ describe('Build uses a strict per-niche route and module boundary', () => {
   test('native package identity is the fixed build niche before account preferences load', () => {
     const appContext = fs.readFileSync(path.join(root, 'contexts/AppContext.tsx'), 'utf8');
     expect(appContext).toContain('resolveNicheFromNativeAppId(NATIVE_BUILD_APP_ID)');
-    expect(appContext).toContain('Native package identity is immutable');
+    expect(appContext).toContain('resolveNicheFromNativeAppScheme(NATIVE_BUILD_APP_SCHEME)');
+    expect(appContext).toContain('Immutable native package/scheme identity');
   });
 });
