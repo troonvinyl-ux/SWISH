@@ -63,6 +63,9 @@ jobs:
         run: bash scripts/install-dependencies.sh
       - name: Load OnSpace-compatible public backend configuration from repository .env when needed
         shell: bash
+        env:
+          SWISH_MASTER_ADMIN: '1'
+          EXPO_NO_DOTENV: '1'
         run: |
           node <<'NODE'
           const fs = require('node:fs');
@@ -82,6 +85,8 @@ jobs:
           if (out.length) fs.appendFileSync(process.env.GITHUB_ENV, out.join('\n') + '\n', { mode: 0o600 });
           console.log(`Loaded ${out.length} public backend setting(s) for signed Master Admin; values withheld.`);
           NODE
+
+      - name: Verify OnSpace-compatible backend and OTA configuration before Master Admin prebuild
         env:
           SWISH_MASTER_ADMIN: '1'
           EXPO_NO_DOTENV: '1'
