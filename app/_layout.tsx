@@ -109,6 +109,7 @@ export default function RootLayout() {
                 <Stack.Screen name="ebay-admin" />
                 <Stack.Screen name="master-admin" />
                 <Stack.Screen name="master-diagnostics" />
+                <Stack.Screen name="reiss-ebay-test" />
                 <Stack.Screen name="production-control" />
                 <Stack.Screen name="dispatch" />
                 <Stack.Screen name="tasks" />
