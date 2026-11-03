@@ -32,6 +32,7 @@ export function useAuth(): AuthContextType {
     context.setOperationLoading(true);
     try {
       const result = await authService.verifyOTPAndLogin(email, otp, options);
+      if (result?.user) context.setAuthenticatedUser(result.user);
       return result;
     } catch (error) {
       console.warn('[Template:useAuth] verifyOTPAndLogin exception:', error);
@@ -64,6 +65,7 @@ export function useAuth(): AuthContextType {
     context.setOperationLoading(true);
     try {
       const result = await authService.signInWithPassword(email, password);
+      if (result?.user) context.setAuthenticatedUser(result.user);
       return result;
     } catch (error) {
       console.warn('[Template:useAuth] signInWithPassword exception:', error);
