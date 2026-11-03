@@ -10,7 +10,7 @@ import { SpecialistReview } from '@/components/feature/SpecialistReview';
 import { Colors,Spacing,Typography,Radius } from '@/constants/theme';
 import { BrandArtwork } from '@/components/feature/BrandArtwork';
 export default function CaptureScreen() {
-  const capture=useGenericCapture(); const router=useRouter(); const { tenant }=useApp();
+  const capture=useGenericCapture(); const router=useRouter();
   return <SafeAreaView edges={['top','bottom']} style={s.screen}><StatusBar style="light"/>
     <KeyboardAvoidingView style={s.screen} behavior={Platform.OS==='ios' ? 'padding' : 'height'}>
     <FlatList data={capture.slots} keyExtractor={slot=>slot.id} contentContainerStyle={s.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled"
