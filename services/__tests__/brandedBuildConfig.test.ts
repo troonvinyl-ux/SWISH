@@ -30,6 +30,8 @@ describe('Branded Expo build configuration', () => {
   const originalExpoProjectId = process.env.EXPO_PROJECT_ID;
   const originalEasProjectId = process.env.EAS_PROJECT_ID;
   const originalOtaPublish = process.env.SWISH_OTA_PUBLISH;
+  const originalPublicBackendUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const originalPublicBackendKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
   afterEach(() => {
     if (originalMasterAdmin === undefined) delete process.env.SWISH_MASTER_ADMIN;
@@ -45,16 +47,23 @@ describe('Branded Expo build configuration', () => {
 
     if (originalOtaPublish === undefined) delete process.env.SWISH_OTA_PUBLISH;
     else process.env.SWISH_OTA_PUBLISH = originalOtaPublish;
+
+    if (originalPublicBackendUrl === undefined) delete process.env.EXPO_PUBLIC_SUPABASE_URL;
+    else process.env.EXPO_PUBLIC_SUPABASE_URL = originalPublicBackendUrl;
+    if (originalPublicBackendKey === undefined) delete process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+    else process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = originalPublicBackendKey;
   });
 
   test('keeps the existing OnSpace app identity when no branded profile is selected', () => {
     delete process.env.SWISH_NICHE;
     delete process.env.SWISH_MASTER_ADMIN;
-    // The OTA workflow injects these variables globally. Keep this identity test
-    // independent of deployment configuration so it tests the true base case.
+    // This base-case assertion intentionally removes deployment configuration:
+    // public backend settings are expected to be injected in actual release builds.
     delete process.env.EXPO_PROJECT_ID;
     delete process.env.EAS_PROJECT_ID;
     delete process.env.SWISH_OTA_PUBLISH;
+    delete process.env.EXPO_PUBLIC_SUPABASE_URL;
+    delete process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
     expect(configureApp({ config: BASE_CONFIG })).toBe(BASE_CONFIG);
   });
 
@@ -112,5 +121,4 @@ describe('Branded Expo build configuration', () => {
     expect(workflow).not.toContain('  push:');
     expect(workflow).not.toContain('branches: [main]');
   });
-
 });
