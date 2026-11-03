@@ -8,7 +8,7 @@
 // Bike subscriber   → Bike Flipper find/identify flow
 // Fashion subscriber → Threads Flip identify flow
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -280,12 +280,6 @@ export default function ScanScreen() {
     aiCapabilities: profile ? [profile.focus,profile.conditionRules,'Targeted follow-up questions and editable evidence review','Transparent buying scenarios with configurable costs'] : NICHE_CAPTURE.general.aiCapabilities,
     captureOptions: activeNiche.captureInstructions.map(desc => ({ icon: 'photo-camera', label: 'Capture guidance', desc })),
   } : NICHE_CAPTURE[product];
-
-  // The centre Scan tab is a one-tap action, not a second landing page.
-  // Replace this route immediately with the active product's actual capture screen.
-  useEffect(() => {
-    router.replace(nicheToScannerRoute(selectedNicheId) as any);
-  }, [selectedNicheId, router]);
 
   const handleOpenNiche = () => {
     // The Scan tab is an action, not a second landing page. Open the active
