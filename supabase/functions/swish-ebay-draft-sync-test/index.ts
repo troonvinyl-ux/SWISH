@@ -3,6 +3,7 @@
 // It never creates an offer and never calls publishOffer.
 // All credentials remain server-side and tenant membership is required.
 
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { decryptCredentials, encryptCredentials } from '../_shared/credentialCrypto.ts';
 
@@ -102,7 +103,7 @@ function safeOffer(offer: any) {
   };
 }
 
-Deno.serve(async (request: Request) => {
+Deno.serve(withEdgeFunctionLogging('swish-ebay-draft-sync-test', async (request: Request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: 'POST required.' }, 405);
   try {
@@ -546,4 +547,4 @@ Deno.serve(async (request: Request) => {
     console.error('[SWISH Draft Round-Trip] Request failed:', String(error?.message ?? 'unknown').slice(0, 400));
     return json({ error: String(error?.message ?? 'Draft test failed.').slice(0, 500) }, 400);
   }
-});
+}));

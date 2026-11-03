@@ -78,8 +78,10 @@ export const shouldIgnoreAuthEvent = (event: string): boolean => {
     return true;
   }
   
-  // Ignore visibility-triggered events
-  if (isVisibilityTriggeredAuthEvent(event)) {
+  // A SIGNED_IN event must always reach AuthProvider. Ignoring it when the
+  // app has just regained focus leaves the successful login on /login until
+  // the next cold start restores the persisted session.
+  if (event !== 'SIGNED_IN' && isVisibilityTriggeredAuthEvent(event)) {
     return true;
   }
   

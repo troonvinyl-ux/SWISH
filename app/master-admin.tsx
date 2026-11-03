@@ -147,6 +147,15 @@ export default function MasterAdminScreen() {
           <MaterialIcons name="chevron-right" size={24} color={Colors.textPrimary} />
         </Pressable>
 
+        <Pressable accessibilityRole="button" onPress={() => router.push('/edge-function-logs' as any)} style={styles.updateButton}>
+          <View style={styles.updateIcon}><MaterialIcons name="monitor-heart" size={24} color={Colors.primary}/></View>
+          <View style={{ flex: 1, gap: Spacing.xs }}>
+            <Text style={styles.updateTitle}>Live Edge Function Logs</Text>
+            <Text style={styles.updateSubtitle}>Real-time invocations, failures, response codes and execution times across SWISH</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={24} color={Colors.textPrimary}/>
+        </Pressable>
+
         <Pressable accessibilityRole="button" accessibilityLabel="Open production readiness control" onPress={() => router.push('/production-control' as any)} style={({ pressed }) => [styles.updateButton, pressed && styles.pressed]}>
           <View style={styles.updateIcon}><MaterialIcons name="fact-check" size={24} color={Colors.primary}/></View>
           <View style={{ flex: 1, gap: Spacing.xs }}>

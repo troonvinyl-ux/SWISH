@@ -61,9 +61,11 @@ jobs:
 
       - name: Install dependencies
         run: bash scripts/install-dependencies.sh
-      - name: Verify public Supabase config before Master Admin prebuild
-      - name: Load public Supabase configuration from repository .env when needed
+      - name: Load OnSpace-compatible public backend configuration from repository .env when needed
         shell: bash
+        env:
+          SWISH_MASTER_ADMIN: '1'
+          EXPO_NO_DOTENV: '1'
         run: |
           node <<'NODE'
           const fs = require('node:fs');
@@ -81,21 +83,23 @@ jobs:
           const out = [];
           for (const key of ['EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_ANON_KEY']) if (!process.env[key] && values[key]) out.push(`${key}=${values[key]}`);
           if (out.length) fs.appendFileSync(process.env.GITHUB_ENV, out.join('\n') + '\n', { mode: 0o600 });
-          console.log(`Loaded ${out.length} public Supabase setting(s) for signed Master Admin; values withheld.`);
+          console.log(`Loaded ${out.length} public backend setting(s) for signed Master Admin; values withheld.`);
           NODE
+
+      - name: Verify OnSpace-compatible backend and OTA configuration before Master Admin prebuild
         env:
           SWISH_MASTER_ADMIN: '1'
           EXPO_NO_DOTENV: '1'
         run: |
           set -euo pipefail
-          test -n "${EXPO_PUBLIC_SUPABASE_URL:-}" || { echo "::error::Missing EXPO_PUBLIC_SUPABASE_URL"; exit 1; }
-          test -n "${EXPO_PUBLIC_SUPABASE_ANON_KEY:-}" || { echo "::error::Missing EXPO_PUBLIC_SUPABASE_ANON_KEY"; exit 1; }
+          test -n "${EXPO_PUBLIC_SUPABASE_URL:-}" || { echo "::error::Missing OnSpace-compatible EXPO_PUBLIC_SUPABASE_URL"; exit 1; }
+          test -n "${EXPO_PUBLIC_SUPABASE_ANON_KEY:-}" || { echo "::error::Missing OnSpace-compatible EXPO_PUBLIC_SUPABASE_ANON_KEY"; exit 1; }
           test -n "${EXPO_PROJECT_ID:-}" || { echo "::error::Missing EXPO_PROJECT_ID; refusing to build an APK without OTA configuration."; exit 1; }
           npx expo config --type public --json > /tmp/swish-master-config.json
           node - <<'NODE'
           const c = JSON.parse(require('node:fs').readFileSync('/tmp/swish-master-config.json', 'utf8'));
-          if (c.extra?.supabase?.url !== process.env.EXPO_PUBLIC_SUPABASE_URL) throw new Error('Master Admin Supabase URL not embedded');
-          if (c.extra?.supabase?.anonKey !== process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) throw new Error('Master Admin Supabase anon key not embedded');
+          if (c.extra?.supabase?.url !== process.env.EXPO_PUBLIC_SUPABASE_URL) throw new Error('OnSpace-compatible backend URL not embedded');
+          if (c.extra?.supabase?.anonKey !== process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) throw new Error('OnSpace-compatible public backend key not embedded');
           if (!c.updates?.url?.includes(process.env.EXPO_PROJECT_ID)) throw new Error('Master Admin EAS update URL not embedded');
           if (!c.runtimeVersion) throw new Error('Master Admin runtime version missing');
           if (c.updates?.requestHeaders?.['expo-channel-name'] !== 'production-default') throw new Error('Master Admin OTA channel mismatch');

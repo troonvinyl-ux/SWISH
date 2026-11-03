@@ -17,6 +17,7 @@ export default function MasterAdminRootLayout() {
       <Stack.Screen name="login"/>
       <Stack.Screen name="master-admin"/>
       <Stack.Screen name="production-control"/>
+      <Stack.Screen name="edge-function-logs"/>
       <Stack.Screen name="master-diagnostics"/>
       <Stack.Screen name="privacy-policy"/>
     </Stack>

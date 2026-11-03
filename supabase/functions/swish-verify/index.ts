@@ -5,6 +5,7 @@
 // Security: JWT + tenant membership required (HARDENED).
 // Missing/invalid auth = 401. Non-member = 403. No bypass path.
 
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { requirePaidNiche, nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
@@ -17,7 +18,7 @@ interface VerifyRequest {
   override_notes?: string;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withEdgeFunctionLogging('swish-verify', async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -304,4 +305,4 @@ Return an empty array if no issues found. Maximum 3 warnings.`,
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-});
+}));

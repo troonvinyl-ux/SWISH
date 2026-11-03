@@ -46,36 +46,43 @@ export function AuthProvider({ children }: AuthProviderProps) {
     let authSubscription: any = null;
 
     const initializeAuth = async () => {
-      
-      try {
-        const currentUser = await authService.getCurrentUser();
-        
-        if (isMounted) {
-          updateState({ 
-            user: currentUser, 
-            loading: false, 
-            initialized: true 
-          });
-        }
+      let authEventReceived = false;
 
+      try {
+        // Subscribe before reading the persisted session so a SIGNED_IN event
+        // cannot be missed between getSession() and listener registration.
         authSubscription = authService.onAuthStateChange((authUser) => {
+          authEventReceived = true;
           if (isMounted) {
-            updateState({ user: authUser });
+            updateState({
+              user: authUser,
+              loading: false,
+              initialized: true,
+            });
           }
         });
 
+        const currentUser = await authService.getCurrentUser();
+
+        if (isMounted) {
+          updateState({
+            // An auth event is newer than the session snapshot started above.
+            ...(authEventReceived ? {} : { user: currentUser }),
+            loading: false,
+            initialized: true,
+          });
+        }
       } catch (error) {
         console.warn('[Template:AuthProvider] Auth initialization failed:', error);
         if (isMounted) {
-          updateState({ 
-            user: null, 
-            loading: false, 
-            initialized: true 
+          updateState({
+            user: null,
+            loading: false,
+            initialized: true,
           });
         }
       }
     };
-
     initializeAuth();
 
     return () => {

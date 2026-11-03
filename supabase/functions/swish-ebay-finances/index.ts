@@ -3,6 +3,7 @@
 // Routes: sync_transactions | get_payouts | get_funds_summary | get_summary
 // POST body: { tenantId, route?, daysBack? }
 
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials, isEncrypted } from '../_shared/credentialCrypto.ts';
 import { ebayFinancesSignatureHeaders } from '../_shared/ebayDigitalSignature.ts';
@@ -134,7 +135,7 @@ async function getToken(
   return { accessToken: creds.accessToken };
 }
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withEdgeFunctionLogging('swish-ebay-finances', async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jr({ error: 'Method not allowed' }, 405);
   let body: unknown;
@@ -403,4 +404,4 @@ Deno.serve(async (req: Request) => {
     console.error('[SWISH Finances] Request failed:', err instanceof Error ? err.message : 'unknown error');
     return jr({ error: 'Financial request failed. Please retry; contact support if the issue continues.' }, 500);
   }
-});
+}));

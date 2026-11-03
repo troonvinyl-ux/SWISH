@@ -25,6 +25,7 @@
 //
 // POST body: { tenantId, itemIds?, fixTitles? }
 
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
@@ -450,7 +451,7 @@ async function processItem(
 
 // ── Main Handler ───────────────────────────────────────────────────────────────
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withEdgeFunctionLogging('swish-image-download', async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResp({ error: 'Method not allowed' }, 405);
 
@@ -660,4 +661,4 @@ Deno.serve(async (req: Request) => {
   };
   console.log(`[v6] COMPLETE: ${JSON.stringify(finalResult)}`);
   return jsonResp(finalResult);
-});
+}));

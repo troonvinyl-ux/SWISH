@@ -1,3 +1,5 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
+
 // SWISH Privacy Policy — Public Edge Function
 // Serves a fully-rendered HTML privacy policy page at:
 //   GET https://iwgaqieyoahmcjfziwga.backend.onspace.ai/functions/v1/swish-privacy-policy
@@ -954,7 +956,7 @@ function html(): string {
 </html>`;
 }
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withEdgeFunctionLogging('swish-privacy-policy', async (req: Request) => {
   // Allow public GET requests — no auth required
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -978,4 +980,4 @@ Deno.serve(async (req: Request) => {
       'Access-Control-Allow-Origin': '*',
     },
   });
-});
+}));
