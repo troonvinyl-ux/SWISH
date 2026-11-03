@@ -13,13 +13,15 @@ function prepareNicheRoutes(niche, root = path.resolve(__dirname, '..')) {
 
   // Fail closed: every route in app/ must be explicitly shared, admin-only,
   // or owned by exactly one niche. New routes cannot silently enter every APK.
-  const ownedRoutes = new Set();
+  const routeOwners = new Map();
   for (const [id, config] of Object.entries(registry.products)) {
     for (const route of [config.entry, config.home, ...config.dedicatedRoutes].filter(Boolean)) {
-      if (ownedRoutes.has(route)) throw new Error('Route has multiple niche owners: ' + route);
-      ownedRoutes.add(route);
+      const existingOwner = routeOwners.get(route);
+      if (existingOwner && existingOwner !== id) throw new Error('Route has multiple niche owners: ' + route);
+      routeOwners.set(route, id);
     }
   }
+  const ownedRoutes = new Set(routeOwners.keys());
   const adminRoutes = new Set(registry.adminOnlyRoutes);
   const sharedRoutes = new Set(registry.sharedRoutes);
   for (const route of sharedRoutes) {
