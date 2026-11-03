@@ -40,4 +40,11 @@ describe('SWISH authentication session bootstrap regressions', () => {
     expect(method).not.toContain('client.auth.getSession()');
   });
 
+  test('logout remains enabled and clears AuthProvider through the signed-out event', () => {
+    expect(hookSource).toContain('const logout = async (): Promise<LogoutResult>');
+    expect(hookSource).toContain('authService.logout()');
+    expect(serviceSource).toContain('callback(null)');
+    expect(hookSource).not.toContain("configManager.isModuleEnabled('auth')");
+  });
+
 });
