@@ -258,4 +258,4 @@ Recommend the strategy that MAXIMISES net profit per labour hour, not just gross
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-})))
+})));
