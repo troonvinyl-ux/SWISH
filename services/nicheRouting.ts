@@ -15,6 +15,15 @@ export function resolveNicheFromNativeAppId(nativeAppId: string | null | undefin
   return null;
 }
 
+/** Resolve a branded installation from its native deep-link scheme. */
+export function resolveNicheFromNativeAppScheme(nativeScheme: string | string[] | null | undefined): ProductionNicheId | null {
+  const schemes = (Array.isArray(nativeScheme) ? nativeScheme : [nativeScheme]).filter((value): value is string => typeof value === 'string');
+  for (const [niche, config] of Object.entries(NICHE_MODULES)) {
+    if (schemes.includes(config.scheme)) return niche as ProductionNicheId;
+  }
+  return null;
+}
+
 /** Exact, registered aliases only. Never classify an unknown ID by substring. */
 export function resolveProductionNiche(value: string | null | undefined): ProductionNicheId | null {
   if (typeof value !== 'string') return null;
