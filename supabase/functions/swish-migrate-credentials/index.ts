@@ -17,6 +17,7 @@
 //
 // RESPONSE: { migrated: number; alreadyEncrypted: number; failed: number; errors: string[] }
 
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { corsHeaders } from '../_shared/cors.ts';
 import { isEncrypted, migrateToEncrypted, decryptCredentials } from '../_shared/credentialCrypto.ts';
@@ -39,7 +40,7 @@ function error(msg: string, status = 400) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withEdgeFunctionLogging('swish-migrate-credentials', async (req: Request) => {
   // CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -217,4 +218,4 @@ Deno.serve(async (req: Request) => {
   }));
 
   return json(summary, failed > 0 ? 207 : 200); // 207 Multi-Status if partial failures
-});
+})))
