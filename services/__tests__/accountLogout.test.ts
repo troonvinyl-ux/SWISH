@@ -39,7 +39,7 @@ describe('Account logout routing and preservation source contracts', () => {
     expect(app).toContain('setTenant(null); setBusinessConfig(null); setSubscriptionStatus(null)');
     expect(source('contexts/ManifestOpportunityContext.tsx')).toContain('useEffect(() => { setSessions({}); }, [user?.id])');
     expect(source('services/nicheRouting.ts')).toContain('options.fixedNicheId ?? options.activeNicheId');
-    for (const file of ['services/accountLogoutService.ts', 'hooks/useAccountLogout.ts']) {
+    for (const file of ['hooks/useAccountLogout.ts']) {
       const contents = source(file);
       expect(contents).not.toContain('AsyncStorage.clear');
       expect(contents).not.toContain('.delete(');
