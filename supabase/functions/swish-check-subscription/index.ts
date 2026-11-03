@@ -1,10 +1,11 @@
 // Verified account-bound entitlements for all registered products; also refreshes the database RLS cache.
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.2';
 import modules from '../_shared/niche-modules.json' with { type:'json' };
 import { corsHeaders } from '../_shared/cors.ts';
 import { refreshVerifiedNiches,nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
 import { LEGACY_PREMIUM_TIERS,SWISH_SUBSCRIPTION_PRODUCT } from '../_shared/nicheAuthorization.ts';
-Deno.serve(async (req:Request)=>{
+Deno.serve(withEdgeFunctionLogging('swish-check-subscription', async (req:Request)=>{
   if(req.method==='OPTIONS') return new Response(null,{ headers:corsHeaders });
   const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{ status,headers:{ ...corsHeaders,'Content-Type':'application/json' } });
   if(!['POST','GET'].includes(req.method)) return json({ error:'Method not allowed' },405);
@@ -29,4 +30,4 @@ Deno.serve(async (req:Request)=>{
     console.error('[swish-check-subscription] Verified entitlement refresh failed.');
     return nicheAccessResponse(error) ?? json({ error:'Subscription status could not be checked. Please retry.' },503);
   }
-});
+})))
