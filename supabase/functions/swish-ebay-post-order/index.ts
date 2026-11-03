@@ -799,4 +799,4 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-post-order', async (req: Request)
     console.error(`[SWISH Dispatch] Request failed (route=${route}).`);
     return jsonResponse({ error: 'Unable to complete the eBay fulfilment request.' }, 500);
   }
-})))
+})));
