@@ -2,6 +2,8 @@ jest.mock('@supabase/supabase-js', () => ({
   createClient: jest.fn(() => ({ auth: {} })),
 }));
 
+jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
+jest.mock('react-native-url-polyfill/auto', () => ({}));
 jest.mock('expo-virtual-env', () => ({ env: process.env }), { virtual: true });
 jest.mock('expo/virtual/env', () => ({ env: process.env }), { virtual: true });
 
