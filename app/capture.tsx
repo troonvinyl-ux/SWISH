@@ -5,11 +5,8 @@ import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useGenericCapture } from '@/hooks/useGenericCapture';
-import { useApp } from '@/hooks/useApp';
 import { SPECIALISTS } from '@/constants/specialists';
 import { SpecialistReview } from '@/components/feature/SpecialistReview';
-import { PhotoQualityReview } from '@/components/feature/PhotoQualityReview';
-import { FlipIntelligencePanel } from '@/components/feature/FlipIntelligencePanel';
 import { Colors,Spacing,Typography,Radius } from '@/constants/theme';
 import { BrandArtwork } from '@/components/feature/BrandArtwork';
 export default function CaptureScreen() {
@@ -36,7 +33,6 @@ export default function CaptureScreen() {
         const image=capture.images.find(i=>i.slotId===slot.id);
         return <View style={s.card}><Text style={s.section}>{slot.label}{slot.required ? ' · recommended evidence' : ''}</Text><Text style={s.body}>{slot.description}</Text>
           {image ? <Image source={{ uri:image.uri }} transition={200} contentFit="contain" style={s.photo}/> : null}
-          {image?.photoQuality ? <PhotoQualityReview quality={image.photoQuality}/> : null}
           <View style={s.row}><Pressable disabled={capture.busy || Boolean(capture.savedId)} onPress={()=>{ void capture.capture(slot.id,false); }} style={({ pressed })=>[s.secondary,pressed ? s.pressed : null]}><MaterialIcons name="photo-camera" size={20} color={Colors.primary}/><Text style={s.body}>{image ? 'Retake' : 'Camera'}</Text></Pressable><Pressable disabled={capture.busy || Boolean(capture.savedId)} onPress={()=>{ void capture.capture(slot.id,true); }} style={({ pressed })=>[s.secondary,pressed ? s.pressed : null]}><Text style={s.body}>Upload photo</Text></Pressable></View>
         </View>;
       }}
@@ -45,7 +41,6 @@ export default function CaptureScreen() {
         {capture.activeNiche.id === 'trading_cards' ? <Pressable onPress={()=>router.push('/card-grading' as any)} style={({ pressed })=>[s.secondary,pressed ? s.pressed : null]}><MaterialIcons name="style" size={24} color={Colors.primary}/><Text style={s.body}>Compare raw versus graded sale scenarios</Text></Pressable> : null}
         {capture.result && !capture.savedId ? <>
           <Pressable disabled={capture.busy} onPress={()=>{ void capture.identify(); }} style={({ pressed })=>[s.secondary,pressed ? s.pressed : null]}><MaterialIcons name="refresh" size={20} color={Colors.info}/><Text style={s.body}>Take another look with my answers</Text></Pressable>
-          <FlipIntelligencePanel key={capture.specialistId} result={capture.result} nicheId={capture.activeNiche.id} tenantId={tenant?.id}/>
         </> : null}
         <Pressable disabled={capture.busy || !capture.images.length || (Boolean(capture.result) && !capture.result?.canonicalTitle.trim())} onPress={()=>{ if(capture.savedId) router.push(`/stock-listing/${capture.savedId}` as any); else if(capture.result) void capture.save(); else void capture.identify(); }} style={({ pressed })=>[s.button,{ backgroundColor:capture.activeNiche.color },capture.busy || pressed || !capture.images.length ? s.pressed : null]}>
           <Text style={s.buttonText}>{capture.savedId ? 'View saved inventory item' : capture.result ? 'Save this find' : 'Tell me what it is'}</Text>
