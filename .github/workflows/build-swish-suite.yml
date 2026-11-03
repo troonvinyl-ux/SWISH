@@ -68,7 +68,7 @@ jobs:
           }
           const out = [];
           for (const key of ['EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_ANON_KEY']) if (!process.env[key] && values[key]) out.push(`${key}=${values[key]}`);
-          if (out.length) fs.appendFileSync(process.env.GITHUB_ENV, out.join('\n') + '\\n', { mode: 0o600 });
+          if (out.length) fs.appendFileSync(process.env.GITHUB_ENV, out.join('\n') + '\n', { mode: 0o600 });
           console.log(`Loaded ${out.length} public Supabase setting(s) for Master Admin; values withheld.`);
           NODE
       - name: Verify public Supabase config before Master Admin prebuild
