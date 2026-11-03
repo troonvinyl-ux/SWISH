@@ -585,7 +585,7 @@ export async function updateItemMedia(
  * These images are for SWISH display/research only and must never become eBay
  * listing photos unless the seller explicitly adds them through the listing UI.
  */
-export async function savePreparedImageReferences(
+export async function saveCoinReferenceImages(
   tenantId: string,
   itemId: string,
   images: CapturedImage[],
@@ -687,7 +687,7 @@ export async function savePreparedImageReferences(
 }
 
 // Backwards-compatible name for older Coin Flipper callers.
-export const saveCoinReferenceImages = savePreparedImageReferences;
+export const savePreparedImageReferences = saveCoinReferenceImages;
 
 export async function saveIdentifiedItem(
   tenantId: string,
