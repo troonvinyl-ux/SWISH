@@ -79,6 +79,8 @@ jobs:
           test -n "${EXPO_PUBLIC_SUPABASE_URL:-}"
           test -n "${EXPO_PUBLIC_SUPABASE_ANON_KEY:-}"
           npx expo config --type public --json > /tmp/swish-master-config.json
+          test -n "${EXPO_PROJECT_ID:-}" || { echo "::error::Missing EXPO_PROJECT_ID; refusing to build an APK without OTA configuration."; exit 1; }
+          npx expo config --type public --json > /tmp/swish-master-config.json
           node - <<'NODE'
           const c = JSON.parse(require('node:fs').readFileSync('/tmp/swish-master-config.json', 'utf8'));
           if (c.extra?.supabase?.url !== process.env.EXPO_PUBLIC_SUPABASE_URL) throw new Error('Master Admin Supabase URL not embedded');
