@@ -38,6 +38,10 @@ on:
 jobs:
   build-release-apk:
     runs-on: ubuntu-latest
+    env:
+      EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
 
     steps:
       - name: Checkout repository
@@ -57,6 +61,45 @@ jobs:
 
       - name: Install dependencies
         run: bash scripts/install-dependencies.sh
+      - name: Verify public Supabase config before Master Admin prebuild
+      - name: Load public Supabase configuration from repository .env when needed
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          if (!fs.existsSync('.env')) process.exit(0);
+          const values = {};
+          for (const raw of fs.readFileSync('.env', 'utf8').split(/\r?\n/)) {
+            const line = raw.trim();
+            if (!line || line.startsWith('#')) continue;
+            const match = line.match(/^(EXPO_PUBLIC_SUPABASE_URL|EXPO_PUBLIC_SUPABASE_ANON_KEY)\s*=\s*(.*)$/);
+            if (!match) continue;
+            let value = match[2].trim();
+            if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
+            values[match[1]] = value;
+          }
+          const out = [];
+          for (const key of ['EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_ANON_KEY']) if (!process.env[key] && values[key]) out.push(`${key}=${values[key]}`);
+          if (out.length) fs.appendFileSync(process.env.GITHUB_ENV, out.join('\n') + '\n', { mode: 0o600 });
+          console.log(`Loaded ${out.length} public Supabase setting(s) for signed Master Admin; values withheld.`);
+          NODE
+        env:
+          SWISH_MASTER_ADMIN: '1'
+          EXPO_NO_DOTENV: '1'
+        run: |
+          set -euo pipefail
+          test -n "${EXPO_PUBLIC_SUPABASE_URL:-}" || { echo "::error::Missing EXPO_PUBLIC_SUPABASE_URL"; exit 1; }
+          test -n "${EXPO_PUBLIC_SUPABASE_ANON_KEY:-}" || { echo "::error::Missing EXPO_PUBLIC_SUPABASE_ANON_KEY"; exit 1; }
+          test -n "${EXPO_PROJECT_ID:-}" || { echo "::error::Missing EXPO_PROJECT_ID; refusing to build an APK without OTA configuration."; exit 1; }
+          npx expo config --type public --json > /tmp/swish-master-config.json
+          node - <<'NODE'
+          const c = JSON.parse(require('node:fs').readFileSync('/tmp/swish-master-config.json', 'utf8'));
+          if (c.extra?.supabase?.url !== process.env.EXPO_PUBLIC_SUPABASE_URL) throw new Error('Master Admin Supabase URL not embedded');
+          if (c.extra?.supabase?.anonKey !== process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) throw new Error('Master Admin Supabase anon key not embedded');
+          if (!c.updates?.url?.includes(process.env.EXPO_PROJECT_ID)) throw new Error('Master Admin EAS update URL not embedded');
+          if (!c.runtimeVersion) throw new Error('Master Admin runtime version missing');
+          if (c.updates?.requestHeaders?.['expo-channel-name'] !== 'production-default') throw new Error('Master Admin OTA channel mismatch');
+          NODE
 
       - name: Run niche isolation and Coin Flipper production tests (pre-build gate)
         # Fails the build before any Android toolchain setup if niche isolation
