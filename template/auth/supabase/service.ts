@@ -352,46 +352,35 @@ export class AuthService {
     try {
       return await safeSupabaseOperation(async (client) => {
         const { data, error } = await withTimeout(
-          client.auth.signInWithPassword({
-            email,
-            password
-          }),
+          client.auth.signInWithPassword({ email, password }),
           TIMEOUT_CONFIG.AUTH_OPERATIONS,
           'SignIn'
         );
 
         if (error) {
-          if (error.message.includes('timeout')) {
+          if (error.message?.includes('timeout')) {
             return { error: 'Sign in timeout, please retry', user: null, errorType: 'timeout' };
           }
           return { error: error.message, user: null, errorType: 'business' };
         }
 
-        if (data.user) {
-          try {
-            const authUser = await this.getCurrentUser();
-            
-            if (authUser) {
-              return { user: authUser };
-            } else {
-              return { error: 'Failed to load user profile', user: null, errorType: 'business' };
-            }
-          } catch (userError) {
-            console.warn('[Template:AuthService] Error retrieving user after sign in:', userError);
-            return { error: 'Sign in succeeded but failed to load profile', user: null, errorType: 'network' };
-          }
+        // signInWithPassword already returns the authenticated user and session.
+        // Do not perform a second getSession/network operation here: that extra
+        // read can stall the button after credentials have been accepted.
+        if (data?.user) {
+          return { user: this.mapSessionToAuthUser(data.user) };
         }
-        
-        return { user: null };
+
+        return { error: 'Sign in completed without a user session. Please retry.', user: null, errorType: 'network' };
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown signIn error';
       console.warn('[Template:AuthService] SignInWithPassword system exception:', errorMessage);
-      
+
       if (errorMessage.includes('timeout')) {
         return { error: 'Sign in timeout, please retry', user: null, errorType: 'timeout' };
       }
-      
+
       return { error: 'Sign in failed', user: null, errorType: 'network' };
     }
   }
