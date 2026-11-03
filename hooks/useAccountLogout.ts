@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useAuth, useAlert } from '@/template';
-import { logoutAccount } from '@/services/accountLogoutService';
 
 interface AccountLogoutOptions { confirmationMessage?: string }
 const defaultMessage = 'Log out to sign in with another SWISH account. Your saved inventory, watched lots and marketplace connections are kept.';
@@ -37,7 +36,7 @@ export function useAccountLogout({ confirmationMessage = defaultMessage }: Accou
     if (!alive.current || inFlight.current || authBusy.current || currentUserId.current !== expectedUserId) return;
     inFlight.current = true;
     setSigningOut(true);
-    const result = await logoutAccount(logout);
+    const result = await logout();
     if (!alive.current) return;
     if (result.error) {
       inFlight.current = false;
