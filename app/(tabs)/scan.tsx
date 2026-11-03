@@ -17,7 +17,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { useSubscription } from '@/hooks/useSubscription';
-import { resolveProductionNiche, nicheToScannerRoute } from '@/services/nicheRouting';
+import { resolveProductionNiche } from '@/services/nicheRouting';
 import { NICHE_MODULES } from '@/constants/niches';
 import { getSpecialistProfile } from '@/shared/specialistIntelligence';
 
