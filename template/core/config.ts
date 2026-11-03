@@ -106,7 +106,10 @@ export const createConfig = (options: CreateConfigOptions = {}): OnSpaceConfig =
 
   let supabaseConfig;
   if (authConfig !== false) {
-    supabaseConfig = getPublicSupabaseConfig();
+    const runtimeConfig = getPublicSupabaseConfig();
+    supabaseConfig = options.supabase?.url && options.supabase?.anonKey
+      ? { url: options.supabase.url, anonKey: options.supabase.anonKey }
+      : runtimeConfig;
     if (!supabaseConfig) {
       console.error('[Template:Config] Auth requested but public Supabase runtime configuration is missing.');
       authConfig = false;
