@@ -131,4 +131,4 @@ serve(withEdgeFunctionLogging('swish-create-checkout', async (req) => {
       status: 500,
     });
   }
-})));
+}));
