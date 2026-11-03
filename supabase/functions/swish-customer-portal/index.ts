@@ -91,4 +91,4 @@ serve(withEdgeFunctionLogging('swish-customer-portal', async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 },
     );
   }
-})))
+})));
