@@ -3214,7 +3214,7 @@ export default function SettingsScreen({ embedded = false }: { embedded?: boolea
         {(() => {
           const tierVal = (tenant as any)?.subscriptionTier ?? (tenant as any)?.subscription_tier ?? '';
           const isLifetime = tierVal === 'lifetime' || tierVal === 'professional' || tierVal === 'enterprise';
-          if (!isLifetime) return null;
+          if (!isLifetime || embedded) return null;
           const NICHE_OPTIONS = [
             { id: 'coins', label: 'Coin Flipper', icon: 'toll', color: '#F5C842', desc: 'Coins · Numismatics · Ancient' },
             { id: 'motocross', label: 'Flipper MX', icon: 'two-wheeler', color: '#FF5500', desc: 'Motocross · Enduro · Parts' },
