@@ -1,6 +1,9 @@
 name: Publish SWISH OTA Update
 
 on:
+  push:
+    branches:
+      - release/ota-antique-hotfix
   workflow_dispatch:
     inputs:
       target:
@@ -34,10 +37,11 @@ jobs:
     timeout-minutes: 20
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-      OTA_MESSAGE: ${{ inputs.message }}
+      OTA_MESSAGE: ${{ inputs.message || 'Antique Flipper scanner navigation fix' }}
+      OTA_TARGET: ${{ inputs.target || 'antiques' }}
       EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
-      SWISH_NICHE: ${{ inputs.target != 'master' && inputs.target || '' }}
-      SWISH_MASTER_ADMIN: ${{ inputs.target == 'master' && '1' || '0' }}
+      SWISH_NICHE: ${{ (inputs.target || 'antiques') != 'master' && (inputs.target || 'antiques') || '' }}
+      SWISH_MASTER_ADMIN: ${{ (inputs.target || 'antiques') == 'master' && '1' || '0' }}
       SWISH_OTA_PUBLISH: '1'
       EXPO_NO_DOTENV: '1'
     steps:
