@@ -158,16 +158,16 @@ jobs:
           BRANCH="$SWISH_CHANNEL"
           CHANNEL="$SWISH_CHANNEL"
 
-          if ! npx eas-cli@latest branch:view "$BRANCH" --non-interactive >/dev/null 2>&1; then
-            npx eas-cli@latest branch:create "$BRANCH" --non-interactive
+          if ! npx --yes eas-cli@27.2.0 branch:view "$BRANCH" --non-interactive >/dev/null 2>&1; then
+            npx --yes eas-cli@27.2.0 branch:create "$BRANCH" --non-interactive
           fi
 
-          if ! npx eas-cli@latest channel:view "$CHANNEL" --non-interactive >/dev/null 2>&1; then
-            npx eas-cli@latest channel:create "$CHANNEL" --non-interactive
+          if ! npx --yes eas-cli@27.2.0 channel:view "$CHANNEL" --non-interactive >/dev/null 2>&1; then
+            npx --yes eas-cli@27.2.0 channel:create "$CHANNEL" --non-interactive
           fi
 
-          npx eas-cli@latest channel:edit "$CHANNEL" --branch "$BRANCH" --non-interactive
+          npx --yes eas-cli@27.2.0 channel:edit "$CHANNEL" --branch "$BRANCH" --non-interactive
 
       - name: Publish app-specific update
         if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
-        run: npx eas-cli@latest update --branch "$SWISH_CHANNEL" --message "SWISH $SWISH_CHANNEL OTA update $GITHUB_SHA" --non-interactive
+        run: npx --yes eas-cli@27.2.0 update --branch "$SWISH_CHANNEL" --message "SWISH $SWISH_CHANNEL OTA update $GITHUB_SHA" --non-interactive
