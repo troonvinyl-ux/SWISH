@@ -2067,4 +2067,4 @@ The caller will use only the requested output (title or description). Do not inv
     console.error('[swish-identify v6] Identification request failed.');
     return new Response(JSON.stringify({ error: 'Identification request failed. Please retry.' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
-})))
+})));
