@@ -248,6 +248,8 @@ export async function prepareImageForAI(uri: string): Promise<string> {
 }
 
 async function compressForAI(uri: string): Promise<string> {
+  // AI-rendered references may already be data URLs; pass them through unchanged.
+  if (/^data:image\/(?:jpeg|jpg|png|webp);base64,/i.test(uri)) return uri;
   try {
     const result = await ImageManipulator.manipulateAsync(
       uri,
@@ -268,6 +270,8 @@ async function compressForAI(uri: string): Promise<string> {
 
 // ── Raw base64 fallback (no compression) ─────────────────────────────────────
 async function ensureBase64Raw(uri: string): Promise<string> {
+  const dataUrl = uri.match(/^data:image\/(?:jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=]+)$/i);
+  if (dataUrl) return uri;
   if (Platform.OS === 'web') {
     const response = await fetch(uri);
     const blob = await response.blob();
