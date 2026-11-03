@@ -4,6 +4,7 @@ import * as path from 'path';
 const serviceSource = fs.readFileSync(path.resolve(__dirname, '../service.ts'), 'utf8');
 const contextSource = fs.readFileSync(path.resolve(__dirname, '../context.tsx'), 'utf8');
 const hookSource = fs.readFileSync(path.resolve(__dirname, '../hook.tsx'), 'utf8');
+const loginSource = fs.readFileSync(path.resolve(__dirname, '../../../../app/login.tsx'), 'utf8');
 
 describe('SWISH authentication session bootstrap regressions', () => {
   test('never filters the SIGNED_IN event after a visibility change', () => {
