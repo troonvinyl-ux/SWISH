@@ -846,4 +846,4 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-sync', async (req: Request) => {
   };
   console.log(`[EbaySync] Done: ${JSON.stringify(result)}`);
   return json(result);
-})));
+}));
