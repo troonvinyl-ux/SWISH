@@ -805,4 +805,4 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-orders', async (req: Request) => 
     console.error('swish-ebay-orders unhandled error:', err.message);
     return jsonResponse({ error: 'Unable to synchronize eBay orders. Please retry.' }, 500);
   }
-})))
+})));
