@@ -68,6 +68,9 @@ on:
       - 'services/aiIdentificationService.ts'
       - 'services/islamicIdentificationService.ts'
       - '.github/workflows/niche-config-checks.yml'
+      - '.github/workflows/_niche-android.yml'
+      - '.github/workflows/build-android-apk.yml'
+      - '.github/workflows/build-niche-apk.yml'
   pull_request:
     paths:
       - 'app.config.js'
@@ -125,6 +128,9 @@ on:
       - 'services/aiIdentificationService.ts'
       - 'services/islamicIdentificationService.ts'
       - '.github/workflows/niche-config-checks.yml'
+      - '.github/workflows/_niche-android.yml'
+      - '.github/workflows/build-android-apk.yml'
+      - '.github/workflows/build-niche-apk.yml'
 
 jobs:
   niche-routing:
