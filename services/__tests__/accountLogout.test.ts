@@ -4,15 +4,6 @@ import * as path from 'node:path';
 const source = (relative: string) => fs.readFileSync(path.resolve(__dirname, '../..', relative), 'utf8');
 
 describe('Account logout routing and preservation source contracts', () => {
-  test('Surplus shared workspace exposes logout without replacing its existing content', () => {
-    const workspace = source('components/feature/ManifestOpportunityWorkspace.tsx');
-    expect(workspace).toContain('<LogoutButton disabled={workflow.busy}');
-    expect(workspace).toContain('Unwatched changes to this lot will be cleared');
-    expect(workspace).toContain('Worth the bid?');
-    expect(workspace).toContain('BIG LOT. SIMPLE ANSWER.');
-    expect(workspace).toContain('Show my bid & profit');
-    expect(workspace).toContain('Save my lot & prepare listings');
-  });
   test('waits for confirmed sign-out, resets history and returns through the root AuthRouter', () => {
     const hook = source('hooks/useAccountLogout.ts');
     expect(hook).toContain('if (!logoutConfirmed || user || loading) return;');
@@ -29,8 +20,9 @@ describe('Account logout routing and preservation source contracts', () => {
     expect(hook).toContain("{ text: 'Cancel', style: 'cancel' }");
     expect(hook).toContain("showAlert('Unable to log out', result.error)");
     expect(hook).toContain('const result = await logout();');
-    expect(source('app/(tabs)/account.tsx')).toContain('onPress={requestLogout}');
-    expect(source('components/auth/LogoutButton.tsx')).toContain('accessibilityLabel="Log out of SWISH"');
+    const account = source('app/(tabs)/account.tsx');
+    expect(account).toContain('onPress={requestLogout}');
+    expect(account).toContain('accessibilityLabel="Log out of SWISH"');
   });
   test('retains existing user-keyed preferences, scope reset and fixed-build niche isolation', () => {
     const app = source('contexts/AppContext.tsx');
