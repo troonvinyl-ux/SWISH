@@ -479,4 +479,4 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-messages', async (req: Request) =
     console.error('[SWISH] swish-ebay-messages request failed.', { route });
     return jsonResponse({ error: 'Unable to complete the eBay messages request. Please retry or contact support.' }, 500);
   }
-})));
+}));
