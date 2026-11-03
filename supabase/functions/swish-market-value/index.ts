@@ -44,6 +44,7 @@
 // distinguished as verified sold evidence. Browse/Gemini remain accurately
 // labelled as asking prices / AI inference.
 
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { decryptCredentials, encryptCredentials } from '../_shared/credentialCrypto.ts';
@@ -1124,7 +1125,7 @@ function computeValuation(params: {
 // ══════════════════════════════════════════════════════════════════════════════
 // MAIN HANDLER
 // ══════════════════════════════════════════════════════════════════════════════
-Deno.serve(async (req: Request) => {
+Deno.serve(withEdgeFunctionLogging('swish-market-value', async (req: Request) => {
   try {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
@@ -1640,4 +1641,4 @@ Deno.serve(async (req: Request) => {
     console.error('[SWISH Market v8] Unhandled valuation error.');
     return jsonResponse({ error: 'Market valuation failed. Please retry.' }, 500);
   }
-});
+})))
