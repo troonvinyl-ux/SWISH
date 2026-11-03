@@ -1,13 +1,10 @@
 // Server-only adapter over the generated canonical registry; no parallel niche list.
 import modules from './niche-modules.json' with { type: 'json' };
 
-// Repricing is a write operation: accept only current canonical specialist IDs.
-// Legacy IDs remain readable elsewhere for migration, but must not authorize
-// server-side price changes after a niche has moved to its canonical identity.
 export const REPRICE_NICHE_SPECIALISTS: Record<string, readonly string[]> = Object.fromEntries(
   Object.entries(modules.products).map(([nicheId, product]) => [
     nicheId,
-    [...product.specialists],
+    [...product.specialists, ...(product.legacySpecialists ?? [])],
   ]),
 );
 

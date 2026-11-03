@@ -8,7 +8,7 @@
 // Bike subscriber   → Bike Flipper find/identify flow
 // Fashion subscriber → Threads Flip identify flow
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,7 +17,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { useSubscription } from '@/hooks/useSubscription';
-import { resolveProductionNiche } from '@/services/nicheRouting';
+import { resolveProductionNiche, nicheToScannerRoute } from '@/services/nicheRouting';
 import { NICHE_MODULES } from '@/constants/niches';
 import { getSpecialistProfile } from '@/shared/specialistIntelligence';
 
@@ -169,7 +169,7 @@ const NICHE_CAPTURE: Record<NicheProduct, NicheCaptureConfig> = {
     color: '#D97706',
     bgColor: '#0B0907',
     dimColor: '#2A1808',
-    route: '/antique-capture',
+    route: '/capture',
     captureOptions: [
       { icon: 'photo-camera', label: 'Main View', desc: 'Full object, straight-on — required' },
       { icon: 'photo-camera', label: 'Reverse / Underside', desc: 'Base, joints, construction and labels' },
@@ -281,16 +281,17 @@ export default function ScanScreen() {
     captureOptions: activeNiche.captureInstructions.map(desc => ({ icon: 'photo-camera', label: 'Capture guidance', desc })),
   } : NICHE_CAPTURE[product];
 
-  // Keep the Scan tab mounted as a normal tab destination. Automatically
-  // replacing it with a root-stack scanner removes the tab history, so Android's
-  // hardware Back can exit the app instead of returning to the tab/footer.
-  // The scanner is opened only after an explicit user action below.
+  // The centre Scan tab is a one-tap action, not a second landing page.
+  // Replace this route immediately with the active product's actual capture screen.
+  useEffect(() => {
+    router.replace(nicheToScannerRoute(selectedNicheId) as any);
+  }, [selectedNicheId, router]);
 
   const handleOpenNiche = () => {
-    // Push, never replace: retain the Scan tab in navigation history so the
-    // Android hardware Back button returns to the tab bar instead of exiting.
+    // The Scan tab is an action, not a second landing page. Open the active
+    // niche directly in capture mode; keep other niche routes unchanged.
     if (product === 'coins') {
-      router.push('/coin-flipper?tab=capture' as any);
+      router.replace('/coin-flipper?tab=capture' as any);
       return;
     }
     router.push(config.route as any);

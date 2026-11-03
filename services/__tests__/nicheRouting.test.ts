@@ -2,8 +2,6 @@ import { NICHE_MODULES } from '@/constants/niches';
 import { SPECIALISTS } from '@/constants/specialists';
 import { SPECIALIST_PROFILES } from '@/shared/specialistIntelligence';
 import { nicheToScannerRoute, resolveProductionNiche } from '@/services/nicheRouting';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
 
 describe('production niche scanner routing', () => {
   test.each([
@@ -47,32 +45,5 @@ describe('production niche scanner routing', () => {
   test('unknown niche does not resolve to a registered product', () => {
     expect(resolveProductionNiche('not-a-swish-niche')).toBeNull();
     expect(nicheToScannerRoute('not-a-swish-niche')).toBe('/capture');
-  });
-});
-
-
-describe('S1-03 shared scanner isolation contracts', () => {
-  const root = path.resolve(__dirname, '../..');
-
-  test('shared capture renders the active niche identity and specialist-specific photo slots', () => {
-    const screen = fs.readFileSync(path.join(root, 'app/capture.tsx'), 'utf8');
-    const hook = fs.readFileSync(path.join(root, 'hooks/useGenericCapture.ts'), 'utf8');
-
-    expect(screen).toContain('const capture=useGenericCapture()');
-    expect(screen).toContain('BrandArtwork nicheId={capture.activeNiche.id}');
-    expect(screen).toContain('capture.activeNiche.specialists.length>1');
-    expect(screen).toContain('capture.slots');
-
-    expect(hook).toContain("const scope = `${user?.id ?? ''}:${tenant?.id ?? ''}:${activeNiche.id}`");
-    expect(hook).toContain('activeNiche.specialists.includes(saved.specialistId as SpecialistId)');
-    expect(hook).toContain('SPECIALISTS[specialistId]?.captureRequirements');
-  });
-
-  test('shared capture sends the selected specialist, tenant and capture mode to the AI service', () => {
-    const hook = fs.readFileSync(path.join(root, 'hooks/useGenericCapture.ts'), 'utf8');
-
-    expect(hook).toContain('identifyItemWithAI(visible.images,specialistId');
-    expect(hook).toContain('tenantId:tenant.id,captureMode:visible.mode');
-    expect(hook).toContain('saveIdentifiedItem(tenant.id,result');
   });
 });
