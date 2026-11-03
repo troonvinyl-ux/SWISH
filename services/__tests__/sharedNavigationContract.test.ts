@@ -19,7 +19,7 @@ describe('shared five-area niche navigation contract', () => {
   });
 
   test('niche home and scanner retain their own brand accent', () => {
-    expect(layout).toContain('NICHES[effectiveNicheId as keyof typeof NICHES].color');
+    expect(layout).toContain('NICHES[resolvedNicheId]?.color');
     expect(layout).toContain("nicheHome.isAntiques\n    ? '#D8AD52'");
     expect(layout).toContain('backgroundColor: nicheAccent');
   });
