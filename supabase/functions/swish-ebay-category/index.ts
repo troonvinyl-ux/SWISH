@@ -1176,4 +1176,4 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-category', async (req: Request): 
   }
 
   return json({ success: false, error: `Unknown route: ${route}` }, 400);
-})));
+}));
