@@ -674,6 +674,9 @@ export async function saveCoinReferenceImages(
       ? attributes._prepared_image_references as Record<string, string>
       : existing;
     const mergedReferences = { ...existing, ...existingPrepared, ...urls };
+    // Keep the legacy Coin Flipper write contract intact:
+    // attributes: { ...attributes, _coin_reference_images: { ...existing, ...urls } }
+    // The shared alias is additive; existing callers and saved metadata remain compatible.
     const legacyAttributes = { ...attributes, _coin_reference_images: { ...existing, ...urls } };
     const { error: updateError } = await supabase
       .from('items')
