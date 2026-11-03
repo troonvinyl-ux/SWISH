@@ -1715,7 +1715,7 @@ Deno.serve(withEdgeFunctionLogging('swish-islamic-identify', async (req: Request
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }
-})));
+}));;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NEXT ACTIONS GENERATOR
