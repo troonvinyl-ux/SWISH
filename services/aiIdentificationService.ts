@@ -668,12 +668,6 @@ export async function saveCoinReferenceImages(
       !Array.isArray(attributes._coin_reference_images)
       ? attributes._coin_reference_images as Record<string, string>
       : {};
-    const existingPrepared = attributes._prepared_image_references &&
-      typeof attributes._prepared_image_references === 'object' &&
-      !Array.isArray(attributes._prepared_image_references)
-      ? attributes._prepared_image_references as Record<string, string>
-      : existing;
-    const mergedReferences = { ...existing, ...existingPrepared, ...urls };
     // The legacy key remains the canonical persisted reference map. Shared scanners
     // read this same map, so no second metadata field or schema migration is needed.
     const { error: updateError } = await supabase
