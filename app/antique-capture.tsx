@@ -16,7 +16,6 @@ import { CameraView, useCameraPermissions, type CameraType } from 'expo-camera';
 import { Image } from 'expo-image';
 import { useGenericCapture } from '@/hooks/useGenericCapture';
 import { SpecialistReview } from '@/components/feature/SpecialistReview';
-import { PhotoQualityReview } from '@/components/feature/PhotoQualityReview';
 import { Colors, Spacing, Typography, Radius } from '@/constants/theme';
 
 const GOLD = Colors.gold;
@@ -176,7 +175,6 @@ export default function AntiqueCaptureScreen() {
               </View>
             ) : null}
           </View>
-          {activeImage?.photoQuality ? <PhotoQualityReview quality={activeImage.photoQuality} /> : null}
           <View style={styles.captureControls}>
             <Pressable
               disabled={capture.busy || Boolean(capture.savedId) || !activeSlot}
