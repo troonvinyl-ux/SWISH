@@ -71,4 +71,4 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-listing-status', async req => {
     console.error('[eBay listing status] Request failed; no credential material logged');
     return response({error:'Unable to check eBay listing status. Existing unverified statuses were preserved.'},500);
   }
-})));
+}));
