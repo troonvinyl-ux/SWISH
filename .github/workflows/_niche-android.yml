@@ -82,6 +82,9 @@ jobs:
           if (router?.[1]?.root !== `.swish-build/${product.id}/app`) throw new Error('Router isolation root mismatch');
           if (config.extra?.supabase?.url !== process.env.EXPO_PUBLIC_SUPABASE_URL) throw new Error('Supabase URL was not embedded in Expo runtime config');
           if (config.extra?.supabase?.anonKey !== process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) throw new Error('Supabase anon key was not embedded in Expo runtime config');
+          if (!config.updates?.url?.includes(process.env.EXPO_PROJECT_ID)) throw new Error('EAS update URL was not embedded');
+          if (!config.runtimeVersion) throw new Error('Runtime version is missing; OTA compatibility cannot be established');
+          if (config.updates?.requestHeaders?.['expo-channel-name'] !== `production-${process.env.SWISH_NICHE}`) throw new Error('Niche OTA channel does not match the installed app');
           NODE
       - name: Install Android 16 SDK platform and Build Tools
         shell: bash
