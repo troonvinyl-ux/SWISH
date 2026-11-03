@@ -68,6 +68,6 @@ module.exports = ({ config }) => {
     scheme: niche.scheme,
     ios: { ...config.ios, bundleIdentifier: niche.iosBundleIdentifier },
     android: { ...config.android, package: niche.androidPackage },
-    extra: { ...(otaConfig.extra || config.extra || {}), swishNicheId: niche.id, swishAppScheme: niche.scheme },
+    extra: { ...(baseConfig.extra || {}), swishNicheId: niche.id, swishAppScheme: niche.scheme },
   };
 };
