@@ -9,6 +9,7 @@
 //
 // Security: JWT + tenant membership verified before any eBay operation.
 
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
@@ -432,7 +433,7 @@ async function handleGetMessageBody(
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withEdgeFunctionLogging('swish-ebay-messages', async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
 
@@ -478,4 +479,4 @@ Deno.serve(async (req: Request) => {
     console.error('[SWISH] swish-ebay-messages request failed.', { route });
     return jsonResponse({ error: 'Unable to complete the eBay messages request. Please retry or contact support.' }, 500);
   }
-});
+})))
