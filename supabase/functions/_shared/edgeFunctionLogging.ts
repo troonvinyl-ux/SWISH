@@ -66,6 +66,7 @@ export function withEdgeFunctionLogging(functionName: string, handler: Handler):
     try {
       const response = await handler(request);
       statusCode = response.status;
+      if (statusCode >= 400) errorCode = `HTTP_${statusCode}`;
       return response;
     } catch (error) {
       errorCode = error instanceof Error
