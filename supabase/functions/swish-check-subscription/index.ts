@@ -30,4 +30,4 @@ Deno.serve(withEdgeFunctionLogging('swish-check-subscription', async (req:Reques
     console.error('[swish-check-subscription] Verified entitlement refresh failed.');
     return nicheAccessResponse(error) ?? json({ error:'Subscription status could not be checked. Please retry.' },503);
   }
-})))
+})));
