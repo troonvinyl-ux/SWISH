@@ -369,7 +369,7 @@ export default function ScanScreen() {
         </View>
         <View style={s.quickLinks}>
           {[
-            { icon: 'fact-check', label: 'Specialist Evidence & Buying Review', route: '/capture' },
+            { icon: 'fact-check', label: 'Specialist Evidence & Buying Review', route: config.route },
             { icon: 'inventory-2', label: 'My Inventory', route: '/(tabs)/inventory' },
             { icon: 'receipt-long', label: 'My Listings', route: '/(tabs)/listings' },
             { icon: 'savings', label: 'Should I Buy This?', route: '/buy-decision' },
