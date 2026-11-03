@@ -2,6 +2,9 @@ jest.mock('@supabase/supabase-js', () => ({
   createClient: jest.fn(() => ({ auth: {} })),
 }));
 
+jest.mock('expo-virtual-env', () => ({ env: process.env }), { virtual: true });
+jest.mock('expo/virtual/env', () => ({ env: process.env }), { virtual: true });
+
 jest.mock('expo-constants', () => ({
   expoConfig: {
     extra: {
@@ -19,7 +22,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   removeItem: jest.fn(),
 }));
 
-describe('Supabase client OTA runtime configuration', () => {
+describe('OnSpace shared client OTA runtime configuration', () => {
   const originalUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
   const originalAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
