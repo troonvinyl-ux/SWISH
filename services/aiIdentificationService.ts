@@ -674,10 +674,11 @@ export async function saveCoinReferenceImages(
       ? attributes._prepared_image_references as Record<string, string>
       : existing;
     const mergedReferences = { ...existing, ...existingPrepared, ...urls };
+    const legacyAttributes = { ...attributes, _coin_reference_images: { ...existing, ...urls } };
     const { error: updateError } = await supabase
       .from('items')
       .update({
-        attributes: { ...attributes, _coin_reference_images: { ...existing, ...urls }, _prepared_image_references: mergedReferences },
+        attributes: { ...legacyAttributes, _prepared_image_references: mergedReferences },
         updated_at: new Date().toISOString(),
       })
       .eq('id', itemId)
