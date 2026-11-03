@@ -68,11 +68,12 @@ export default function TabLayout() {
   const nicheHome = useNicheHomeTab();
   const { activeNicheId, fixedNicheId } = useApp();
   const effectiveNicheId = fixedNicheId ?? activeNicheId;
-  const isThreadsFlip = effectiveNicheId === 'clothing';
+  const resolvedNicheId = resolveProductionNiche(effectiveNicheId);
+  const isThreadsFlip = resolvedNicheId === 'clothing';
   const nicheAccent = nicheHome.isAntiques
     ? '#D8AD52'
-    : effectiveNicheId && NICHES[effectiveNicheId as keyof typeof NICHES]?.color
-      ? NICHES[effectiveNicheId as keyof typeof NICHES].color
+    : resolvedNicheId
+      ? NICHES[resolvedNicheId]?.color ?? Colors.primary
       : Colors.primary;
   const threads = { background: '#0C080C', surface: '#160E16', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5' };
 
