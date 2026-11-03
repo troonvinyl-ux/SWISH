@@ -1,4 +1,7 @@
 import { NICHE_MODULES, type ProductionNicheId } from '@/constants/niches';
+import moduleRegistry from '../niche-modules.json';
+
+const ADMIN_ONLY_ROUTES = new Set((moduleRegistry.adminOnlyRoutes ?? []).map(route => route.replace(/\.tsx$/, '')));
 
 export type ProductEntryRoute = `/entry/${string}`;
 
@@ -54,7 +57,7 @@ export function isRouteAllowedForBuild(pathname: string, fixedNiche: string | nu
   const niche = resolveProductionNiche(fixedNiche);
   if (!niche) return false;
   const route = pathname.split('?')[0].replace(/^\//, '').replace(/\/$/, '');
-  if (['niche-select', 'master-admin'].includes(route)) return false;
+  if (['niche-select', 'master-admin'].includes(route) || ADMIN_ONLY_ROUTES.has(route)) return false;
   for (const [id, config] of Object.entries(NICHE_MODULES)) {
     const dedicated = [config.entry, ...config.dedicatedRoutes].map(file => file.replace(/\.tsx$/, ''));
     if (dedicated.includes(route) && id !== niche) return false;
