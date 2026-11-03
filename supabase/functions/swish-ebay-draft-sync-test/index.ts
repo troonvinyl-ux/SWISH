@@ -547,4 +547,4 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-draft-sync-test', async (request:
     console.error('[SWISH Draft Round-Trip] Request failed:', String(error?.message ?? 'unknown').slice(0, 400));
     return json({ error: String(error?.message ?? 'Draft test failed.').slice(0, 500) }, 400);
   }
-})));
+}));
