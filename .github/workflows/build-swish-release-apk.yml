@@ -38,6 +38,9 @@ on:
 jobs:
   build-release-apk:
     runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
 
     steps:
       - name: Checkout repository
@@ -57,6 +60,20 @@ jobs:
 
       - name: Install dependencies
         run: bash scripts/install-dependencies.sh
+      - name: Verify public Supabase config before Master Admin prebuild
+        env:
+          SWISH_MASTER_ADMIN: '1'
+          EXPO_NO_DOTENV: '1'
+        run: |
+          set -euo pipefail
+          test -n "${EXPO_PUBLIC_SUPABASE_URL:-}" || { echo "::error::Missing EXPO_PUBLIC_SUPABASE_URL"; exit 1; }
+          test -n "${EXPO_PUBLIC_SUPABASE_ANON_KEY:-}" || { echo "::error::Missing EXPO_PUBLIC_SUPABASE_ANON_KEY"; exit 1; }
+          npx expo config --type public --json > /tmp/swish-master-config.json
+          node - <<'NODE'
+          const c = JSON.parse(require('node:fs').readFileSync('/tmp/swish-master-config.json', 'utf8'));
+          if (c.extra?.supabase?.url !== process.env.EXPO_PUBLIC_SUPABASE_URL) throw new Error('Master Admin Supabase URL not embedded');
+          if (c.extra?.supabase?.anonKey !== process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) throw new Error('Master Admin Supabase anon key not embedded');
+          NODE
 
       - name: Run niche isolation and Coin Flipper production tests (pre-build gate)
         # Fails the build before any Android toolchain setup if niche isolation
