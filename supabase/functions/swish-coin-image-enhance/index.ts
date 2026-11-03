@@ -94,14 +94,14 @@ Deno.serve(async (req) => {
     });
 
     if (!response.ok) {
-      console.error('[swish-object-image-enhance] model request failed', response.status);
+      console.error('[swish-coin-image-enhance] model request failed', response.status);
       return jsonResponse({ error: 'AI image enhancement is temporarily unavailable. The original photo is safe.', code: 'MODEL_UNAVAILABLE' }, 502);
     }
 
     const payload = await response.json();
     const enhancedImage = extractImageUrl(payload);
     if (!enhancedImage) {
-      console.warn('[swish-object-image-enhance] model response contained no image output');
+      console.warn('[swish-coin-image-enhance] model response contained no image output');
       return jsonResponse({ error: 'The configured AI model did not return an edited image. The original photo is unchanged.', code: 'NO_IMAGE_OUTPUT' }, 502);
     }
 
@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
       warning: 'AI-rendered reference only. Always use the original photo for eBay listings and final attribution.',
     });
   } catch (error) {
-    console.error('[swish-object-image-enhance] request failed.');
+    console.error('[swish-coin-image-enhance] request failed.');
     return jsonResponse({ error: 'Image enhancement failed safely. The original photo is unchanged.' }, 500);
   }
 });
