@@ -247,7 +247,7 @@ export async function prepareImageForAI(uri: string): Promise<string> {
   return uri;
 }
 
-async async function compressForAI(uri: string): Promise<string> {
+async function compressForAI(uri: string): Promise<string> {
   // AI-rendered references may already be data URLs; pass them through unchanged.
   if (/^data:image\/(?:jpeg|jpg|png|webp);base64,/i.test(uri)) return uri;
   try {
