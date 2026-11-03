@@ -52,12 +52,17 @@ export function withEdgeFunctionLogging(functionName: string, handler: Handler):
     let errorCode: string | null = null;
 
     try {
-      // Read only non-sensitive routing identifiers from a clone; original body remains untouched.
-      const body = await request.clone().json().catch(() => null) as Record<string, unknown> | null;
-      if (body && typeof body === 'object') {
-        tenantId = safeUuid(body.tenantId ?? body.tenant_id);
-        const rawNiche = body.nicheId ?? body.niche_id ?? body.activeNicheId;
-        if (typeof rawNiche === 'string' && rawNiche.length <= 80) nicheId = rawNiche;
+      // Parse only small, explicitly JSON requests. Never buffer multipart/video/image uploads.
+      const contentType = request.headers.get('content-type')?.toLowerCase() ?? '';
+      const contentLength = Number(request.headers.get('content-length') ?? '0');
+      if (contentType.includes('application/json') && Number.isFinite(contentLength)
+        && contentLength > 0 && contentLength <= 64 * 1024) {
+        const body = await request.clone().json().catch(() => null) as Record<string, unknown> | null;
+        if (body && typeof body === 'object') {
+          tenantId = safeUuid(body.tenantId ?? body.tenant_id);
+          const rawNiche = body.nicheId ?? body.niche_id ?? body.activeNicheId;
+          if (typeof rawNiche === 'string' && rawNiche.length <= 80) nicheId = rawNiche;
+        }
       }
     } catch {
       // Telemetry must never prevent the business handler from running.
