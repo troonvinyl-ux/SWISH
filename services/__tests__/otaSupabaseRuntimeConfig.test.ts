@@ -1,3 +1,5 @@
+jest.mock('expo/virtual/env', () => ({ env: process.env }), { virtual: true });
+
 jest.mock('@supabase/supabase-js', () => ({
   createClient: jest.fn(() => ({ auth: {} })),
 }));
