@@ -1,6 +1,28 @@
 import { NICHE_MODULES, type ProductionNicheId } from '@/constants/niches';
+import moduleRegistry from '../niche-modules.json';
+
+const ADMIN_ONLY_ROUTES = new Set((moduleRegistry.adminOnlyRoutes ?? []).map(route => route.replace(/\.tsx$/, '')));
 
 export type ProductEntryRoute = `/entry/${string}`;
+
+/** Resolve a branded installation from its immutable native package identity. */
+export function resolveNicheFromNativeAppId(nativeAppId: string | null | undefined): ProductionNicheId | null {
+  if (typeof nativeAppId !== 'string' || !nativeAppId.trim()) return null;
+  const appId = nativeAppId.trim();
+  for (const [niche, config] of Object.entries(NICHE_MODULES)) {
+    if (config.androidPackage === appId || config.iosBundleIdentifier === appId) return niche as ProductionNicheId;
+  }
+  return null;
+}
+
+/** Resolve a branded installation from its native deep-link scheme. */
+export function resolveNicheFromNativeAppScheme(nativeScheme: string | string[] | null | undefined): ProductionNicheId | null {
+  const schemes = (Array.isArray(nativeScheme) ? nativeScheme : [nativeScheme]).filter((value): value is string => typeof value === 'string');
+  for (const [niche, config] of Object.entries(NICHE_MODULES)) {
+    if (schemes.includes(config.scheme)) return niche as ProductionNicheId;
+  }
+  return null;
+}
 
 /** Exact, registered aliases only. Never classify an unknown ID by substring. */
 export function resolveProductionNiche(value: string | null | undefined): ProductionNicheId | null {
@@ -44,7 +66,7 @@ export function isRouteAllowedForBuild(pathname: string, fixedNiche: string | nu
   const niche = resolveProductionNiche(fixedNiche);
   if (!niche) return false;
   const route = pathname.split('?')[0].replace(/^\//, '').replace(/\/$/, '');
-  if (['niche-select', 'master-admin'].includes(route)) return false;
+  if (['niche-select', 'master-admin'].includes(route) || ADMIN_ONLY_ROUTES.has(route)) return false;
   for (const [id, config] of Object.entries(NICHE_MODULES)) {
     const dedicated = [config.entry, ...config.dedicatedRoutes].map(file => file.replace(/\.tsx$/, ''));
     if (dedicated.includes(route) && id !== niche) return false;

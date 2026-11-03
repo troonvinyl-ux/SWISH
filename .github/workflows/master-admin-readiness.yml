@@ -11,6 +11,10 @@ on:
     paths:
       - 'app/master-admin.tsx'
       - 'app/production-control.tsx'
+      - 'contexts/AppContext.tsx'
+      - 'niche-modules.json'
+      - 'scripts/prepare-niche-routes.js'
+      - 'scripts/verify-niche-module.js'
       - 'app.json'
       - 'app.config.js'
       - '.github/workflows/publish-ota-update.yml'
@@ -35,6 +39,10 @@ on:
     paths:
       - 'app/master-admin.tsx'
       - 'app/production-control.tsx'
+      - 'contexts/AppContext.tsx'
+      - 'niche-modules.json'
+      - 'scripts/prepare-niche-routes.js'
+      - 'scripts/verify-niche-module.js'
       - 'app.json'
       - 'app.config.js'
       - '.github/workflows/publish-ota-update.yml'
@@ -180,6 +188,10 @@ jobs:
         env:
           SWISH_NICHE: ${{ matrix.niche }}
         run: npx expo config --type public
+      - name: Verify exact per-niche route and module boundary
+        env:
+          SWISH_NICHE: ${{ matrix.niche }}
+        run: node scripts/verify-niche-module.js
       - name: Generate isolated Android Gradle project
         env:
           SWISH_NICHE: ${{ matrix.niche }}
