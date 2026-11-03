@@ -305,4 +305,4 @@ Return an empty array if no issues found. Maximum 3 warnings.`,
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-})));
+}));
