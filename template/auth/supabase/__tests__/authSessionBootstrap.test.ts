@@ -24,4 +24,19 @@ describe('SWISH authentication session bootstrap regressions', () => {
     expect(hookSource).not.toContain('Auth function not enabled, please check configuration');
     expect(hookSource).toContain('authService.signInWithPassword(email, password)');
   });
+  test('commits the returned authenticated user to AuthProvider without waiting for an SDK event', () => {
+    expect(contextSource).toContain('setAuthenticatedUser: (user: AuthUser) => void');
+    expect(contextSource).toContain('updateState({ user, loading: false, initialized: true })');
+    expect(hookSource).toContain('if (result?.user) context.setAuthenticatedUser(result.user)');
+  });
+
+  test('password sign-in uses the user returned by signInWithPassword without a second session fetch', () => {
+    const start = serviceSource.indexOf('async signInWithPassword(email: string, password: string)');
+    const end = serviceSource.indexOf('async logout()', start);
+    const method = serviceSource.slice(start, end);
+    expect(method).toContain('this.mapSessionToAuthUser(data.user)');
+    expect(method).not.toContain('this.getCurrentUser()');
+    expect(method).not.toContain('client.auth.getSession()');
+  });
+
 });
