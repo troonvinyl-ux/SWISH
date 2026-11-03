@@ -17,7 +17,7 @@ const MAX_IMAGE_DATA_LENGTH = 8_000_000;
 
 export async function generateSharedObjectImageReference(uri: string): Promise<PreparedObjectImageReference> {
   if (typeof uri !== 'string' || !uri.trim()) {
-    throw new Error('Capture an object photo before creating an AI reference.');
+    throw new Error('Capture a coin photo or object photo before creating an AI reference.');
   }
 
   // Generate a resized JPEG copy on either platform. Request base64 directly
@@ -66,7 +66,7 @@ export async function generateSharedObjectImageReference(uri: string): Promise<P
   const enhancedUri = data?.enhancedImage;
   if (typeof enhancedUri !== 'string' ||
       !/^(data:image\/(?:png|jpe?g|webp);base64,[A-Za-z0-9+/=]+$|https:\/\/\S+$)/i.test(enhancedUri)) {
-    throw new Error('AI returned no usable prepared image. The original photo is unchanged.');
+    throw new Error('AI returned no usable image reference. The original photo is unchanged.');
   }
   return {
     enhancedUri,
