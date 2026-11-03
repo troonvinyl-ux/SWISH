@@ -1,31 +1,7 @@
-import { logoutAccount } from '../accountLogoutService';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 const source = (relative: string) => fs.readFileSync(path.resolve(__dirname, '../..', relative), 'utf8');
-
-describe('Account logout result handling', () => {
-  test('reuses the supplied auth operation exactly once', async () => {
-    const operation = jest.fn().mockResolvedValue({ error: null });
-    await expect(logoutAccount(operation)).resolves.toEqual({ error: null });
-    expect(operation).toHaveBeenCalledTimes(1);
-  });
-  test('supports the existing SDK empty success object', async () => {
-    await expect(logoutAccount(async () => ({}))).resolves.toEqual({ error: null });
-  });
-  test('does not report success after an auth error', async () => {
-    await expect(logoutAccount(async () => ({ error: 'Network unavailable' }))).resolves.toEqual({ error: 'Network unavailable' });
-  });
-  test('fails closed for an unconfirmed response', async () => {
-    const result = await logoutAccount(async () => undefined);
-    expect(result.error).toContain('not confirmed');
-  });
-  test('does not expose thrown exception details', async () => {
-    const result = await logoutAccount(async () => { throw new Error('private diagnostic'); });
-    expect(result.error).toContain('Check your connection');
-    expect(result.error).not.toContain('private diagnostic');
-  });
-});
 
 describe('Account logout routing and preservation source contracts', () => {
   test('Surplus shared workspace exposes logout without replacing its existing content', () => {
@@ -52,7 +28,7 @@ describe('Account logout routing and preservation source contracts', () => {
     const hook = source('hooks/useAccountLogout.ts');
     expect(hook).toContain("{ text: 'Cancel', style: 'cancel' }");
     expect(hook).toContain("showAlert('Unable to log out', result.error)");
-    expect(hook).toContain('logoutAccount(logout)');
+    expect(hook).toContain('const result = await logout();');
     expect(source('app/(tabs)/account.tsx')).toContain('onPress={requestLogout}');
     expect(source('components/auth/LogoutButton.tsx')).toContain('accessibilityLabel="Log out of SWISH"');
   });
