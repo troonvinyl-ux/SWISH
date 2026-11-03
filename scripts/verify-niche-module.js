@@ -25,7 +25,6 @@ const admin = new Set(registry.adminOnlyRoutes);
 for (const route of [...shared, ...admin]) {
   if (routeOwners.has(route) || (shared.has(route) && admin.has(route))) throw new Error('Conflicting route ownership: ' + route);
 }
-const classified = new Set([...shared, ...admin, ...routeOwners.keys()]);
 const generated = path.join(root, '.swish-build', niche, 'app');
 const allowed = new Set([...shared, product.entry, product.home, ...product.dedicatedRoutes].filter(Boolean));
 const actual = new Set();
