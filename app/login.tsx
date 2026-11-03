@@ -49,15 +49,13 @@ export default function LoginScreen() {
       return;
     }
     const { error, user } = await signInWithPassword(email.trim().toLowerCase(), password);
-    if (error) {
-      showAlert('Login Failed', error, [{ text: 'OK', style: 'destructive' }]);
+    if (error || !user) {
+      showAlert('Login Failed', error || 'Authentication returned no signed-in user. Please retry.', [{ text: 'OK', style: 'destructive' }]);
       return;
     }
-    if (user) {
-      // This screen is outside AuthRouter. Navigate here after confirmed login;
-      // the home route then performs tenant/niche routing.
-      router.replace('/');
-    }
+    // This screen is outside AuthRouter. Navigate here after confirmed login;
+    // the home route then performs tenant/niche routing.
+    router.replace('/');
   }, [email, password, isValidEmail, signInWithPassword, showAlert, router]);
 
   // ── REGISTER STEP 1: Send OTP ─────────────────────────────────────────
@@ -90,15 +88,13 @@ export default function LoginScreen() {
       return;
     }
     const { error, user } = await verifyOTPAndLogin(email.trim().toLowerCase(), otp, { password });
-    if (error) {
-      showAlert('Verification Failed', error, [{ text: 'OK', style: 'destructive' }]);
+    if (error || !user) {
+      showAlert('Verification Failed', error || 'Verification returned no signed-in user. Please retry.', [{ text: 'OK', style: 'destructive' }]);
       return;
     }
-    if (user) {
-      // The login screen is not wrapped by AuthRouter, so complete navigation
-      // explicitly once OTP verification has returned an authenticated user.
-      router.replace('/');
-    }
+    // The login screen is not wrapped by AuthRouter, so complete navigation
+    // explicitly once OTP verification has returned an authenticated user.
+    router.replace('/');
   }, [email, otp, password, verifyOTPAndLogin, showAlert, router]);
 
   const handleResendOTP = useCallback(async () => {
