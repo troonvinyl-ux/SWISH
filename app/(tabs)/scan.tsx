@@ -8,7 +8,7 @@
 // Bike subscriber   → Bike Flipper find/identify flow
 // Fashion subscriber → Threads Flip identify flow
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,7 +17,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { useSubscription } from '@/hooks/useSubscription';
-import { resolveProductionNiche, nicheToScannerRoute } from '@/services/nicheRouting';
+import { resolveProductionNiche } from '@/services/nicheRouting';
 import { NICHE_MODULES } from '@/constants/niches';
 import { getSpecialistProfile } from '@/shared/specialistIntelligence';
 
@@ -281,17 +281,11 @@ export default function ScanScreen() {
     captureOptions: activeNiche.captureInstructions.map(desc => ({ icon: 'photo-camera', label: 'Capture guidance', desc })),
   } : NICHE_CAPTURE[product];
 
-  // The centre Scan tab is a one-tap action, not a second landing page.
-  // Replace this route immediately with the active product's actual capture screen.
-  useEffect(() => {
-    router.replace(nicheToScannerRoute(selectedNicheId) as any);
-  }, [selectedNicheId, router]);
-
   const handleOpenNiche = () => {
     // The Scan tab is an action, not a second landing page. Open the active
     // niche directly in capture mode; keep other niche routes unchanged.
     if (product === 'coins') {
-      router.replace('/coin-flipper?tab=capture' as any);
+      router.push('/coin-flipper?tab=capture' as any);
       return;
     }
     router.push(config.route as any);
