@@ -2,6 +2,16 @@ import { NICHE_MODULES, type ProductionNicheId } from '@/constants/niches';
 
 export type ProductEntryRoute = `/entry/${string}`;
 
+/** Resolve a branded installation from its immutable native package identity. */
+export function resolveNicheFromNativeAppId(nativeAppId: string | null | undefined): ProductionNicheId | null {
+  if (typeof nativeAppId !== 'string' || !nativeAppId.trim()) return null;
+  const appId = nativeAppId.trim();
+  for (const [niche, config] of Object.entries(NICHE_MODULES)) {
+    if (config.androidPackage === appId || config.iosBundleIdentifier === appId) return niche as ProductionNicheId;
+  }
+  return null;
+}
+
 /** Exact, registered aliases only. Never classify an unknown ID by substring. */
 export function resolveProductionNiche(value: string | null | undefined): ProductionNicheId | null {
   if (typeof value !== 'string') return null;
