@@ -954,7 +954,7 @@ function html(): string {
 </html>`;
 }
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withEdgeFunctionLogging('swish-privacy-policy', async (req: Request) => {
   // Allow public GET requests — no auth required
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -978,4 +978,4 @@ Deno.serve(async (req: Request) => {
       'Access-Control-Allow-Origin': '*',
     },
   });
-});
+})))
