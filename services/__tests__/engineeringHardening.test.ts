@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { NICHE_MODULES, PRODUCTION_NICHE_IDS, NICHES } from '@/constants/niches';
-import { resolveProductionNiche, resolveNicheFromNativeAppId, getProductionNicheSpecialistIds, isRouteAllowedForBuild } from '@/services/nicheRouting';
+import { resolveProductionNiche, resolveNicheFromNativeAppId, getAuthenticatedHomeRoute, getProductionNicheSpecialistIds, isRouteAllowedForBuild } from '@/services/nicheRouting';
 import { isLiveListing, isDraftListing } from '@/services/listingLifecycle';
 import { classifyListing, isListingEligibleForNiche } from '@/services/nicheCategoryService';
 const root = path.resolve(__dirname, '../..');
@@ -20,6 +20,14 @@ describe('Production identity and route boundaries', () => {
   test.each(PRODUCTION_NICHE_IDS)('%s is resolved from its native package identity', niche => {
     expect(resolveNicheFromNativeAppId(NICHE_MODULES[niche].androidPackage)).toBe(niche);
     expect(resolveNicheFromNativeAppId(NICHE_MODULES[niche].iosBundleIdentifier)).toBe(niche);
+  });
+  test('a Surplus account cannot change a Threads installation home route', () => {
+    expect(getAuthenticatedHomeRoute({
+      isMasterAdmin: false,
+      fixedNicheId: 'clothing',
+      activeNicheId: 'surplus_flip',
+      onboardingRequired: false,
+    })).toBe('/entry/clothing');
   });
   test('unknown native package IDs never select a niche', () => {
     expect(resolveNicheFromNativeAppId('com.swish.inventory')).toBeNull();
