@@ -3,6 +3,7 @@
 // Route 2 (my_active_listings): Fetches all active seller listings for import.
 // Uses eBay OAuth user token for seller operations; App token for public browse.
 
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
@@ -322,7 +323,7 @@ function parseItemXml(itemXml: string, ebayStatus: string): Record<string, any> 
   };
 }
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withEdgeFunctionLogging('swish-ebay-browse', async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
@@ -969,4 +970,4 @@ Deno.serve(async (req: Request) => {
   }
 
   return json({ views, watchers });
-});
+})))
