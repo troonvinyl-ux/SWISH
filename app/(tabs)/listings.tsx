@@ -29,9 +29,9 @@ const EBAY_ROUTES = [
 export default function ListingsTabScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, activeNicheId } = useApp();
+  const { tenant, activeNicheId, fixedNicheId } = useApp();
 
-  const nicheId = (activeNicheId ?? '').toLowerCase();
+  const nicheId = (fixedNicheId ?? activeNicheId ?? '').toLowerCase();
   const accentColor =
     nicheId.includes('coin') ? '#F5C842' :
     nicheId === 'motocross' ? '#FF5500' :

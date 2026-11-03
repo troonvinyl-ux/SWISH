@@ -832,14 +832,17 @@ describe('eBay end lifecycle reconciliation', () => {
   const end = listing.indexOf('// ── Route: revise', start);
   const endRoute = listing.slice(start, end);
 
-  test('confirmed eBay end uses the atomic lifecycle RPC rather than a direct item status write', () => {
+  test('confirmed eBay end prefers the atomic RPC and falls back only when that RPC is absent', () => {
     expect(endRoute).toContain("rpc('swish_transition_item'");
     expect(endRoute).toContain("p_status: 'identified'");
+    expect(endRoute).toContain("transitionError.code === 'PGRST202'");
+    expect(endRoute).toContain("transitionError.code === '42883'");
+    expect(endRoute).toContain(".eq('id', ownedItem.id)");
+    expect(endRoute).toContain(".eq('tenant_id', tenantId)");
+    expect(endRoute).toContain(".select('id')");
     expect(endRoute).toContain('transitioned !== true');
-    expect(endRoute).not.toMatch(/\.from\('items'\)[\s\S]{0,120}\.update\(\{\s*status:\s*'identified'/);
   });
 });
-
 
 describe('eBay category aspect name normalization', () => {
   const source = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-ebay-list/index.ts'), 'utf8');

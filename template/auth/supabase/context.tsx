@@ -12,6 +12,7 @@ interface AuthContextState {
 
 interface AuthContextActions {
   setOperationLoading: (loading: boolean) => void;
+  setAuthenticatedUser: (user: AuthUser) => void;
 }
 
 type AuthContextType = AuthContextState & AuthContextActions;
@@ -39,6 +40,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const setOperationLoading = (loading: boolean) => {
     updateState({ operationLoading: loading });
+  };
+
+  // Commit a confirmed sign-in result immediately. Navigation must not depend
+  // exclusively on the SDK event listener being scheduled on the UI thread.
+  const setAuthenticatedUser = (user: AuthUser) => {
+    updateState({ user, loading: false, initialized: true });
   };
 
   useEffect(() => {
@@ -95,6 +102,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const contextValue: AuthContextType = {
     ...state,
     setOperationLoading,
+    setAuthenticatedUser,
   };
 
   return (
