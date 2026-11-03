@@ -30,6 +30,7 @@
 //   get_category_children   — browse cached/live EBAY_GB category branches
 //   get_category_suggestions— search only live/cached eBay leaf categories
 
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 import { assessListingConfidence } from '../_shared/listingConfidencePolicy.ts';
@@ -2423,7 +2424,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
 // ── Entry point with 90-second hard deadline ─────────────────────────────────
 
-Deno.serve(async (req: Request): Promise<Response> => {
+Deno.serve(withEdgeFunctionLogging('swish-ebay-list', async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   const DEADLINE_MS = 90_000;
@@ -2453,4 +2454,4 @@ Deno.serve(async (req: Request): Promise<Response> => {
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }
-});
+})))
