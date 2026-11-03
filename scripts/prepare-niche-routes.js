@@ -81,16 +81,50 @@ function prepareNicheRoutes(niche, root = path.resolve(__dirname, '..')) {
   function pruneLayout(relative) {
     const target = path.join(output, relative);
     if (!fs.existsSync(target)) return;
-    const layout = fs.readFileSync(target, 'utf8').replace(/<(Stack|Tabs)\.Screen\b[\s\S]*?\/>/g, block => {
-      const match = block.match(/\bname=["']([^"']+)["']/);
-      if (!match) return block;
-      const name = match[1];
+    const sourceText = fs.readFileSync(target, 'utf8');
+    const screenPattern = /<(Stack|Tabs)\.Screen\b/g;
+    let cursor = 0;
+    let result = '';
+    let match;
+    while ((match = screenPattern.exec(sourceText)) !== null) {
+      const start = match.index;
+      let index = start + match[0].length;
+      let braceDepth = 0;
+      let quote = null;
+      let escaped = false;
+      let end = -1;
+      for (; index < sourceText.length; index++) {
+        const char = sourceText[index];
+        if (quote) {
+          if (escaped) escaped = false;
+          else if (char === '\\') escaped = true;
+          else if (char === quote) quote = null;
+          continue;
+        }
+        if (char === '"' || char === "'") { quote = char; continue; }
+        if (char.charCodeAt(0) === 96) { quote = String.fromCharCode(96); continue; }
+        if (char === '{') braceDepth++;
+        else if (char === '}') braceDepth = Math.max(0, braceDepth - 1);
+        else if (char === '/' && sourceText[index + 1] === '>' && braceDepth === 0) {
+          end = index + 2;
+          break;
+        }
+      }
+      if (end < 0) throw new Error('Could not parse navigator screen declaration in ' + relative);
+      const block = sourceText.slice(start, end);
+      const nameMatch = block.match(/\bname=["']([^"']+)["']/);
       const directory = path.posix.dirname(relative);
-      if (name.startsWith('(') && !name.includes('/')) return block;
-      const route = (directory === '.' ? name : path.posix.join(directory, name)).replace(/\.tsx$/, '');
-      return removed.has(route) ? '' : block;
-    });
-    save(relative, layout);
+      const name = nameMatch?.[1];
+      const route = name
+        ? (directory === '.' ? name : path.posix.join(directory, name)).replace(/\.tsx$/, '')
+        : null;
+      result += sourceText.slice(cursor, start);
+      if (!route || !removed.has(route)) result += block;
+      cursor = end;
+      screenPattern.lastIndex = end;
+    }
+    result += sourceText.slice(cursor);
+    save(relative, result);
   }
   for (const relative of [...kept].filter(file => file.endsWith('_layout.tsx'))) pruneLayout(relative);
 
