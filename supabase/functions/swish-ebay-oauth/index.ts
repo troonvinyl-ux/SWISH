@@ -616,4 +616,4 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-oauth', async (req: Request) => {
     }
     return jsonResponse({ error: err.message ?? 'Internal error' }, 500);
   }
-})))
+})));
