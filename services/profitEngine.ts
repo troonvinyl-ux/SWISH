@@ -395,7 +395,7 @@ export function formatCurrency(v: number, compact = false): string {
   if (compact && Math.abs(v) >= 1000) {
     return `£${(v / 1000).toFixed(1)}k`;
   }
-  return `£${Math.abs(v).toFixed(2)}`;
+  return `${v < 0 ? '-' : ''}£${Math.abs(v).toFixed(2)}`;
 }
 
 export function formatROI(roi: number): string {
