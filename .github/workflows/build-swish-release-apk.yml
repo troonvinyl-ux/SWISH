@@ -90,6 +90,7 @@ jobs:
           set -euo pipefail
           test -n "${EXPO_PUBLIC_SUPABASE_URL:-}" || { echo "::error::Missing EXPO_PUBLIC_SUPABASE_URL"; exit 1; }
           test -n "${EXPO_PUBLIC_SUPABASE_ANON_KEY:-}" || { echo "::error::Missing EXPO_PUBLIC_SUPABASE_ANON_KEY"; exit 1; }
+          test -n "${EXPO_PROJECT_ID:-}" || { echo "::error::Missing EXPO_PROJECT_ID; refusing to build an APK without OTA configuration."; exit 1; }
           npx expo config --type public --json > /tmp/swish-master-config.json
           node - <<'NODE'
           const c = JSON.parse(require('node:fs').readFileSync('/tmp/swish-master-config.json', 'utf8'));
