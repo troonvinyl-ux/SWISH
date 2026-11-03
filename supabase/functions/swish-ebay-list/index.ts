@@ -2454,4 +2454,4 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-list', async (req: Request): Prom
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }
-})));
+}));
