@@ -1641,4 +1641,4 @@ Deno.serve(withEdgeFunctionLogging('swish-market-value', async (req: Request) =>
     console.error('[SWISH Market v8] Unhandled valuation error.');
     return jsonResponse({ error: 'Market valuation failed. Please retry.' }, 500);
   }
-})))
+})));
