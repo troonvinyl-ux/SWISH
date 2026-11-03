@@ -291,6 +291,18 @@ export default function AntiqueCaptureScreen() {
           </View>
         ) : null}
 
+        {capture.savedId ? (
+          <Pressable
+            accessibilityRole="button"
+            disabled={capture.busy}
+            onPress={() => void capture.save()}
+            style={styles.galleryButton}
+          >
+            <MaterialIcons name="refresh" size={20} color={GOLD} />
+            <Text style={styles.secondaryButtonText}>Retry photo uploads</Text>
+          </Pressable>
+        ) : null}
+
         <Pressable
           disabled={capture.busy || (!capture.images.length && !capture.savedId) || (Boolean(capture.result) && !capture.result?.canonicalTitle.trim())}
           onPress={() => {
