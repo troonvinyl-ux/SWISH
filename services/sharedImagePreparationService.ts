@@ -15,7 +15,7 @@ export interface PreparedObjectImageReference {
 const REFERENCE_WARNING = 'AI-rendered reference only. Always use the original photo for eBay listings and final attribution.';
 const MAX_IMAGE_DATA_LENGTH = 8_000_000;
 
-export async function generatePreparedObjectImageReference(uri: string): Promise<PreparedObjectImageReference> {
+export async function generateSharedObjectImageReference(uri: string): Promise<PreparedObjectImageReference> {
   if (typeof uri !== 'string' || !uri.trim()) {
     throw new Error('Capture an object photo before creating an AI reference.');
   }
