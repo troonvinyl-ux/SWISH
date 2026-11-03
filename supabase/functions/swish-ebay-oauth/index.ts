@@ -23,6 +23,7 @@
 //   - All access token / refresh token values stored AES-256-GCM encrypted
 //   - state nonce is single-use with 15-minute expiry
 
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
@@ -585,7 +586,7 @@ function escapeHtml(s: string): string {
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withEdgeFunctionLogging('swish-ebay-oauth', async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   const url        = new URL(req.url);
@@ -615,4 +616,4 @@ Deno.serve(async (req: Request) => {
     }
     return jsonResponse({ error: err.message ?? 'Internal error' }, 500);
   }
-});
+})))
