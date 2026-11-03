@@ -115,4 +115,4 @@ Deno.serve(withEdgeFunctionLogging('swish-coin-image-enhance', async (req) => {
     console.error('[swish-coin-image-enhance] request failed.');
     return jsonResponse({ error: 'Image enhancement failed safely. The original photo is unchanged.' }, 500);
   }
-})));
+}));
