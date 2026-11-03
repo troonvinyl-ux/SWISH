@@ -1,7 +1,18 @@
 name: Build isolated SWISH Test Lab APK
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app.config.js'
+      - 'test-lab-app/**'
+      - '.github/workflows/test-lab-apk.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'niche-modules.json'
+      - 'services/**'
+      - 'constants/niches.ts'
   push:
-    branches: [feature/swish-test-lab-apk]
+    branches: [feature/swish-test-lab-apk, integration/swish-test-lab-apk-main]
     paths:
       - 'app.config.js'
       - 'test-lab-app/**'
