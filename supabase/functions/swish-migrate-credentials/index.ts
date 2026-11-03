@@ -218,4 +218,4 @@ Deno.serve(withEdgeFunctionLogging('swish-migrate-credentials', async (req: Requ
   }));
 
   return json(summary, failed > 0 ? 207 : 200); // 207 Multi-Status if partial failures
-})));
+}));
