@@ -34,6 +34,8 @@ describe('Production identity and route boundaries', () => {
     expect(isRouteAllowedForBuild('/entry/coins', 'clothing')).toBe(false);
     expect(isRouteAllowedForBuild('/niche-select', 'clothing')).toBe(false);
     expect(isRouteAllowedForBuild('/master-admin', 'clothing')).toBe(false);
+    expect(isRouteAllowedForBuild('/production-control', 'clothing')).toBe(false);
+    expect(isRouteAllowedForBuild('/edge-function-logs', 'clothing')).toBe(false);
     expect(isRouteAllowedForBuild('/threads-flip', 'clothing')).toBe(true);
     expect(isRouteAllowedForBuild('/ebay-listing-editor', 'clothing')).toBe(true);
   });
