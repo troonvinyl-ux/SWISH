@@ -34,6 +34,33 @@ jobs:
         run: npx tsc --noEmit
       - name: Regression tests (mandatory release gate)
         run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand
+      - name: Load public Supabase configuration from repository .env when needed
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = '.env';
+          if (!fs.existsSync(path)) {
+            console.log('No repository .env found; using configured GitHub variables/secrets.');
+            process.exit(0);
+          }
+          const values = {};
+          for (const raw of fs.readFileSync(path, 'utf8').split(/\\r?\\n/)) {
+            const line = raw.trim();
+            if (!line || line.startsWith('#')) continue;
+            const match = line.match(/^(EXPO_PUBLIC_SUPABASE_URL|EXPO_PUBLIC_SUPABASE_ANON_KEY)\\s*=\\s*(.*)$/);
+            if (!match) continue;
+            let value = match[2].trim();
+            if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
+            values[match[1]] = value;
+          }
+          const out = [];
+          for (const key of ['EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_ANON_KEY']) {
+            if (!process.env[key] && values[key]) out.push(`${key}=${values[key]}`);
+          }
+          if (out.length) fs.appendFileSync(process.env.GITHUB_ENV, out.join('\\n') + '\\n', { mode: 0o600 });
+          console.log(`Loaded ${out.length} missing public Supabase setting(s) from .env; values withheld.`);
+          NODE
       - name: Verify public Supabase configuration is available
         shell: bash
         run: |
