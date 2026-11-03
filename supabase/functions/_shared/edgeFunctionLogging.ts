@@ -74,17 +74,20 @@ export function withEdgeFunctionLogging(functionName: string, handler: Handler):
       throw error;
     } finally {
       const durationMs = Math.max(0, Math.round(performance.now() - started));
-      // Do not hold up the user's response on a telemetry write.
-      void writeInvocation({
-        functionName,
-        tenantId,
-        nicheId,
-        statusCode,
-        durationMs,
-        errorCode,
-      }).catch(() => {
+      // Persist before returning so the invocation record is not lost when the isolate is suspended.
+      // Telemetry failures are swallowed and never replace the business response/error.
+      try {
+        await writeInvocation({
+          functionName,
+          tenantId,
+          nicheId,
+          statusCode,
+          durationMs,
+          errorCode,
+        });
+      } catch {
         console.error('[EdgeTelemetry] unexpected telemetry failure');
-      });
+      }
     }
   };
 }
