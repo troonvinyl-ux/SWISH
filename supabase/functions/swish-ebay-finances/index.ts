@@ -404,4 +404,4 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-finances', async (req: Request) =
     console.error('[SWISH Finances] Request failed:', err instanceof Error ? err.message : 'unknown error');
     return jr({ error: 'Financial request failed. Please retry; contact support if the issue continues.' }, 500);
   }
-})))
+})));
