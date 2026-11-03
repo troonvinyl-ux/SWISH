@@ -330,7 +330,7 @@ export async function identifyItemWithAI(
     if (preflight.error) return { result:null,error:preflight.error };
     // Compress any new captures; skip if using existing URLs only
     const base64Images = images.length > 0
-      ? await Promise.all(images.map(img => compressForAI(img.uri)))
+      ? await Promise.all(images.map(img => compressForAI(img.enhancedUri ?? img.uri)))
       : [];
 
     const supabase = getSupabaseClient();
