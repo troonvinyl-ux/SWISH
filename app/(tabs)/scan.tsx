@@ -169,7 +169,7 @@ const NICHE_CAPTURE: Record<NicheProduct, NicheCaptureConfig> = {
     color: '#D97706',
     bgColor: '#0B0907',
     dimColor: '#2A1808',
-    route: '/capture',
+    route: '/antique-capture',
     captureOptions: [
       { icon: 'photo-camera', label: 'Main View', desc: 'Full object, straight-on — required' },
       { icon: 'photo-camera', label: 'Reverse / Underside', desc: 'Base, joints, construction and labels' },
