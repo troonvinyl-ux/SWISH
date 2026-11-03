@@ -978,4 +978,4 @@ Deno.serve(withEdgeFunctionLogging('swish-privacy-policy', async (req: Request) 
       'Access-Control-Allow-Origin': '*',
     },
   });
-})))
+})));
