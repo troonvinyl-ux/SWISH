@@ -291,7 +291,7 @@ export default function ScanScreen() {
     // The Scan tab is an action, not a second landing page. Open the active
     // niche directly in capture mode; keep other niche routes unchanged.
     if (product === 'coins') {
-      router.replace('/coin-flipper?tab=capture' as any);
+      router.push('/coin-flipper?tab=capture' as any);
       return;
     }
     router.push(config.route as any);
