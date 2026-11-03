@@ -970,4 +970,4 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-browse', async (req: Request) => 
   }
 
   return json({ views, watchers });
-})))
+})));
