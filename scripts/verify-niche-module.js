@@ -51,13 +51,13 @@ for (const [id, config] of Object.entries(registry.products)) {
 }
 const home = fs.readFileSync(path.join(generated, '(tabs)/index.tsx'), 'utf8');
 if (product.home) {
-  const expectedImport = "@/app/" + product.home.replace(/\.tsx$/, '');
+  const expectedImport = "../" + product.home.replace(/\.tsx$/, '');
   if (!home.includes(expectedImport)) throw new Error('Selected niche home is not the only home imported.');
 } else if (!home.includes("NicheOverview as ProductHome")) {
   throw new Error('Generic registered niche home is missing.');
 }
 for (const [id, config] of Object.entries(registry.products)) {
-  if (id !== niche && config.home && home.includes('@/app/' + config.home.replace(/\.tsx$/, ''))) {
+  if (id !== niche && config.home && home.includes('../' + config.home.replace(/\.tsx$/, ''))) {
     throw new Error('Foreign home import: ' + id);
   }
 }
