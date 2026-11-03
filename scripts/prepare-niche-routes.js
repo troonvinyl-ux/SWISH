@@ -58,7 +58,7 @@ function prepareNicheRoutes(niche, root = path.resolve(__dirname, '..')) {
 }
 module.exports = { prepareNicheRoutes };
 if (require.main === module) {
-  const niche = process.env.SWISH_NICHE || process.env.NICHE;
+  const niche = process.env['SWISH_NICHE'] || process.env['NICHE'];
   if (!niche) throw new Error('Set SWISH_NICHE to the branded app being built.');
   console.log('Prepared isolated route root: ' + prepareNicheRoutes(niche));
 }

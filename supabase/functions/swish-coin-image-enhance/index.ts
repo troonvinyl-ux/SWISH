@@ -1,6 +1,6 @@
-// SWISH AI Coin Image Enhancement
+// SWISH Shared AI Image Preparation
 //
-// Generates a separate, AI-rendered visual reference from a coin photo.
+// Generates a separate, AI-rendered visual reference from a object photograph.
 // The original image is never modified or returned as the listing image.
 // This is intentionally a visual aid only: generated pixels can alter small
 // details, so original photographs remain the source of truth for listings.
@@ -64,14 +64,14 @@ Deno.serve(async (req) => {
     if (imageDataUrl.length > 8_000_000) return jsonResponse({ error: 'Image is too large. Retake or resize it and try again.' }, 413);
 
     const prompt = [
-      'Create a photorealistic, high-clarity conservation-style visual reference of the exact coin shown in the input image.',
-      'Preserve the exact coin design, visible lettering, orientation, flan shape, wear, corrosion, patina, scratches and edge irregularities.',
-      'Automatically detect the coin’s complete outer boundary and tightly crop around it, removing excess background. Centre the coin and make it fill about 85–90% of the frame while keeping the entire rim and irregular edges visible.',
-      'Replace the surrounding background with a clean neutral white or very light grey background. Do not cut off any part of the coin and do not leave large empty margins.',
-      'Improve legibility through careful macro lighting, local contrast and focus; preserve the coin’s original orientation and proportions.',
-      'Do not invent, reconstruct, complete, replace, translate or embellish any inscription or design. Do not make the coin look newer, cleaner, more valuable or made of a different metal.',
-      'Do not add labels, measurements, hands, holders, shadows from other objects, or extra coins.',
-      'If a feature is indistinct in the input, leave it indistinct rather than hallucinating detail.',
+      'Create a photorealistic, high-clarity conservation-style visual reference of the exact physical object shown in the input image. This may be a coin, antique, collectible, card, fossil, clothing item, beauty product or electronic device.',
+      'Preserve the exact object identity, geometry, proportions, visible lettering, markings, wear, damage, corrosion, patina, scratches, stains, folds, chips and edge irregularities.',
+      'Automatically detect the complete outer boundary and remove only the surrounding background. Centre and frame the entire object with safe margins; never crop off handles, rims, corners, edges or protruding parts.',
+      'Replace only the background with a clean neutral white or very light grey background. Preserve natural object shadows only where needed to show its real shape.',
+      'Improve visibility through restrained lighting, white balance, local contrast and focus correction. Preserve original colour, material appearance, orientation and proportions.',
+      'Do not invent, reconstruct, complete, repair, replace, translate or embellish any feature, text, pattern or design. Do not hide, erase or soften defects, wear, damage, marks, patina, stains, scratches or corrosion. Do not make the object look newer, cleaner, more valuable or materially different.',
+      'Do not add labels, measurements, hands, holders, shadows from other objects, or extra objects.',
+      'If any feature is indistinct, obscured or damaged in the input, leave it indistinct rather than hallucinating detail. If faithful preservation cannot be achieved, return an error rather than fabricate details.',
       'This is an AI-generated viewing aid, not documentary evidence. Return the edited image only.',
     ].join(' ');
 

@@ -1,3 +1,7 @@
+// Expo's Babel preset rewrites process.env references to this virtual ESM module.
+// The dynamic config test needs the real Node environment, not Expo's runtime shim.
+jest.mock('expo/virtual/env', () => ({ env: process.env }), { virtual: true });
+
 const fs = require('node:fs');
 const path = require('node:path');
 // Tests the dynamic Expo configuration without requiring a native build.

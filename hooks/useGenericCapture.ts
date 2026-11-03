@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useApp } from './useApp';
 import { useAuth, useAlert } from '@/template';
-import { captureFromCamera, pickFromLibrary, identifyItemWithAI, saveIdentifiedItem, uploadItemImages, updateItemMedia, type CapturedImage, type AIIdentificationResult } from '@/services/aiIdentificationService';
+import { captureFromCamera, pickFromLibrary, identifyItemWithAI, saveIdentifiedItem, uploadItemImages, updateItemMedia, saveCoinReferenceImages, type CapturedImage, type AIIdentificationResult } from '@/services/aiIdentificationService';
 import { SPECIALISTS, type SpecialistId } from '@/constants/specialists';
 import { getSpecialistProfile } from '@/shared/specialistIntelligence';
 import { readCaptureDraft, persistCaptureDraft, retainCaptureImage, type CaptureDraft } from '@/services/captureDraftService';
 import { inspectPhotoQuality } from '@/services/photoQualityService';
+import { generateSharedObjectImageReference } from '@/services/sharedImagePreparationService';
 const emptyDraft = (specialistId: string): CaptureDraft => ({ images:[],result:null,savedId:null,mode:'item',specialistId,answers:{} });
 export function useGenericCapture() {
   const { tenant, activeNiche, triggerInventoryReload } = useApp(); const { user } = useAuth(); const { showAlert } = useAlert();
@@ -80,8 +81,20 @@ export function useGenericCapture() {
     if(!tenant || lock.current || !ready || !visible.images.length || visible.savedId) return;
     lock.current=true; setBusy(true); setPhase('Analysing specialist evidence'); setError(null);
     try {
+      // Shared preparation creates a separate viewing rendition. Original photos remain documentary evidence.
+      const preparedImages = await Promise.all(visible.images.map(async image => {
+        if (image.enhancedUri) return image;
+        try {
+          const prepared = await generateSharedObjectImageReference(image.uri);
+          return { ...image, enhancedUri: prepared.enhancedUri, enhancementStatus: 'ready' as const, enhancementWarning: prepared.warning };
+        } catch (error: any) {
+          return { ...image, enhancementStatus: 'failed' as const, enhancementWarning: error?.message ?? 'Image preparation unavailable; original photo will be used.' };
+        }
+      }));
+      if (current.current!==scope) return;
+      setDraft(previous=>({ ...previous, images: preparedImages }));
       const notes=Object.entries(visible.answers).filter(([,value])=>value.trim()).map(([key,value])=>`${key}: ${value} (user-supplied; cross-check)`).join('\n');
-      const response=await identifyItemWithAI(visible.images,specialistId,undefined,{ customNotes:notes,existingAttributes:visible.result?.attributes },{ tenantId:tenant.id,captureMode:visible.mode,allowPhotoWarnings });
+      const response=await identifyItemWithAI(preparedImages,specialistId,undefined,{ customNotes:notes,existingAttributes:visible.result?.attributes },{ tenantId:tenant.id,captureMode:visible.mode,allowPhotoWarnings });
       if(current.current!==scope) return;
       if(response.error || !response.result) { setError(response.error ?? 'No identification was returned.'); return; }
       setDraft(previous=>({ ...previous,result:response.result }));
@@ -118,8 +131,10 @@ export function useGenericCapture() {
         triggerInventoryReload();
       }
       const upload=await uploadItemImages(id,visible.images);
+      if(upload.errors.length || upload.urls.length !== visible.images.length) throw new Error('Inventory is saved; one or more original photos failed to upload. Retry photos here without creating another item.');
       if(upload.urls.length) await updateItemMedia(tenant.id,id,upload.urls);
-      if(upload.errors.length) throw new Error('Inventory is saved; some photos failed. Retry photos here without creating another item.');
+      const references = await saveCoinReferenceImages(tenant.id,id,visible.images);
+      if(references.errors.length) throw new Error('Original photos are saved. Some cleaned viewing images could not be linked. Retry without creating another inventory item.');
       if(current.current===scope) triggerInventoryReload();
     } catch(e:any) { if(current.current===scope) setError(e?.message ?? 'Save failed.'); }
     finally { lock.current=false; if(current.current===scope) { setBusy(false); setPhase(''); } }

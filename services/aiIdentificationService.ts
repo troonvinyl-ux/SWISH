@@ -248,6 +248,8 @@ export async function prepareImageForAI(uri: string): Promise<string> {
 }
 
 async function compressForAI(uri: string): Promise<string> {
+  // AI-rendered references may already be data URLs; pass them through unchanged.
+  if (/^data:image\/(?:jpeg|jpg|png|webp);base64,/i.test(uri)) return uri;
   try {
     const result = await ImageManipulator.manipulateAsync(
       uri,
@@ -268,6 +270,8 @@ async function compressForAI(uri: string): Promise<string> {
 
 // ── Raw base64 fallback (no compression) ─────────────────────────────────────
 async function ensureBase64Raw(uri: string): Promise<string> {
+  const dataUrl = uri.match(/^data:image\/(?:jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=]+)$/i);
+  if (dataUrl) return uri;
   if (Platform.OS === 'web') {
     const response = await fetch(uri);
     const blob = await response.blob();
@@ -330,7 +334,7 @@ export async function identifyItemWithAI(
     if (preflight.error) return { result:null,error:preflight.error };
     // Compress any new captures; skip if using existing URLs only
     const base64Images = images.length > 0
-      ? await Promise.all(images.map(img => compressForAI(img.uri)))
+      ? await Promise.all(images.map(img => compressForAI(img.enhancedUri ?? img.uri)))
       : [];
 
     const supabase = getSupabaseClient();
@@ -664,6 +668,8 @@ export async function saveCoinReferenceImages(
       !Array.isArray(attributes._coin_reference_images)
       ? attributes._coin_reference_images as Record<string, string>
       : {};
+    // The legacy key remains the canonical persisted reference map. Shared scanners
+    // read this same map, so no second metadata field or schema migration is needed.
     const { error: updateError } = await supabase
       .from('items')
       .update({
@@ -681,6 +687,9 @@ export async function saveCoinReferenceImages(
 
   return { urls, errors };
 }
+
+// Backwards-compatible name for older Coin Flipper callers.
+export const savePreparedImageReferences = saveCoinReferenceImages;
 
 export async function saveIdentifiedItem(
   tenantId: string,

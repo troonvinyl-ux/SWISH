@@ -1,5 +1,13 @@
 // @ts-nocheck
 import { OnSpaceConfig } from './types';
+import Constants from 'expo-constants';
+
+function getPublicSupabaseConfig() {
+  const runtimeConfig = (Constants.expoConfig?.extra as any)?.supabase;
+  const url = process.env.EXPO_PUBLIC_SUPABASE_URL || runtimeConfig?.url;
+  const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || runtimeConfig?.anonKey;
+  return url && anonKey ? { url, anonKey } : null;
+}
 
 class ConfigManager {
   private static instance: ConfigManager;
@@ -30,24 +38,12 @@ class ConfigManager {
   }
 
   private createDefaultConfig(): OnSpaceConfig {
-    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-
-    let authConfig;
-    let supabaseConfig;
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-          console.warn('[Template:Config] Supabase environment variables missing, automatically disabling auth module');
-      authConfig = false;
-    } else {
-      authConfig = {
-        enabled: true,
-        profileTableName: 'user_profiles',
-      };
-      supabaseConfig = {
-        url: supabaseUrl,
-        anonKey: supabaseAnonKey,
-      };
+    const supabaseConfig = getPublicSupabaseConfig();
+    const authConfig = supabaseConfig
+      ? { enabled: true, profileTableName: 'user_profiles' }
+      : false;
+    if (!supabaseConfig) {
+      console.error('[Template:Config] Missing public Supabase runtime configuration. Check EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in the app build environment.');
     }
 
     return {
@@ -110,18 +106,13 @@ export const createConfig = (options: CreateConfigOptions = {}): OnSpaceConfig =
 
   let supabaseConfig;
   if (authConfig !== false) {
-    const supabaseUrl = options.supabase?.url || process.env.EXPO_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = options.supabase?.anonKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.warn('[Template:Config] Auth feature enabled but Supabase configuration missing, automatically disabling auth module');
-      console.warn('[Template:Config] Please check EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in .env file');
+    const runtimeConfig = getPublicSupabaseConfig();
+    supabaseConfig = options.supabase?.url && options.supabase?.anonKey
+      ? { url: options.supabase.url, anonKey: options.supabase.anonKey }
+      : runtimeConfig;
+    if (!supabaseConfig) {
+      console.error('[Template:Config] Auth requested but public Supabase runtime configuration is missing.');
       authConfig = false;
-    } else {
-      supabaseConfig = {
-        url: supabaseUrl,
-        anonKey: supabaseAnonKey,
-      };
     }
   }
 
