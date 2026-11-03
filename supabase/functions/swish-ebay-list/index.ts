@@ -1921,17 +1921,40 @@ async function handleRequest(req: Request): Promise<Response> {
       .update({ status: 'ended', ended_at: now, updated_at: now })
       .eq('id', ownedListing.id)
       .eq('tenant_id', tenantId);
-    // The single-item owner test console can preserve inventory only after
-    // the server-side owner check above has succeeded.
-    const { data: transitioned, error: itemUpdateError } = preserveInventoryStatus
-      ? { data: true, error: null }
-      : await supabase.rpc('swish_transition_item', {
-          p_tenant_id: tenantId,
-          p_item_id: ownedItem.id,
-          p_status: 'identified',
-          p_notes: `eBay listing ended: ${savedExternalListingId}`,
-          p_marketplace: 'ebay',
-        });
+    // Prefer the atomic lifecycle command when it exists. Older OnSpace
+    // deployments may not yet expose that RPC; in that specific case retain
+    // the original tenant-scoped update so ending a provider listing does not
+    // become dependent on a database migration. Other RPC failures stay closed.
+    let transitioned = preserveInventoryStatus;
+    let itemUpdateError: any = null;
+    if (!preserveInventoryStatus) {
+      const { data: transitionResult, error: transitionError } = await supabase.rpc('swish_transition_item', {
+        p_tenant_id: tenantId,
+        p_item_id: ownedItem.id,
+        p_status: 'identified',
+        p_notes: `eBay listing ended: ${savedExternalListingId}`,
+        p_marketplace: 'ebay',
+      });
+      if (!transitionError && transitionResult === true) {
+        transitioned = true;
+      } else if (
+        transitionError &&
+        (transitionError.code === 'PGRST202' ||
+          transitionError.code === '42883' ||
+          /function .*swish_transition_item.*does not exist/i.test(transitionError.message ?? ''))
+      ) {
+        const fallback = await supabase.from('items')
+          .update({ status: 'identified', updated_at: now })
+          .eq('id', ownedItem.id)
+          .eq('tenant_id', tenantId)
+          .select('id')
+          .maybeSingle();
+        itemUpdateError = fallback.error;
+        transitioned = Boolean(fallback.data) && !fallback.error;
+      } else {
+        itemUpdateError = transitionError ?? new Error('Item transition was not confirmed.');
+      }
+    }
 
     if (listingUpdateError || itemUpdateError || transitioned !== true) {
       console.error(`[SWISH end] eBay listing ended but local state update failed (tenant scoped): listingError=${listingUpdateError?.message ?? 'none'} itemError=${itemUpdateError?.message ?? 'none'}`);
