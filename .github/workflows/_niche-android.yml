@@ -14,6 +14,7 @@ jobs:
     env:
       SWISH_NICHE: ${{ inputs.niche }}
       EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
+      ANDROID_NDK_VERSION: 27.1.12297006
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -45,7 +46,7 @@ jobs:
           if (config.extra.swishNicheId !== product.id || config.android.package !== product.androidPackage) throw new Error('Build identity mismatch');
           if (router?.[1]?.root !== `.swish-build/${product.id}/app`) throw new Error('Router isolation root mismatch');
           NODE
-      - name: Install Android 16 SDK platform and Build Tools
+      - name: Install Android 16 SDK, Build Tools and pinned NDK
         shell: bash
         run: |
           set -euo pipefail
@@ -54,10 +55,37 @@ jobs:
           SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
           if [ ! -x "$SDKMANAGER" ]; then SDKMANAGER="$(command -v sdkmanager || true)"; fi
           test -x "$SDKMANAGER"
+
           set +o pipefail
           yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses >/dev/null
           set -o pipefail
-          "$SDKMANAGER" --sdk_root="$SDK_ROOT" "platforms;android-36" "build-tools;36.0.0"
+
+          install_with_retry() {
+            local package="$1"
+            local attempt
+            for attempt in 1 2 3; do
+              echo "Installing $package (attempt $attempt/3)"
+              if "$SDKMANAGER" --sdk_root="$SDK_ROOT" --verbose "$package"; then
+                return 0
+              fi
+              echo "Install attempt $attempt failed for $package; clearing partial package files."
+              if [[ "$package" == ndk\;* ]]; then
+                rm -rf "$SDK_ROOT/ndk/${ANDROID_NDK_VERSION}"
+              fi
+              sleep $((attempt * 5))
+            done
+            echo "::error::Unable to install Android SDK package after three attempts: $package"
+            return 1
+          }
+
+          install_with_retry "platforms;android-36"
+          install_with_retry "build-tools;36.0.0"
+          install_with_retry "ndk;${ANDROID_NDK_VERSION}"
+
+          test -s "$SDK_ROOT/ndk/${ANDROID_NDK_VERSION}/source.properties"
+          grep -q "Pkg.Revision = ${ANDROID_NDK_VERSION}" "$SDK_ROOT/ndk/${ANDROID_NDK_VERSION}/source.properties"
+          echo "Verified NDK ${ANDROID_NDK_VERSION}:"
+          grep "Pkg.Revision" "$SDK_ROOT/ndk/${ANDROID_NDK_VERSION}/source.properties"
       - name: Generate Android project
         run: npx expo prebuild --platform android --clean
       - name: Verify Android 16 SDK configuration
