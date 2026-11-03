@@ -7,7 +7,7 @@ import { Tenant, getUserPrimaryTenant, provisionTenant } from '@/services/tenant
 import { BusinessConfig, getBusinessConfig } from '@/services/businessConfigService';
 import { NicheId, NicheConfig, NICHES, PRODUCTION_NICHE_IDS, isProductionNiche } from '@/constants/niches';
 import { checkSubscription, type SubscriptionStatus } from '@/services/subscriptionService';
-import { resolveNicheFromNativeAppId } from '@/services/nicheRouting';
+import { resolveNicheFromNativeAppId, resolveNicheFromNativeAppScheme } from '@/services/nicheRouting';
 
 const NICHE_STORAGE_PREFIX = '@swish_active_niches';
 export const SWISH_MASTER_ADMIN_EMAIL = 'troonvinyl@gmail.com';
@@ -17,10 +17,12 @@ const CONFIGURED_BUILD_NICHE = Constants.expoConfig?.extra?.swishNicheId;
 const NATIVE_BUILD_APP_ID = Platform.OS === 'android'
   ? Constants.expoConfig?.android?.package
   : Platform.OS === 'ios' ? Constants.expoConfig?.ios?.bundleIdentifier : null;
-// Native package identity is immutable for an installed APK and takes priority
-// over mutable account preferences or a missing/stale Expo extra field.
+const NATIVE_BUILD_APP_SCHEME = Constants.expoConfig?.scheme;
+// Immutable native package/scheme identity takes priority over mutable account
+// preferences or a missing/stale Expo extra field.
 const FIXED_BUILD_NICHE_ID: NicheId | null =
   resolveNicheFromNativeAppId(NATIVE_BUILD_APP_ID) ??
+  resolveNicheFromNativeAppScheme(NATIVE_BUILD_APP_SCHEME) ??
   (isProductionNiche(CONFIGURED_BUILD_NICHE) ? CONFIGURED_BUILD_NICHE : null);
 interface AppContextType {
   isMasterAdmin: boolean;
