@@ -15,3 +15,4 @@ jobs:
     uses: ./.github/workflows/_niche-android.yml
     with:
       niche: ${{ inputs.niche }}
+    secrets: inherit
