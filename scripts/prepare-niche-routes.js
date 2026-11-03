@@ -14,7 +14,7 @@ function prepareNicheRoutes(niche, root = path.resolve(__dirname, '..')) {
   // Fail closed: every route in app/ must be explicitly shared, admin-only,
   // or owned by exactly one niche. New routes cannot silently enter every APK.
   const ownedRoutes = new Set();
-  for ( (const [id, config] of Object.entries(registry.products)) ) {
+  for (const [id, config] of Object.entries(registry.products)) {
     for (const route of [config.entry, config.home, ...config.dedicatedRoutes].filter(Boolean)) {
       if (ownedRoutes.has(route)) throw new Error('Route has multiple niche owners: ' + route);
       ownedRoutes.add(route);
@@ -55,7 +55,7 @@ function prepareNicheRoutes(niche, root = path.resolve(__dirname, '..')) {
       if (entry.isDirectory()) { walk(full); continue; }
       if (!classified.has(relative)) throw new Error('Unclassified app route; assign it in niche-modules.json: ' + relative);
       if (!allowed.has(relative)) {
-        removed.add(relative.replace(/\\.tsx$/, ''));
+        removed.add(relative.replace(/\.tsx$/, ''));
         continue;
       }
       save(relative, fs.readFileSync(full, 'utf8'));
@@ -69,23 +69,23 @@ function prepareNicheRoutes(niche, root = path.resolve(__dirname, '..')) {
   if (!kept.has(product.entry)) throw new Error('Missing entry route: ' + product.entry);
 
   const homeImport = product.home
-    ? `import ProductHome from '@/app/${product.home.replace(/\\.tsx$/, '')}';`
+    ? "import ProductHome from '@/app/" + product.home.replace(/\.tsx$/, '') + "';"
     : "import { NicheOverview as ProductHome } from '@/components/feature/NicheOverview';";
   const props = product.home ? ' isHomeTab' : '';
-  save('(tabs)/index.tsx', `${homeImport}\\nexport default function NicheHomeScreen() { return <ProductHome${props} />; }\\n`);
+  save('(tabs)/index.tsx', homeImport + '\nexport default function NicheHomeScreen() { return <ProductHome' + props + ' />; }\n');
 
   // Remove navigator declarations for routes not present in this product's
   // generated tree. Handles multi-line Stack.Screen and Tabs.Screen elements.
   function pruneLayout(relative) {
     const target = path.join(output, relative);
     if (!fs.existsSync(target)) return;
-    const layout = fs.readFileSync(target, 'utf8').replace(/<(Stack|Tabs)\\.Screen\\b[\\s\\S]*?\\/>/g, block => {
-      const match = block.match(/\\bname=["']([^"']+)["']/);
+    const layout = fs.readFileSync(target, 'utf8').replace(/<(Stack|Tabs)\.Screen\b[\s\S]*?\/>/g, block => {
+      const match = block.match(/\bname=["']([^"']+)["']/);
       if (!match) return block;
       const name = match[1];
       const directory = path.posix.dirname(relative);
       if (name.startsWith('(') && !name.includes('/')) return block;
-      const route = (directory === '.' ? name : path.posix.join(directory, name)).replace(/\\.tsx$/, '');
+      const route = (directory === '.' ? name : path.posix.join(directory, name)).replace(/\.tsx$/, '');
       return removed.has(route) ? '' : block;
     });
     save(relative, layout);
