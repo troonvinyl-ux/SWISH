@@ -661,4 +661,4 @@ Deno.serve(withEdgeFunctionLogging('swish-image-download', async (req: Request) 
   };
   console.log(`[v6] COMPLETE: ${JSON.stringify(finalResult)}`);
   return jsonResp(finalResult);
-})));
+}));
