@@ -24,6 +24,7 @@ test('every deployed SWISH Edge Function is wrapped by shared invocation telemet
 test('Edge Function telemetry stores metadata only and does not persist payloads or secrets', () => {
   const source = fs.readFileSync(path.join(root, 'supabase/functions/_shared/edgeFunctionLogging.ts'), 'utf8');
   expect(source).toContain('request.clone().json()');
+  expect(source).toContain('contentLength <= 64 * 1024');
   expect(source).toContain('tenant_id: input.tenantId');
   expect(source).toContain('duration_ms: input.durationMs');
   expect(source).not.toContain('request.text()');
