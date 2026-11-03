@@ -96,6 +96,9 @@ jobs:
           const c = JSON.parse(require('node:fs').readFileSync('/tmp/swish-master-config.json', 'utf8'));
           if (c.extra?.supabase?.url !== process.env.EXPO_PUBLIC_SUPABASE_URL) throw new Error('Master Admin Supabase URL not embedded');
           if (c.extra?.supabase?.anonKey !== process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) throw new Error('Master Admin Supabase anon key not embedded');
+          if (!c.updates?.url?.includes(process.env.EXPO_PROJECT_ID)) throw new Error('Master Admin EAS update URL not embedded');
+          if (!c.runtimeVersion) throw new Error('Master Admin runtime version missing');
+          if (c.updates?.requestHeaders?.['expo-channel-name'] !== 'production-default') throw new Error('Master Admin OTA channel mismatch');
           NODE
 
       - name: Run niche isolation and Coin Flipper production tests (pre-build gate)
