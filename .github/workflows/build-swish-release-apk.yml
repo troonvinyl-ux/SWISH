@@ -62,6 +62,27 @@ jobs:
       - name: Install dependencies
         run: bash scripts/install-dependencies.sh
       - name: Verify public Supabase config before Master Admin prebuild
+      - name: Load public Supabase configuration from repository .env when needed
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          if (!fs.existsSync('.env')) process.exit(0);
+          const values = {};
+          for (const raw of fs.readFileSync('.env', 'utf8').split(/\r?\n/)) {
+            const line = raw.trim();
+            if (!line || line.startsWith('#')) continue;
+            const match = line.match(/^(EXPO_PUBLIC_SUPABASE_URL|EXPO_PUBLIC_SUPABASE_ANON_KEY)\s*=\s*(.*)$/);
+            if (!match) continue;
+            let value = match[2].trim();
+            if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
+            values[match[1]] = value;
+          }
+          const out = [];
+          for (const key of ['EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_ANON_KEY']) if (!process.env[key] && values[key]) out.push(`${key}=${values[key]}`);
+          if (out.length) fs.appendFileSync(process.env.GITHUB_ENV, out.join('\n') + '\n', { mode: 0o600 });
+          console.log(`Loaded ${out.length} public Supabase setting(s) for signed Master Admin; values withheld.`);
+          NODE
         env:
           SWISH_MASTER_ADMIN: '1'
           EXPO_NO_DOTENV: '1'
