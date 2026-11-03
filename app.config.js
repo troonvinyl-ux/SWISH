@@ -11,8 +11,8 @@ module.exports = ({ config }) => {
   // Supabase URL and anon key are public client configuration. Copy them into
   // Expo's runtime manifest so native/OTA bundles do not depend on runtime
   // process.env availability. Never place service-role or provider secrets here.
-  const publicSupabase = process.env.EXPO_PUBLIC_SUPABASE_URL && process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
-    ? { url: process.env.EXPO_PUBLIC_SUPABASE_URL, anonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY }
+  const publicSupabase = process.env['EXPO_PUBLIC_SUPABASE_URL'] && process.env['EXPO_PUBLIC_SUPABASE_ANON_KEY']
+    ? { url: process.env['EXPO_PUBLIC_SUPABASE_URL'], anonKey: process.env['EXPO_PUBLIC_SUPABASE_ANON_KEY'] }
     : config.extra?.supabase;
   const easProjectId = process.env.EXPO_PROJECT_ID || process.env.EAS_PROJECT_ID || config.extra?.eas?.projectId;
   if (!selected && !masterAdminBuild && !easProjectId && !publicSupabase) return config;
