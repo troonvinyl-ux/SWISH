@@ -1,5 +1,6 @@
 // One registry drives native identities, runtime aliases and route packaging.
 const { products: NICHE_BUILDS } = require('./niche-modules.json');
+const { prepareNicheRoutes } = require('./scripts/prepare-niche-routes');
 
 module.exports = ({ config }) => {
   const selected = process.env.SWISH_NICHE;
@@ -53,7 +54,6 @@ module.exports = ({ config }) => {
   }
   if (!niche) return baseConfig;
   // Prepare for every Expo consumer (prebuild, EAS, export, OTA), not just one workflow.
-  const { prepareNicheRoutes } = require('./scripts/prepare-niche-routes');
   const routeRoot = prepareNicheRoutes(selected);
   const plugins = (config.plugins || []).map(plugin => {
     const name = Array.isArray(plugin) ? plugin[0] : plugin;
