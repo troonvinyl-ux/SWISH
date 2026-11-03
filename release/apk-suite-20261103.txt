@@ -1,0 +1,4 @@
+SWISH APK suite build trigger.
+Source PR: #154
+Source commit: 2f66fceb230be9f85c09e09d2b787866da1d3393
+Purpose: generate fresh isolated niche APKs for repeated cold-launch testing.
