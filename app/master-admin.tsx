@@ -165,6 +165,15 @@ export default function MasterAdminScreen() {
           <MaterialIcons name="chevron-right" size={24} color={Colors.textPrimary} />
         </Pressable>
 
+        <Pressable accessibilityRole="button" onPress={() => router.push('/reiss-ebay-test' as any)} style={styles.diagnosticsButton}>
+          <View style={styles.diagnosticsIcon}><MaterialIcons name="shopping-bag" size={24} color="#111111" /></View>
+          <View style={{ flex: 1, gap: 3 }}>
+            <Text style={styles.diagnosticsTitle}>Reiss single-item eBay test</Text>
+            <Text style={styles.diagnosticsSubtitle}>Inspect the selected inventory listing and run confirmed revise/end checks</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={24} color={Colors.textPrimary} />
+        </Pressable>
+
         <View style={styles.notice}>
           <MaterialIcons name="info-outline" size={18} color={Colors.primary} />
           <Text style={styles.noticeText}>Production Control is read-only repository evidence, not an automatic release approval. Diagnostics perform real marketplace operations only after explicit confirmation. User management and privileged platform metrics still require authorized server-side admin endpoints.</Text>

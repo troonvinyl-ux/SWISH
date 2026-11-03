@@ -1855,6 +1855,16 @@ async function handleRequest(req: Request): Promise<Response> {
 
   // ── Route: end ────────────────────────────────────────────────────────────
   if (route === 'end') {
+    // Inventory-status preservation is an owner-only diagnostic exception.
+    // The browser's Master Admin gate is presentation only; enforce it again
+    // against the verified JWT email before any eBay or database side effect.
+    const preserveInventoryStatus = body.preserveInventoryStatus === true;
+    if (preserveInventoryStatus) {
+      const configuredOwnerEmail = (Deno.env.get('SWISH_MASTER_ADMIN_EMAIL') ?? '').trim().toLowerCase();
+      if (!configuredOwnerEmail || !auth.userEmail || auth.userEmail.trim().toLowerCase() !== configuredOwnerEmail) {
+        return jsonResponse({ error: 'Owner-only inventory preservation is not authorised.' }, 403);
+      }
+    }
     const { listingId, externalListingId: requestedExternalListingId } = body;
     if (!listingId) return jsonResponse({ error: 'listingId required' }, 400);
 
@@ -1911,13 +1921,17 @@ async function handleRequest(req: Request): Promise<Response> {
       .update({ status: 'ended', ended_at: now, updated_at: now })
       .eq('id', ownedListing.id)
       .eq('tenant_id', tenantId);
-    const { data: transitioned, error: itemUpdateError } = await supabase.rpc('swish_transition_item', {
-      p_tenant_id: tenantId,
-      p_item_id: ownedItem.id,
-      p_status: 'identified',
-      p_notes: `eBay listing ended: ${savedExternalListingId}`,
-      p_marketplace: 'ebay',
-    });
+    // The single-item owner test console can preserve inventory only after
+    // the server-side owner check above has succeeded.
+    const { data: transitioned, error: itemUpdateError } = preserveInventoryStatus
+      ? { data: true, error: null }
+      : await supabase.rpc('swish_transition_item', {
+          p_tenant_id: tenantId,
+          p_item_id: ownedItem.id,
+          p_status: 'identified',
+          p_notes: `eBay listing ended: ${savedExternalListingId}`,
+          p_marketplace: 'ebay',
+        });
 
     if (listingUpdateError || itemUpdateError || transitioned !== true) {
       console.error(`[SWISH end] eBay listing ended but local state update failed (tenant scoped): listingError=${listingUpdateError?.message ?? 'none'} itemError=${itemUpdateError?.message ?? 'none'}`);
@@ -1927,7 +1941,7 @@ async function handleRequest(req: Request): Promise<Response> {
         warning: 'The eBay listing was ended, but SWISH could not fully update its local status. Run eBay sync to reconcile.',
       });
     }
-    return jsonResponse({ success: true, externalListingId: savedExternalListingId });
+    return jsonResponse({ success: true, externalListingId: savedExternalListingId, inventoryStatusPreserved: preserveInventoryStatus });
   }
 
   // ── Route: revise ─────────────────────────────────────────────────────────
