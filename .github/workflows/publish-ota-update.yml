@@ -19,6 +19,7 @@ on:
       - 'assets/**'
       - 'niche-modules.json'
       - 'scripts/prepare-niche-assets.mjs'
+      - 'scripts/prepare-niche-routes.js'
       - 'scripts/verify-ota-runtime-compatibility.mjs'
       # Include this workflow file so a safety-gate change can supersede an obsolete run.
       - '.github/workflows/publish-ota-update.yml'
