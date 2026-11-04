@@ -29,6 +29,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
 
 # Avoid overlapping matrix publishes against the same EAS project and API.
@@ -57,38 +58,9 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           BEFORE_SHA: ${{ github.event.before }}
           CURRENT_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            echo "should_publish=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [[ -z "$BEFORE_SHA" || "$BEFORE_SHA" == "0000000000000000000000000000000000000000" ]]; then
-            echo "should_publish=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          changed_files="$(git diff --name-only "$BEFORE_SHA" "$CURRENT_SHA")"
-          printf 'Changed files:\n%s\n' "$changed_files"
-          should_publish=false
-          while IFS= read -r file; do
-            [[ -z "$file" ]] && continue
-            case "$file" in
-              app/*|components/*|contexts/*|constants/*|hooks/*|services/*|shared/*|template/*|utils/*|assets/*|niche-modules.json)
-                case "$file" in
-                  */__tests__/*|*.test.*|*.spec.*|*.md) continue ;;
-                esac
-                should_publish=true
-                ;;
-            esac
-          done <<< "$changed_files"
-
-          echo "should_publish=$should_publish" >> "$GITHUB_OUTPUT"
-          if [[ "$should_publish" == "true" ]]; then
-            echo "Compatible application runtime changes detected."
-          else
-            echo "No compatible application runtime changes; OTA publish jobs will be skipped."
-          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/verify-ota-runtime-compatibility.mjs
 
   publish-update:
     needs: detect-changes
@@ -146,11 +118,18 @@ jobs:
         if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
         run: |
           pnpm exec expo config --type public --json > /tmp/swish-expo-config.json
-          if ! node -e "const fs=require('fs'); const c=JSON.parse(fs.readFileSync('/tmp/swish-expo-config.json','utf8')); const expected=process.env.SWISH_CHANNEL; if (!c.updates?.url?.includes(process.env.EXPO_PROJECT_ID) || !c.runtimeVersion || c.updates?.requestHeaders?.['expo-channel-name'] !== expected) { console.error('OTA configuration missing expected project/runtime/channel'); process.exit(1); }"; then
-            echo "Expo config output (first 40 lines):"
-            head -40 /tmp/swish-expo-config.json
-            exit 1
-          fi
+          node <<'NODE'
+          const fs = require('node:fs');
+          const c = JSON.parse(fs.readFileSync('/tmp/swish-expo-config.json', 'utf8'));
+          const niche = process.env.SWISH_NICHE;
+          const master = process.env.SWISH_MASTER_ADMIN === '1';
+          const version = c.version || '1.0.0';
+          const expectedRuntime = master ? version + '-master-admin-api36-v1' : version + '-' + niche + '-isolated-api36-v1';
+          if (!c.updates?.url?.includes(process.env.EXPO_PROJECT_ID)) throw new Error('OTA project ID mismatch');
+          if (c.runtimeVersion !== expectedRuntime) throw new Error('OTA runtime version mismatch for target ' + (master ? 'Master Admin' : niche));
+          if (c.updates?.requestHeaders?.['expo-channel-name'] !== process.env.SWISH_CHANNEL) throw new Error('OTA channel does not match target app');
+          if (!master && c.extra?.swishNicheId !== niche) throw new Error('OTA niche identity mismatch');
+          NODE
 
       - name: Ensure OTA branch and channel are linked
         if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
