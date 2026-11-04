@@ -15,11 +15,12 @@ describe('production niche scanner routing', () => {
     ['fossils', '/capture'],
     ['beauty', '/capture'],
     ['tech', '/capture'],
+    ['collectibles', '/capture'],
   ])('%s resolves to its registered scanner workflow', (niche, expected) => {
     expect(nicheToScannerRoute(niche)).toBe(expected);
   });
 
-  test.each(['trading_cards', 'fossils', 'beauty', 'tech'])(
+  test.each(['trading_cards', 'fossils', 'beauty', 'tech', 'collectibles'])(
     '%s shared capture route has a niche-specific specialist and photo checklist',
     (nicheId) => {
       const niche = NICHE_MODULES[nicheId as keyof typeof NICHE_MODULES];
