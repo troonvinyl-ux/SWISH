@@ -1,3 +1,4 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // SWISH Collection Decomposition Engine — Edge Function
 // Core SWISH capability: analyse a bulk acquisition, detect all separable assets,
 // identify prize items, calculate decomposition uplift, choose optimal exit strategies.
@@ -82,7 +83,7 @@ Return ONLY valid JSON (no markdown fences) in this exact structure:
 
 All monetary values in GBP (numbers only). ROI as decimal (0.3 = 30%). Labour hours as decimals.`;
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withEdgeFunctionLogging('swish-decompose', async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -257,4 +258,4 @@ Recommend the strategy that MAXIMISES net profit per labour hour, not just gross
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-});
+}));
