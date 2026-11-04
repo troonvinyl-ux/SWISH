@@ -1188,6 +1188,7 @@ export default function EbayCsvScreen() {
     beauty: 'beauty',
     tech: 'tech',
     surplus_flip: 'surplus_flip',
+    collectibles: 'collectibles',
   };
   // Never let an unknown/general context disable filtering and import every niche.
   // Unclassified rows can remain generic for manual review, but never enter another
