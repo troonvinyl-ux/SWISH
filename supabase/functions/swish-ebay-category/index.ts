@@ -1,3 +1,4 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // SWISH — eBay Taxonomy Category Service v5
 //
 // AUTHORITATIVE LEAF DETECTION RULE:
@@ -1022,7 +1023,7 @@ function filterCurated(query: string): CatSuggestion[] {
 // Main Handler
 // ═════════════════════════════════════════════════════════════════════════════
 
-Deno.serve(async (req: Request): Promise<Response> => {
+Deno.serve(withEdgeFunctionLogging('swish-ebay-category', async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
@@ -1175,4 +1176,4 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   return json({ success: false, error: `Unknown route: ${route}` }, 400);
-});
+}));
