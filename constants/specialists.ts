@@ -28,7 +28,7 @@ export type SpecialistId =
   | 'fossils'
   | 'beauty'
   | 'tech'
-  | 'collectibles_flipper';
+  | 'collectibles';
 
 export interface CaptureRequirement {
   id: string;
@@ -794,8 +794,8 @@ export const SPECIALISTS: Record<SpecialistId, SpecialistConfig> = {
     version: '1.0.0',
   },
 
-  collectibles_flipper: {
-    id: 'collectibles_flipper', name: 'Collectibles & Clearance Finds', shortName: 'Collectibles',
+  collectibles: {
+    id: 'collectibles', name: 'Collectibles & Clearance Finds', shortName: 'Collectibles',
     description: 'Identify, research, value and list branded giftware, pottery, bears, silverware and miscellaneous collectables.',
     icon: 'category', iconFamily: 'MaterialIcons', color: '#D8AD52', category: 'collectibles',
     captureRequirements: [
