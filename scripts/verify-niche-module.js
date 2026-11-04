@@ -26,7 +26,9 @@ for (const route of [...shared, ...admin]) {
   if (routeOwners.has(route) || (shared.has(route) && admin.has(route))) throw new Error('Conflicting route ownership: ' + route);
 }
 const generated = path.join(root, '.swish-build', niche, 'app');
-const allowed = new Set([...shared, product.entry, product.home, ...product.dedicatedRoutes].filter(Boolean));
+const selectedShared = Array.isArray(product.buildSharedRoutes) ? new Set(product.buildSharedRoutes) : shared;
+if ([...selectedShared].some(route => !shared.has(route))) throw new Error('Product buildSharedRoutes must be a subset of canonical sharedRoutes.');
+const allowed = new Set([...selectedShared, product.entry, product.home, ...product.dedicatedRoutes].filter(Boolean));
 const actual = new Set();
 function walk(directory) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
