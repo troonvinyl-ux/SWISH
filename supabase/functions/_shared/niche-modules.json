@@ -296,14 +296,14 @@
       "entry": "entry/collectibles.tsx",
       "home": null,
       "aliases": [
-        "collectibles_flipper",
+        "collectibles",
         "collectibles-flipper"
       ],
       "specialists": [
-        "collectibles_flipper"
+        "collectibles"
       ],
       "legacySpecialists": [],
-      "defaultSpecialist": "collectibles_flipper",
+      "defaultSpecialist": "collectibles",
       "dedicatedRoutes": [],
       "scannerRoute": "/capture"
     }
