@@ -53,7 +53,8 @@ for (const rule of ['noRebuild', 'noNewDatabase', 'noNewAuth', 'preserveExisting
 }
 const products = object(nicheRegistry) && object(nicheRegistry.products) ? nicheRegistry.products : {};
 const nicheIds = Object.keys(products);
-if (nicheIds.length !== 10) fail(`expected 10 registered niches, found ${nicheIds.length}`);
+const expectedNicheCount = Number.isInteger(register.nicheCertification?.expectedNicheCount) ? register.nicheCertification.expectedNicheCount : 10;
+if (nicheIds.length !== expectedNicheCount) fail(`expected ${expectedNicheCount} registered niches, found ${nicheIds.length}`);
 for (const [id, niche] of Object.entries(products)) {
   if (!object(niche) || niche.id !== id || !text(niche.name) || !text(niche.entry)) fail(`niche ${id} has invalid identity, name or entry route`);
 }
