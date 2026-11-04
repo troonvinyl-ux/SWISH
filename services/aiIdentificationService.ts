@@ -417,7 +417,7 @@ export async function identifyItemWithAI(
     ]);
     const aiSpecialist = id.specialistId as SpecialistId | undefined;
     const callerNiche = resolveProductionNiche(specialistId);
-    if (callerNiche && aiSpecialist && !getProductionNicheSpecialistIds(callerNiche).includes(aiSpecialist)) {
+    if (callerNiche && aiSpecialist && !GENERIC_SPECIALISTS.has(aiSpecialist) && !getProductionNicheSpecialistIds(callerNiche).includes(aiSpecialist)) {
       return { result: null, error: 'The returned identification does not match this specialist. Add evidence or request human review; nothing was saved.' };
     }
     const resolvedSpecialistId: SpecialistId =
