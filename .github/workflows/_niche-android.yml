@@ -133,6 +133,8 @@ jobs:
           sha256sum "dist/${SWISH_NICHE}.apk" > "dist/${SWISH_NICHE}.sha256"
           cp /tmp/swish-expo-config.json "dist/${SWISH_NICHE}-runtime-config.json"
           cp ".swish-build/${SWISH_NICHE}/import-closure.json" "dist/${SWISH_NICHE}-import-closure.json"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA" || { echo "::error::Build checkout does not match the pinned workflow SHA."; exit 1; }
+          node scripts/create-niche-apk-metadata.mjs
       - uses: actions/upload-artifact@v7
         with:
           name: swish-${{ inputs.niche }}-apk
@@ -141,6 +143,8 @@ jobs:
             dist/${{ inputs.niche }}.sha256
             dist/${{ inputs.niche }}-runtime-config.json
             dist/${{ inputs.niche }}-import-closure.json
+            dist/${{ inputs.niche }}-metadata.json
+            dist/${{ inputs.niche }}-signing.txt
           if-no-files-found: error
           retention-days: 90
       - name: Retain build failure diagnostics
