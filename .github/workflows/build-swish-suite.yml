@@ -11,7 +11,7 @@ on:
         type: boolean
         default: true
       include_all_niches:
-        description: Build all ten isolated niche APKs
+        description: Build all eleven isolated niche APKs
         required: true
         type: boolean
         default: true
@@ -24,7 +24,7 @@ jobs:
       fail-fast: false
       max-parallel: 3
       matrix:
-        niche: [coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech]
+        niche: [coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech, collectibles]
     uses: ./.github/workflows/_niche-android.yml
     with:
       niche: ${{ matrix.niche }}
