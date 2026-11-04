@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 // Aggregate the eleven niche APK artifacts into a conservative testing index.
 const fs = require('node:fs');
 const path = require('node:path');
