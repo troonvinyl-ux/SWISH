@@ -51,6 +51,10 @@ const expectedFingerprint = (process.env.SWISH_RELEASE_CERT_SHA256 || '').replac
 if (!expectedFingerprint || signingFingerprintSha256 !== expectedFingerprint) {
   throw new Error('APK signer does not match the approved persistent release certificate.');
 }
+const schemeReportPath = '/tmp/swish-apk-scheme.txt';
+if (!fs.existsSync(schemeReportPath) || fs.readFileSync(schemeReportPath, 'utf8').trim() !== 'Verified Android deep-link scheme: ' + product.scheme) {
+  throw new Error('Compiled Android manifest scheme does not match the canonical niche scheme.');
+}
 const badgingPath = '/tmp/swish-apk-badging.txt';
 if (!fs.existsSync(badgingPath)) throw new Error('APK verification report is missing.');
 const badging = fs.readFileSync(badgingPath, 'utf8');
@@ -69,6 +73,7 @@ const metadata = {
   androidPackage: product.androidPackage,
   iosBundleIdentifier: product.iosBundleIdentifier,
   appScheme: config.scheme,
+  schemeVerified: true,
   appVersion: packageMatch[3],
   androidVersionCode: packageMatch[2],
   launcherIcon: config.icon,
