@@ -3,32 +3,8 @@
 module.exports = {
   testEnvironment: 'node',
   moduleNameMapper: {
-    '^expo/virtual/env(?:\\.js)?
-  },
-  transform: {
-    '^.+\\.[jt]sx?$': 'babel-jest',
-  },
-  testMatch: [
-    '**/__tests__/**/*.test.ts',
-    '**/__tests__/**/*.test.tsx',
-    '**/*.spec.ts',
-    '**/*.spec.tsx',
-  ],
-};
-: '<rootDir>/__mocks__/expoVirtualEnv.js',
-    '^@/(.*)
-  },
-  transform: {
-    '^.+\\.[jt]sx?$': 'babel-jest',
-  },
-  testMatch: [
-    '**/__tests__/**/*.test.ts',
-    '**/__tests__/**/*.test.tsx',
-    '**/*.spec.ts',
-    '**/*.spec.tsx',
-  ],
-};
-: '<rootDir>/$1',
+    '^expo/virtual/env(?:\\.js)?$': '<rootDir>/__mocks__/expoVirtualEnv.js',
+    '^@/(.*)$': '<rootDir>/$1',
   },
   transform: {
     '^.+\\.[jt]sx?$': 'babel-jest',
