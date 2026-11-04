@@ -80,7 +80,7 @@ if (!fs.existsSync(assetScopePath)) throw new Error('Niche-only asset preparatio
 const assetScope = JSON.parse(fs.readFileSync(assetScopePath, 'utf8'));
 const expectedBrandAsset = assetScope.selectedBrandArtwork;
 const sharedBrandAsset = assetScope.sharedBrandArtwork;
-const codeExtensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json', '.d.ts'];
+const codeExtensions = ['.native.tsx', '.native.ts', '.ios.tsx', '.ios.ts', '.android.tsx', '.android.ts', '.web.tsx', '.web.ts', '.tsx', '.ts', '.jsx', '.js', '.mjs', '.cjs', '.json', '.d.ts'];
 const assetExtensions = new Set(['.png','.jpg','.jpeg','.webp','.svg','.gif','.ttf','.otf','.mp4','.mov','.wav','.mp3']);
 const dataFiles = new Set();
 const assetFiles = new Set();
