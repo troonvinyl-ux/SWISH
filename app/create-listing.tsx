@@ -1134,10 +1134,44 @@ export default function CreateListingScreen() {
     setSuggestingCategory(true);
     try {
       const supabase = getSupabaseClient();
-      const { data, error } = await supabase.functions.invoke('swish-ebay-list', {
-        body: { route: 'get_category_suggestions', tenantId: tenant.id, query: title.slice(0, 100) },
-      });
-      if (error) throw error;
+      const requestBody = {
+        route: 'get_category_suggestions',
+        tenantId: tenant.id,
+        query: title.slice(0, 100),
+      };
+
+      // Use the dedicated taxonomy function first, matching the category browser.
+      // Fall back to swish-ebay-list because some deployments may not yet have
+      // the dedicated function enabled or may lack its current runtime.
+      let data: any = null;
+      let lastError: any = null;
+      for (const functionName of ['swish-ebay-category', 'swish-ebay-list']) {
+        try {
+          const result = await supabase.functions.invoke(functionName, { body: requestBody });
+          data = result.data;
+          lastError = result.error ?? null;
+          if (!lastError && data?.success) break;
+        } catch (invokeError: any) {
+          lastError = invokeError;
+        }
+      }
+
+      if (lastError) {
+        let detail = lastError?.message ?? 'The category service could not be reached.';
+        if (lastError instanceof FunctionsHttpError) {
+          try {
+            const responseText = await lastError.context?.text();
+            if (responseText) {
+              const parsed = JSON.parse(responseText);
+              detail = parsed?.error ?? parsed?.message ?? responseText;
+            }
+          } catch {
+            // Keep the SDK message when the response body is not readable JSON.
+          }
+        }
+        throw new Error(detail);
+      }
+
       const suggestions = Array.isArray(data?.suggestions) ? data.suggestions : [];
       const best = suggestions.find((cat: any) => cat?.id && cat?.name && cat.isLeaf === true);
       if (!data?.success || !best) {
