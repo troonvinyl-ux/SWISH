@@ -119,7 +119,7 @@ export const SPECIALIST_PROFILES: Record<string, SpecialistProfile> = {
     listingRules: 'Use verified SKU, condition and sellable units. Disclose mixed/untested condition. Do not auto-create hundreds of records or publish a lot from estimated counts.',
     sourcingChecks: ['Reconcile manifest and physical contents','Stress-test sellable yield and labour costs','Compare lot exit with individual sale economics'],
     sources: [{ label: 'Liquidation manifest risks (supplier guidance)', url: 'https://www.directliquidation.com/liquidation-102/buying-unmanifested-liquidation-pallets-truckloads-need-know/' }],
-  },,
+  },
   collectibles: {
     nicheId: 'collectibles', focus: 'Everyday collectables, branded giftware and house-clearance finds',
     modes: [{ id: 'item', label: 'Collectible / clearance find' }],
