@@ -4,7 +4,7 @@
   "sourcePrompt": "SWISH Modular Production Readiness Master Directive",
   "repository": "troonvinyl-ux/SWISH",
   "defaultBranch": "main",
-  "lastReviewed": "2026-11-02",
+  "lastReviewed": "2026-11-04",
   "rules": {
     "noRebuild": true,
     "noNewDatabase": true,
@@ -303,7 +303,8 @@
       "security-and-entitlements",
       "regression-tests",
       "google-play-store-compliance"
-    ]
+    ],
+    "expectedNicheCount": 11
   },
   "mergePolicy": {
     "requiredChecksMustPass": true,
@@ -527,6 +528,10 @@
     {
       "date": "2026-11-02",
       "change": "Rechecked stale PRs #142–#145 against current main and recorded completed 14-job main verification run 41537431800; live integration remains explicitly skipped."
+    },
+    {
+      "date": "2026-11-04",
+      "change": "PR #167 adds Collectibles Flipper as niche 11 with a minimal route allowlist, dedicated specialist profile and additive existing-entitlement migration. Registration is not production certification."
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"

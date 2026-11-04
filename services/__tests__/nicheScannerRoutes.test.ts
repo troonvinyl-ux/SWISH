@@ -25,6 +25,7 @@ describe('One-tap niche scanner routing', () => {
     ['fossils', '/capture'],
     ['beauty', '/capture'],
     ['tech', '/capture'],
+    ['collectibles', '/capture'],
   ])('%s opens its own capture workflow', (niche, route) => {
     expect(nicheToScannerRoute(niche)).toBe(route);
   });
@@ -41,6 +42,13 @@ describe('One-tap niche scanner routing', () => {
     expect(SPECIALIST_PROFILES.antiques.fields.length).toBeGreaterThanOrEqual(8);
     expect(NICHES.antiques.keyAttributes).toContain('object_type');
     expect(getProductionNicheSpecialistIds('antiques')).toEqual(['antiques', 'books']);
+  });
+
+  test('Collectibles capture, AI profile and inventory specialist are connected', () => {
+    expect(SPECIALISTS.collectibles.captureRequirements.some(slot => slot.required)).toBe(true);
+    expect(SPECIALIST_PROFILES.collectibles.fields.length).toBeGreaterThanOrEqual(8);
+    expect(NICHES.collectibles.keyAttributes).toContain('object_type');
+    expect(getProductionNicheSpecialistIds('collectibles')).toEqual(['collectibles']);
   });
 
   test('Fossils capture, AI profile and inventory specialist are connected', () => {

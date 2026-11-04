@@ -44,7 +44,7 @@ function nicheToEntryRoute(nicheId: NicheId): string {
   return resolveNicheEntryRoute(nicheId) ?? '/niche-select';
 }
 
-// The four primary subscriber niches available at onboarding
+// Registered subscriber niches available at onboarding
 const ONBOARDING_NICHES: Array<{
   id: NicheId;
   name: string;
@@ -124,6 +124,14 @@ const ONBOARDING_NICHES: Array<{
     icon: 'devices',
     color: '#06B6D4',
     description: 'Identify consumer electronics, model specifications, condition, and resale value.',
+  },
+  {
+    id: 'collectibles',
+    name: 'Collectibles Flipper',
+    tagline: 'Identify, value and flip every clearance find',
+    icon: 'category',
+    color: '#D8AD52',
+    description: 'Identify and list branded pottery, giftware, bears, silverware, memorabilia and decorative objects.',
   },
   {
     id: 'surplus_flip',
@@ -417,7 +425,7 @@ export default function OnboardingScreen() {
       type NicheClassification004 =
         | 'coins' | 'motocross' | 'bicycles' | 'clothing'
         | 'trading_cards' | 'antiques' | 'fossils' | 'beauty'
-        | 'tech' | 'surplus_flip' | 'unclassified';
+        | 'tech' | 'surplus_flip' | 'collectibles' | 'unclassified';
 
       const NICHE_TO_CLASSIFICATION: Record<NicheId, NicheClassification004> = {
         coins: 'coins',
@@ -430,6 +438,7 @@ export default function OnboardingScreen() {
         beauty: 'beauty',
         tech: 'tech',
         surplus_flip: 'surplus_flip',
+        collectibles: 'collectibles',
         general: 'unclassified',
       };
 

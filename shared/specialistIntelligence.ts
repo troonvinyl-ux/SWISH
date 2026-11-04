@@ -120,6 +120,18 @@ export const SPECIALIST_PROFILES: Record<string, SpecialistProfile> = {
     sourcingChecks: ['Reconcile manifest and physical contents','Stress-test sellable yield and labour costs','Compare lot exit with individual sale economics'],
     sources: [{ label: 'Liquidation manifest risks (supplier guidance)', url: 'https://www.directliquidation.com/liquidation-102/buying-unmanifested-liquidation-pallets-truckloads-need-know/' }],
   },
+  collectibles: {
+    nicheId: 'collectibles', focus: 'Everyday collectables, branded giftware and house-clearance finds',
+    modes: [{ id: 'item', label: 'Collectible / clearance find' }],
+    taxonomy: ['ceramics', 'pottery', 'branded giftware', 'teddy bears', 'toys', 'silverware', 'silver plate', 'memorabilia', 'glassware', 'decorative objects', 'vintage household'],
+    fields: [field('brand','Maker / brand'),field('object_type','Object type'),field('pattern','Pattern / range'),field('model','Model / edition'),field('date_mark','Date / date mark'),field('material','Material claim'),field('hallmark','Hallmark / maker mark'),field('edition','Limited edition / number'),field('dimensions','Measured dimensions'),field('condition_notes','Condition / defects'),field('packaging','Original box / packaging')],
+    recognition: 'Identify the object category first, then read every visible maker mark, label, pattern, model and edition number literally. Distinguish Wedgwood and other maker marks from lookalike styles. Identify branded bears by label, year, edition and tags. For silver items distinguish solid silver, silver plate and unknown metal; never infer silver content from colour or appearance. Treat anniversary dates and packaging as evidence, not proof of rarity.',
+    conditionRules: 'Record chips, cracks, crazing, tarnish, dents, repairs, missing parts, box condition and label damage. Do not polish silver or clean delicate surfaces. Photos cannot prove metal fineness, authenticity or completeness.',
+    valuationRules: 'Prioritise exact-match eBay UK sold/completed listings over active asking prices. Match maker, pattern, model, edition, size, condition and included packaging. Separate single items from sets and job lots; deduct fees, postage and realistic handling costs. If sold evidence is sparse, show a broad estimate and low confidence rather than inventing a price.',
+    listingRules: 'Generate concise eBay titles and category-specific item specifics from observed or user-confirmed evidence only. Never claim rare, limited edition, solid silver, sterling, antique or authentic without supporting evidence. Use silver plate when confirmed; otherwise mark material as unverified and request hallmark/weight details.',
+    sourcingChecks: ['Photograph maker marks, labels, base stamps and packaging','For silver, capture all hallmarks and obtain a measured weight; do not acid-test from the app','Check sets for missing pieces and record damage before pricing','Use sold-price evidence, not optimistic active listings'],
+    sources: [{ label: 'eBay UK sold listings and category requirements', url: 'https://www.ebay.co.uk/sh/research' }],
+  },
 };
 export type ConfidenceDimension = 'identification' | 'variant' | 'condition' | 'authenticity' | 'compatibility' | 'valuation';
 export interface FollowUp { key: string; question: string; reason: string; photo: string }

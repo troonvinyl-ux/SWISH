@@ -10,7 +10,7 @@ import { getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 
 const read = (file:string) => fs.readFileSync(path.join(process.cwd(),file),'utf8');
 
-describe('ten-niche inventory projection contracts',()=>{
+describe('registered-niche inventory projection contracts',()=>{
   test.each(Object.keys(modules.products))('%s has a unique, registered inventory specialist allow-list',niche=>{
     const ids=getProductionNicheSpecialistIds(niche);
     expect(ids.length).toBeGreaterThan(0);

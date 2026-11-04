@@ -8,7 +8,7 @@ export interface NicheModuleContract {
   androidPackage: string; iosBundleIdentifier: string;
   entry: string; home: string | null; scannerRoute: string;
   aliases: string[]; specialists: string[]; legacySpecialists: string[];
-  defaultSpecialist: string; dedicatedRoutes: string[];
+  defaultSpecialist: string; dedicatedRoutes: string[]; buildSharedRoutes?: string[];
 }
 export const MODULE_CONTRACT_VERSION = registry.contractVersion;
 export const REGISTERED_NICHE_IDS = Object.keys(registry.products) as RegisteredNicheId[];

@@ -88,7 +88,8 @@ describe('Build uses a strict per-niche route and module boundary', () => {
       } else {
         expect(home).toContain('NicheOverview as ProductHome');
       }
-      const expected = [...new Set([...registry.sharedRoutes, product.entry, product.home, ...product.dedicatedRoutes].filter(Boolean))].sort();
+      const selectedSharedRoutes = product.buildSharedRoutes ?? registry.sharedRoutes;
+      const expected = [...new Set([...selectedSharedRoutes, product.entry, product.home, ...product.dedicatedRoutes].filter(Boolean))].sort();
       expect(routeFiles(path.join(temporary, output)).filter(file => file.endsWith('.tsx')).sort()).toEqual(expected);
       for (const adminRoute of registry.adminOnlyRoutes) {
         expect(fs.existsSync(path.join(temporary, output, adminRoute))).toBe(false);

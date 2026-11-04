@@ -27,7 +27,8 @@ export type SpecialistId =
   | 'surplus_trader'
   | 'fossils'
   | 'beauty'
-  | 'tech';
+  | 'tech'
+  | 'collectibles';
 
 export interface CaptureRequirement {
   id: string;
@@ -790,6 +791,26 @@ export const SPECIALISTS: Record<SpecialistId, SpecialistConfig> = {
     riskFactors: ['misidentification', 'restoration', 'protected_species_or_site', 'uncertain_provenance'],
     typicalMarketplaces: ['ebay', 'etsy'],
     autoDetectKeywords: ['fossil', 'ammonite', 'trilobite', 'petrified', 'shark tooth', 'mineral specimen'],
+    version: '1.0.0',
+  },
+
+  collectibles: {
+    id: 'collectibles', name: 'Collectibles & Clearance Finds', shortName: 'Collectibles',
+    description: 'Identify, research, value and list branded giftware, pottery, bears, silverware and miscellaneous collectables.',
+    icon: 'category', iconFamily: 'MaterialIcons', color: '#D8AD52', category: 'collectibles',
+    captureRequirements: [
+      { id: 'main', label: 'Main item', description: 'Clear full view of the object', required: true },
+      { id: 'maker', label: 'Maker marks and labels', description: 'Close-up of base stamps, labels, tags and hallmarks', required: false },
+      { id: 'detail', label: 'Details and edition', description: 'Pattern, model, serial or edition number', required: false },
+      { id: 'condition', label: 'Condition', description: 'Show chips, cracks, tarnish, repairs and missing parts', required: true },
+      { id: 'scale', label: 'Size / scale', description: 'Include a ruler or record dimensions', required: false },
+    ],
+    capabilities: { identify: true, classify: true, research: true, assessCondition: true, value: true, predictDemand: true, recommendDisposition: true, generateListing: true, validateListing: true, detectRisk: true },
+    keyAttributes: ['brand', 'object_type', 'pattern', 'model', 'date_mark', 'material', 'hallmark', 'edition', 'dimensions', 'condition_notes', 'packaging'],
+    valuationInputs: ['brand', 'pattern', 'model', 'edition', 'material', 'condition', 'sold_comparables', 'packaging'],
+    riskFactors: ['silver_vs_plate_uncertain', 'unverified_authenticity', 'misattributed_maker', 'missing_parts', 'damage', 'unsupported_rarity_claim'],
+    typicalMarketplaces: ['ebay'],
+    autoDetectKeywords: ['wedgwood', 'royal doulton', 'royal worcester', 'harrods bear', 'anniversary bear', 'silver spoon', 'silver plate', 'collectible', 'collectable', 'figurine', 'commemorative', 'giftware', 'ornament'],
     version: '1.0.0',
   },
 

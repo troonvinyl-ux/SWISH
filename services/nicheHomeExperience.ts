@@ -8,6 +8,14 @@ export interface NicheHomeExperience {
 }
 
 const EXPERIENCES: Record<string, NicheHomeExperience> = {
+  collectibles: {
+    headline: 'Identify the maker, record the evidence and price from real sold examples before listing.',
+    focusTitle: 'Collectibles evidence checklist',
+    focusBody: 'Clear photos of marks, labels, condition and packaging make the difference between a guess and a defensible listing.',
+    evidenceChecks: ['Maker, brand, pattern and model from visible marks', 'Base stamps, labels, tags and edition numbers', 'Material evidence: solid silver, silver plate or unverified', 'Dimensions, weight and included pieces', 'Chips, cracks, crazing, tarnish, repairs and box condition', 'Exact-match eBay UK sold examples, not asking prices'],
+    cautionTitle: 'Never guess silver, age or rarity',
+    cautionBody: 'Photographs cannot certify sterling content, authenticity, date or rarity. Record hallmarks and measured weight, mark uncertainty clearly and do not make unsupported claims in the listing.',
+  },
   trading_cards: {
     headline: 'Identify the card. Record its condition. Decide whether grading is worth it.',
     focusTitle: 'Card evidence checklist',

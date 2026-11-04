@@ -15,11 +15,12 @@ describe('production niche scanner routing', () => {
     ['fossils', '/capture'],
     ['beauty', '/capture'],
     ['tech', '/capture'],
+    ['collectibles', '/capture'],
   ])('%s resolves to its registered scanner workflow', (niche, expected) => {
     expect(nicheToScannerRoute(niche)).toBe(expected);
   });
 
-  test.each(['trading_cards', 'fossils', 'beauty', 'tech'])(
+  test.each(['trading_cards', 'fossils', 'beauty', 'tech', 'collectibles'])(
     '%s shared capture route has a niche-specific specialist and photo checklist',
     (nicheId) => {
       const niche = NICHE_MODULES[nicheId as keyof typeof NICHE_MODULES];
@@ -40,6 +41,16 @@ describe('production niche scanner routing', () => {
     for (const specialistId of [...niche.specialists, ...niche.legacySpecialists]) {
       expect(resolveProductionNiche(specialistId)).toBe(nicheId);
     }
+  });
+
+  test('Collectibles build packages only its essential shared workflow routes', () => {
+    const routes = NICHE_MODULES.collectibles.buildSharedRoutes ?? [];
+    expect(routes).toContain('create-listing.tsx');
+    expect(routes).toContain('marketplaces.tsx');
+    expect(routes).toContain('(tabs)/inventory.tsx');
+    expect(routes).not.toContain('ebay-finances.tsx');
+    expect(routes).not.toContain('ebay-cases.tsx');
+    expect(routes).not.toContain('ebay-admin.tsx');
   });
 
   test('unknown niche does not resolve to a registered product', () => {

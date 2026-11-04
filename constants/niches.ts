@@ -354,6 +354,28 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     version: '1.0.0',
   },
 
+  collectibles: {
+    id: 'collectibles', name: 'Collectibles Flipper', shortName: 'Collectibles',
+    tagline: 'Identify, value and flip every clearance find',
+    description: 'Specialist identification and resale preparation for branded pottery, giftware, bears, silverware, memorabilia, glass and decorative objects.',
+    icon: 'category', color: '#D8AD52', accentColor: '#9C742E',
+    specialists: NICHE_MODULES.collectibles.specialists as SpecialistId[], defaultSpecialist: 'collectibles',
+    terms: { item: 'Collectible', items: 'Collectibles', itemPlural: 'collectibles', scan: 'Identify Item', identify: 'Identify', condition: 'Condition', catalogue: 'Maker / model' },
+    quickActions: [
+      { icon: 'qr-code-scanner', label: 'Identify Item', route: '/(tabs)/scan' },
+      { icon: 'add-circle', label: 'Create Listing', route: '/create-listing' },
+      { icon: 'inventory-2', label: 'Stock', route: '/(tabs)/inventory' },
+      { icon: 'link', label: 'Connect eBay', route: '/ebay-account' },
+    ],
+    keyAttributes: ['brand', 'object_type', 'pattern', 'model', 'material', 'hallmark', 'edition', 'condition_notes'],
+    acquisitionSources: ['House clearances', 'Estate sales', 'Charity shops', 'Car boot sales', 'Auctions', 'Clearance lots'],
+    marketplaces: ['eBay'],
+    captureInstructions: ['Photograph the whole item', 'Capture maker marks, labels, base stamps and hallmarks', 'Show damage, repairs and missing parts', 'Include a ruler or measured dimensions', 'Photograph original packaging and edition numbers'],
+    hasMeasurements: true,
+    measurementLabels: { weight: 'Weight (g)', size: 'Dimensions (cm)' },
+    version: '1.0.0',
+  },
+
   beauty: {
     id: 'beauty',
     name: 'SWISH Beauty',
@@ -536,7 +558,7 @@ export function nicheIdForSpecialist(specialistId: string): NicheId | null {
 
 // ── Production niche gate ─────────────────────────────────────────────────────
 // Only explicitly registered production niches are active in the application.
-// All ten registered products are selectable subject to server entitlements.
+// All registered products are selectable subject to server entitlements.
 // The generic catch-all remains outside production. Historical records are preserved.
 
 export const PRODUCTION_NICHE_IDS = Object.keys(moduleRegistry.products) as RegisteredNicheId[];

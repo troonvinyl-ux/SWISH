@@ -28,6 +28,7 @@ import { getLearningStats, LearningStats } from '@/services/aiLearningService';
 import { getPartialImageItems } from '@/services/ebayImageService';
 import { getSupabaseClient } from '@/template';
 import { NICHES, NICHE_LIST, NicheId } from '@/constants/niches';
+import { resolveProductionNiche } from '@/services/nicheRouting';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 
 // Enable LayoutAnimation on Android
@@ -3072,7 +3073,8 @@ const nichStyles = StyleSheet.create({
 export default function SettingsScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, businessConfig, reloadBusinessConfig, triggerInventoryReload, activeNiche, activeNicheId, setActiveNiche } = useApp();
+  const { tenant, businessConfig, reloadBusinessConfig, triggerInventoryReload, activeNiche, activeNicheId, fixedNicheId, setActiveNiche } = useApp();
+  const isCollectiblesBuild = resolveProductionNiche(fixedNicheId ?? activeNicheId) === 'collectibles';
   const { logout, user } = useAuth();
   const { showAlert } = useAlert();
 
@@ -3363,11 +3365,12 @@ export default function SettingsScreen({ embedded = false }: { embedded?: boolea
         <CardGroup>
           <SettingRow
             icon="receipt-long"
-            label="All Listings"
-            desc="Manage draft, live and ended listings"
-            onPress={() => router.push('/(tabs)/listings' as any)}
+            label={isCollectiblesBuild ? 'Inventory & Listings' : 'All Listings'}
+            desc={isCollectiblesBuild ? 'Review stock, drafts and live listing status' : 'Manage draft, live and ended listings'}
+            onPress={() => router.push((isCollectiblesBuild ? '/(tabs)/inventory' : '/(tabs)/listings') as any)}
             color={Colors.accent}
           />
+          {!isCollectiblesBuild ? <>
           <Divider />
           <SettingRow
             icon="local-shipping"
@@ -3384,6 +3387,7 @@ export default function SettingsScreen({ embedded = false }: { embedded?: boolea
             onPress={() => router.push('/orders' as any)}
             color={Colors.info}
           />
+          </> : null}
         </CardGroup>
 
         {/* ── Niches & Subscriptions ──────────────────────────────── */}
