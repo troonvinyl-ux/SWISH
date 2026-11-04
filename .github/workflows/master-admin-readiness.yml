@@ -15,6 +15,7 @@ on:
       - 'niche-modules.json'
       - 'scripts/prepare-niche-routes.js'
       - 'scripts/verify-niche-module.js'
+      - 'scripts/prepare-niche-assets.mjs'
       - 'app.json'
       - 'app.config.js'
       - '.github/workflows/publish-ota-update.yml'
@@ -184,6 +185,10 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
       - name: Install locked dependencies
         run: bash scripts/install-dependencies.sh
+      - name: Prepare selected niche-only brand artwork
+        env:
+          SWISH_NICHE: ${{ matrix.niche }}
+        run: node scripts/prepare-niche-assets.mjs
       - name: Validate branded Expo config
         env:
           SWISH_NICHE: ${{ matrix.niche }}
