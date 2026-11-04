@@ -21,7 +21,7 @@ if (canonical.version !== 1 || canonical.contractVersion !== 1) fail('unsupporte
 if (!Array.isArray(canonical.coreServices) || canonical.coreServices.length === 0) fail('coreServices must be a non-empty array');
 const products = canonical.products && typeof canonical.products === 'object' ? canonical.products : {};
 const ids = Object.keys(products);
-if (ids.length !== 10) fail('exactly ten niche products must be registered');
+if (ids.length < 11) fail('all eleven current niche products must be registered');
 const packages = new Set();
 const iosBundles = new Set();
 const schemes = new Set();
