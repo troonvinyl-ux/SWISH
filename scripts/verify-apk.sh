@@ -16,6 +16,14 @@ SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
 test -n "$SDK"
 BUILD_TOOLS="$(find "$SDK/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
 "$BUILD_TOOLS/apksigner" verify --verbose "$APK"
+EXPECTED_CERT_SHA256="${SWISH_RELEASE_CERT_SHA256:?Missing SWISH_RELEASE_CERT_SHA256; refusing unverified signing identity}"
+ACTUAL_CERT_SHA256="$("$BUILD_TOOLS/apksigner" verify --print-certs "$APK" | sed -n 's/.*certificate SHA-256 digest: //p' | head -n 1 | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')"
+EXPECTED_CERT_SHA256="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')"
+if [[ -z "$ACTUAL_CERT_SHA256" || "$ACTUAL_CERT_SHA256" != "$EXPECTED_CERT_SHA256" ]]; then
+  echo "::error::APK signing certificate does not match the approved persistent release fingerprint."
+  exit 1
+fi
+printf "%s\n" "$ACTUAL_CERT_SHA256" > /tmp/swish-signing-fingerprint.txt
 "$BUILD_TOOLS/aapt" dump badging "$APK" > /tmp/swish-apk-badging.txt
 node - "$NICHE" <<'NODE'
 const fs = require('node:fs');
