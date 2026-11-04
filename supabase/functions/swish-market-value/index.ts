@@ -1,3 +1,4 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // SWISH Market Value & Pricing Intelligence Edge Function v8
 //
 // v8 — FIXES:
@@ -1124,7 +1125,7 @@ function computeValuation(params: {
 // ══════════════════════════════════════════════════════════════════════════════
 // MAIN HANDLER
 // ══════════════════════════════════════════════════════════════════════════════
-Deno.serve(async (req: Request) => {
+Deno.serve(withEdgeFunctionLogging('swish-market-value', async (req: Request) => {
   try {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
@@ -1640,4 +1641,4 @@ Deno.serve(async (req: Request) => {
     console.error('[SWISH Market v8] Unhandled valuation error.');
     return jsonResponse({ error: 'Market valuation failed. Please retry.' }, 500);
   }
-});
+}));
