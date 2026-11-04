@@ -87,6 +87,11 @@ jobs:
           npx tsc --noEmit
           npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand
 
+      - name: Prepare niche-only brand artwork
+        env:
+          SWISH_NICHE: ${{ matrix.niche }}
+        run: node scripts/prepare-niche-assets.mjs
+
       - name: Validate branded app identity
         env:
           SWISH_NICHE: ${{ matrix.niche }}
