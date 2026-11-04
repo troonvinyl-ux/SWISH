@@ -193,7 +193,22 @@ jobs:
       - name: Validate branded Expo config
         env:
           SWISH_NICHE: ${{ matrix.niche }}
-        run: npx expo config --type public
+        run: |
+          npx expo config --type public --json > /tmp/swish-expo-config.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const registry = require('./niche-modules.json');
+          const niche = process.env.SWISH_NICHE;
+          const product = registry.products[niche];
+          const config = JSON.parse(fs.readFileSync('/tmp/swish-expo-config.json', 'utf8'));
+          const router = (config.plugins || []).find(p => Array.isArray(p) && p[0] === 'expo-router');
+          const splash = (config.plugins || []).find(p => Array.isArray(p) && p[0] === 'expo-splash-screen');
+          const runtime = (config.version || '1.0.0') + '-' + niche + '-isolated-api36-v1';
+          if (!product || config.name !== product.name || config.android?.package !== product.androidPackage || config.ios?.bundleIdentifier !== product.iosBundleIdentifier || config.scheme !== product.scheme) throw new Error('Canonical package, scheme or branding mismatch: ' + niche);
+          if (config.extra?.swishNicheId !== niche || router?.[1]?.root !== '.swish-build/' + niche + '/app') throw new Error('Niche entry/route isolation mismatch: ' + niche);
+          if (!config.icon || config.android?.adaptiveIcon?.foregroundImage !== config.icon || splash?.[1]?.image !== config.icon) throw new Error('Niche icon/splash mismatch: ' + niche);
+          if (config.runtimeVersion !== runtime || config.updates?.requestHeaders?.['expo-channel-name'] !== 'production-' + niche) throw new Error('Niche runtime/channel mismatch: ' + niche);
+          NODE
       - name: Verify exact per-niche route and module boundary
         env:
           SWISH_NICHE: ${{ matrix.niche }}
