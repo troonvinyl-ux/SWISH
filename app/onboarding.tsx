@@ -430,6 +430,7 @@ export default function OnboardingScreen() {
         beauty: 'beauty',
         tech: 'tech',
         surplus_flip: 'surplus_flip',
+        collectibles: 'collectibles',
         general: 'unclassified',
       };
 
