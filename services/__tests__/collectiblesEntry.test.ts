@@ -1,10 +1,16 @@
 import { nicheToEntryRoute, resolveProductionNiche } from '@/services/nicheRouting';
 import registry from '@/niche-modules.json';
+import fs from 'node:fs';
+import path from 'node:path';
 
 describe('Collectibles Flipper entry integration', () => {
   test('collectibles is a canonical registered niche', () => {
     expect(resolveProductionNiche('collectibles')).toBe('collectibles');
     expect(registry.products.collectibles.entry).toBe('entry/collectibles.tsx');
+  });
+
+  test('canonical Collectibles entry file exists at the registered route', () => {
+    expect(fs.existsSync(path.join(process.cwd(), 'app', registry.products.collectibles.entry))).toBe(true);
   });
 
   test('collectibles opens its own entry route', () => {
