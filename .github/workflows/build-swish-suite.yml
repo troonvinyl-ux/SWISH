@@ -5,7 +5,7 @@ on:
       - 'release/apk-suite-*'
   pull_request:
     branches:
-      - 'release/11-app-android-testing'
+      - main
     paths:
       - '.github/workflows/_niche-android.yml'
       - '.github/workflows/build-swish-suite.yml'
