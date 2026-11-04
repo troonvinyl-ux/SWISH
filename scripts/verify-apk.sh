@@ -36,4 +36,16 @@ if (!badging.includes("targetSdkVersion:'36'")) throw new Error('APK must target
 if (!badging.includes('launchable-activity:')) throw new Error('APK has no launcher activity');
 console.log('APK ZIP, signature, package, label and launcher verified for ' + product.id);
 NODE
+EXPECTED_SCHEME="$(node - "$NICHE" <<'NODE'
+const product = require(process.cwd() + '/niche-modules.json').products[process.argv[2]];
+if (!product?.scheme) process.exit(1);
+process.stdout.write(product.scheme);
+NODE
+)"
+MANIFEST_DUMP="$("$BUILD_TOOLS/aapt" dump xmltree "$APK" AndroidManifest.xml)"
+if ! printf '%s\n' "$MANIFEST_DUMP" | grep -F "$EXPECTED_SCHEME" >/dev/null; then
+  echo "::error::APK AndroidManifest does not contain the canonical app scheme: $EXPECTED_SCHEME"
+  exit 1
+fi
+printf 'Verified Android deep-link scheme: %s\n' "$EXPECTED_SCHEME" > /tmp/swish-apk-scheme.txt
 # Device launch, authentication and inventory checks remain separate release gates.
