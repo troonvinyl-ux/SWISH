@@ -317,6 +317,7 @@
         "ebay-account.tsx",
         "ebay-listing-editor.tsx",
         "listing-preflight.tsx",
+        "lot-opportunity.tsx",
         "photo-quality-check.tsx",
         "review-required.tsx",
         "settings.tsx",
