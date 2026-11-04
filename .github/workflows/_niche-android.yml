@@ -138,6 +138,7 @@ jobs:
           cp "$APK" "dist/${SWISH_NICHE}.apk"
           sha256sum "dist/${SWISH_NICHE}.apk" > "dist/${SWISH_NICHE}.sha256"
           cp /tmp/swish-expo-config.json "dist/${SWISH_NICHE}-runtime-config.json"
+          cp /tmp/swish-apk-scheme.txt "dist/${SWISH_NICHE}-scheme-verification.txt"
           cp ".swish-build/${SWISH_NICHE}/import-closure.json" "dist/${SWISH_NICHE}-import-closure.json"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA" || { echo "::error::Build checkout does not match the pinned workflow SHA."; exit 1; }
           node scripts/create-niche-apk-metadata.mjs
@@ -148,6 +149,7 @@ jobs:
             dist/${{ inputs.niche }}.apk
             dist/${{ inputs.niche }}.sha256
             dist/${{ inputs.niche }}-runtime-config.json
+            dist/${{ inputs.niche }}-scheme-verification.txt
             dist/${{ inputs.niche }}-import-closure.json
             dist/${{ inputs.niche }}-metadata.json
             dist/${{ inputs.niche }}-signing.txt
