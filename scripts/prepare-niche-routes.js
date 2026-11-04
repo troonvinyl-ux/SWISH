@@ -31,8 +31,10 @@ function prepareNicheRoutes(niche, root = path.resolve(__dirname, '..')) {
     if (ownedRoutes.has(route) || sharedRoutes.has(route)) throw new Error('Route has conflicting build ownership: ' + route);
   }
 
+  const selectedSharedRoutes = Array.isArray(product.buildSharedRoutes) ? product.buildSharedRoutes : registry.sharedRoutes;
+  if (selectedSharedRoutes.some(route => !sharedRoutes.has(route))) throw new Error('Product buildSharedRoutes must be a subset of canonical sharedRoutes: ' + niche);
   const allowed = new Set([
-    ...registry.sharedRoutes,
+    ...selectedSharedRoutes,
     product.entry,
     ...(product.dedicatedRoutes || []),
     ...(product.home ? [product.home] : []),
