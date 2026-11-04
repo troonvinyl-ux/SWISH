@@ -1,6 +1,7 @@
 import { classifyListing, nicheToSpecialistId } from '@/services/nicheCategoryService';
 import { resolveProductionNiche, getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 import { SPECIALIST_PROFILES } from '@/shared/specialistIntelligence';
+import { getNicheHomeExperience } from '@/services/nicheHomeExperience';
 
 describe('Collectibles Flipper niche', () => {
   test.each([
@@ -12,6 +13,12 @@ describe('Collectibles Flipper niche', () => {
     const result = classifyListing(null, null, title);
     expect(result.niche).toBe(expected);
     expect(nicheToSpecialistId(result.niche)).toBe('collectibles');
+  });
+
+  test('shows the evidence checklist and silver / rarity safety cautions on its home', () => {
+    const home = getNicheHomeExperience('collectibles');
+    expect(home?.evidenceChecks).toContain('Base stamps, labels, tags and edition numbers');
+    expect(home?.cautionBody).toContain('cannot certify sterling content');
   });
 
   test('uses its own canonical specialist and never the legacy catch-all', () => {
