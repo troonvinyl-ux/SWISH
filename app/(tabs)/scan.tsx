@@ -23,7 +23,7 @@ import { getSpecialistProfile } from '@/shared/specialistIntelligence';
 
 // ── Map active niche to its product ──────────────────────────────────────────
 
-type NicheProduct = 'coins' | 'mx' | 'bikes' | 'clothing' | 'cards' | 'antiques' | 'fossils' | 'beauty' | 'tech' | 'surplus' | 'general';
+type NicheProduct = 'coins' | 'mx' | 'bikes' | 'clothing' | 'cards' | 'antiques' | 'fossils' | 'beauty' | 'tech' | 'surplus' | 'collectibles' | 'general';
 
 function getNicheProduct(nicheId: string | null | undefined): NicheProduct {
   // resolveProductionNiche returns canonical ProductionNicheId values only.
@@ -41,6 +41,7 @@ function getNicheProduct(nicheId: string | null | undefined): NicheProduct {
   if (id === 'fossils') return 'fossils';
   if (id === 'beauty') return 'beauty';
   if (id === 'tech') return 'tech';
+  if (id === 'collectibles') return 'collectibles';
   return 'general';
 }
 
@@ -306,6 +307,30 @@ const NICHE_CAPTURE: Record<NicheProduct, NicheCaptureConfig> = {
       'Fees, shipping and risk-adjusted bid ceiling',
       'Fast-turnover maximum purchase recommendation',
       'Lot-level margin and cash-recovery analysis',
+    ],
+  },
+  collectibles: {
+    title: 'Collectibles Flipper',
+    subtitle: 'AI Collectibles & Clearance Identification',
+    tagline: 'IDENTIFY • VALUE • LIST • SELL',
+    icon: 'category',
+    color: '#D8AD52',
+    bgColor: '#0B0907',
+    dimColor: '#2A2010',
+    route: '/capture',
+    captureOptions: [
+      { icon: 'photo-camera', label: 'Main Item', desc: 'Full view of the object — required' },
+      { icon: 'photo-camera', label: 'Maker Marks & Labels', desc: 'Base stamps, maker marks, tags and hallmarks' },
+      { icon: 'photo-camera', label: 'Details & Edition', desc: 'Pattern, model, date or edition number' },
+      { icon: 'photo-camera', label: 'Condition', desc: 'Chips, cracks, tarnish, repairs and missing parts — required' },
+      { icon: 'straighten', label: 'Scale & Packaging', desc: 'Ruler, dimensions and original box or tags' },
+    ],
+    aiCapabilities: [
+      'Identify branded pottery, giftware, bears, silverware and decorative objects',
+      'Read maker marks, labels, patterns, model and edition evidence',
+      'Separate silver, silver plate and unknown metal without visual guesswork',
+      'Describe visible condition and completeness risks',
+      'Prepare evidence-led eBay categories, item specifics and listing drafts',
     ],
   },
   general: {
