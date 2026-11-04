@@ -19,6 +19,7 @@ on:
           - fossils
           - beauty
           - tech
+          - collectibles
       message:
         description: Short release note shown in the update
         required: true
