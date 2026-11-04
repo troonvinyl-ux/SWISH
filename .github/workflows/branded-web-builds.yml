@@ -63,6 +63,7 @@ jobs:
           - trading_cards
           - beauty
           - tech
+          - collectibles
 
     steps:
       - name: Checkout
