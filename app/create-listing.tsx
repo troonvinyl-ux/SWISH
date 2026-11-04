@@ -41,6 +41,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
+import { useAntiqueCategory } from '@/hooks/useAntiqueCategory';
 import { useAlert } from '@/template';
 import { getItem, Item } from '@/services/itemService';
 import { generateListing, saveListing, getItemListings } from '@/services/listingService';
@@ -971,8 +972,10 @@ export default function CreateListingScreen() {
   const { id: itemId } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, activeNicheId, fixedNicheId } = useApp();
+  const { tenant, activeNicheId, fixedNicheId, activeNiche } = useApp();
   const isThreadsFlip = (fixedNicheId ?? activeNicheId) === 'clothing';
+  const isAntique = (fixedNicheId ?? activeNicheId) === 'antiques';
+  const chooseAntiqueCategory = useAntiqueCategory();
   const threads = { background: '#0C080C', surface: '#160E16', surfaceHigh: '#201420', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5', muted: '#9A7090' };
   const { showAlert } = useAlert();
 
@@ -1101,6 +1104,16 @@ export default function CreateListingScreen() {
   // ── Category selected from inline picker ─────────────────────────────────
 
   const handleCategorySelected = useCallback(async (catId: string, catName: string) => {
+    if (isAntique) {
+      if (!item || !tenant) return;
+      try {
+        const saved = await chooseAntiqueCategory(item.id, catId, catName);
+        if (saved.error || !saved.attributes) { showAlert('Category not saved', saved.error ?? 'Save was not confirmed.'); return; }
+        setItem(previous => previous ? { ...previous, attributes: saved.attributes } : previous);
+        setConfirmedCategory({ id: catId, name: catName, source: 'user' });
+      } catch { showAlert('Category not saved', 'The category request failed. Reload this item before continuing.'); }
+      return;
+    }
     setConfirmedCategory({ id: catId, name: catName, source: 'user' });
     // Persist to item attributes so the listing editor + edge function can read it
     if (item && tenant) {
@@ -1121,7 +1134,7 @@ export default function CreateListingScreen() {
       ebaySearchedHashRef.current = null;
       runEbayVisualSearch(item, catId);
     }
-  }, [item, tenant, ebaySearchDone, runEbayVisualSearch]);
+  }, [item, tenant, ebaySearchDone, runEbayVisualSearch, isAntique, chooseAntiqueCategory, showAlert]);
 
   // ── Title-based category suggestion works even if visual search has no usable image ──
   const handleSuggestCategory = useCallback(async () => {
@@ -1196,9 +1209,10 @@ export default function CreateListingScreen() {
   // ── Generate listing ───────────────────────────────────────────────────────
 
   const handleGenerateListing = useCallback(async () => {
-    if (!item || !tenant) return;
+    if (!item || !tenant || generatingListing) return;
     setGeneratingListing(true);
 
+    try {
     const { listing, error } = await generateListing(item.id, tenant.id, 'ebay');
     if (error || !listing) {
       showAlert('Generation Failed', error ?? 'Could not generate listing.');
@@ -1216,7 +1230,9 @@ export default function CreateListingScreen() {
     setGeneratedListing(saved);
     // Navigate to the listing editor for full review
     router.push(`/ebay-listing-editor?id=${saved.id}` as any);
-  }, [item, tenant, showAlert, router, confirmedCategory]);
+    } catch { showAlert('Draft not confirmed', 'Reload this item and inspect existing drafts before retrying. No publication was requested.'); }
+    finally { setGeneratingListing(false); }
+  }, [item, tenant, showAlert, router, confirmedCategory, generatingListing]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -1255,7 +1271,7 @@ export default function CreateListingScreen() {
           <MaterialIcons name="arrow-back" size={20} color={Colors.textSecondary} />
         </Pressable>
         <View style={s.flex}>
-          <Text style={[s.headerTitle, isThreadsFlip && { color: threads.cream }]}>Threads Flip · Create Listing</Text>
+          <Text style={[s.headerTitle, isThreadsFlip && { color: threads.cream }]}>{activeNiche.name} · Create Listing</Text>
           <Text style={[s.headerSub, isThreadsFlip && { color: threads.muted }]} numberOfLines={1}>{item.canonicalTitle}</Text>
         </View>
         {hasExistingListing ? (

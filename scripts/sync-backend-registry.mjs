@@ -7,14 +7,15 @@ export function syncBackendRegistry(root = process.cwd(), check = false) {
   const target = path.join(root, 'supabase/functions/_shared/niche-modules.json');
   if (check) {
     const deployed = JSON.parse(fs.readFileSync(target, 'utf8'));
-    if (JSON.stringify(deployed) !== JSON.stringify(canonical)) throw new Error('Backend niche registry is stale. Run node scripts/sync-backend-registry.mjs and commit the generated asset.');
+    const stable = value => Array.isArray(value) ? value.map(stable) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key,stable(value[key])])) : value;
+    if (JSON.stringify(stable(deployed)) !== JSON.stringify(stable(canonical))) throw new Error('Backend niche registry is stale. Run node scripts/sync-backend-registry.mjs and commit the generated asset.');
   } else {
     fs.writeFileSync(target, JSON.stringify(canonical, null, 2) + '\n');
   }
 }
 // These byte-identical deployment assets are generated from shared/; never edit
 // them as independent rules. OnSpace deploys supabase/functions, not the repo root.
-export const BACKEND_SHARED_ASSETS = ['nicheAuthorization.ts', 'specialistIntelligence.ts', 'ebayMessagePagination.ts'];
+export const BACKEND_SHARED_ASSETS = ['nicheAuthorization.ts', 'specialistIntelligence.ts', 'ebayMessagePagination.ts', 'ebayImportScope.ts', 'antiqueListingPolicy.ts'];
 export function syncBackendSharedAssets(root = process.cwd(), check = false) {
   for (const name of BACKEND_SHARED_ASSETS) {
     const source = fs.readFileSync(path.join(root, 'shared', name), 'utf8');

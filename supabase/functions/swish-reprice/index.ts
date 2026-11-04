@@ -2,6 +2,7 @@
 // Analyses stale/underperforming listings and suggests AI-driven price adjustments.
 // Considers: days listed, views, watchers, valuation range, floor price, market context.
 
+import { serveModule } from '../_shared/moduleScope.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { isSpecialistAllowedForReprice, REPRICE_NICHE_SPECIALISTS } from '../_shared/repriceNicheAccess.ts';
@@ -31,7 +32,7 @@ interface RepriceResult {
   estimated_sale_probability_uplift: number;
 }
 
-Deno.serve(async (req) => {
+serveModule(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }

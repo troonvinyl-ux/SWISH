@@ -62,9 +62,9 @@ export interface NicheConfig {
 export const NICHES: Record<NicheId, NicheConfig> = {
   collectibles: {
     id: 'collectibles', name: 'Collectibles Flipper', shortName: 'Collectibles',
-    tagline: 'Identify, value and flip every clearance find',
-    description: 'Evidence-led resale of branded pottery, giftware, bears, silverware, memorabilia and decorative objects.',
-    icon: 'category', color: '#D8AD52', accentColor: '#9C742E',
+    tagline: 'Toys · Memorabilia · Comics · Vintage finds',
+    description: 'Evidence-led identification and resale of toys, figures, comics, games, pop-culture memorabilia, vintage collectibles and clearance finds.',
+    icon: 'category', color: '#FFE600', accentColor: '#F5C842',
     specialists: NICHE_MODULES.collectibles.specialists as SpecialistId[], defaultSpecialist: 'collectibles',
     terms: { item: 'Collectible', items: 'Collectibles', itemPlural: 'collectibles', scan: 'Identify Item', identify: 'Identify', condition: 'Condition', catalogue: 'Maker / model' },
     quickActions: [
@@ -73,7 +73,7 @@ export const NICHES: Record<NicheId, NicheConfig> = {
       { icon: 'sell', label: 'Listings', route: '/(tabs)/listings' },
       { icon: 'link', label: 'Connect eBay', route: '/ebay-account' },
     ],
-    keyAttributes: ['brand','object_type','pattern','model','material','hallmark','edition','condition_notes'],
+    keyAttributes: ['brand','object_type','character','franchise','series','model','edition','completeness','condition_notes'],
     acquisitionSources: ['House clearances','Estate sales','Charity shops','Car boot sales','Auctions'], marketplaces: ['eBay'],
     captureInstructions: ['Photograph the whole item','Capture base stamps, labels, maker marks and hallmarks','Show damage, repairs and missing parts','Record dimensions with a ruler','Photograph packaging and edition numbers'],
     hasMeasurements: true, measurementLabels: { weight: 'Weight (g)', size: 'Dimensions (cm)' }, version: '1.0.0',

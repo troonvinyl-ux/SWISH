@@ -23,7 +23,6 @@
 //   - All access token / refresh token values stored AES-256-GCM encrypted
 //   - state nonce is single-use with 15-minute expiry
 
-import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
@@ -70,7 +69,7 @@ function jsonResponse(body: unknown, status = 200) {
 function htmlResponse(html: string, status = 200) {
   return new Response(html, {
     status,
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    headers: { ...corsHeaders, 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
   });
 }
 
@@ -134,30 +133,14 @@ async function createOAuthSession(
   ruName: string,
   sellerAccountId: string,
 ): Promise<{ consentUrl: string; error?: string }> {
-  // Upsert connector record with encrypted credentials
+  // Stage encrypted credentials on the one-time consent session ONLY.
+  // Cancelling/expiring consent leaves the current connector and tokens intact.
   const credentialRef = await encryptCredentials({
     clientId:        clientId.trim(),
     clientSecret:    clientSecret.trim(),
     ruName:          ruName.trim(),
     sellerAccountId: sellerAccountId.trim(),
   });
-
-  const { error: upsertErr } = await supabase
-    .from('marketplace_connectors')
-    .upsert({
-      tenant_id:      tenantId,
-      marketplace_id: 'ebay',
-      display_name:   'eBay',
-      status:         'disconnected',
-      credential_ref: credentialRef,
-      seller_account_id: sellerAccountId.trim(),
-      updated_at:     new Date().toISOString(),
-    }, { onConflict: 'tenant_id,marketplace_id' });
-
-  if (upsertErr) {
-    console.error('Connector upsert error:', upsertErr.message);
-    return { consentUrl: '', error: 'Unable to save eBay connection setup. Please retry or contact support.' };
-  }
 
   const stateNonce = generateStateNonce();
   const expiresAt  = new Date(Date.now() + 15 * 60 * 1000).toISOString();
@@ -170,6 +153,7 @@ async function createOAuthSession(
       provider:   'ebay',
       expires_at: expiresAt,
       used:       false,
+      pending_credential_ref: credentialRef,
     });
 
   if (sessionErr) {
@@ -308,7 +292,7 @@ async function handleCallback(url: URL): Promise<Response> {
 
   const { data: session, error: sessionFetchErr } = await supabase
     .from('oauth_sessions')
-    .select('id, tenant_id, expires_at, used')
+    .select('id, tenant_id, expires_at, used, pending_credential_ref')
     .eq('state', stateNonce)
     .eq('provider', 'ebay')
     .maybeSingle();
@@ -347,11 +331,13 @@ async function handleCallback(url: URL): Promise<Response> {
 
   const tenantId = session.tenant_id;
 
-  // Mark session used immediately (one-time-use protection)
-  await supabase
+  // Atomic single-use claim: simultaneous callbacks cannot exchange twice.
+  const { data: claimed, error: claimError } = await supabase
     .from('oauth_sessions')
     .update({ used: true, used_at: new Date().toISOString() })
-    .eq('id', session.id);
+    .eq('id', session.id).eq('used', false).gt('expires_at', new Date().toISOString())
+    .select('id').maybeSingle();
+  if (claimError || !claimed) return htmlResponse(errorPage('Session Unavailable', 'This consent attempt was already claimed or expired.', 'Check your existing connection; no active credentials were replaced.'), 409);
 
   // Retrieve stored credentials
   const { data: connectorRow, error: fetchErr } = await supabase
@@ -361,7 +347,8 @@ async function handleCallback(url: URL): Promise<Response> {
     .eq('marketplace_id', 'ebay')
     .maybeSingle();
 
-  if (fetchErr || !connectorRow?.credential_ref) {
+  const stagedCredentialRef = session.pending_credential_ref ?? connectorRow?.credential_ref;
+  if (fetchErr || !stagedCredentialRef) {
     console.error('Connector credential fetch error:', fetchErr?.message ?? 'no credential_ref');
     return htmlResponse(errorPage(
       'Credentials Not Found',
@@ -372,9 +359,9 @@ async function handleCallback(url: URL): Promise<Response> {
 
   let credentials: { clientId: string; clientSecret: string; ruName: string; sellerAccountId?: string };
   try {
-    credentials = await decryptCredentials(connectorRow.credential_ref) as any;
+    credentials = await decryptCredentials(stagedCredentialRef) as any;
   } catch (e: any) {
-    console.error('credential_ref decrypt error for tenant:', tenantId, e.message);
+    console.error('[swish-ebay-oauth] staged credentials unavailable');
     return htmlResponse(errorPage('Invalid Credentials', 'Stored credentials could not be decrypted.', 'Return to SWISH and try connecting again.'));
   }
 
@@ -422,8 +409,10 @@ async function handleCallback(url: URL): Promise<Response> {
         'Content-Type':  'application/x-www-form-urlencoded',
       },
       body: tokenBody.toString(),
+      signal: AbortSignal.timeout(15000),
     });
     tokenData = await tokenResponse.json();
+    if (!tokenResponse.ok) tokenData.access_token = undefined;
   } catch (networkErr: any) {
     console.error('Token exchange network error:', networkErr.message);
     return htmlResponse(errorPage('Network Error', 'Could not reach the eBay token endpoint.', networkErr.message));
@@ -455,12 +444,17 @@ async function handleCallback(url: URL): Promise<Response> {
     accessToken:  tokenData.access_token,
     refreshToken: tokenData.refresh_token ?? null,
     expiresAt,
+    sellerAccountId: sellerAccountId ?? '',
+    hasAnalyticsScope: true,
   });
 
-  // Mark connector connected
+  // Successful consent is the only operation that may replace active credentials.
   const { error: updateErr } = await supabase
     .from('marketplace_connectors')
-    .update({
+    .upsert({
+      tenant_id:                tenantId,
+      marketplace_id:           'ebay',
+      display_name:             'eBay',
       status:                   'connected',
       credential_ref:           updatedCredentialRef,
       access_token_expires_at:  expiresAt,
@@ -477,9 +471,7 @@ async function handleCallback(url: URL): Promise<Response> {
       connected_at:             new Date().toISOString(),
       last_error:               null,
       updated_at:               new Date().toISOString(),
-    })
-    .eq('tenant_id', tenantId)
-    .eq('marketplace_id', 'ebay');
+    }, { onConflict: 'tenant_id,marketplace_id' });
 
   if (updateErr) {
     console.error('Connector update error:', updateErr.message);
@@ -586,7 +578,7 @@ function escapeHtml(s: string): string {
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-Deno.serve(withEdgeFunctionLogging('swish-ebay-oauth', async (req: Request) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   const url        = new URL(req.url);
@@ -610,10 +602,10 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-oauth', async (req: Request) => {
 
     return jsonResponse({ error: 'Method not allowed' }, 405);
   } catch (err: any) {
-    console.error('[swish-ebay-oauth] unhandled error:', err.message);
+    console.error('[swish-ebay-oauth] request failed');
     if (isCallback) {
-      return htmlResponse(errorPage('Unexpected Error', err.message ?? 'An internal error occurred.', 'Return to SWISH and try again.'));
+      return htmlResponse(errorPage('Unexpected Error', 'The connection could not be completed.', 'Your existing authorisation is preserved. Return to SWISH and retry.'), 500);
     }
-    return jsonResponse({ error: err.message ?? 'Internal error' }, 500);
+    return jsonResponse({ error: 'The connection could not be completed. Existing authorisations are preserved.' }, 500);
   }
-}));
+});

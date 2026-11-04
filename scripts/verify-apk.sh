@@ -15,7 +15,13 @@ PY
 SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
 test -n "$SDK"
 BUILD_TOOLS="$(find "$SDK/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
-"$BUILD_TOOLS/apksigner" verify --verbose "$APK"
+"$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" > /tmp/swish-apk-signature.txt
+cat /tmp/swish-apk-signature.txt
+if [ -z "${SWISH_RELEASE_CERT_SHA256:-}" ]; then echo 'Expected persistent release certificate SHA-256 is required'; exit 1; fi
+ACTUAL_CERT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/swish-apk-signature.txt | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')
+EXPECTED_CERT=$(printf '%s' "$SWISH_RELEASE_CERT_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')
+test -n "$ACTUAL_CERT"
+test "$ACTUAL_CERT" = "$EXPECTED_CERT" || { echo 'APK is not signed by the approved persistent certificate'; exit 1; }
 "$BUILD_TOOLS/aapt" dump badging "$APK" > /tmp/swish-apk-badging.txt
 node - "$NICHE" <<'NODE'
 const fs = require('node:fs');

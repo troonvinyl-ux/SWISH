@@ -2,7 +2,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
 import 'react-native-url-polyfill/auto';
 import { SupabaseConfig } from './types';
 
@@ -27,12 +26,8 @@ class SupabaseManager {
     try {
       console.log(`[Template:Client] Creating Supabase client instance #${this.creationCount}`);
       
-      // OTA bundles may not have build-time EXPO_PUBLIC_* values available.
-      // app.config.js embeds only the public Supabase URL and anon key in the
-      // Expo runtime manifest so an OTA bundle uses the same backend as a fresh APK.
-      const runtimeSupabase = (Constants.expoConfig?.extra as any)?.supabase;
-      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || runtimeSupabase?.url;
-      const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || runtimeSupabase?.anonKey;
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+      const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
       
       if (!supabaseUrl || !supabaseAnonKey) {
         const errorMsg = '[Template:Client] Supabase environment variables missing\n' +

@@ -504,6 +504,7 @@ serveModule(async (req) => {
     if (!isMXSpecialist) {
       for (const [k, v] of Object.entries(item.attributes as Record<string, any> ?? {})) {
         const kl = k.toLowerCase().replace(/[^a-z0-9_]/g, '');
+        if (profile?.nicheId === 'antiques' && (item.attributes?.[`_inferred_${k}`] != null || item.attributes?._specialist_analysis?.fields?.[k]?.basis === 'inferred')) continue;
         if (k.startsWith('_') || ATTR_BLOCK_LIST.has(k) || ATTR_BLOCK_LIST.has(kl)) continue;
         if (kl.startsWith('inferred') || kl.startsWith('numista') || kl.startsWith('ebay')) continue;
         if (v === null || v === undefined || typeof v === 'object') continue;
@@ -587,6 +588,7 @@ You always respond with ONLY valid JSON — no markdown, no explanation, no prea
 SPECIALIST RULES: ${profile?.listingRules ?? 'Use supported item evidence only.'}
 ${isMXPart ? 'This is a motorcycle COMPONENT, not a complete bike. Use exact part number/component identity. Fitment is not verified by visual resemblance.' : ''}
 Category IDs must not be invented. Use an empty category_id unless a saved, seller-selected ID is supplied. Current category requirements are checked in the existing editor/publish Taxonomy flow.
+${profile?.nicheId === 'antiques' ? 'ANTIQUE EVIDENCE: ' + JSON.stringify(item.attributes?._specialist_analysis ?? {}) + '\nInferred maker/date/origin/style are hypotheses, never confirmed claims. Preserve uncertainty, user condition notes and restoration/provenance limitations. Do not fabricate a maker, age, originality or rarity. Return candidate specifics only; actual required fields are fetched from the selected eBay category in the editor.' : ''}
 Mapped, evidence-based candidate specifics (use only when applicable to the chosen category): ${JSON.stringify(profile ? mappedSpecialistSpecifics(profile,item.attributes ?? {}) : {})}
 
 ITEM DATA:
@@ -814,6 +816,13 @@ Return ONLY this exact JSON:
       }
     }
     if (profile?.nicheId === 'beauty') safetyFlags.push('Seller must verify seal, expiry, recalls, ingredients, EAN and responsible-person requirements before publication; AI does not certify safety.');
+    if (profile?.nicheId === 'antiques') {
+      // No AI category-ID or unverified generic specifics become authoritative.
+      listing.title = listing.title.trim().slice(0, 80);
+      if (provisional && !/possible|provisional|attributed|style of|unverified/i.test(listing.title)) listing.title = `Possible ${listing.title}`.slice(0, 80);
+      listing.category_id = String(item.attributes?.ebay_category_id ?? '');
+      listing.item_specifics = mappedSpecialistSpecifics(profile, item.attributes ?? {});
+    }
     listing.safety_flags = safetyFlags;
     listing.description = buildEbayDescriptionHtml(listing, profile?.nicheId);
 

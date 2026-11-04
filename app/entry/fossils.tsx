@@ -1,3 +1,2 @@
-import { Redirect } from 'expo-router';
-import { useNicheEntry } from '@/hooks/useNicheEntry';
-export default function FossilsEntryRoute() { useNicheEntry('fossils'); return <Redirect href="/(tabs)" />; }
+import { ModuleEntry } from '@/components/layout/ModuleEntry';
+export default function FossilsEntryRoute() { return <ModuleEntry nicheId="fossils" />; }

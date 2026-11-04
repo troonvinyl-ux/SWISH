@@ -28,12 +28,7 @@
 //   test                    — health check with live eBay round-trip
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+import { corsHeaders } from '../_shared/cors.ts';
 
 const EBAY_TOKEN_URL = 'https://api.ebay.com/identity/v1/oauth2/token';
 const EBAY_TAXONOMY  = 'https://api.ebay.com/commerce/taxonomy/v1';
@@ -642,6 +637,7 @@ interface CatAspect {
   name: string; required: boolean; recommended: boolean; optional: boolean;
   cardinality: 'SINGLE' | 'MULTI'; values: string[];
   dataType: string; usage: 'REQUIRED' | 'RECOMMENDED' | 'OPTIONAL';
+  localizedAspectName?: string; aspectConstraint?: Record<string, unknown>; aspectValues?: Array<Record<string, unknown>>;
 }
 
 async function getCategoryAspects(
@@ -716,8 +712,10 @@ async function getCategoryAspects(
         required: a.aspectConstraint?.aspectRequired === true || usage === 'REQUIRED',
         recommended: usage === 'RECOMMENDED', optional: usage === 'OPTIONAL',
         cardinality: a.aspectConstraint?.itemToAspectCardinality === 'MULTI' ? 'MULTI' : 'SINGLE',
-        values: (a.aspectValues ?? []).slice(0, 30).map((v: any) => v.localizedValue ?? '').filter(Boolean),
+        values: (a.aspectValues ?? []).map((v: any) => v.localizedValue ?? '').filter(Boolean),
         dataType: a.aspectConstraint?.aspectDataType ?? 'STRING', usage,
+        // Preserve full metadata and dependent values; normalized cache/UI fields are additive.
+        localizedAspectName: a.localizedAspectName, aspectConstraint: a.aspectConstraint ?? {}, aspectValues: a.aspectValues ?? [],
       };
     }).filter((a: CatAspect) => a.name);
 
@@ -1146,7 +1144,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   if (route === 'get_category_aspects') {
     if (!categoryId) return json({ success: false, error: 'categoryId is required' }, 400);
-    const result = await getCategoryAspects(supabase, token, treeId, categoryId);
+    const result = await getCategoryAspects(supabase, token, treeId, categoryId, body.forceLive === true);
     return json({
       success: result.isLeaf, isLeaf: result.isLeaf, aspects: result.aspects,
       requiredAspects: result.aspects.filter(a => a.required).map(a => a.name),
