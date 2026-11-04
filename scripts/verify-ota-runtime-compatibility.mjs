@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 // Fail closed unless this commit contains OTA-compatible JS/assets only since
 // the latest successful isolated APK suite build that is an ancestor of it.
 const fs = require('node:fs');
