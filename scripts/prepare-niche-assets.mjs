@@ -1,9 +1,13 @@
 #!/usr/bin/env node
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 'use strict';
 // Build-time override: keep only the selected niche's static brand-art imports
 // in the Metro graph. The original source is preserved under .swish-build.
 const fs = require('node:fs');
 const path = require('node:path');
+const { fileURLToPath } = require('node:url');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const registry = require('../niche-modules.json');
 const root = path.resolve(__dirname, '..');
 const niche = process.env.SWISH_NICHE || process.env.NICHE;
