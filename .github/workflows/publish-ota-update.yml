@@ -114,6 +114,11 @@ jobs:
           npx tsc --noEmit
           npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand
 
+      - name: Prepare niche-only brand artwork
+        if: ${{ matrix.niche != 'master' }}
+        env:
+          SWISH_NICHE: ${{ matrix.niche }}
+        run: node scripts/prepare-niche-assets.mjs
       - name: Validate Expo OTA configuration
         if: ${{ env.EXPO_TOKEN != '' && env.EXPO_PROJECT_ID != '' }}
         run: |
