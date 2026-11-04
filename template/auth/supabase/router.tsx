@@ -1,7 +1,7 @@
 // @ts-nocheck
-import React, { useEffect } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { useRouter, usePathname } from 'expo-router';
+import { Redirect, usePathname } from 'expo-router';
 import { useAuth } from './hook';
 
 const DefaultLoadingScreen = () => (
@@ -24,43 +24,25 @@ export function AuthRouter({
   excludeRoutes = []
 }: AuthRouterProps) {
   const { user, loading, initialized } = useAuth();
-  const router = useRouter();
   const pathname = usePathname();
 
-  useEffect(() => {
-    if (!initialized || loading) {
-      return;
-    }
-
-    const isLoginRoute = pathname === loginRoute;
-    const isExcludedRoute = excludeRoutes.some(route => 
-      pathname.startsWith(route)
-    );
-
-    const action = !user && !isLoginRoute && !isExcludedRoute ? 'redirect_to_login' :
-                   user && isLoginRoute ? 'redirect_to_home' : 'no_action';
-
-    if (action === 'redirect_to_login') {
-      router.push(loginRoute);
-    } else if (action === 'redirect_to_home') {
-      router.replace('/');
-    }
-  }, [user?.id, loading, initialized, pathname, loginRoute, excludeRoutes, router]);
-
-  if (loading || !initialized) {
+  if (loading || !initialized || !pathname) {
     return <LoadingComponent />;
   }
 
   const isLoginRoute = pathname === loginRoute;
-  const isExcludedRoute = excludeRoutes.some(route => 
+  const isExcludedRoute = excludeRoutes.some((route) =>
     pathname.startsWith(route)
   );
-  
-  if (isLoginRoute || isExcludedRoute || user) {
-    return <>{children}</>;
+
+  if (!user && !isLoginRoute && !isExcludedRoute) {
+    return <Redirect href={loginRoute as any} />;
+  }
+  if (user && isLoginRoute) {
+    return <Redirect href={'/' as any} />;
   }
 
-  return <LoadingComponent />;
+  return <>{children}</>;
 }
 
 const styles = StyleSheet.create({
