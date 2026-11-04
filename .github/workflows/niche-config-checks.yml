@@ -29,6 +29,8 @@ on:
       - 'supabase/migrations/**'
       - 'shared/**'
       - 'scripts/validate-foundation.mjs'
+      - 'scripts/prepare-niche-assets.mjs'
+      - 'scripts/verify-niche-module.js'
       - 'scripts/sync-backend-registry.mjs'
       - 'niche-modules.json'
       - 'services/nicheRouting.ts'
@@ -234,7 +236,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for niche in coins motocross bicycles clothing trading_cards antiques fossils beauty tech surplus_flip; do
+          for niche in coins motocross bicycles clothing surplus_flip trading_cards antiques fossils beauty tech collectibles; do
             echo "Validating branded config: $niche"
             SWISH_NICHE="$niche" npx expo config --type public >/dev/null
+            SWISH_NICHE="$niche" node scripts/prepare-niche-assets.mjs
+            SWISH_NICHE="$niche" node scripts/verify-niche-module.js
           done
