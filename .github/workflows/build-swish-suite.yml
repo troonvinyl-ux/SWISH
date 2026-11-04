@@ -6,16 +6,17 @@ on:
   workflow_dispatch:
     inputs:
       include_master_admin:
-        description: Build the full Master Switch admin and shopfront APK
+        description: Optionally build the separate Master Admin launcher APK
         required: true
         type: boolean
-        default: true
+        default: false
       include_all_niches:
-        description: Build all ten isolated niche APKs
+        description: Build all eleven isolated niche APKs
         required: true
         type: boolean
         default: true
 permissions:
+  actions: read
   contents: read
 jobs:
   niche-apks:
@@ -24,16 +25,50 @@ jobs:
       fail-fast: false
       max-parallel: 3
       matrix:
-        niche: [coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech]
+        niche: [coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech, collectibles]
     uses: ./.github/workflows/_niche-android.yml
     with:
       niche: ${{ matrix.niche }}
+  release-index:
+    name: Generate 11-app Android testing index
+    if: ${{ always() && (github.event_name == 'push' || inputs.include_all_niches) }}
+    needs: niche-apks
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Download APK and build-evidence artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: swish-*
+          path: collected-artifacts
+          merge-multiple: false
+          if-no-artifact-found: warn
+      - name: Read artifact IDs for direct links
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts > release-artifacts.json
+      - name: Generate index with build, signing and OTA evidence
+        env:
+          SWISH_ARTIFACTS_DIR: collected-artifacts
+          SWISH_ARTIFACTS_JSON: release-artifacts.json
+        run: node scripts/create-apk-testing-index.mjs
+      - uses: actions/upload-artifact@v7
+        with:
+          name: swish-11-app-android-testing-index
+          path: |
+            dist/apk-testing-index.md
+            dist/apk-testing-index.json
+          if-no-files-found: error
+          retention-days: 90
   master-admin-apk:
     env:
       EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
       EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
-    if: ${{ github.event_name == 'push' || inputs.include_master_admin }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.include_master_admin }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
