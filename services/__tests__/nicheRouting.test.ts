@@ -46,6 +46,7 @@ describe('production niche scanner routing', () => {
   test('Collectibles build packages only its essential shared workflow routes', () => {
     const routes = NICHE_MODULES.collectibles.buildSharedRoutes ?? [];
     expect(routes).toContain('create-listing.tsx');
+    expect(routes).toContain('marketplaces.tsx');
     expect(routes).toContain('(tabs)/inventory.tsx');
     expect(routes).not.toContain('ebay-finances.tsx');
     expect(routes).not.toContain('ebay-cases.tsx');
