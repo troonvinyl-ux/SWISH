@@ -25,6 +25,7 @@ export type NicheClassification =
   | 'beauty'        // Beauty niche
   | 'tech'          // Technology niche
   | 'surplus_flip'  // Surplus lots and manifests
+  | 'collectibles'  // General branded collectables and clearance finds
   | 'unclassified'; // Ambiguous — do not assign to any niche
 
 // ── eBay UK Category ID → Niche mapping ──────────────────────────────────────
@@ -359,6 +360,7 @@ export function nicheToSpecialistId(niche: NicheClassification): string {
     case 'beauty':        return 'beauty';
     case 'tech':          return 'tech';
     case 'surplus_flip':  return 'surplus_trader';
+    case 'collectibles':  return 'collectibles_flipper';
     default:              return 'curiosities_collectibles';
   }
 }
