@@ -329,7 +329,8 @@
         "(tabs)/index.tsx",
         "(tabs)/inventory.tsx",
         "(tabs)/scan.tsx",
-        "marketplaces.tsx"
+        "marketplaces.tsx",
+        "research.tsx"
       ]
     }
   },
