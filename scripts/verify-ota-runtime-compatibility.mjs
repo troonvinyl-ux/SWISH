@@ -15,7 +15,7 @@ const currentSha = process.env.GITHUB_SHA;
 if (!repo || !currentSha) throw new Error('GitHub repository and current commit SHA are required.');
 if (process.env.GITHUB_REF !== 'refs/heads/main') {
   console.warn('OTA publishing is restricted to main; this ref is not eligible.');
-  if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, 'should_publish=false\\n');
+  if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, 'should_publish=false\n');
   if (process.env.REQUIRE_OTA_SAFE === '1') process.exit(1);
   process.exit(0);
 }
@@ -23,7 +23,7 @@ function git(args) {
   return execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 }
 function writeOutput(value) {
-  if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, 'should_publish=' + value + '\\n');
+  if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, 'should_publish=' + value + '\n');
 }
 function reject(reason, files = []) {
   console.warn('OTA publish blocked: ' + reason);
@@ -56,14 +56,14 @@ function validateSuiteArtifacts(run) {
       try {
         execFileSync('gh', ['api', 'repos/' + repo + '/actions/artifacts/' + artifact.id + '/zip'], { stdio: ['ignore', fd, 'pipe'], maxBuffer: 1024 * 1024 });
       } finally { closeSync(fd); }
-      const entries = execFileSync('unzip', ['-Z1', zipPath], { encoding: 'utf8' }).split(/\\r?\\n/).filter(Boolean);
+      const entries = execFileSync('unzip', ['-Z1', zipPath], { encoding: 'utf8' }).split(/\r?\n/).filter(Boolean);
       const metaEntry = artifactEntry(entries, id + '-metadata.json');
       const shaEntry = artifactEntry(entries, id + '.sha256');
       const apkEntry = artifactEntry(entries, id + '.apk');
       if (!metaEntry || !shaEntry || !apkEntry) return false;
       const metadata = JSON.parse(unzipText(zipPath, metaEntry));
       const checksumText = unzipText(zipPath, shaEntry);
-      const checksum = checksumText.match(/^([a-f0-9]{64})\\s+/i)?.[1]?.toLowerCase();
+      const checksum = checksumText.match(/^([a-f0-9]{64})\s+/i)?.[1]?.toLowerCase();
       if (!checksum || metadata.sourceSha !== run.head_sha || metadata.apkSha256?.toLowerCase() !== checksum) return false;
       if (!metadata.signingFingerprintSha256 || metadata.schemeVerified !== true || metadata.assetBoundaryVerified !== true) return false;
       const apkPath = path.join(temp, id + '.apk');
@@ -109,27 +109,27 @@ for (const run of runs) {
 if (!baseline) reject('no successful ancestor Android suite contains all eleven signed, checksum-verified APK artifacts from one pinned commit.');
 
 let changed;
-try { changed = git(['diff', '--name-only', baseline, currentSha]).split('\\n').filter(Boolean); }
+try { changed = git(['diff', '--name-only', baseline, currentSha]).split('\n').filter(Boolean); }
 catch { reject('could not compare this commit with the last complete APK suite.'); }
 const nativePatterns = [
-  /^app\\.config\\.js$/,
-  /^app\\.json$/,
-  /^eas\\.json$/,
-  /^niche-modules\\.json$/,
-  /^scripts\\/prepare-niche-assets\\.mjs$/,
-  /^scripts\\/prepare-niche-routes\\.js$/,
-  /^package\\.json$/,
-  /^(?:pnpm-lock\\.yaml|package-lock\\.json|yarn\\.lock)$/,
-  /^(?:metro|babel|react-native)\\.config\\.(?:js|cjs|mjs)$/,
-  /^expo-env\\.d\\.ts$/,
-  /^plugins\\//,
-  /^android\\//,
-  /^ios\\//,
-  /^native\\//
+  /^app\.config\.js$/,
+  /^app\.json$/,
+  /^eas\.json$/,
+  /^niche-modules\.json$/,
+  /^scripts\/prepare-niche-assets\.mjs$/,
+  /^scripts\/prepare-niche-routes\.js$/,
+  /^package\.json$/,
+  /^(?:pnpm-lock\.yaml|package-lock\.json|yarn\.lock)$/,
+  /^(?:metro|babel|react-native)\.config\.(?:js|cjs|mjs)$/,
+  /^expo-env\.d\.ts$/,
+  /^plugins\//,
+  /^android\//,
+  /^ios\//,
+  /^native\//
 ];
 const nativeChanges = changed.filter(file => nativePatterns.some(pattern => pattern.test(file)));
 if (nativeChanges.length) reject('native-incompatible changes require a new complete APK suite before OTA.', nativeChanges);
-const compatiblePatterns = [/^app\\//,/^components\\//,/^contexts\\//,/^constants\\//,/^hooks\\//,/^services\\//,/^shared\\//,/^template\\//,/^utils\\//,/^assets\\//];
+const compatiblePatterns = [/^app\//,/^components\//,/^contexts\//,/^constants\//,/^hooks\//,/^services\//,/^shared\//,/^template\//,/^utils\//,/^assets\//];
 const compatibleChanges = changed.filter(file => compatiblePatterns.some(pattern => pattern.test(file)));
 if (!compatibleChanges.length) reject('no OTA-compatible application changes were found since the last complete APK suite.');
 console.log('OTA compatibility passed against complete 11-app APK baseline ' + baseline + '; ' + compatibleChanges.length + ' JS/asset file(s), no native-runtime changes.');
