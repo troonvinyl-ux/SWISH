@@ -5,6 +5,7 @@
 // This is intentionally a visual aid only: generated pixels can alter small
 // details, so original photographs remain the source of truth for listings.
 
+import { serveModule } from '../_shared/moduleScope.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 
@@ -35,7 +36,7 @@ function extractImageUrl(payload: any): string | null {
   return null;
 }
 
-Deno.serve(async (req) => {
+serveModule(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'POST required' }, 405);
 

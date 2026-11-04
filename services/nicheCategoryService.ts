@@ -25,6 +25,7 @@ export type NicheClassification =
   | 'beauty'        // Beauty niche
   | 'tech'          // Technology niche
   | 'surplus_flip'  // Surplus lots and manifests
+  | 'collectibles'  // Dedicated Collectibles Flipper, not the coin catch-all
   | 'unclassified'; // Ambiguous — do not assign to any niche
 
 // ── eBay UK Category ID → Niche mapping ──────────────────────────────────────
@@ -242,6 +243,10 @@ const TITLE_NICHE_KEYWORDS: Array<{ patterns: RegExp[]; niche: NicheClassificati
     confidence: 'high',
   },
   {
+    patterns: [/\b(wedgwood|royal doulton|royal worcester|harrods.{0,20}bear|silver[ -]plated|jasperware|giftware|commemorative figurine)\b/i],
+    niche: 'collectibles', confidence: 'medium',
+  },
+  {
     patterns: [/\b(job lot|joblot|surplus|pallet|clearance lot|wholesale lot|liquidation|manifest)\b/i],
     niche: 'surplus_flip',
     confidence: 'medium',
@@ -359,6 +364,7 @@ export function nicheToSpecialistId(niche: NicheClassification): string {
     case 'beauty':        return 'beauty';
     case 'tech':          return 'tech';
     case 'surplus_flip':  return 'surplus_trader';
+    case 'collectibles':  return 'collectibles';
     default:              return 'curiosities_collectibles';
   }
 }

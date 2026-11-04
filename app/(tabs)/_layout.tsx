@@ -5,14 +5,12 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Platform, View, Text, StyleSheet, Pressable } from 'react-native';
-import { useState, useEffect, useCallback } from 'react';
+import { Platform, View, Text, StyleSheet } from 'react-native';
 import { Colors, Typography, Spacing, Radius } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { useNicheListingCount } from '@/hooks/useNicheListingCount';
 import { IS_TV } from '@/hooks/useTVNavigation';
 import { NICHES } from '@/constants/niches';
-import { SPECIALISTS } from '@/constants/specialists';
 import { resolveProductionNiche } from '@/services/nicheRouting';
 
 // Derive the home tab icon and label from the active niche
@@ -66,7 +64,7 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const liveCount = useLiveListingCount();
   const nicheHome = useNicheHomeTab();
-  const { activeNicheId, fixedNicheId } = useApp();
+  const { activeNicheId, fixedNicheId, moduleEpoch } = useApp();
   const effectiveNicheId = fixedNicheId ?? activeNicheId;
   const resolvedNicheId = resolveProductionNiche(effectiveNicheId);
   const isThreadsFlip = resolvedNicheId === 'clothing';
@@ -97,7 +95,7 @@ export default function TabLayout() {
 
   return (
     <>
-    <Tabs
+    <Tabs key={`${effectiveNicheId}:${moduleEpoch}`}
       screenOptions={{
         headerShown: false,
         tabBarStyle,
@@ -123,7 +121,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="scan"
         options={{ title: 'Scan', tabBarAccessibilityLabel: 'Scan an item with your niche specialist',
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: () => (
             <View style={[styles.scanTab, { backgroundColor: nicheAccent, shadowColor: nicheAccent }]}>
               <MaterialIcons name="qr-code-scanner" size={26} color={isThreadsFlip ? threads.background : Colors.background} />
             </View>

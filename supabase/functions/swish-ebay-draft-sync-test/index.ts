@@ -3,7 +3,6 @@
 // It never creates an offer and never calls publishOffer.
 // All credentials remain server-side and tenant membership is required.
 
-import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { decryptCredentials, encryptCredentials } from '../_shared/credentialCrypto.ts';
 
@@ -103,7 +102,7 @@ function safeOffer(offer: any) {
   };
 }
 
-Deno.serve(withEdgeFunctionLogging('swish-ebay-draft-sync-test', async (request: Request) => {
+Deno.serve(async (request: Request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: 'POST required.' }, 405);
   try {
@@ -126,6 +125,8 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-draft-sync-test', async (request:
     const { data: membership } = await db.from('tenant_memberships').select('id')
       .eq('tenant_id', tenantId).eq('user_id', user.id).maybeSingle();
     if (!membership) return json({ error: 'Access denied for this SWISH organisation.' }, 403);
+    const owner=await db.rpc('swish_owner_for_user',{p_user_id:user.id});
+    if(owner.error || owner.data!==true)return json({error:'Trusted platform owner required'},403);
 
     const credentials = await getCredentials(db, tenantId);
     if (action === 'list_unpublished_offers') {
@@ -547,4 +548,4 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-draft-sync-test', async (request:
     console.error('[SWISH Draft Round-Trip] Request failed:', String(error?.message ?? 'unknown').slice(0, 400));
     return json({ error: String(error?.message ?? 'Draft test failed.').slice(0, 500) }, 400);
   }
-}));
+});

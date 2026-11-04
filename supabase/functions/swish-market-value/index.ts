@@ -44,6 +44,7 @@
 // distinguished as verified sold evidence. Browse/Gemini remain accurately
 // labelled as asking prices / AI inference.
 
+import { serveModule } from '../_shared/moduleScope.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { decryptCredentials, encryptCredentials } from '../_shared/credentialCrypto.ts';
@@ -237,11 +238,12 @@ async function getAndRefreshConnectorCreds(
           // Preserve hasAnalyticsScope flag from before refresh — scope set doesn't change on refresh
           creds = { ...creds, accessToken: tokenData.access_token, expiresAt: newExpiry };
           const newCredRef = await encryptCredentials(creds);
-          await supabase.from('marketplace_connectors').update({
+          const { data: persisted, error: persistError } = await supabase.from('marketplace_connectors').update({
             credential_ref: newCredRef,
             access_token_expires_at: newExpiry,
             updated_at: new Date().toISOString(),
-          }).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay');
+          }).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').eq('credential_ref', conn.credential_ref).select('id').maybeSingle();
+          if (persistError || !persisted) return null;
           console.log(`[SWISH Market v7] Token refreshed, new expiry=${newExpiry}`);
         }
       } else {
@@ -1124,7 +1126,7 @@ function computeValuation(params: {
 // ══════════════════════════════════════════════════════════════════════════════
 // MAIN HANDLER
 // ══════════════════════════════════════════════════════════════════════════════
-Deno.serve(async (req: Request) => {
+serveModule(async (req: Request) => {
   try {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
@@ -1176,6 +1178,12 @@ Deno.serve(async (req: Request) => {
   console.log(`[SWISH Market v7] title="${cleanTitle}" specialist=${specialistId}`);
 
   // ── Credentials + token refresh ────────────────────────────────────────────
+  // Fail closed before credential refresh or research if the requested resource is another niche.
+  if (!requestedNiche || (body.nicheId && body.nicheId !== requestedNiche)) return jsonResponse({ error: 'Registered matching specialist required.' }, 403);
+  if (itemId) {
+    const { data: owned, error: ownershipError } = await supabase.from('items').select('specialist_id').eq('id', itemId).eq('tenant_id', tenantId).maybeSingle();
+    if (ownershipError || !owned || specialistNiche(owned.specialist_id) !== requestedNiche) return jsonResponse({ error: 'Item and valuation specialist belong to different products.' }, 403);
+  }
   const creds = await getAndRefreshConnectorCreds(supabase, tenantId);
   if (!creds) {
     return jsonResponse({ error: 'eBay is not connected. Connect eBay in Marketplaces to enable market valuation.' }, 400);

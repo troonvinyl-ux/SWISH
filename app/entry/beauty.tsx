@@ -1,3 +1,2 @@
-import { Redirect } from 'expo-router';
-import { useNicheEntry } from '@/hooks/useNicheEntry';
-export default function BeautyEntryRoute() { useNicheEntry('beauty'); return <Redirect href="/(tabs)" />; }
+import { ModuleEntry } from '@/components/layout/ModuleEntry';
+export default function BeautyEntryRoute() { return <ModuleEntry nicheId="beauty" />; }

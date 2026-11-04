@@ -9,7 +9,6 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth, getSupabaseClient } from '@/template';
 import { useApp } from '@/hooks/useApp';
-import { isSwishMasterAdmin } from '@/contexts/AppContext';
 import { getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 import { PRODUCTION_NICHES } from '@/constants/niches';
 import {
@@ -27,7 +26,7 @@ export default function MasterDiagnosticsScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { tenant, activeNicheId } = useApp();
+  const { tenant, activeNicheId, isMasterAdmin } = useApp();
   const [items, setItems] = useState<TestItem[]>([]);
   const [selected, setSelected] = useState<TestItem | null>(null);
   const [loading, setLoading] = useState(false);
@@ -42,7 +41,7 @@ export default function MasterDiagnosticsScreen() {
   const specialists = getProductionNicheSpecialistIds(activeNicheId);
 
   const loadItems = useCallback(async () => {
-    if (!tenant?.id || !specialists.length) return;
+    if (!isMasterAdmin || !tenant?.id || !specialists.length) return;
     setLoading(true);
     const { data, error } = await getSupabaseClient().from('items')
       .select('id,canonical_title,description,expected_selling_price,condition,condition_notes,media,specialist_id,attributes,quantity,inventory_id,status')
@@ -61,7 +60,7 @@ export default function MasterDiagnosticsScreen() {
 
   useEffect(() => { void loadItems(); }, [loadItems]);
 
-  if (!isSwishMasterAdmin(user?.email)) return <Redirect href="/" />;
+  if (!isMasterAdmin) return <Redirect href="/" />;
 
   const setCheck = (key: Check, value: CheckState) => setChecks(previous => ({ ...previous, [key]: value }));
   const fail = (key: Check, error: string) => { setCheck(key, 'failed'); setMessage(error); setBusy(false); };

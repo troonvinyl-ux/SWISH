@@ -14,7 +14,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -27,7 +27,7 @@ type RegisterStep = 'email_password' | 'verify_otp';
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
-  const { sendOTP, verifyOTPAndLogin, signInWithPassword, operationLoading } = useAuth();
+  const { user: signedInUser, sendOTP, verifyOTPAndLogin, signInWithPassword, operationLoading } = useAuth();
   const { showAlert } = useAlert();
   const router = useRouter();
 
@@ -55,7 +55,7 @@ export default function LoginScreen() {
     }
     // This screen is outside AuthRouter. Navigate here after confirmed login;
     // the home route then performs tenant/niche routing.
-    router.replace('/');
+    // Auth state renders the root membership router; no callback-driven navigation.
   }, [email, password, isValidEmail, signInWithPassword, showAlert, router]);
 
   // ── REGISTER STEP 1: Send OTP ─────────────────────────────────────────
@@ -94,7 +94,7 @@ export default function LoginScreen() {
     }
     // The login screen is not wrapped by AuthRouter, so complete navigation
     // explicitly once OTP verification has returned an authenticated user.
-    router.replace('/');
+    // Auth state renders the root membership router; no callback-driven navigation.
   }, [email, otp, password, verifyOTPAndLogin, showAlert, router]);
 
   const handleResendOTP = useCallback(async () => {
@@ -102,6 +102,7 @@ export default function LoginScreen() {
     if (!error) showAlert('New code sent', `Check ${email} for your new 4-digit code.`);
   }, [email, sendOTP, showAlert]);
 
+  if (signedInUser) return <Redirect href="/" />;
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar style="light" />

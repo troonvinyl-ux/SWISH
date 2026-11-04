@@ -1,11 +1,19 @@
-name: Build isolated SWISH niche APK
+name: Legacy niche APK migration only (not a release route)
 on:
   workflow_dispatch:
+    inputs:
+      niche:
+        description: Canonical branded application
+        required: true
+        type: choice
+        default: collectibles
+        options: [coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech, collectibles]
 permissions:
   contents: read
 jobs:
   build-apk:
+    if: vars.SWISH_ENABLE_LEGACY_MIGRATION_BUILDS == 'true'
     uses: ./.github/workflows/_niche-android.yml
     with:
-      niche: ${{ inputs.niche || 'clothing' }}
+      niche: ${{ inputs.niche }}
     secrets: inherit

@@ -1,16 +1,2 @@
-import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useAccountLogout } from '@/hooks/useAccountLogout';
-import { Colors, Spacing, Typography, Radius } from '@/constants/theme';
-import { NICHES } from '@/constants/niches';
-const links=[{icon:'tune',title:'Niche Settings',sub:'Antique Flipper preferences',route:'/settings'},{icon:'link',title:'eBay Connection',sub:'Shared business account and policies',route:'/ebay-account'},{icon:'price-change',title:'Price Decay',sub:'Repricing rules and simulations',route:'/repricing'},{icon:'menu-book',title:'Antique Guides',sub:'Periods, marks and collecting reference',route:'/antique-guides'},{icon:'handyman',title:'Restoration & Care',sub:'Conservation-first advice',route:'/antique-restoration'}];
-export default function AntiqueMoreScreen(){
- const router=useRouter(); const {requestLogout,signingOut,disabled}=useAccountLogout(); const accent=NICHES.antiques.color;
- return <SafeAreaView style={styles.screen} edges={['top']}><FlatList data={links} keyExtractor={item=>item.title} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}
- ListHeaderComponent={<View style={styles.copy}><Text style={[styles.label,{color:accent}]}>ANTIQUE FLIPPER</Text><Text style={styles.title}>More</Text><Text style={styles.body}>Connections, settings and specialist resources.</Text></View>}
- renderItem={({item})=><Pressable accessibilityRole="button" onPress={()=>router.push(item.route as any)} style={({pressed})=>[styles.card,{opacity:pressed?0.7:1}]}><MaterialIcons name={item.icon as any} size={24} color={accent}/><View style={styles.copy}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.body}>{item.sub}</Text></View><MaterialIcons name="chevron-right" size={24} color={accent}/></Pressable>}
- ListFooterComponent={<Pressable accessibilityLabel="Sign out of Antique Flipper" disabled={disabled} onPress={requestLogout} style={({pressed})=>[styles.card,{opacity:pressed||disabled?0.6:1}]}>{signingOut?<ActivityIndicator color={Colors.danger}/>:<MaterialIcons name="logout" size={24} color={Colors.danger}/>}<View style={styles.copy}><Text style={[styles.cardTitle,{color:Colors.danger}]}>{signingOut?'Signing out…':'Sign Out'}</Text><Text style={styles.body}>Your inventory and business eBay connection remain saved.</Text></View></Pressable>}/></SafeAreaView>;
-}
-const styles=StyleSheet.create({screen:{flex:1,backgroundColor:Colors.background},content:{padding:Spacing.base,gap:Spacing.base},copy:{flex:1,gap:Spacing.sm},label:{fontSize:Typography.size.base,fontWeight:'600'},title:{fontSize:Typography.size.xl,fontWeight:'700',color:Colors.textPrimary},body:{fontSize:Typography.size.base,lineHeight:26,color:Colors.textSecondary,includeFontPadding:false},card:{minHeight:72,flexDirection:'row',alignItems:'center',gap:Spacing.base,padding:Spacing.base,backgroundColor:Colors.surface,borderWidth:1,borderColor:Colors.surfaceBorder,borderRadius:Radius.lg},cardTitle:{fontSize:Typography.size.md,color:Colors.textPrimary,fontWeight:'600'}});
+import { ModuleMore } from '@/components/feature/ModuleMore';
+export default function AntiqueMoreScreen() { return <ModuleMore />; }

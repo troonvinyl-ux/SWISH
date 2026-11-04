@@ -50,7 +50,7 @@ async function invokeEdgeFunction<T = any>(
 
 // ── Check subscription status ─────────────────────────────────────────────────
 
-export async function checkSubscription(): Promise<{
+export async function checkSubscription(tenantId?: string): Promise<{
   status: SubscriptionStatus | null;
   error: string | null;
 }> {
@@ -60,7 +60,7 @@ export async function checkSubscription(): Promise<{
     price_id: string | null;
     subscription_end: string | null;
     niche_entitlements?: unknown;
-  }>('swish-check-subscription');
+  }>('swish-check-subscription', tenantId ? { tenantId } : {});
 
   if (error || !data) {
     return { status: null, error: error ?? 'Subscription check failed' };

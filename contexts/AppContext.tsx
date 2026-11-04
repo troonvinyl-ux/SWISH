@@ -1,21 +1,25 @@
-import React, { createContext, useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppState } from 'react-native';
+import { createContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { AppState, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { useAuth } from '@/template';
-import { Tenant, getUserPrimaryTenant, provisionTenant } from '@/services/tenantService';
-import { BusinessConfig, getBusinessConfig } from '@/services/businessConfigService';
-import { NicheId, NicheConfig, NICHES, PRODUCTION_NICHE_IDS, isProductionNiche } from '@/constants/niches';
-import { checkSubscription, type SubscriptionStatus } from '@/services/subscriptionService';
+import { getUserPrimaryTenant, provisionTenant, type Tenant } from '@/services/tenantService';
+import { getBusinessConfig, type BusinessConfig } from '@/services/businessConfigService';
+import { NICHES, isProductionNiche, type NicheId, type NicheConfig, type ProductionNicheId } from '@/constants/niches';
+import { resolveNicheFromNativeAppId, resolveNicheFromNativeAppScheme } from '@/services/nicheRouting';
+import { loadModuleAccess, activateModuleScope, type ModuleAccessSnapshot } from '@/services/moduleAccessService';
+import type { SubscriptionStatus } from '@/services/subscriptionService';
 
-const NICHE_STORAGE_PREFIX = '@swish_active_niches';
 export const SWISH_MASTER_ADMIN_EMAIL = 'troonvinyl@gmail.com';
-/** Presentation-only legacy owner hint. Server permissions never use this email. */
+/** Legacy presentation helper only. AppProvider and backend grants NEVER derive roles from this. */
 export function isSwishMasterAdmin(email?: string | null) { return (email ?? '').trim().toLowerCase() === SWISH_MASTER_ADMIN_EMAIL; }
-const CONFIGURED_BUILD_NICHE = Constants.expoConfig?.extra?.swishNicheId;
-const FIXED_BUILD_NICHE_ID: NicheId | null = isProductionNiche(CONFIGURED_BUILD_NICHE) ? CONFIGURED_BUILD_NICHE : null;
+const unified = Constants.expoConfig?.extra?.swishUnifiedBuild !== false;
+const configured = Constants.expoConfig?.extra?.swishNicheId;
+const fixedNiche: ProductionNicheId | null = unified ? null :
+  resolveNicheFromNativeAppId(Platform.OS === 'android' ? Constants.expoConfig?.android?.package : Constants.expoConfig?.ios?.bundleIdentifier) ??
+  resolveNicheFromNativeAppScheme(Constants.expoConfig?.scheme) ?? (isProductionNiche(configured) ? configured : null);
 interface AppContextType {
-  isMasterAdmin: boolean;
+  isMasterAdmin: boolean; accessReady: boolean; accessError: string | null; canSwitchNiche: boolean; moduleLoading: boolean; moduleEpoch: number;
+  openModule: (id: ProductionNicheId) => Promise<boolean>; returnToMaster: () => Promise<boolean>;
   subscriptionStatus: SubscriptionStatus | null; subscriptionLoading: boolean; subscriptionTier: string | null; refreshSubscription: () => Promise<void>;
   tenant: Tenant | null; tenantLoading: boolean; tenantError: string | null; reloadTenant: () => Promise<void>;
   businessConfig: BusinessConfig | null; reloadBusinessConfig: () => Promise<void>;
@@ -28,81 +32,72 @@ interface AppContextType {
 export const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const isMasterAdmin = isSwishMasterAdmin(user?.email);
-  const currentUser = useRef(user?.id); currentUser.current = user?.id;
-  const loadVersion = useRef(0);
-  const subscriptionVersion = useRef(0);
+  const userRef = useRef(user?.id); userRef.current = user?.id;
+  const generation = useRef(0); const accessRequest = useRef(0); const scopeRequest = useRef(0);
+  const tenantRef = useRef<Tenant | null>(null); const accessRef = useRef<ModuleAccessSnapshot | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loadedUserId, setLoadedUserId] = useState<string | null>(null);
-  const [tenantLoading, setTenantLoading] = useState(true);
-  const [tenantError, setTenantError] = useState<string | null>(null);
+  const [tenantLoading, setTenantLoading] = useState(true); const [tenantError, setTenantError] = useState<string | null>(null);
   const [businessConfig, setBusinessConfig] = useState<BusinessConfig | null>(null);
-  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
-  const [subscriptionLoading, setSubscriptionLoading] = useState(false);
+  const [access, setAccess] = useState<ModuleAccessSnapshot | null>(null); const [accessError, setAccessError] = useState<string | null>(null);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(false); const [moduleLoading, setModuleLoading] = useState(false);
+  const [activeNicheId, setNiche] = useState<NicheId>('general'); const activeRef = useRef<NicheId>('general');
+  const [moduleEpoch, setEpoch] = useState(0); const [inventoryReloadSignal, setReloadSignal] = useState(0);
   const [activeAcquisitionId, setActiveAcquisitionId] = useState<string | null>(null);
   const [scanMode, setScanMode] = useState<AppContextType['scanMode']>('idle');
-  const [inventoryReloadSignal, setInventoryReloadSignal] = useState(0);
-  const [enabledNiches, setEnabledNiches] = useState<NicheId[]>(FIXED_BUILD_NICHE_ID ? [FIXED_BUILD_NICHE_ID] : ['general']);
-  const [activeNicheId, setActiveNicheId] = useState<NicheId>(FIXED_BUILD_NICHE_ID ?? 'general');
-  const [nichePreferencesLoading, setNichePreferencesLoading] = useState(true);
+  const clearModule = useCallback(() => { activeRef.current = 'general'; setNiche('general'); setActiveAcquisitionId(null); setScanMode('idle'); setEpoch(v => v + 1); }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    setNichePreferencesLoading(true);
-    setActiveNicheId(FIXED_BUILD_NICHE_ID ?? 'general');
-    setEnabledNiches(FIXED_BUILD_NICHE_ID ? [FIXED_BUILD_NICHE_ID] : ['general']);
-    const loadPreferences = async () => {
-      if (FIXED_BUILD_NICHE_ID || !user?.id) return;
-      try {
-        const value = await AsyncStorage.getItem(`${NICHE_STORAGE_PREFIX}:${user.id}`);
-        const saved = value ? JSON.parse(value) : {};
-        if (cancelled) return;
-        const selected: NicheId = isProductionNiche(saved.active) ? saved.active : (isMasterAdmin ? 'coins' : 'general');
-        setActiveNicheId(selected);
-        setEnabledNiches(isMasterAdmin ? [...PRODUCTION_NICHE_IDS] : Array.isArray(saved.enabled) ? saved.enabled.filter(isProductionNiche) : [selected]);
-      } catch { /* Corrupt preferences remain general; never fall into another product. */ }
-    };
-    void loadPreferences().finally(() => { if (!cancelled) setNichePreferencesLoading(false); });
-    return () => { cancelled = true; };
-  }, [user?.id, isMasterAdmin]);
-
-  const persist = useCallback((active: NicheId, enabled: NicheId[]) => {
-    if (!user?.id || FIXED_BUILD_NICHE_ID) return;
-    void AsyncStorage.setItem(`${NICHE_STORAGE_PREFIX}:${user.id}`, JSON.stringify({ active, enabled })).catch(() => {});
-  }, [user?.id]);
-  const setActiveNiche = useCallback((id: NicheId) => {
-    if (!isProductionNiche(id) || (FIXED_BUILD_NICHE_ID && id !== FIXED_BUILD_NICHE_ID)) return;
-    setActiveNicheId(id);
-    setEnabledNiches(previous => { const next = previous.includes(id) ? previous : [id, ...previous.filter(isProductionNiche)]; persist(id, next); return next; });
-  }, [persist]);
-  const enableNiche = useCallback((id: NicheId) => {
-    if (!isProductionNiche(id) || FIXED_BUILD_NICHE_ID) return;
-    setEnabledNiches(previous => { const next = [...new Set([...previous.filter(isProductionNiche), id])]; persist(activeNicheId, next); return next; });
-  }, [persist, activeNicheId]);
-  const disableNiche = useCallback((id: NicheId) => {
-    if (FIXED_BUILD_NICHE_ID) return;
-    setEnabledNiches(previous => { const filtered = previous.filter(n => n !== id && isProductionNiche(n)); const next: NicheId[] = filtered.length ? filtered : ['general'];
-      const active = next.includes(activeNicheId) ? activeNicheId : next[0]; setActiveNicheId(active); persist(active, next); return next; });
-  }, [persist, activeNicheId]);
-
-  const loadSubscription = useCallback(async () => {
-    const uid = currentUser.current;
-    if (!uid) return;
-    const version=++subscriptionVersion.current;
-    setSubscriptionLoading(true);
+  const openModule = useCallback(async (id: ProductionNicheId) => {
+    const grant = accessRef.current; const account = tenantRef.current; const uid = userRef.current;
+    if (!uid || !account || !grant || grant.tenantId !== account.id || !grant.nicheIds.includes(id) || (fixedNiche && fixedNiche !== id)) return false;
+    const version = ++scopeRequest.current; setModuleLoading(true); setAccessError(null); clearModule();
     try {
-      const { status,error }=await checkSubscription();
-      if(currentUser.current===uid && subscriptionVersion.current===version) {
-        setSubscriptionStatus(error ? null : status);
-        if(!error) setInventoryReloadSignal(value=>value+1); // First inventory fetch may precede trusted cache hydration.
+      const result = await activateModuleScope(account.id, id);
+      if (userRef.current !== uid || scopeRequest.current !== version) return false;
+      if (result.error) { setAccessError(result.error); return false; }
+      const config = await getBusinessConfig(account.id, id);
+      if (userRef.current !== uid || scopeRequest.current !== version) return false;
+      if (config.error) { setAccessError(config.error); return false; }
+      setBusinessConfig(config.config);
+      activeRef.current = id; setNiche(id); setReloadSignal(v => v + 1); return true;
+    } finally { if (userRef.current === uid && scopeRequest.current === version) setModuleLoading(false); }
+  }, [clearModule]);
+  const returnToMaster = useCallback(async () => {
+    const account = tenantRef.current; const uid = userRef.current;
+    if (!account || !uid || !accessRef.current || (accessRef.current.nicheIds.length < 2 && !accessRef.current.owner) || fixedNiche) return false;
+    const version = ++scopeRequest.current; setModuleLoading(true); clearModule();
+    try {
+      const result = await activateModuleScope(account.id, null);
+      if (userRef.current !== uid || version !== scopeRequest.current) return false;
+      if (result.error) { setAccessError(result.error); return false; }
+      return true;
+    } finally { if (userRef.current === uid && version === scopeRequest.current) setModuleLoading(false); }
+  }, [clearModule]);
+  const loadAccess = useCallback(async () => {
+    const account = tenantRef.current; const uid = userRef.current;
+    if (!account || !uid) return;
+    const version = ++accessRequest.current; setSubscriptionLoading(true);
+    try {
+      const result = await loadModuleAccess(account.id);
+      if (uid !== userRef.current || version !== accessRequest.current) return;
+      if (result.error || !result.snapshot) {
+        accessRef.current = null; setAccess(null); setAccessError(result.error); clearModule(); return;
       }
-    } finally { if(currentUser.current===uid && subscriptionVersion.current===version) setSubscriptionLoading(false); }
-  }, []);
+      const first = accessRef.current === null;
+      const next = result.snapshot; accessRef.current = next; setAccess(next); setAccessError(null);
+      const chosen = fixedNiche ?? (next.nicheIds.length === 1 && !next.owner ? next.nicheIds[0] : null);
+      if (chosen && next.nicheIds.includes(chosen) && (first || activeRef.current !== chosen)) await openModule(chosen);
+      else if (first || (activeRef.current !== 'general' && !next.nicheIds.includes(activeRef.current as ProductionNicheId))) {
+        clearModule(); const scoped = await activateModuleScope(account.id, null);
+        if (uid === userRef.current && version === accessRequest.current && scoped.error) setAccessError(scoped.error);
+      }
+      setReloadSignal(v => v + 1);
+    } finally { if (uid === userRef.current && version === accessRequest.current) setSubscriptionLoading(false); }
+  }, [openModule, clearModule]);
   const loadTenant = useCallback(async () => {
-    const uid = user?.id;
-    const version = ++loadVersion.current;
-    const valid = () => currentUser.current === uid && loadVersion.current === version;
-    if (!uid) { setTenant(null); setBusinessConfig(null); setTenantLoading(false); return; }
+    const uid = user?.id; const version = ++generation.current;
+    const valid = () => uid === userRef.current && version === generation.current;
+    if (!uid) { setTenantLoading(false); return; }
     setTenantLoading(true); setTenantError(null);
     try {
       let result = await getUserPrimaryTenant();
@@ -115,47 +110,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
         result = await getUserPrimaryTenant();
       }
       if (!valid()) return;
-      if (result.error || !result.tenant) throw new Error(result.error ?? 'Business account could not be loaded');
-      const configResult = await getBusinessConfig(result.tenant.id);
+      if (result.error || !result.tenant) throw new Error(result.error ?? 'Business account unavailable.');
+      const config = await getBusinessConfig(result.tenant.id);
       if (!valid()) return;
-      if (configResult.error) throw new Error(configResult.error);
-      setTenant(result.tenant); setBusinessConfig(configResult.config); setLoadedUserId(uid);
-      void loadSubscription().catch(() => {});
-    } catch (error: any) { if (valid()) { setTenant(null); setBusinessConfig(null); setLoadedUserId(uid); setTenantError(error?.message ?? 'Account load failed'); } }
+      if (config.error) throw new Error(config.error);
+      tenantRef.current = result.tenant; setTenant(result.tenant); setBusinessConfig(config.config); setLoadedUserId(uid);
+      await loadAccess();
+    } catch (error) { if (valid()) { tenantRef.current = null; setTenant(null); setLoadedUserId(uid); setTenantError(error instanceof Error ? error.message : 'Account load failed.'); } }
     finally { if (valid()) setTenantLoading(false); }
-  }, [user?.id, user?.email, user?.username, loadSubscription]);
-
+  }, [user?.id, user?.email, user?.username, loadAccess]);
   useEffect(() => {
-    setTenant(null); setBusinessConfig(null); setSubscriptionStatus(null); setSubscriptionLoading(false);
-    setLoadedUserId(null); setActiveAcquisitionId(null); setScanMode('idle');
-    void loadTenant();
-    return () => { loadVersion.current++; };
-  }, [loadTenant]);
-  useEffect(()=>{
-    if(!user?.id) return;
-    const timer=setInterval(()=>{ if(AppState.currentState==='active') void loadSubscription().catch(()=>{}); },240000);
-    const subscription=AppState.addEventListener('change',state=>{ if(state==='active') void loadSubscription().catch(()=>{}); });
-    return ()=>{ clearInterval(timer);subscription.remove();subscriptionVersion.current++; };
-  },[user?.id,loadSubscription]);
+    tenantRef.current = null; accessRef.current = null; setTenant(null); setAccess(null); setBusinessConfig(null); setLoadedUserId(null);
+    setAccessError(null); setModuleLoading(false); setSubscriptionLoading(false); clearModule(); void loadTenant();
+    return () => { generation.current++; accessRequest.current++; scopeRequest.current++; };
+  }, [loadTenant, clearModule]);
+  useEffect(() => {
+    if (!user?.id) return;
+    const timer = setInterval(() => { if (AppState.currentState === 'active') void loadAccess(); }, 240000);
+    const listener = AppState.addEventListener('change', state => { if (state === 'active') void loadAccess(); });
+    return () => { clearInterval(timer); listener.remove(); };
+  }, [user?.id, loadAccess]);
   const accountMatches = Boolean(user?.id && loadedUserId === user.id);
+  const effectiveAccess = accountMatches ? access : null;
   const effectiveTenant = accountMatches ? tenant : null;
   const reloadBusinessConfig = useCallback(async () => {
-    if (!effectiveTenant) return;
-    const uid = currentUser.current; const id = effectiveTenant.id;
-    const { config, error } = await getBusinessConfig(id);
-    if (!error && currentUser.current === uid) setBusinessConfig(config);
-  }, [effectiveTenant?.id]);
-
+    const account = tenantRef.current; const uid = userRef.current;
+    if (!account) return;
+    const result = await getBusinessConfig(account.id, isProductionNiche(activeRef.current) ? activeRef.current : null);
+    if (!result.error && uid === userRef.current) setBusinessConfig(result.config);
+  }, []);
+  const setActiveNiche = useCallback((id: NicheId) => { if (isProductionNiche(id) && activeRef.current !== id) void openModule(id); }, [openModule]);
+  // Legacy preference actions now refresh actual grants. Never modify entitlements locally.
+  const refreshPreferences = useCallback((_id: NicheId) => { void loadAccess(); }, [loadAccess]);
   return <AppContext.Provider value={{
-    tenant: effectiveTenant, tenantLoading: Boolean(user?.id) && (!accountMatches || tenantLoading), tenantError,
-    reloadTenant: loadTenant, businessConfig: accountMatches ? businessConfig : null, reloadBusinessConfig,
-    isMasterAdmin, subscriptionStatus: accountMatches ? subscriptionStatus : null, subscriptionLoading,
-    // Paid access is based on stored tenant/server billing state, never the client email hint.
-    subscriptionTier: effectiveTenant?.subscriptionTier ?? null, refreshSubscription: loadSubscription,
-    activeNiche: NICHES[FIXED_BUILD_NICHE_ID ?? activeNicheId] ?? NICHES.general,
-    activeNicheId: FIXED_BUILD_NICHE_ID ?? activeNicheId, fixedNicheId: FIXED_BUILD_NICHE_ID,
-    enabledNiches, nichePreferencesLoading, setActiveNiche, enableNiche, disableNiche,
-    activeAcquisitionId, setActiveAcquisitionId, scanMode, setScanMode,
-    inventoryReloadSignal, triggerInventoryReload: () => setInventoryReloadSignal(value => value + 1),
+    tenant: effectiveTenant, tenantLoading: Boolean(user?.id) && (!accountMatches || tenantLoading), tenantError, reloadTenant: loadTenant,
+    businessConfig: accountMatches ? businessConfig : null, reloadBusinessConfig,
+    isMasterAdmin: effectiveAccess?.owner === true, accessReady: !!effectiveAccess && !accessError, accessError,
+    canSwitchNiche: !fixedNiche && !!effectiveAccess && (effectiveAccess.owner || effectiveAccess.nicheIds.length > 1),
+    moduleLoading, moduleEpoch, openModule, returnToMaster,
+    subscriptionStatus: effectiveAccess?.billingStatus ?? null, subscriptionLoading, subscriptionTier: effectiveTenant?.subscriptionTier ?? null, refreshSubscription: loadAccess,
+    activeNiche: NICHES[accountMatches ? activeNicheId : 'general'], activeNicheId: accountMatches ? activeNicheId : 'general', fixedNicheId: fixedNiche,
+    enabledNiches: effectiveAccess?.nicheIds ?? [], nichePreferencesLoading: Boolean(user?.id) && (!accountMatches || (!effectiveAccess && !accessError && !tenantError)),
+    setActiveNiche, enableNiche: refreshPreferences, disableNiche: refreshPreferences,
+    activeAcquisitionId, setActiveAcquisitionId, scanMode, setScanMode, inventoryReloadSignal, triggerInventoryReload: () => setReloadSignal(v => v + 1),
   }}>{children}</AppContext.Provider>;
 }

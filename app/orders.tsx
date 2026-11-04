@@ -527,7 +527,7 @@ export default function OrdersScreen() {
   const isThreadsFlip = effectiveNicheId === 'clothing';
   const threads = { background: '#0C080C', surface: '#160E16', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5', muted: '#9A7090' };
   // Guard the niche resolver so a stale/incompatible module export cannot crash the whole screen.
-  const specialistIds: string[] = (() => {
+  const specialistIds: string[] = useMemo(() => {
     try {
       return typeof getProductionNicheSpecialistIds === 'function'
         ? getProductionNicheSpecialistIds(effectiveNicheId)
@@ -536,7 +536,7 @@ export default function OrdersScreen() {
       console.error('[Orders] Failed to resolve active niche:', error);
       return [];
     }
-  })();
+  }, [effectiveNicheId]);
   const { showAlert } = useAlert();
 
   const [orders, setOrders] = useState<OrderWithItem[]>([]);
@@ -561,6 +561,7 @@ export default function OrdersScreen() {
       return;
     }
     setLoadError(null);
+    setOrders([]);
     try {
       const { orders: data, error } = await getAllOrders(tenant.id, undefined, specialistIds);
       if (error) {
@@ -574,7 +575,7 @@ export default function OrdersScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [tenant?.id, activeNicheId, showAlert]);
+  }, [tenant?.id, effectiveNicheId, specialistIds]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -953,7 +954,7 @@ const s = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder,
   },
   backBtn: {
-    width: 36, height: 36, borderRadius: Radius.md, backgroundColor: Colors.surface,
+    width: 48, height: 48, borderRadius: Radius.md, backgroundColor: Colors.surface,
     alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder,
   },
   title: { fontSize: Typography.size.xl, fontWeight: Typography.weight.bold, color: Colors.textPrimary },
@@ -1036,7 +1037,7 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
       <MaterialIcons name="error-outline" size={42} color={Colors.danger} />
       <Text style={{ color: Colors.textPrimary, fontSize: Typography.size.lg, fontWeight: Typography.weight.bold, textAlign: 'center' }}>Orders couldn’t open</Text>
       <Text selectable style={{ color: Colors.textSecondary, fontSize: Typography.size.sm, textAlign: 'center' }}>{error?.message || 'An unexpected error occurred while rendering the Orders page.'}</Text>
-      <ScrollView style={{ maxHeight: 220, width: '100%', flexGrow: 0 }} contentContainerStyle={{ padding: Spacing.sm }}>
+      <ScrollView style={{ height: 220, width: '100%', flexGrow: 0 }} contentContainerStyle={{ padding: Spacing.sm }}>
         <Text selectable style={{ color: Colors.textTertiary, fontSize: 10, lineHeight: 15 }}>{error?.stack || 'No JavaScript stack trace was provided.'}</Text>
       </ScrollView>
       <Pressable onPress={retry} style={{ backgroundColor: Colors.primary, borderRadius: Radius.md, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md }}>

@@ -112,6 +112,8 @@ Deno.serve(async (req: Request) => {
   // column list in marketplaceService.ts), so we use the service-role client
   // exclusively for reading and writing the encrypted value.
   const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const owner = await adminClient.rpc('swish_owner_for_user',{p_user_id:user.id});
+  if (owner.error || owner.data !== true) return error('Trusted platform owner required',403);
 
   // ── Fetch connector rows ───────────────────────────────────────────────────
   // Only fetch rows that have a non-empty credential_ref.

@@ -12,6 +12,7 @@
 // POST body:
 //   { tenantId: string, daysBack?: number (default 30), mode?: 'fulfillment_api' | 'trading_api' | 'both' }
 
+import { serveModule } from '../_shared/moduleScope.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 import registry from '../_shared/niche-modules.json' with { type: 'json' };
@@ -655,7 +656,7 @@ async function refreshMultiQuantityListingStatuses(
 
 // ── Main handler ───────────────────────────────────────────────────────────────
 
-Deno.serve(async (req: Request) => {
+serveModule(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
 

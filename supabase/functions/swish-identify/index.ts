@@ -11,7 +11,7 @@
 // v5 CHANGES — THREE PRODUCTION NICHES:
 //   COINS / CLOTHING / MX — see full comments in v5
 
-import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
+import { serveModule } from '../_shared/moduleScope.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { requirePaidNiche,nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
@@ -1567,7 +1567,7 @@ async function runCoinResearch(id: any, known: Record<string, any>, numista: Num
 }
 
 // ── Main handler ───────────────────────────────────────────────────────────────
-Deno.serve(withEdgeFunctionLogging('swish-identify', async (req: Request) => {
+serveModule(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return new Response(JSON.stringify({ error: 'Method not allowed.' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
@@ -2067,4 +2067,4 @@ The caller will use only the requested output (title or description). Do not inv
     console.error('[swish-identify v6] Identification request failed.');
     return new Response(JSON.stringify({ error: 'Identification request failed. Please retry.' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
-}));
+});

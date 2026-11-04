@@ -7,7 +7,6 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useAlert, useAuth } from '@/template';
 import { useApp } from '@/hooks/useApp';
 import { useProductionControl } from '@/hooks/useProductionControl';
-import { isSwishMasterAdmin } from '@/contexts/AppContext';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { classifyProductionWorkflowJob } from '@/services/productionControlEvidence';
 import { PRODUCTION_REPOSITORY } from '@/services/productionControlService';
@@ -36,7 +35,7 @@ export default function ProductionControlScreen() {
   const { user, loading: authLoading } = useAuth();
   const { isMasterAdmin, tenantLoading, nichePreferencesLoading } = useApp();
   const accessLoading = authLoading || tenantLoading || nichePreferencesLoading;
-  const ownerAccessDenied = !isSwishMasterAdmin(user?.email) || !isMasterAdmin;
+  const ownerAccessDenied = !isMasterAdmin;
   const allowed = !accessLoading && !ownerAccessDenied;
   // Hook is always mounted, but it cannot fetch repository data before owner authorization.
   const control = useProductionControl(allowed);
@@ -86,7 +85,7 @@ export default function ProductionControlScreen() {
       {overview.stages.length === 0 ? <Text style={styles.body}>No valid register is available. Readiness cannot be calculated.</Text> : null}
     </Section>;
 
-    if (item === 'certification') return <Section title="Ten-niche certification" subtitle={`${overview.gatesVerified} / ${overview.gatesTotal} current-commit acceptance gates · ${overview.certified} / ${snapshot.niches.length} certified niches`}>
+    if (item === 'certification') return <Section title="Canonical module certification" subtitle={`${overview.gatesVerified} / ${overview.gatesTotal} current-commit acceptance gates · ${overview.certified} / ${snapshot.niches.length} certified niches`}>
       <Text style={styles.body}>Only explicit, dated niche evidence for the loaded main commit counts. Missing records stay open; older or offline evidence requires recheck.</Text>
       <View style={styles.nicheRail}><FlatList horizontal data={overview.certifications} keyExtractor={niche => niche.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.railContent} renderItem={({ item: niche }) => <Pressable accessibilityRole="button" accessibilityState={{ selected: selectedNiche?.id === niche.id }} onPress={() => setSelectedNicheId(niche.id)} style={({ pressed }) => [styles.nicheChip, selectedNiche?.id === niche.id && styles.selectedChip, pressed && styles.pressed]}>
         <Text style={styles.chipTitle}>{niche.name}</Text><Text style={styles.muted}>{niche.verified} / {niche.total} verified</Text>

@@ -25,7 +25,7 @@
 //
 // POST body: { tenantId, itemIds?, fixTitles? }
 
-import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
+import { serveModule } from '../_shared/moduleScope.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
@@ -451,14 +451,18 @@ async function processItem(
 
 // ── Main Handler ───────────────────────────────────────────────────────────────
 
-Deno.serve(withEdgeFunctionLogging('swish-image-download', async (req: Request) => {
+serveModule(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResp({ error: 'Method not allowed' }, 405);
 
   let body: any;
   try { body = await req.json(); } catch { return jsonResp({ error: 'Invalid JSON' }, 400); }
 
-  const { tenantId, itemIds, fixTitles = true } = body;
+  const { tenantId, itemIds, fixTitles = true, specialistIds } = body;
+  const scopedItems = () => {
+    const query = supabase.from('items').select('id, media, canonical_title, attributes').eq('tenant_id', tenantId);
+    return Array.isArray(specialistIds) ? query.in('specialist_id', specialistIds) : query;
+  };
   if (!tenantId) return jsonResp({ error: 'tenantId is required' }, 400);
 
   const supabase = adminClient();
@@ -504,16 +508,12 @@ Deno.serve(withEdgeFunctionLogging('swish-image-download', async (req: Request) 
   let allItems: Array<{ id: string; media: string[]; canonical_title: string; attributes: Record<string, any> | null }> = [];
 
   if (itemIds && Array.isArray(itemIds) && itemIds.length > 0) {
-    const { data } = await supabase.from('items')
-      .select('id, media, canonical_title, attributes')
-      .eq('tenant_id', tenantId).in('id', itemIds);
+    const { data } = await scopedItems().in('id', itemIds);
     allItems = data ?? [];
   } else {
     let page = 0;
     while (true) {
-      const { data: pageData, error: pageErr } = await supabase.from('items')
-        .select('id, media, canonical_title, attributes')
-        .eq('tenant_id', tenantId)
+      const { data: pageData, error: pageErr } = await scopedItems()
         .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
         .order('created_at', { ascending: false });
       if (pageErr || !pageData || pageData.length === 0) break;
@@ -661,4 +661,4 @@ Deno.serve(withEdgeFunctionLogging('swish-image-download', async (req: Request) 
   };
   console.log(`[v6] COMPLETE: ${JSON.stringify(finalResult)}`);
   return jsonResp(finalResult);
-}));
+});
