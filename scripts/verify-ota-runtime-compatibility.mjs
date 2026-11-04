@@ -9,7 +9,7 @@ const currentSha = process.env.GITHUB_SHA;
 if (!repo || !currentSha) throw new Error('GitHub repository and current commit SHA are required.');
 if (process.env.GITHUB_REF !== 'refs/heads/main') {
   console.warn('OTA publishing is restricted to main; this ref is not eligible.');
-  if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, 'should_publish=false\\n');
+  if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, 'should_publish=false\n');
   if (process.env.REQUIRE_OTA_SAFE === '1') process.exit(1);
   process.exit(0);
 }
