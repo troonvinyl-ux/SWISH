@@ -303,7 +303,8 @@
       "security-and-entitlements",
       "regression-tests",
       "google-play-store-compliance"
-    ]
+    ],
+    "expectedNicheCount": 11
   },
   "mergePolicy": {
     "requiredChecksMustPass": true,
