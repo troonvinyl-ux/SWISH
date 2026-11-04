@@ -1,6 +1,13 @@
 name: Build isolated SWISH niche APK
 on:
   workflow_dispatch:
+    inputs:
+      niche:
+        description: Canonical branded application
+        required: true
+        type: choice
+        default: collectibles
+        options: [coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech, collectibles]
 permissions:
   contents: read
 jobs:
