@@ -3,10 +3,10 @@
   "id": "collectibles",
   "name": "Collectibles Flipper",
   "specialistIds": [
-    "collectibles_flipper"
+    "collectibles"
   ],
   "legacySpecialistIds": [],
-  "defaultSpecialistId": "collectibles_flipper",
+  "defaultSpecialistId": "collectibles",
   "androidPackage": "com.swish.collectiblesflipper",
   "iosBundleIdentifier": "com.swish.collectiblesflipper",
   "entryRoute": "/entry/collectibles",
