@@ -3,6 +3,17 @@ on:
   push:
     branches:
       - 'release/apk-suite-*'
+  pull_request:
+    branches:
+      - 'release/11-app-android-testing'
+    paths:
+      - '.github/workflows/_niche-android.yml'
+      - '.github/workflows/build-swish-suite.yml'
+      - 'app.config.js'
+      - 'niche-modules.json'
+      - 'scripts/**'
+      - 'jest.config.ci.js'
+      - 'services/__tests__/**'
   workflow_dispatch:
     inputs:
       include_master_admin:
@@ -29,6 +40,7 @@ jobs:
     uses: ./.github/workflows/_niche-android.yml
     with:
       niche: ${{ matrix.niche }}
+    secrets: inherit
   release-index:
     name: Generate 11-app Android testing index
     if: ${{ always() && (github.event_name == 'push' || inputs.include_all_niches) }}
