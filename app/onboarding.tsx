@@ -44,7 +44,7 @@ function nicheToEntryRoute(nicheId: NicheId): string {
   return resolveNicheEntryRoute(nicheId) ?? '/niche-select';
 }
 
-// The four primary subscriber niches available at onboarding
+// Registered subscriber niches available at onboarding
 const ONBOARDING_NICHES: Array<{
   id: NicheId;
   name: string;
