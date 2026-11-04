@@ -3073,6 +3073,7 @@ export default function SettingsScreen({ embedded = false }: { embedded?: boolea
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { tenant, businessConfig, reloadBusinessConfig, triggerInventoryReload, activeNiche, activeNicheId, setActiveNiche } = useApp();
+  const isCollectiblesBuild = activeNicheId === 'collectibles';
   const { logout, user } = useAuth();
   const { showAlert } = useAlert();
 
@@ -3363,11 +3364,12 @@ export default function SettingsScreen({ embedded = false }: { embedded?: boolea
         <CardGroup>
           <SettingRow
             icon="receipt-long"
-            label="All Listings"
-            desc="Manage draft, live and ended listings"
-            onPress={() => router.push('/(tabs)/listings' as any)}
+            label={isCollectiblesBuild ? 'Inventory & Listings' : 'All Listings'}
+            desc={isCollectiblesBuild ? 'Review stock, drafts and live listing status' : 'Manage draft, live and ended listings'}
+            onPress={() => router.push((isCollectiblesBuild ? '/(tabs)/inventory' : '/(tabs)/listings') as any)}
             color={Colors.accent}
           />
+          {!isCollectiblesBuild ? <>
           <Divider />
           <SettingRow
             icon="local-shipping"
@@ -3384,6 +3386,7 @@ export default function SettingsScreen({ embedded = false }: { embedded?: boolea
             onPress={() => router.push('/orders' as any)}
             color={Colors.info}
           />
+          </> : null}
         </CardGroup>
 
         {/* ── Niches & Subscriptions ──────────────────────────────── */}
