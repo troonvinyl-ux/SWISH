@@ -17,13 +17,13 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { useSubscription } from '@/hooks/useSubscription';
-import { resolveProductionNiche } from '@/services/nicheRouting';
+import { resolveProductionNiche, nicheToScannerRoute, isRouteAllowedForBuild } from '@/services/nicheRouting';
 import { NICHE_MODULES } from '@/constants/niches';
 import { getSpecialistProfile } from '@/shared/specialistIntelligence';
 
 // ── Map active niche to its product ──────────────────────────────────────────
 
-type NicheProduct = 'coins' | 'mx' | 'bikes' | 'clothing' | 'cards' | 'antiques' | 'fossils' | 'beauty' | 'tech' | 'surplus' | 'general';
+type NicheProduct = 'coins' | 'mx' | 'bikes' | 'clothing' | 'surplus' | 'antiques' | 'fossils' | 'general';
 
 function getNicheProduct(nicheId: string | null | undefined): NicheProduct {
   // resolveProductionNiche returns canonical ProductionNicheId values only.
@@ -35,12 +35,9 @@ function getNicheProduct(nicheId: string | null | undefined): NicheProduct {
   if (id === 'motocross') return 'mx';
   if (id === 'bicycles') return 'bikes';
   if (id === 'clothing') return 'clothing';
-  if (id === 'trading_cards') return 'cards';
   if (id === 'surplus_flip') return 'surplus';
   if (id === 'antiques') return 'antiques';
   if (id === 'fossils') return 'fossils';
-  if (id === 'beauty') return 'beauty';
-  if (id === 'tech') return 'tech';
   return 'general';
 }
 
@@ -164,75 +161,6 @@ const NICHE_CAPTURE: Record<NicheProduct, NicheCaptureConfig> = {
       'Recommended marketplace and selling strategy',
     ],
   },
-  cards: {
-    title: 'Card Flipper',
-    subtitle: 'AI Trading Card Identification & Grading',
-    tagline: 'IDENTIFY • GRADE • VALUE • COLLECT',
-    icon: 'style',
-    color: '#FACC15',
-    bgColor: '#09090B',
-    dimColor: '#292000',
-    route: '/capture',
-    captureOptions: [
-      { icon: 'photo-camera', label: 'Card Front', desc: 'Full card face, square to camera — required' },
-      { icon: 'photo-camera', label: 'Card Back', desc: 'Full reverse, including set and number — required' },
-      { icon: 'zoom-in', label: 'Corners & Edges', desc: 'Close-ups of all four corners and edges' },
-      { icon: 'center-focus-strong', label: 'Surface Detail', desc: 'Scratches, print lines, dents and foil condition' },
-    ],
-    aiCapabilities: [
-      'Card, set, character / player and card-number identification',
-      'Edition, rarity and language evidence',
-      'Corner, edge, surface and centring observations',
-      'Condition and grading guidance with uncertainty clearly shown',
-      'Market evidence and listing attribute preparation',
-    ],
-  },
-  beauty: {
-    title: 'Beauty Flipper',
-    subtitle: 'AI Beauty Product Identification',
-    tagline: 'BRANDS • SHADES • DETAILS • VALUE',
-    icon: 'face-retouching-natural',
-    color: '#E879B9',
-    bgColor: '#100A10',
-    dimColor: '#32172B',
-    route: '/capture',
-    captureOptions: [
-      { icon: 'photo-camera', label: 'Product Front', desc: 'Brand, product name and shade — required' },
-      { icon: 'photo-camera', label: 'Ingredients / Back', desc: 'Ingredient list and manufacturer details' },
-      { icon: 'photo-camera', label: 'Batch / Barcode', desc: 'Batch code, barcode and authenticity details' },
-      { icon: 'photo-camera', label: 'Packaging & Seal', desc: 'Packaging, tamper seal and visible condition' },
-    ],
-    aiCapabilities: [
-      'Brand, product line, type and shade identification',
-      'Packaging and barcode text extraction',
-      'Batch and expiry information when visibly present',
-      'Condition, seal and completeness observations',
-      'Listing attributes and resale research leads',
-    ],
-  },
-  tech: {
-    title: 'Tech Flipper',
-    subtitle: 'AI Technology Identification',
-    tagline: 'IDENTIFY • TEST • VALUE • FLIP',
-    icon: 'devices',
-    color: '#38BDF8',
-    bgColor: '#070C12',
-    dimColor: '#10283A',
-    route: '/capture',
-    captureOptions: [
-      { icon: 'photo-camera', label: 'Device Front', desc: 'Full device and visible condition — required' },
-      { icon: 'photo-camera', label: 'Model Label', desc: 'Manufacturer, model and regulatory label' },
-      { icon: 'photo-camera', label: 'Ports & Connections', desc: 'Ports, connectors and physical damage' },
-      { icon: 'photo-camera', label: 'Accessories & Screen', desc: 'Included accessories and powered-on status' },
-    ],
-    aiCapabilities: [
-      'Manufacturer, model family and specification extraction',
-      'Ports, connectors, accessories and compatibility observations',
-      'Screen, casing and visible condition assessment',
-      'Model-specific item specifics and listing preparation',
-      'Test status and activation / account-lock checks recorded as operator evidence',
-    ],
-  },
   antiques: {
     title: 'Antique Flipper',
     subtitle: 'AI Antiques & Collectibles Identification',
@@ -241,7 +169,7 @@ const NICHE_CAPTURE: Record<NicheProduct, NicheCaptureConfig> = {
     color: '#D97706',
     bgColor: '#0B0907',
     dimColor: '#2A1808',
-    route: '/antique-capture',
+    route: '/capture',
     captureOptions: [
       { icon: 'photo-camera', label: 'Main View', desc: 'Full object, straight-on — required' },
       { icon: 'photo-camera', label: 'Reverse / Underside', desc: 'Base, joints, construction and labels' },
@@ -356,11 +284,7 @@ export default function ScanScreen() {
   const handleOpenNiche = () => {
     // The Scan tab is an action, not a second landing page. Open the active
     // niche directly in capture mode; keep other niche routes unchanged.
-    if (product === 'coins') {
-      router.push('/coin-flipper?tab=capture' as any);
-      return;
-    }
-    router.push(config.route as any);
+    router.push(nicheToScannerRoute(selectedNicheId) as any);
   };
 
   return (
@@ -441,13 +365,13 @@ export default function ScanScreen() {
         </View>
         <View style={s.quickLinks}>
           {[
-            { icon: 'fact-check', label: 'Specialist Evidence & Buying Review', route: '/capture' },
+            { icon: 'fact-check', label: 'Specialist Evidence & Buying Review', route: nicheToScannerRoute(selectedNicheId) },
             { icon: 'inventory-2', label: 'My Inventory', route: '/(tabs)/inventory' },
             { icon: 'receipt-long', label: 'My Listings', route: '/(tabs)/listings' },
             { icon: 'savings', label: 'Should I Buy This?', route: '/buy-decision' },
             { icon: 'storefront', label: 'eBay Hub', route: '/ebay-hub' },
             { icon: 'cloud-download', label: 'Import eBay', route: '/ebay-import' },
-          ].map(link => (
+          ].filter(link => isRouteAllowedForBuild(link.route, canonicalId)).map(link => (
             <Pressable
               key={link.label}
               onPress={() => router.push(link.route as any)}

@@ -1,0 +1,37 @@
+{
+  "programme": "SWISH navigation repair, Collectibles workflow and owner verification",
+  "releaseDecision": "ACCEPTANCE INCOMPLETE",
+  "testExecution": {"sqlChecksExecuted": true, "jestExecutedInEditor": false, "nativeDeviceTestsExecuted": false, "browserClicksExecuted": false},
+  "observedSqlChecks": {"owner_bound": true, "client_can_grant_owner": false, "client_can_edit_scope": false, "anon_can_open_module": false, "verification_rls": true, "client_can_insert_verification": false, "collectibles_mapping": "collectibles"},
+  "moduleNavigation": [
+    {"niche":"coins","route":"/coins","status":"NOT TESTED"},
+    {"niche":"motocross","route":"/mx","status":"NOT TESTED"},
+    {"niche":"bicycles","route":"/bikes","status":"NOT TESTED"},
+    {"niche":"clothing","route":"/threads","status":"NOT TESTED"},
+    {"niche":"trading_cards","route":"/cards","status":"NOT TESTED"},
+    {"niche":"antiques","route":"/antiques","status":"NOT TESTED"},
+    {"niche":"fossils","route":"/fossils","status":"NOT TESTED"},
+    {"niche":"beauty","route":"/beauty","status":"NOT TESTED"},
+    {"niche":"tech","route":"/tech","status":"NOT TESTED"},
+    {"niche":"surplus_flip","route":"/surplus","status":"NOT TESTED"},
+    {"niche":"collectibles","route":"/entry/collectibles","status":"NOT TESTED"}
+  ],
+  "acceptance": [
+    {"criterion":"Selected dashboard and footer render, no master home reload","status":"NOT TESTED","evidence":"Navigator-remount and silent-redirect causes repaired in source; actual card clicks await runtime."},
+    {"criterion":"Collectibles real specialist capture, review, valuation, save and eBay draft","status":"NOT TESTED","evidence":"Existing image, valuation and listing services connected; real photos, inventory and marketplace journey not executed."},
+    {"criterion":"Collectibles artwork in dashboard","status":"NOT TESTED","evidence":"Existing local Collectibles artwork connected via expo-image; visual device inspection outstanding."},
+    {"criterion":"Collectibles inventory isolation","status":"NOT TESTED","evidence":"Canonical specialist mapping verified by executed SQL; multi-account RLS acceptance outstanding."},
+    {"criterion":"Trusted owner role exists and clients cannot grant it","status":"PASS","evidence":"Executed SQL returned owner_bound=true, client_can_grant_owner=false."},
+    {"criterion":"Owner-only Admin and verification endpoints reject subscriber JWTs","status":"NOT TESTED","evidence":"Server guard present; subscriber authenticated HTTP probe not run."},
+    {"criterion":"Diagnostic evidence protected from client inserts","status":"PASS","evidence":"Executed SQL: verification_rls=true, client_can_insert_verification=false."},
+    {"criterion":"Run and inspect safe test results","status":"NOT TESTED","evidence":"Owner runner persists real execution rows; initial history remains empty, no fabricated results."},
+    {"criterion":"Live eBay diagnosis using established integration","status":"NOT TESTED","evidence":"Explicitly confirmed seller-policy probe connected; HTTP error-to-empty-policy bug repaired."},
+    {"criterion":"Credentials protected in diagnostics","status":"NOT TESTED","evidence":"Whitelisted non-secret responses implemented; automated source/security suite awaiting execution."},
+    {"criterion":"Android, iOS and website parity","status":"BLOCKED","evidence":"Same Expo routes and hooks; no device or hosted browser execution tools available in editor."},
+    {"criterion":"Outstanding failures and blocked checks visible","status":"NOT TESTED","evidence":"Verification catalogue and unknown-source states implemented; owner UI journey pending."},
+    {"criterion":"Regression and isolation suite","status":"BLOCKED","evidence":"No shell/Jest executor exposed here. Existing CI retains JSON test results; no workflow triggered in this session."},
+    {"criterion":"Native signed artifacts and checksums","status":"BLOCKED","evidence":"Original signing credentials and native build runner unavailable; no artifact claimed."}
+  ],
+  "productionChanges": {"otaPublished": false, "releasePublished": false, "pullRequestsMerged": false, "signingChanged": false, "packageIdsChanged": false, "businessRecordsModifiedByTools": false, "diagnosticSchemaAdded": true},
+  "report": "docs/SWISH_NAVIGATION_ADMIN_ACCEPTANCE_20261104.md"
+}

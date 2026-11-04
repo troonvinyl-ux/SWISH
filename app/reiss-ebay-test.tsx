@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, Pressable, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, Pressable, View } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth, getSupabaseClient } from '@/template';
 import { useApp } from '@/hooks/useApp';
-import { isSwishMasterAdmin } from '@/contexts/AppContext';
+import { Image } from 'expo-image';
 import type { SavedListing } from '@/services/listingService';
 import { Colors, Spacing, Radius, Typography } from '@/constants/theme';
 
@@ -19,7 +19,7 @@ type InventoryItem = {
 
 export default function ReissEbayTestConsole() {
   const { user } = useAuth();
-  const { tenant } = useApp();
+  const { tenant, isMasterAdmin, activeNicheId } = useApp();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [item, setItem] = useState<InventoryItem | null>(null);
@@ -33,7 +33,7 @@ export default function ReissEbayTestConsole() {
   const [status, setStatus] = useState('Connecting to the existing SWISH backend…');
 
   const load = useCallback(async () => {
-    if (!tenant?.id) return;
+    if (!isMasterAdmin || activeNicheId !== 'clothing' || !tenant?.id) return;
     setLoading(true);
     const client = getSupabaseClient();
     const { data, error } = await client.from('items').select('id,canonical_title,description,expected_selling_price,condition,condition_notes,media,specialist_id,attributes,quantity,inventory_id,status')
@@ -66,7 +66,7 @@ export default function ReissEbayTestConsole() {
   }, [tenant?.id]);
 
   useEffect(() => { void load(); }, [load]);
-  if (!isSwishMasterAdmin(user?.email)) return <Redirect href="/" />;
+  if (!isMasterAdmin || activeNicheId !== 'clothing') return <Redirect href="/" />;
 
   const revise = () => {
     if (!tenant?.id || !item || !listing || !externalId) return;
@@ -132,7 +132,7 @@ export default function ReissEbayTestConsole() {
   return <View style={styles.screen}><StatusBar style="light"/><ScrollView contentContainerStyle={[styles.content,{paddingTop:insets.top+Spacing.md,paddingBottom:insets.bottom+Spacing.xl}]}>
     <View style={styles.header}><Pressable onPress={()=>router.back()} style={styles.back}><MaterialIcons name="arrow-back" size={22} color={Colors.textPrimary}/></Pressable><View style={{flex:1}}><Text style={styles.eyebrow}>SWISH · OWNER TEST TOOL</Text><Text style={styles.title}>Single-item eBay console</Text><Text style={styles.sub}>One inventory item · shared backend · shared eBay connection</Text></View></View>
     <View style={styles.panel}><Text style={styles.section}>Inventory source</Text><Text style={styles.muted}>Exact title lookup: {TARGET_TITLE}</Text>
-      {loading ? <ActivityIndicator color={Colors.primary}/> : item ? <><Text style={styles.itemTitle}>{item.canonical_title}</Text><Text style={styles.muted}>Inventory ID: {item.id}</Text><Text style={styles.muted}>Specialist: {item.specialist_id ?? '—'} · Status: {item.status ?? '—'}</Text>{(item.media ?? []).map((url,i)=><Image key={url+i} source={{uri:url}} style={styles.photo}/>)}</> : <Text style={styles.muted}>No matching item loaded.</Text>}
+      {loading ? <ActivityIndicator color={Colors.primary}/> : item ? <><Text style={styles.itemTitle}>{item.canonical_title}</Text><Text style={styles.muted}>Inventory ID: {item.id}</Text><Text style={styles.muted}>Specialist: {item.specialist_id ?? '—'} · Status: {item.status ?? '—'}</Text>{(item.media ?? []).map((url,i)=><Image key={url+i} source={{uri:url}} contentFit="cover" transition={200} style={styles.photo}/>)}</> : <Text style={styles.muted}>No matching item loaded.</Text>}
       <Pressable onPress={()=>void load()} disabled={loading||busy} style={styles.secondary}><Text style={styles.secondaryText}>Refresh source record</Text></Pressable>
     </View>
     {item ? <View style={styles.panel}><Text style={styles.section}>Listing fields</Text><Text style={styles.muted}>These fields are pre-populated from the existing live eBay listing. Revising changes the eBay listing and its SWISH listing row, not the original inventory fields.</Text>

@@ -26,6 +26,7 @@
 //     dispatchPhotoUrl?: string // URL of dispatch proof photo (optional)
 //   }
 
+import { serveModule } from '../_shared/moduleScope.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
@@ -744,7 +745,7 @@ async function handleSyncCases(
 
 // ── Main Handler ──────────────────────────────────────────────────────────────
 
-Deno.serve(async (req: Request) => {
+serveModule(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
 

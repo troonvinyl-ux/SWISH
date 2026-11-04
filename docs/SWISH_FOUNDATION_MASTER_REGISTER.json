@@ -4,7 +4,45 @@
   "sourcePrompt": "SWISH Modular Production Readiness Master Directive",
   "repository": "troonvinyl-ux/SWISH",
   "defaultBranch": "main",
-  "lastReviewed": "2026-11-02",
+  "lastReviewed": "2026-11-04",
+  "completionProgramme": {
+    "directive": "SWISH Master Completion Directive",
+    "status": "BLOCKED",
+    "productionReady": false,
+    "sourceReference": "a8eee534b716a7be172992c3100943b1b6314562",
+    "collectiblesPullRequest": 167,
+    "collectiblesPrHead": "467ad03a6cb3912f8ba6a00c8f212ee987917bc7",
+    "implementationCommit": null,
+    "handover": "docs/SWISH_COMPLETION_HANDOVER.md",
+    "tasks": [
+      { "id": "C1-SOURCE", "scope": "shared", "description": "Reconcile current GitHub and OnSpace; targeted route/runtime/dependency restoration implemented", "status": "BLOCKED", "files": ["scripts/check-source-baseline.mjs", "scripts/prepare-niche-routes.js", "contexts/AppContext.tsx"], "implementationCommit": null, "testEvidence": "Pinned public main and PR were inspected; full Git tree diff/commit executor unavailable", "remainingBlocker": "Complete authorized Git checkout, diff review and commit", "verificationStatus": "BLOCKED" },
+      { "id": "C2-BOOT", "scope": "shared eBay", "description": "Restore missing edgeFunctionLogging dependency and verify runtime recovery", "status": "IMPLEMENTED", "files": ["supabase/functions/_shared/edgeFunctionLogging.ts", "scripts/validate-edge-deployment.mjs"], "implementationCommit": null, "testEvidence": "Confirmed unresolved local import; dependency restored; no successful deployed boot probe", "remainingBlocker": "Deployed revision/import parity and safe runtime probe", "verificationStatus": "BLOCKED" },
+      { "id": "C2-OAUTH", "scope": "shared eBay", "description": "Preserve active seller credentials until successful consent; claim callback once", "status": "IMPLEMENTED", "files": ["supabase/functions/swish-ebay-oauth/index.ts", "supabase/migrations/20261104_oauth_consent_staging.sql"], "implementationCommit": null, "testEvidence": "Staging column and denied client reads verified by catalog; callback regression authored, not executed", "remainingBlocker": "Controlled cancellation, concurrency and exchange acceptance with approved account", "verificationStatus": "BLOCKED" },
+      { "id": "C2-SCHEMA", "scope": "shared backend", "description": "Add consent staging, telemetry, sale metadata, order RLS and existing sold-order RPC without changing historical rows", "status": "VERIFIED", "files": ["supabase/migrations/20261104_order_resource_boundary.sql", "supabase/migrations/20261103_edge_function_logs.sql", "supabase/migrations/20261102181000_atomic_ebay_order_reconciliation.sql"], "implementationCommit": null, "testEvidence": "Executed catalog checks: OAuth staging exists/client read denied; 3 restrictive order policies; telemetry RLS; sale columns; sold RPC exists, client/anon EXECUTE denied and server EXECUTE allowed", "remainingBlocker": "Operational and two-account acceptance remain separate C3/C9 gates", "verificationStatus": "VERIFIED" },
+      { "id": "C3-COLLECTIBLES", "scope": "collectibles", "description": "Integrate dedicated eleventh specialist, capture, home, registry, checkout and five-area route subset", "status": "IMPLEMENTED", "files": ["niche-modules.json", "constants/niches.ts", "constants/specialists.ts", "shared/specialistIntelligence.ts", "app/entry/collectibles.tsx", "supabase/functions/swish-create-checkout/index.ts"], "implementationCommit": null, "testEvidence": "Cross-product contract tests authored; live mapping still NULL and ten-product constraint inspected", "remainingBlocker": "Owner-controlled known-product CHECK and snapshot-limit migration; PR review/merge; no historical reclassification", "verificationStatus": "BLOCKED" },
+      { "id": "C3-ORDERS", "scope": "shared orders", "description": "Authorize canonical linked item/niche through restrictive RLS and service filters", "status": "IMPLEMENTED", "files": ["services/orderService.ts", "app/orders.tsx", "supabase/migrations/20261104_order_resource_boundary.sql"], "implementationCommit": null, "testEvidence": "Helper/policy presence verified; null-identity role-switch test failed with backend error and is not counted as a pass", "remainingBlocker": "Approved tenant/account/niche direct API fixtures; remaining finance/message/resource scopes", "verificationStatus": "BLOCKED" },
+      { "id": "C4-NAV", "scope": "eleven apps", "description": "Preserve Antique five-area footer, restore missing Antique resources and filter Scan/Listings links", "status": "IMPLEMENTED", "files": ["app/(tabs)/_layout.tsx", "app/(tabs)/listings.tsx", "app/(tabs)/scan.tsx", "app/(tabs)/antique-more.tsx", "hooks/useAccountLogout.ts"], "implementationCommit": null, "testEvidence": "Five-area generator assertions and identity tests authored; no device/overflow/back acceptance", "remainingBlocker": "Full Settings/detail rendered-link audit and installed-device usability checks", "verificationStatus": "BLOCKED" },
+      { "id": "C5-CAPTURE", "scope": "eleven specialists", "description": "Require capture evidence; reject returned foreign specialists; retain original photographs and retry IDs", "status": "IMPLEMENTED", "files": ["hooks/useGenericCapture.ts", "services/aiIdentificationService.ts", "services/marketValueService.ts"], "implementationCommit": null, "testEvidence": "Implementation and specialist contracts present; no real-image confidence calibration or save/reopen acceptance", "remainingBlocker": "Approved real-image/session tests for each niche", "verificationStatus": "BLOCKED" },
+      { "id": "C6-LISTING", "scope": "shared marketplace", "description": "Guard all marketplace writes, preserve localized required-specific names and reject inappropriate safety/condition assumptions", "status": "IMPLEMENTED", "files": ["supabase/functions/swish-ebay-list/index.ts", "supabase/functions/swish-market-value/index.ts"], "implementationCommit": null, "testEvidence": "Regression assertions authored; no remote draft, publish, revise, end or clothing-specific round-trip executed", "remainingBlocker": "Boot recovery, approved seller fixture, finance grants/application permissions", "verificationStatus": "BLOCKED" },
+      { "id": "C7-PARITY", "scope": "web/mobile", "description": "Verify canonical data and workflow consistency in hosted web and native products", "status": "BLOCKED", "files": ["services/", "app/"], "implementationCommit": null, "testEvidence": "No hosted authenticated parity tests executed", "remainingBlocker": "Hosted build revision and approved web/native sessions", "verificationStatus": "BLOCKED" },
+      { "id": "C8-BUILDS", "scope": "eleven APKs", "description": "Extend existing workflows to 11 products, persistent signing, compiler evidence and per-artifact checksums", "status": "IMPLEMENTED", "files": [".github/workflows/_niche-android.yml", ".github/workflows/build-swish-suite.yml", "scripts/configure-niche-signing.mjs", "scripts/verify-apk.sh", "scripts/verify-niche-module.js", "app.config.js"], "implementationCommit": null, "testEvidence": "Build selectors/closure/certificate gates authored; no new native build executed", "remainingBlocker": "GitHub dispatch/runner, approved certificate fingerprint, Tech compiler log, complete prompt/asset/native exclusion and device acceptance", "verificationStatus": "BLOCKED" },
+      { "id": "C9-TESTS", "scope": "shared and eleven niches", "description": "Execute independent automated source checks plus operational/device acceptance", "status": "BLOCKED", "files": ["scripts/run-completion-checks.mjs", "services/__tests__/completionProgramme.test.ts", "supabase/tests/completion_readonly.sql"], "implementationCommit": null, "testEvidence": "Automated runners and regressions authored; terminal unavailable; no TypeScript/Jest/Deno/Gradle pass claimed", "remainingBlocker": "Authorized executor and approved fixtures/device", "verificationStatus": "BLOCKED" },
+      { "id": "C10-RELEASE", "scope": "eleven products", "description": "Release only after every critical per-product acceptance gate passes", "status": "BLOCKED", "files": ["docs/SWISH_COMPLETION_HANDOVER.md", "docs/SWISH_FOUNDATION_MASTER_REGISTER.json"], "implementationCommit": null, "testEvidence": "Implementation handover records executed checks and unresolved gates; no production certification", "remainingBlocker": "C1-C9 acceptance, final commit, all APK checksums and owner release approval", "verificationStatus": "BLOCKED" }
+    ],
+    "releaseStatusByNiche": {
+      "coins": { "status": "BLOCKED", "artifact": null, "apkChecksum": null, "buildNumber": null },
+      "motocross": { "status": "BLOCKED", "artifact": null, "apkChecksum": null, "buildNumber": null },
+      "bicycles": { "status": "BLOCKED", "artifact": null, "apkChecksum": null, "buildNumber": null },
+      "clothing": { "status": "BLOCKED", "artifact": null, "apkChecksum": null, "buildNumber": null },
+      "surplus_flip": { "status": "BLOCKED", "artifact": null, "apkChecksum": null, "buildNumber": null },
+      "trading_cards": { "status": "BLOCKED", "artifact": null, "apkChecksum": null, "buildNumber": null },
+      "antiques": { "status": "BLOCKED", "artifact": null, "apkChecksum": null, "buildNumber": null },
+      "fossils": { "status": "BLOCKED", "artifact": null, "apkChecksum": null, "buildNumber": null },
+      "beauty": { "status": "BLOCKED", "artifact": null, "apkChecksum": null, "buildNumber": null },
+      "tech": { "status": "BLOCKED", "artifact": null, "apkChecksum": null, "buildNumber": null },
+      "collectibles": { "status": "BLOCKED", "artifact": null, "apkChecksum": null, "buildNumber": null }
+    }
+  },
   "rules": {
     "noRebuild": true,
     "noNewDatabase": true,
@@ -65,31 +103,31 @@
     {
       "id": "S2",
       "name": "Implement foundation architecture and registry",
-      "status": "VERIFIED",
+      "status": "IN PROGRESS",
       "goal": "Make existing architecture boundaries explicit and enforceable without creating duplicate registries or services.",
       "tasks": [
         {
           "id": "S2-01",
           "title": "Define shared core/module boundaries against existing code",
-          "status": "VERIFIED",
+          "status": "IMPLEMENTED",
           "evidence": "Verified on main source snapshot e8fec5fdb6ed262556c9b84499ec956ad0a2f385 by https://github.com/troonvinyl-ux/SWISH/actions/runs/41458231817: regression and niche isolation job passed locked dependency install, lint, production-register validation, shared app/Master Admin typecheck and targeted SWISH regression tests; Edge Function syntax and client secret-boundary regression job passed; all ten niche branded configuration and Android JS bundle jobs passed. PR #124 foundation contract gate also passed and was merged as 79dbf7724b0e2d559a4e524780ec06616a481044. Verification covers repository contracts and CI; live OnSpace Cloud deployment/RLS, authenticated integration and installed-device acceptance remain S7 checks and are not implied."
         },
         {
           "id": "S2-02",
           "title": "Extend existing niche-modules.json as the canonical module registry",
-          "status": "VERIFIED",
+          "status": "IMPLEMENTED",
           "evidence": "Verified on main source snapshot e8fec5fdb6ed262556c9b84499ec956ad0a2f385 by https://github.com/troonvinyl-ux/SWISH/actions/runs/41458231817: regression and niche isolation job passed locked dependency install, lint, production-register validation, shared app/Master Admin typecheck and targeted SWISH regression tests; Edge Function syntax and client secret-boundary regression job passed; all ten niche branded configuration and Android JS bundle jobs passed. PR #124 foundation contract gate also passed and was merged as 79dbf7724b0e2d559a4e524780ec06616a481044. Verification covers repository contracts and CI; live OnSpace Cloud deployment/RLS, authenticated integration and installed-device acceptance remain S7 checks and are not implied."
         },
         {
           "id": "S2-03",
           "title": "Define typed contracts and dependency rules for niche extensions",
-          "status": "VERIFIED",
+          "status": "IMPLEMENTED",
           "evidence": "Verified on main source snapshot e8fec5fdb6ed262556c9b84499ec956ad0a2f385 by https://github.com/troonvinyl-ux/SWISH/actions/runs/41458231817: regression and niche isolation job passed locked dependency install, lint, production-register validation, shared app/Master Admin typecheck and targeted SWISH regression tests; Edge Function syntax and client secret-boundary regression job passed; all ten niche branded configuration and Android JS bundle jobs passed. PR #124 foundation contract gate also passed and was merged as 79dbf7724b0e2d559a4e524780ec06616a481044. Verification covers repository contracts and CI; live OnSpace Cloud deployment/RLS, authenticated integration and installed-device acceptance remain S7 checks and are not implied."
         },
         {
           "id": "S2-04",
           "title": "Add architecture and cross-niche regression tests",
-          "status": "VERIFIED",
+          "status": "IMPLEMENTED",
           "evidence": "Verified on main source snapshot e8fec5fdb6ed262556c9b84499ec956ad0a2f385 by https://github.com/troonvinyl-ux/SWISH/actions/runs/41458231817: regression and niche isolation job passed locked dependency install, lint, production-register validation, shared app/Master Admin typecheck and targeted SWISH regression tests; Edge Function syntax and client secret-boundary regression job passed; all ten niche branded configuration and Android JS bundle jobs passed. PR #124 foundation contract gate also passed and was merged as 79dbf7724b0e2d559a4e524780ec06616a481044. Verification covers repository contracts and CI; live OnSpace Cloud deployment/RLS, authenticated integration and installed-device acceptance remain S7 checks and are not implied."
         }
       ]
@@ -286,6 +324,7 @@
   ],
   "nicheCertification": {
     "source": "niche-modules.json",
+    "expectedNicheCount": 11,
     "records": {},
     "requiredAreas": [
       "brand-and-routes",
@@ -303,8 +342,7 @@
       "security-and-entitlements",
       "regression-tests",
       "google-play-store-compliance"
-    ],
-    "expectedNicheCount": 11
+    ]
   },
   "mergePolicy": {
     "requiredChecksMustPass": true,
@@ -343,6 +381,11 @@
     "sourceSecurityRepairStatus": "MERGED; internal secret is additional to user JWT and tenant membership; deployment parity remains BLOCKED."
   },
   "knownReleaseRisks": [
+    "CURRENT 2026-11-04: completionProgramme is the authoritative current execution snapshot; prior VERIFIED evidence applies only to its dated historical source, not this changed 11-product baseline.",
+    "All eleven releases remain BLOCKED: no current native artifact, full automated pass, hosted parity, approved seller action or installed-device acceptance was executed by this editor.",
+    "Collectibles backend known-product constraint and entitlement snapshot remain ten-niche; owner-controlled reviewed migration required. No historical collectible records were moved.",
+    "New environment logs record inventory projection HEAD 504 and tenant-name PATCH 403; causes remain unverified.",
+    "Strict route/import inspection is implemented, but complete prompt/asset/native binary exclusion remains unresolved; registry/allowlist alone is not APK certification.",
     "Live 2026-11-02 GET probes returned HTTP 500 for ten endpoints, nine with BootFailure; four post-source-edit retests still failed. Acknowledged deployment parity and complete boot/import diagnostics are required.",
     "Live catalog found 69 repeated tenant/order-ID groups and 70 repeated tenant/order/item groups with no order UNIQUE constraints; diagnose allocation/duplication without automatic data cleanup.",
     "Authorized test sessions, authenticated runtime/Actions execution, hosted app revisions and installed-device access are not available to this editor; no full live acceptance is claimed.",
@@ -359,6 +402,10 @@
     "PRs #142, #143, #144 and #145 remain on older branch bases and must be replayed/rebased against current main before merge; do not merge stale branches."
   ],
   "changeLog": [
+    {
+      "date": "2026-11-04",
+      "change": "Implemented consent staging and atomic callback claims, restored missing listing telemetry dependency and Antique routes, added 11-product Collectibles configuration without reclassification, guarded marketplace writes and order resources, added sale metadata/server-only reconciliation function, extended native branding/build/signing/evidence gates and authored regressions. Catalog/privilege postconditions verified only. Full Git synchronization, actual test/build execution, Collectibles CHECK/snapshot migration, deployed boot recovery, binary exclusion and seller/device acceptance remain blocked. No final source commit, PR merge, new APK or production certification claimed. Historical S2 source passes downgraded for current-baseline recheck; dated evidence retained."
+    },
     {
       "date": "2026-11-02",
       "change": "Final S1-S7 reconciliation: PR #139 and #140 remain open, mergeable and fully CI-green; PR #141 adds the eBay GetMyMessages ReturnHeaders/ReturnMessages repair and also passed all five required workflows. All three branches are up to date with main. No PR was merged and no APK, signed AAB or OnSpace deployment was produced. Live seller-account, physical Android and OnSpace deployment acceptance remain outstanding."

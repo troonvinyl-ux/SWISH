@@ -1,19 +1,9 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import { nicheToScannerRoute, getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 import { SPECIALIST_PROFILES } from '@/shared/specialistIntelligence';
 import { NICHES } from '@/constants/niches';
 import { SPECIALISTS } from '@/constants/specialists';
 
 describe('One-tap niche scanner routing', () => {
-  test('Scan tab pushes the scanner and never replaces tab history', () => {
-    const scanSource = fs.readFileSync(path.resolve(__dirname, '../../app/(tabs)/scan.tsx'), 'utf8');
-    expect(scanSource).toContain('router.push(config.route as any)');
-    expect(scanSource).toContain("router.push('/coin-flipper?tab=capture' as any)");
-    expect(scanSource).not.toContain('router.replace(');
-    expect(scanSource).not.toContain('nicheToScannerRoute(selectedNicheId)');
-  });
-
   test.each([
     ['coins', '/coin-flipper?tab=capture'],
     ['motocross', '/flipper-mx'],

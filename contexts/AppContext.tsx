@@ -8,6 +8,8 @@ import { NICHES, isProductionNiche, type NicheId, type NicheConfig, type Product
 import { resolveNicheFromNativeAppId, resolveNicheFromNativeAppScheme } from '@/services/nicheRouting';
 import { loadModuleAccess, activateModuleScope, type ModuleAccessSnapshot } from '@/services/moduleAccessService';
 import type { SubscriptionStatus } from '@/services/subscriptionService';
+import { restoredModule } from '@/services/moduleNavigationService';
+import { recordNavigationFailure } from '@/services/verificationCentreService';
 
 export const SWISH_MASTER_ADMIN_EMAIL = 'troonvinyl@gmail.com';
 /** Legacy presentation helper only. AppProvider and backend grants NEVER derive roles from this. */
@@ -18,7 +20,7 @@ const fixedNiche: ProductionNicheId | null = unified ? null :
   resolveNicheFromNativeAppId(Platform.OS === 'android' ? Constants.expoConfig?.android?.package : Constants.expoConfig?.ios?.bundleIdentifier) ??
   resolveNicheFromNativeAppScheme(Constants.expoConfig?.scheme) ?? (isProductionNiche(configured) ? configured : null);
 interface AppContextType {
-  isMasterAdmin: boolean; accessReady: boolean; accessError: string | null; canSwitchNiche: boolean; moduleLoading: boolean; moduleEpoch: number;
+  isMasterAdmin: boolean; accessReady: boolean; accessError: string | null; moduleError: string | null; canSwitchNiche: boolean; moduleLoading: boolean; moduleEpoch: number;
   openModule: (id: ProductionNicheId) => Promise<boolean>; returnToMaster: () => Promise<boolean>;
   subscriptionStatus: SubscriptionStatus | null; subscriptionLoading: boolean; subscriptionTier: string | null; refreshSubscription: () => Promise<void>;
   tenant: Tenant | null; tenantLoading: boolean; tenantError: string | null; reloadTenant: () => Promise<void>;
@@ -40,6 +42,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [tenantLoading, setTenantLoading] = useState(true); const [tenantError, setTenantError] = useState<string | null>(null);
   const [businessConfig, setBusinessConfig] = useState<BusinessConfig | null>(null);
   const [access, setAccess] = useState<ModuleAccessSnapshot | null>(null); const [accessError, setAccessError] = useState<string | null>(null);
+  const [moduleError, setModuleError] = useState<string | null>(null);
+  const moduleLock = useRef(false);
   const [subscriptionLoading, setSubscriptionLoading] = useState(false); const [moduleLoading, setModuleLoading] = useState(false);
   const [activeNicheId, setNiche] = useState<NicheId>('general'); const activeRef = useRef<NicheId>('general');
   const [moduleEpoch, setEpoch] = useState(0); const [inventoryReloadSignal, setReloadSignal] = useState(0);
@@ -49,29 +53,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const openModule = useCallback(async (id: ProductionNicheId) => {
     const grant = accessRef.current; const account = tenantRef.current; const uid = userRef.current;
-    if (!uid || !account || !grant || grant.tenantId !== account.id || !grant.nicheIds.includes(id) || (fixedNiche && fixedNiche !== id)) return false;
-    const version = ++scopeRequest.current; setModuleLoading(true); setAccessError(null); clearModule();
+    if (moduleLock.current) return false;
+    if (!uid || !account || !grant || grant.tenantId !== account.id || !grant.nicheIds.includes(id) || (fixedNiche && fixedNiche !== id)) { setModuleError('This workspace is not permitted by your verified memberships. Refresh access and retry.'); return false; }
+    moduleLock.current = true;
+    const version = ++scopeRequest.current; setModuleLoading(true); setModuleError(null);
     try {
       const result = await activateModuleScope(account.id, id);
       if (userRef.current !== uid || scopeRequest.current !== version) return false;
-      if (result.error) { setAccessError(result.error); return false; }
+      if (result.error) { setModuleError(result.error); if (grant.owner) void recordNavigationFailure(account.id, id); return false; }
       const config = await getBusinessConfig(account.id, id);
       if (userRef.current !== uid || scopeRequest.current !== version) return false;
-      if (config.error) { setAccessError(config.error); return false; }
-      setBusinessConfig(config.config);
+      // Settings are optional; an unavailable overlay must not discard an authorized module.
+      setBusinessConfig(config.config); setModuleError(config.error);
+      setActiveAcquisitionId(null); setScanMode('idle'); setEpoch(v => v + 1);
       activeRef.current = id; setNiche(id); setReloadSignal(v => v + 1); return true;
-    } finally { if (userRef.current === uid && scopeRequest.current === version) setModuleLoading(false); }
+    } catch { if (userRef.current === uid && scopeRequest.current === version) { setModuleError('Workspace initialization failed. Retry this module; no inventory was changed.'); if (grant.owner) void recordNavigationFailure(account.id, id); } return false;
+    } finally { moduleLock.current = false; if (userRef.current === uid && scopeRequest.current === version) setModuleLoading(false); }
   }, [clearModule]);
   const returnToMaster = useCallback(async () => {
     const account = tenantRef.current; const uid = userRef.current;
     if (!account || !uid || !accessRef.current || (accessRef.current.nicheIds.length < 2 && !accessRef.current.owner) || fixedNiche) return false;
-    const version = ++scopeRequest.current; setModuleLoading(true); clearModule();
+    if (moduleLock.current) return false;
+    moduleLock.current = true;
+    const version = ++scopeRequest.current; setModuleLoading(true); setModuleError(null);
     try {
       const result = await activateModuleScope(account.id, null);
       if (userRef.current !== uid || version !== scopeRequest.current) return false;
-      if (result.error) { setAccessError(result.error); return false; }
-      return true;
-    } finally { if (userRef.current === uid && version === scopeRequest.current) setModuleLoading(false); }
+      if (result.error) { setModuleError(result.error); return false; }
+      clearModule(); return true;
+    } catch { setModuleError('Master home could not be authorized. Retry.'); return false;
+    } finally { moduleLock.current = false; if (userRef.current === uid && version === scopeRequest.current) setModuleLoading(false); }
   }, [clearModule]);
   const loadAccess = useCallback(async () => {
     const account = tenantRef.current; const uid = userRef.current;
@@ -85,9 +96,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       const first = accessRef.current === null;
       const next = result.snapshot; accessRef.current = next; setAccess(next); setAccessError(null);
-      const chosen = fixedNiche ?? (next.nicheIds.length === 1 && !next.owner ? next.nicheIds[0] : null);
+      const restored = first ? await restoredModule(account.id) : null;
+      if (uid !== userRef.current || version !== accessRequest.current) return;
+      const chosen = fixedNiche ?? (restored && next.nicheIds.includes(restored) ? restored : next.nicheIds.length === 1 && !next.owner ? next.nicheIds[0] : null);
       if (chosen && next.nicheIds.includes(chosen) && (first || activeRef.current !== chosen)) await openModule(chosen);
-      else if (first || (activeRef.current !== 'general' && !next.nicheIds.includes(activeRef.current as ProductionNicheId))) {
+      else if (!moduleLock.current && (first || (activeRef.current !== 'general' && !next.nicheIds.includes(activeRef.current as ProductionNicheId)))) {
         clearModule(); const scoped = await activateModuleScope(account.id, null);
         if (uid === userRef.current && version === accessRequest.current && scoped.error) setAccessError(scoped.error);
       }
@@ -121,7 +134,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [user?.id, user?.email, user?.username, loadAccess]);
   useEffect(() => {
     tenantRef.current = null; accessRef.current = null; setTenant(null); setAccess(null); setBusinessConfig(null); setLoadedUserId(null);
-    setAccessError(null); setModuleLoading(false); setSubscriptionLoading(false); clearModule(); void loadTenant();
+    setAccessError(null); setModuleError(null); setModuleLoading(false); setSubscriptionLoading(false); clearModule(); void loadTenant();
     return () => { generation.current++; accessRequest.current++; scopeRequest.current++; };
   }, [loadTenant, clearModule]);
   useEffect(() => {
@@ -147,7 +160,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     businessConfig: accountMatches ? businessConfig : null, reloadBusinessConfig,
     isMasterAdmin: effectiveAccess?.owner === true, accessReady: !!effectiveAccess && !accessError, accessError,
     canSwitchNiche: !fixedNiche && !!effectiveAccess && (effectiveAccess.owner || effectiveAccess.nicheIds.length > 1),
-    moduleLoading, moduleEpoch, openModule, returnToMaster,
+    moduleLoading, moduleError, moduleEpoch, openModule, returnToMaster,
     subscriptionStatus: effectiveAccess?.billingStatus ?? null, subscriptionLoading, subscriptionTier: effectiveTenant?.subscriptionTier ?? null, refreshSubscription: loadAccess,
     activeNiche: NICHES[accountMatches ? activeNicheId : 'general'], activeNicheId: accountMatches ? activeNicheId : 'general', fixedNicheId: fixedNiche,
     enabledNiches: effectiveAccess?.nicheIds ?? [], nichePreferencesLoading: Boolean(user?.id) && (!accountMatches || (!effectiveAccess && !accessError && !tenantError)),

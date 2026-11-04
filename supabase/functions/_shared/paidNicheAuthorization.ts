@@ -56,6 +56,10 @@ export async function refreshVerifiedNiches(admin: AdminClient, account: Account
 }
 export async function requirePaidNiche(admin: AdminClient, account: Account, tenantId: string, nicheId: string | null) {
   await requireTenantMembership(admin, account.id, tenantId);
+  if (!nicheId || !Object.hasOwn(modules.products, nicheId)) throw new NicheAccessError(403, 'UNREGISTERED_PAID_NICHE', 'Registered specialist required.');
+  const { data: owner, error: ownerError } = await admin.rpc('swish_owner_for_user', { p_user_id: account.id });
+  if (ownerError) throw new NicheAccessError(503, 'AUTHORIZATION_UNAVAILABLE', 'Platform authorization unavailable.');
+  if (owner === true) return { source: 'trusted_platform_owner', tier: 'lifetime', isPremium: true };
   const { data: tenant, error: tenantError } = await admin.from('tenants').select('subscription_tier').eq('id', tenantId).maybeSingle();
   if (tenantError || !tenant) throw new NicheAccessError(503, 'AUTHORIZATION_UNAVAILABLE', 'Business authorization is temporarily unavailable.');
   // These existing tiers are immutable to clients; preserve all established tenant-wide rights, including lifetime.

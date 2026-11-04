@@ -17,7 +17,7 @@
 //
 // Security: JWT required. Tenant verified when provided.
 
-import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
+import { serveModule } from '../_shared/moduleScope.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { requirePaidNiche,nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
@@ -1117,7 +1117,7 @@ function buildBatchFlags(
 // MAIN HANDLER
 // ─────────────────────────────────────────────────────────────────────────────
 
-Deno.serve(withEdgeFunctionLogging('swish-islamic-identify', async (req: Request) => {
+serveModule(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
@@ -1715,7 +1715,7 @@ Deno.serve(withEdgeFunctionLogging('swish-islamic-identify', async (req: Request
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }
-}));;
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NEXT ACTIONS GENERATOR

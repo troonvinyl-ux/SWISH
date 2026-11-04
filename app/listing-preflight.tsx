@@ -15,6 +15,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { getSupabaseClient } from '@/template';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
+import { useAntiquePreflight } from '@/hooks/useAntiquePreflight';
 import { useAlert } from '@/template';
 import { submitListingToMarketplace, SubmitStep, SubmitResult } from '@/services/listingService';
 
@@ -29,7 +30,11 @@ interface PreflightCheck {
 export default function ListingPreflightScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant } = useApp();
+  const { tenant, activeNicheId, fixedNicheId, triggerInventoryReload } = useApp();
+  const isAntique = (fixedNicheId ?? activeNicheId) === 'antiques';
+  const checkAntique = useAntiquePreflight();
+  const [antiqueReady, setAntiqueReady] = useState(false);
+  const [antiqueError, setAntiqueError] = useState<string | null>(null);
   const { showAlert } = useAlert();
   const { listingId, itemId } = useLocalSearchParams<{ listingId: string; itemId: string }>();
 
@@ -69,6 +74,7 @@ export default function ListingPreflightScreen() {
     if (!listingId || !tenant) return;
     setScanning(true);
     setScanError(null);
+    setAntiqueReady(false); setAntiqueError(null);
 
     const supabase = getSupabaseClient();
     let allPass = true;
@@ -249,12 +255,17 @@ export default function ListingPreflightScreen() {
         updateCheck('description', { status: 'pass', detail: `${description.trim().length} characters` });
       }
 
+      if (isAntique) {
+        const antique = await checkAntique(listingId);
+        setAntiqueReady(antique.ready); setAntiqueError(antique.error);
+        updateCheck('condition', { status: antique.ready ? 'pass' : 'warn', detail: antique.ready ? 'Supported category condition policy and saved condition notes checked live.' : 'Category-specific conditions are not confirmed. Complete the Antique checks below.' });
+      }
     } catch (e: any) {
       setScanError(e?.message ?? 'Preflight scan failed');
     } finally {
       setScanning(false);
     }
-  }, [listingId, tenant, updateCheck]);
+  }, [listingId, tenant, updateCheck, isAntique, checkAntique]);
 
   useEffect(() => { runPreflight(); }, [runPreflight]);
 
@@ -421,6 +432,7 @@ export default function ListingPreflightScreen() {
 
   const handleCatSelect = useCallback(async (catId: string, catName: string) => {
     if (!listingId || !tenant?.id || !catId) return;
+    if (isAntique) { setCategoryPickerOpen(false); router.push(`/ebay-listing-editor?id=${listingId}` as any); return; }
     setCatSaving(true);
     try {
       const supabase = getSupabaseClient();
@@ -458,16 +470,17 @@ export default function ListingPreflightScreen() {
       showAlert('Save Failed', e?.message ?? 'Could not save category');
     }
     setCatSaving(false);
-  }, [listingId, tenant?.id, runPreflight, showAlert]);
+  }, [listingId, tenant?.id, runPreflight, showAlert, isAntique, router]);
 
   const failCount = checks.filter(c => c.status === 'fail').length;
   const warnCount = checks.filter(c => c.status === 'warn').length;
   const passCount = checks.filter(c => c.status === 'pass').length;
-  const canSubmit = !scanning && failCount === 0 && !submitting && !submitResult?.success;
+  const canSubmit = !scanning && !scanError && Boolean(listingData) && checks.every(check=>check.status!=='pending'&&check.status!=='running') && failCount === 0 && !submitting && !submitResult?.success && (!isAntique || antiqueReady);
 
   const handleSubmit = useCallback(async () => {
     if (!listingId || !tenant || !canSubmit) return;
 
+    const proceed = async () => {
     setSubmitting(true);
 
     const result = await submitListingToMarketplace(
@@ -480,6 +493,7 @@ export default function ListingPreflightScreen() {
     setSubmitting(false);
 
     if (result.success) {
+      triggerInventoryReload();
       showAlert(
         'Listed on eBay!',
         `Your listing is now live on eBay UK.${result.externalListingId ? `\n\nListing ID: ${result.externalListingId}` : ''}`,
@@ -501,7 +515,10 @@ export default function ListingPreflightScreen() {
         ],
       );
     }
-  }, [listingId, tenant, canSubmit, showAlert, router, itemId]);
+    };
+    if (isAntique) showAlert('Publish this Antique item to eBay?', `This is a real public listing on your connected eBay UK account and may incur fees. Approve only if you own the item and have reviewed the saved category, condition, price, shipping policy, specifics and photographs.\n\n${listingData?.title ?? ''}\nSWISH draft: ${listingId}`, [{text:'Cancel',style:'cancel'},{text:'Publish reviewed item',onPress:()=>{void proceed();}}]);
+    else await proceed();
+  }, [listingId, tenant, canSubmit, showAlert, router, itemId, isAntique, listingData?.title, triggerInventoryReload]);
 
   const SUBMIT_STEPS = [
     { id: 'verifying',          label: 'Verifying listing', icon: 'fact-check' },
@@ -564,7 +581,7 @@ export default function ListingPreflightScreen() {
             </View>
             {failCount === 0 ? (
               <Text style={[s.summaryStatus, { color: Colors.success }]}>
-                {warnCount > 0 ? 'Ready to submit — review warnings below' : 'All checks passed — ready to submit'}
+                {isAntique && !antiqueReady ? 'Antique checks incomplete — submission blocked' : warnCount > 0 ? 'Ready to submit — review warnings below' : 'All checks passed — ready to submit'}
               </Text>
             ) : (
               <Text style={[s.summaryStatus, { color: Colors.danger }]}>
@@ -573,6 +590,8 @@ export default function ListingPreflightScreen() {
             )}
           </View>
         )}
+
+        {isAntique ? <View style={s.checkCard}><View style={s.flex}><Text style={s.checkLabel}>Antique category, specifics & persistence</Text><Text style={s.checkDetail}>{antiqueReady ? 'Current eBay leaf category, full item-specific requirements, supported condition, original photos and saved fields validated. This is API preflight, not a published listing.' : antiqueError ?? 'NOT TESTED: waiting for category-specific validation.'}</Text><Pressable onPress={()=>router.push(`/ebay-listing-editor?id=${listingId}` as any)} style={s.pickCatBtn}><Text style={s.pickCatBtnText}>Review saved draft and requirements</Text></Pressable></View></View> : null}
 
         {/* Checks */}
         {checks.map(check => (

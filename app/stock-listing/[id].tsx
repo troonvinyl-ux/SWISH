@@ -50,6 +50,7 @@ import {
   updateItemMedia,
   captureFromCamera,
   pickFromLibrary,
+  applyAntiqueIdentification,
 } from '@/services/aiIdentificationService';
 import {
   recordAIFeedback,
@@ -840,6 +841,22 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
   const handleApply = useCallback(async (applyResult?: any) => {
     const r = applyResult ?? result;
     if (!r) return;
+    if (['antiques', 'books'].includes(item.specialistId)) {
+      setSaving(true); setError(null);
+      try {
+        let media = [...item.media];
+        if (capturedImages.length) {
+          const uploaded = await uploadItemImages(item.id, capturedImages, true);
+          if (uploaded.errors.length || uploaded.urls.length !== capturedImages.length) throw new Error('Original photo upload failed. Identification was not applied; retry without creating a new item.');
+          media = [...new Set([...uploaded.urls, ...media])];
+        }
+        const saved = await applyAntiqueIdentification(tenantId, item.id, r, media);
+        if (saved.error || !saved.item) throw new Error(saved.error ?? 'Identification save was not confirmed.');
+        onComplete(saved.item, saved.item.media);
+      } catch (cause) { setError(cause instanceof Error ? cause.message : 'Identification could not be saved.'); }
+      finally { setSaving(false); setUploading(false); }
+      return;
+    }
     const numista = r.numistaVerification ?? {};
     const suppliedNumistaN = r.numistaN ?? numista.numistaN ?? null;
     const parsedNumistaId = suppliedNumistaN
@@ -1006,6 +1023,7 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
           <View style={{ width: 36 }} />
         </View>
         <ScrollView contentContainerStyle={reid.content} showsVerticalScrollIndicator={false}>
+          {error && step !== 'capture' ? <View style={reid.errorBanner}><MaterialIcons name="error-outline" size={18} color={Colors.danger} /><Text style={reid.errorText}>{error}</Text></View> : null}
           <View style={reid.contextCard}>
             <Text style={reid.contextLabel}>RE-IDENTIFYING</Text>
             <Text style={reid.contextTitle} numberOfLines={2}>{item.canonicalTitle}</Text>
@@ -1373,7 +1391,8 @@ function MarketValuePanel({
       expectedNet: listPrice * 0.8725, expectedProfit: listPrice * 0.8725 - (item.acquiredCost ?? 0),
       saleProb30d: val.saleProb30d ?? item.saleProb30d,
     };
-    await updateItem(item.id, updates, tenantId);
+    const saved = await updateItem(item.id, updates, tenantId);
+    if (saved.error) { setError(`Valuation returned, but inventory save failed: ${saved.error}`); return; }
     onUpdated(updates, mv);
   }, [item, tenantId, onUpdated]);
 
@@ -1976,7 +1995,8 @@ export default function StockListingScreen() {
       const ruler = findSpec(['Ruler', 'Monarch', 'Emperor']); if (ruler && !item.ruler) updates.ruler = ruler;
       const denomination = findSpec(['Denomination', 'Face Value']); if (denomination && !item.denomination) updates.denomination = denomination;
       const yearMade = findSpec(['Year', 'Date']); if (yearMade && !item.yearMade) updates.yearMade = yearMade;
-      await updateItem(item.id, updates, tenant?.id);
+      const saved = await updateItem(item.id, updates, tenant?.id);
+      if (saved.error) { showAlert('Sync not saved', saved.error); return; }
       setItem(prev => prev ? { ...prev, ...updates } : prev);
       showAlert('Synced from eBay', `Updated item data from live eBay listing.`);
     } catch (e: any) { showAlert('Sync Failed', e?.message ?? 'Unknown error'); }
@@ -1985,6 +2005,12 @@ export default function StockListingScreen() {
 
   const handlePushToEbay = useCallback(async () => {
     if (!tenant || !item) return;
+    if (['antiques', 'books'].includes(item.specialistId)) {
+      const live = listings.find(row => row.externalListingId && row.status === 'active');
+      if (live) router.push(`/ebay-listing-editor?id=${live.id}` as any);
+      else showAlert('No live listing', 'This Antique item has no active eBay listing.');
+      return;
+    }
     const activeListing = listings.find(l => l.status === 'active' && l.externalListingId);
     if (!activeListing) { showAlert('No Live Listing', 'This item has no active eBay listing.'); return; }
     const imageCount = (item.media ?? []).filter(u => u.startsWith('https://')).length;
@@ -2030,6 +2056,10 @@ export default function StockListingScreen() {
     setSaving(true);
     try {
       const numericFields = ['expectedSellingPrice', 'valuationLow', 'valuationMid', 'valuationHigh', 'acquiredCost', 'weightGrams', 'diameterMm', 'quantity'];
+      if (['antiques', 'books'].includes(item.specialistId) && numericFields.includes(field)) {
+        const number = Number(editValue);
+        if (!Number.isFinite(number) || number < 0 || (field === 'quantity' && (!Number.isInteger(number) || number < 1))) throw new Error('Enter a non-negative amount and a positive whole quantity.');
+      }
       const value = numericFields.includes(field) ? (parseFloat(editValue) || 0) : editValue;
       const updates: Partial<Item> = { [field]: value };
       if (field === 'expectedSellingPrice') {
@@ -2058,6 +2088,7 @@ export default function StockListingScreen() {
 
   const handleGenerateListing = useCallback(async () => {
     if (!item || !tenant) return;
+    if (['antiques', 'books'].includes(item.specialistId)) { router.push(`/create-listing?id=${item.id}` as any); return; }
     const idConf = item.identificationConfidence ?? 0;
     const valConf = item.valuationConfidence ?? 'insufficient_data';
     const warnings: string[] = [];
