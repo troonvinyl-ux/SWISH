@@ -554,7 +554,7 @@ export function nicheIdForSpecialist(specialistId: string): NicheId | null {
 
 // ── Production niche gate ─────────────────────────────────────────────────────
 // Only explicitly registered production niches are active in the application.
-// All ten registered products are selectable subject to server entitlements.
+// All eleven registered products are selectable subject to server entitlements.
 // The generic catch-all remains outside production. Historical records are preserved.
 
 export const PRODUCTION_NICHE_IDS = Object.keys(moduleRegistry.products) as RegisteredNicheId[];
