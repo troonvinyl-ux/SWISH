@@ -126,6 +126,14 @@ const ONBOARDING_NICHES: Array<{
     description: 'Identify consumer electronics, model specifications, condition, and resale value.',
   },
   {
+    id: 'collectibles',
+    name: 'Collectibles Flipper',
+    tagline: 'Identify, value and flip every clearance find',
+    icon: 'category',
+    color: '#D8AD52',
+    description: 'Identify and list branded pottery, giftware, bears, silverware, memorabilia and decorative objects.',
+  },
+  {
     id: 'surplus_flip',
     name: 'Surplus Flip',
     tagline: 'Turn job lots and manifests into listings',
