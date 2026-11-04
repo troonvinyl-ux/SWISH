@@ -10,6 +10,8 @@ import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
+import { isRouteAllowedForBuild } from '@/services/nicheRouting';
+import { NICHE_MODULES } from '@/constants/niches';
 
 const EBAY_ROUTES = [
   { icon: 'storefront', label: 'eBay Hub', sub: 'Orders, messages, offers', route: '/ebay-hub', color: '#E53238' },
@@ -29,14 +31,12 @@ const EBAY_ROUTES = [
 export default function ListingsTabScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, activeNicheId, fixedNicheId } = useApp();
+  const { tenant, activeNicheId, fixedNicheId, activeNiche } = useApp();
 
   const nicheId = (fixedNicheId ?? activeNicheId ?? '').toLowerCase();
-  const accentColor =
-    nicheId.includes('coin') ? '#F5C842' :
-    nicheId === 'motocross' ? '#FF5500' :
-    nicheId === 'bicycles' ? '#6ED020' :
-    nicheId === 'clothing' ? '#E91E8C' : Colors.primary;
+  const accentColor = activeNiche.color;
+  const visibleRoutes = EBAY_ROUTES.filter(route => isRouteAllowedForBuild(route.route, nicheId));
+  const hubAvailable = visibleRoutes.some(route => route.route === '/ebay-hub');
 
   return (
     <View style={s.container}>
@@ -48,30 +48,30 @@ export default function ListingsTabScreen() {
           <MaterialIcons name="storefront" size={18} color="#E53238" />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[s.headerTitle, { color: '#E53238' }]}>eBay Management</Text>
-          <Text style={s.headerSub}>Orders · Messages · Analytics · Finances</Text>
+          <Text style={[s.headerTitle, { color: accentColor }]}>Listings</Text>
+          <Text style={s.headerSub}>{NICHE_MODULES[activeNiche.id as keyof typeof NICHE_MODULES]?.name ?? activeNiche.name} · eBay workspace</Text>
         </View>
-        <Pressable
+        {hubAvailable ? <Pressable
           onPress={() => router.push('/ebay-hub' as any)}
           style={({ pressed }) => [s.hubBtn, pressed && { opacity: 0.85 }]}
         >
           <MaterialIcons name="dashboard" size={14} color="#000" />
           <Text style={s.hubBtnText}>Hub</Text>
-        </Pressable>
+        </Pressable> : null}
       </View>
 
       {/* Info banner — direct users to Stock tab for listings */}
       <View style={s.infoBanner}>
         <MaterialIcons name="info-outline" size={13} color={accentColor} />
         <View style={{ flex: 1 }}>
-          <Text style={[s.infoBannerTitle, { color: accentColor }]}>Listings are now in the Stock tab</Text>
+          <Text style={[s.infoBannerTitle, { color: accentColor }]}>Manage stock, drafts and live listings</Text>
           <Text style={s.infoBannerSub}>In Stock → Draft → Live → Sold, all in one place.</Text>
         </View>
         <Pressable
           onPress={() => router.replace('/(tabs)/inventory' as any)}
           style={[s.goStockBtn, { backgroundColor: accentColor }]}
         >
-          <Text style={s.goStockBtnText}>Go to Stock</Text>
+          <Text style={s.goStockBtnText}>Inventory</Text>
         </Pressable>
       </View>
 
@@ -81,7 +81,7 @@ export default function ListingsTabScreen() {
       >
         {/* Quick-access grid */}
         <View style={s.grid}>
-          {EBAY_ROUTES.map(route => (
+          {visibleRoutes.map(route => (
             <Pressable
               key={route.route}
               onPress={() => router.push(route.route as any)}
@@ -106,17 +106,17 @@ const s = StyleSheet.create({
   headerIcon: { width: 40, height: 40, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: Typography.size.xl, fontWeight: Typography.weight.bold },
   headerSub: { fontSize: Typography.size.xs, color: Colors.textTertiary, marginTop: 2 },
-  hubBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E53238', borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: 8 },
+  hubBtn: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E53238', borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: 8 },
   hubBtnText: { fontSize: Typography.size.xs, fontWeight: Typography.weight.bold, color: '#000' },
   infoBanner: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, margin: Spacing.base, backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceBorder, ...Shadow.sm },
   infoBannerTitle: { fontSize: Typography.size.xs, fontWeight: Typography.weight.bold },
-  infoBannerSub: { fontSize: 10, color: Colors.textTertiary, lineHeight: 14, marginTop: 2 },
-  goStockBtn: { borderRadius: Radius.md, paddingHorizontal: Spacing.sm, paddingVertical: 6 },
+  infoBannerSub: { fontSize: Typography.size.base, color: Colors.textSecondary, lineHeight: 24, marginTop: 2 },
+  goStockBtn: { minHeight: 48, justifyContent: 'center', borderRadius: Radius.md, paddingHorizontal: Spacing.sm, paddingVertical: 6 },
   goStockBtnText: { fontSize: 10, fontWeight: Typography.weight.bold, color: '#000' },
   content: { padding: Spacing.base, gap: Spacing.md },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.md },
-  card: { width: '47%', backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.md, gap: Spacing.sm, borderWidth: 1, borderColor: Colors.surfaceBorder, ...Shadow.sm },
+  card: { width: '47%', minHeight: 120, backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.md, gap: Spacing.sm, borderWidth: 1, borderColor: Colors.surfaceBorder, ...Shadow.sm },
   cardIcon: { width: 44, height: 44, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
   cardLabel: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: Colors.textPrimary },
-  cardSub: { fontSize: 10, color: Colors.textTertiary, lineHeight: 14 },
+  cardSub: { fontSize: Typography.size.base, color: Colors.textSecondary, lineHeight: 24 },
 });

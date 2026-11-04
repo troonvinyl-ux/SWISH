@@ -1,28 +1,15 @@
 import { NICHE_MODULES, type ProductionNicheId } from '@/constants/niches';
 import moduleRegistry from '../niche-modules.json';
 
-const ADMIN_ONLY_ROUTES = new Set((moduleRegistry.adminOnlyRoutes ?? []).map(route => route.replace(/\.tsx$/, '')));
+export function resolveNicheFromNativeAppId(appId: string | null | undefined): ProductionNicheId | null {
+  return (Object.entries(NICHE_MODULES).find(([, product]) => product.androidPackage === appId || product.iosBundleIdentifier === appId)?.[0] as ProductionNicheId) ?? null;
+}
+export function resolveNicheFromNativeAppScheme(input: string | string[] | null | undefined): ProductionNicheId | null {
+  const schemes = Array.isArray(input) ? input : [input];
+  return (Object.entries(NICHE_MODULES).find(([, product]) => schemes.includes(product.scheme))?.[0] as ProductionNicheId) ?? null;
+}
 
 export type ProductEntryRoute = `/entry/${string}`;
-
-/** Resolve a branded installation from its immutable native package identity. */
-export function resolveNicheFromNativeAppId(nativeAppId: string | null | undefined): ProductionNicheId | null {
-  if (typeof nativeAppId !== 'string' || !nativeAppId.trim()) return null;
-  const appId = nativeAppId.trim();
-  for (const [niche, config] of Object.entries(NICHE_MODULES)) {
-    if (config.androidPackage === appId || config.iosBundleIdentifier === appId) return niche as ProductionNicheId;
-  }
-  return null;
-}
-
-/** Resolve a branded installation from its native deep-link scheme. */
-export function resolveNicheFromNativeAppScheme(nativeScheme: string | string[] | null | undefined): ProductionNicheId | null {
-  const schemes = (Array.isArray(nativeScheme) ? nativeScheme : [nativeScheme]).filter((value): value is string => typeof value === 'string');
-  for (const [niche, config] of Object.entries(NICHE_MODULES)) {
-    if (schemes.includes(config.scheme)) return niche as ProductionNicheId;
-  }
-  return null;
-}
 
 /** Exact, registered aliases only. Never classify an unknown ID by substring. */
 export function resolveProductionNiche(value: string | null | undefined): ProductionNicheId | null {
@@ -66,7 +53,17 @@ export function isRouteAllowedForBuild(pathname: string, fixedNiche: string | nu
   const niche = resolveProductionNiche(fixedNiche);
   if (!niche) return false;
   const route = pathname.split('?')[0].replace(/^\//, '').replace(/\/$/, '');
-  if (['niche-select', 'master-admin'].includes(route) || ADMIN_ONLY_ROUTES.has(route)) return false;
+  if (moduleRegistry.adminOnlyRoutes.some(file => file.replace(/\.tsx$/, '') === route)) return false;
+  const config = NICHE_MODULES[niche];
+  const allowed = [...(config.buildSharedRoutes ?? moduleRegistry.sharedRoutes), config.entry, config.home, ...config.dedicatedRoutes].filter((file): file is string => Boolean(file));
+  // Expo omits tab groups from usePathname; normalize both representations.
+  if (!allowed.some(file => {
+    const pattern = file.replace(/\.tsx$/, '').replace(/\([^/]+\)\//g, '').replace(/\[[^/]+\]/g, '[id]');
+    const actual = route.replace(/\([^/]+\)\//g, '');
+    if (pattern === 'index' && !actual) return true;
+    const expectedParts = pattern.split('/'); const parts = actual.split('/');
+    return expectedParts.length === parts.length && expectedParts.every((value,index) => value === '[id]' || value === parts[index]);
+  })) return false;
   for (const [id, config] of Object.entries(NICHE_MODULES)) {
     const dedicated = [config.entry, ...config.dedicatedRoutes].map(file => file.replace(/\.tsx$/, ''));
     if (dedicated.includes(route) && id !== niche) return false;

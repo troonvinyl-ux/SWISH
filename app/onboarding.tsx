@@ -126,6 +126,10 @@ const ONBOARDING_NICHES: Array<{
     description: 'Identify consumer electronics, model specifications, condition, and resale value.',
   },
   {
+    id: 'collectibles', name: 'Collectibles Flipper', tagline: 'Identify, value and flip clearance finds',
+    icon: 'category', color: '#D8AD52', description: 'Maker marks, exact models, condition and evidence-led resale.',
+  },
+  {
     id: 'surplus_flip',
     name: 'Surplus Flip',
     tagline: 'Turn job lots and manifests into listings',
@@ -257,6 +261,8 @@ export default function OnboardingScreen() {
       await checkEbayStatus();
     }, 3000);
   }, [checkEbayStatus]);
+
+  useEffect(() => { if (step === 2 && tenant?.id) void checkEbayStatus(); }, [step, tenant?.id, checkEbayStatus]);
 
   // ── Step 0 → Step 1: save niche selection ────────────────────────────────
 
@@ -417,7 +423,7 @@ export default function OnboardingScreen() {
       type NicheClassification004 =
         | 'coins' | 'motocross' | 'bicycles' | 'clothing'
         | 'trading_cards' | 'antiques' | 'fossils' | 'beauty'
-        | 'tech' | 'surplus_flip' | 'unclassified';
+        | 'tech' | 'surplus_flip' | 'collectibles' | 'unclassified';
 
       const NICHE_TO_CLASSIFICATION: Record<NicheId, NicheClassification004> = {
         coins: 'coins',
@@ -430,6 +436,7 @@ export default function OnboardingScreen() {
         beauty: 'beauty',
         tech: 'tech',
         surplus_flip: 'surplus_flip',
+        collectibles: 'collectibles',
         general: 'unclassified',
       };
 
@@ -693,7 +700,7 @@ export default function OnboardingScreen() {
               <View style={s.infoCard}>
                 <MaterialIcons name="info-outline" size={14} color={Colors.info} />
                 <Text style={s.infoText}>
-                  You can switch niche at any time from Settings. Your inventory, eBay integration, and data are shared across all niches.
+                  Your account and business eBay connection are shared. Each branded application keeps its specialist inventory separate; other niches open in their own application.
                 </Text>
               </View>
             </View>

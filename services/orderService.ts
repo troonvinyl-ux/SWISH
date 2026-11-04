@@ -3,6 +3,7 @@
 
 import { getSupabaseClient } from '@/template';
 import { markItemSold } from '@/services/itemService';
+import { getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 
 export type OrderStatus =
   | 'pending'
@@ -106,16 +107,20 @@ function mapOrder(row: any): Order {
 
 export async function listOrders(
   tenantId: string,
-  filters?: { status?: OrderStatus; requiresAction?: boolean }
+  filters?: { status?: OrderStatus; requiresAction?: boolean; nicheId?: string }
 ): Promise<{ orders: Order[]; error: string | null }> {
+  if (!tenantId?.trim()) return { orders: [], error: 'tenantId is required.' };
+  const specialists = filters?.nicheId ? getProductionNicheSpecialistIds(filters.nicheId) : [];
+  if (filters?.nicheId && !specialists.length) return { orders: [], error: 'Registered niche required.' };
   const supabase = getSupabaseClient();
   let query = supabase
     .from('orders')
-    .select('*, items(canonical_title), listings(title)')
+    .select(filters?.nicheId ? '*, items!inner(canonical_title,specialist_id,tenant_id), listings(title)' : '*, items(canonical_title), listings(title)')
     .eq('tenant_id', tenantId)
     .order('created_at', { ascending: false })
     .limit(100);
 
+  if (filters?.nicheId) query = query.eq('items.tenant_id', tenantId).in('items.specialist_id', specialists);
   if (filters?.status) query = query.eq('status', filters.status);
   if (filters?.requiresAction) query = query.eq('requires_action', true);
 
@@ -124,7 +129,7 @@ export async function listOrders(
   return { orders: (data ?? []).map(mapOrder), error: null };
 }
 
-export async function getOrder(id: string, tenantId: string): Promise<{ order: Order | null; error: string | null }> {
+export async function getOrder(id: string, tenantId: string, nicheId?: string): Promise<{ order: Order | null; error: string | null }> {
   if (!tenantId) return { order: null, error: 'tenantId is required.' };
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
@@ -134,7 +139,13 @@ export async function getOrder(id: string, tenantId: string): Promise<{ order: O
     .eq('tenant_id', tenantId)
     .single();
 
-  if (error) return { order: null, error: error.message };
+  if (error || !data) return { order: null, error: error?.message ?? 'Order not found.' };
+  if (nicheId) {
+    const ids = getProductionNicheSpecialistIds(nicheId);
+    const { data: owned, error: ownershipError } = await supabase.from('items').select('id')
+      .eq('id', data.item_id).eq('tenant_id', tenantId).in('specialist_id', ids).maybeSingle();
+    if (!ids.length || ownershipError || !owned) return { order: null, error: 'Order is outside this specialist inventory.' };
+  }
   return { order: mapOrder(data), error: null };
 }
 
@@ -264,8 +275,8 @@ export async function updateOrderStatus(
   }
 
   if (!tenantId) return { error: 'tenantId is required.' };
-  const { error } = await supabase.from('orders').update(updates).eq('id', orderId).eq('tenant_id', tenantId);
-  return { error: error?.message ?? null };
+  const { data: updated, error } = await supabase.from('orders').update(updates).eq('id', orderId).eq('tenant_id', tenantId).select('id').maybeSingle();
+  return { error: error?.message ?? (updated ? null : 'Order update was not authorized or confirmed.') };
 }
 
 // ── Order Statistics ────────────────────────────────────────────────────────

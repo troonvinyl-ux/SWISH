@@ -122,7 +122,7 @@ export default function TabLayout() {
       {/* ── Tab 2: Scan (centre hero button) ── */}
       <Tabs.Screen
         name="scan"
-        options={{
+        options={{ title: 'Scan', tabBarAccessibilityLabel: 'Scan an item with your niche specialist',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.scanTab, { backgroundColor: nicheAccent, shadowColor: nicheAccent }]}>
               <MaterialIcons name="qr-code-scanner" size={26} color={isThreadsFlip ? threads.background : Colors.background} />
@@ -190,7 +190,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: IS_TV ? Spacing.lg : Spacing.sm,
     paddingVertical: IS_TV ? Spacing.sm : Spacing.xs,
     borderRadius: Radius.sm,
-    minWidth: IS_TV ? 100 : 56,
+    minWidth: IS_TV ? 100 : 48,
+    minHeight: 48,
   },
   tabItemActive: {
     backgroundColor: Colors.primaryDim,
@@ -214,7 +215,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   tabLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: Typography.weight.medium,
     color: Colors.textTertiary,
     letterSpacing: 0.2,

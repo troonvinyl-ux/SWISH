@@ -18,7 +18,7 @@ declare
   v_listing public.listings%rowtype;
   v_now timestamptz := now();
 begin
-  if auth.role() <> 'service_role' then
+  if auth.role() is distinct from 'service_role' then
     raise exception 'Server-side eBay reconciliation only' using errcode='42501';
   end if;
   if p_tenant_id is null or p_item_id is null or p_listing_id is null

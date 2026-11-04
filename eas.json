@@ -191,6 +191,8 @@
         "buildType": "app-bundle"
       }
     },
+    "collectibles": { "extends": "production", "env": { "SWISH_NICHE": "collectibles" }, "android": { "buildType": "apk" } },
+    "collectibles-play": { "extends": "production-play", "env": { "SWISH_NICHE": "collectibles" }, "android": { "buildType": "app-bundle" } },
     "master-admin": {
       "extends": "production",
       "env": {

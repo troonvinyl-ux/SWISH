@@ -4,6 +4,7 @@
 
 import { getSupabaseClient } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
+import { resolveProductionNiche } from '@/services/nicheRouting';
 
 export interface MarketStats {
   count: number;
@@ -163,6 +164,7 @@ export async function getMarketValue(params: {
   imageUrls?: string[];
 }): Promise<{ result: MarketValueResult | null; error: string | null }> {
   try {
+    if (!params.tenantId?.trim() || !resolveProductionNiche(params.specialistId)) return { result: null, error: 'Select a registered specialist and business before researching value.' };
     const supabase = getSupabaseClient();
     // Build clean body — exclude null/undefined numistaTypeId to avoid confusion
     const body: Record<string, any> = { ...params };
@@ -183,6 +185,7 @@ export async function getMarketValue(params: {
       return { result: null, error: msg };
     }
 
+    if (!data?.success || !data?.valuation) return { result: null, error: data?.error ?? 'Market valuation was not returned. No price was inferred.' };
     return { result: data as MarketValueResult, error: null };
   } catch (e: any) {
     return { result: null, error: e?.message ?? 'Market value lookup failed' };

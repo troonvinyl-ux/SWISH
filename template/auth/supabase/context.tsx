@@ -12,7 +12,6 @@ interface AuthContextState {
 
 interface AuthContextActions {
   setOperationLoading: (loading: boolean) => void;
-  setAuthenticatedUser: (user: AuthUser) => void;
 }
 
 type AuthContextType = AuthContextState & AuthContextActions;
@@ -42,54 +41,41 @@ export function AuthProvider({ children }: AuthProviderProps) {
     updateState({ operationLoading: loading });
   };
 
-  // Commit a confirmed sign-in result immediately. Navigation must not depend
-  // exclusively on the SDK event listener being scheduled on the UI thread.
-  const setAuthenticatedUser = (user: AuthUser) => {
-    updateState({ user, loading: false, initialized: true });
-  };
-
   useEffect(() => {
     let isMounted = true;
     let authSubscription: any = null;
 
     const initializeAuth = async () => {
-      let authEventReceived = false;
-
+      
       try {
-        // Subscribe before reading the persisted session so a SIGNED_IN event
-        // cannot be missed between getSession() and listener registration.
+        const currentUser = await authService.getCurrentUser();
+        
+        if (isMounted) {
+          updateState({ 
+            user: currentUser, 
+            loading: false, 
+            initialized: true 
+          });
+        }
+
         authSubscription = authService.onAuthStateChange((authUser) => {
-          authEventReceived = true;
           if (isMounted) {
-            updateState({
-              user: authUser,
-              loading: false,
-              initialized: true,
-            });
+            updateState({ user: authUser });
           }
         });
 
-        const currentUser = await authService.getCurrentUser();
-
-        if (isMounted) {
-          updateState({
-            // An auth event is newer than the session snapshot started above.
-            ...(authEventReceived ? {} : { user: currentUser }),
-            loading: false,
-            initialized: true,
-          });
-        }
       } catch (error) {
         console.warn('[Template:AuthProvider] Auth initialization failed:', error);
         if (isMounted) {
-          updateState({
-            user: null,
-            loading: false,
-            initialized: true,
+          updateState({ 
+            user: null, 
+            loading: false, 
+            initialized: true 
           });
         }
       }
     };
+
     initializeAuth();
 
     return () => {
@@ -102,7 +88,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const contextValue: AuthContextType = {
     ...state,
     setOperationLoading,
-    setAuthenticatedUser,
   };
 
   return (

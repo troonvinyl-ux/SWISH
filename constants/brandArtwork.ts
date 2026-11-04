@@ -12,6 +12,8 @@ export function getBrandArtwork(nicheId: string | null | undefined): ImageSource
     case 'tech': return require('@/assets/images/brands/tech-flipper.jpeg');
     case 'beauty': return require('@/assets/images/brands/beauty-flipper.jpeg');
     case 'fossils': return require('@/assets/images/brands/fossil-flipper.jpeg');
+    case 'surplus_flip': return require('@/assets/images/brands/surplus-flip.png');
+    case 'collectibles': return require('@/assets/images/brands/collectibles-flipper.png');
     default: return null;
   }
 }
@@ -19,5 +21,5 @@ export const TOOL_ARTWORK: ImageSource = require('@/assets/images/brands/tool-fl
 export const BRAND_NAMES: Record<string, string> = {
   coins: 'Coin Flipper', motocross: 'MX Flipper', bicycles: 'Bike Flipper', clothing: 'Threads Flip',
   trading_cards: 'Card Flipper', antiques: 'Antique Flipper', tech: 'Tech Flipper',
-  beauty: 'Beauty Flipper', fossils: 'Fossil Flipper', surplus_flip: 'Surplus Flip',
+  beauty: 'Beauty Flipper', fossils: 'Fossil Flipper', surplus_flip: 'Surplus Flip', collectibles: 'Collectibles Flipper',
 };

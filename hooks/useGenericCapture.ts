@@ -79,6 +79,8 @@ export function useGenericCapture() {
   },[busy,visible.savedId]);
   const identify=useCallback(async ()=>{
     if(!tenant || lock.current || !ready || !visible.images.length || visible.savedId) return;
+    const missingSlots = slots.filter(slot => slot.required && !visible.images.some(image => image.slotId === slot.id));
+    if (missingSlots.length) { setError(`Add the required photographs: ${missingSlots.map(slot => slot.label).join(', ')}.`); return; }
     lock.current=true; setBusy(true); setPhase('Analysing specialist evidence'); setError(null);
     try {
       // Shared preparation creates a separate viewing rendition. Original photos remain documentary evidence.
@@ -100,7 +102,7 @@ export function useGenericCapture() {
       setDraft(previous=>({ ...previous,result:response.result }));
     } catch(e:any) { if(current.current===scope) setError(e?.message ?? 'Identification failed.'); }
     finally { lock.current=false; if(current.current===scope) { setBusy(false); setPhase(''); } }
-  },[tenant?.id,ready,scope,visible,specialistId,allowPhotoWarnings]);
+  },[tenant?.id,ready,scope,visible,specialistId,allowPhotoWarnings,slots]);
   const answer=useCallback((key:string,value:string)=>setDraft(previous=>({ ...previous,answers:{ ...previous.answers,[key]:value } })),[]);
   const correctTitle=useCallback((title:string)=>setDraft(previous=>({ ...previous,result:previous.result ? { ...previous.result,canonicalTitle:title } : null })),[]);
   const reviewedResult=useCallback(()=>{
@@ -116,6 +118,7 @@ export function useGenericCapture() {
   },[visible,profile]);
   const save=useCallback(async ()=>{
     const result=reviewedResult();
+    if (result && !activeNiche.specialists.includes(result.specialistId)) { setError('This result belongs to another specialist. Review it before saving.'); return; }
     if(!tenant || !result || lock.current || !result.canonicalTitle.trim()) return;
     lock.current=true; setBusy(true); setPhase(visible.savedId ? 'Retrying photo upload' : 'Saving reviewed inventory'); setError(null);
     let id=visible.savedId;
@@ -138,7 +141,7 @@ export function useGenericCapture() {
       if(current.current===scope) triggerInventoryReload();
     } catch(e:any) { if(current.current===scope) setError(e?.message ?? 'Save failed.'); }
     finally { lock.current=false; if(current.current===scope) { setBusy(false); setPhase(''); } }
-  },[tenant?.id,visible,scope,reviewedResult,triggerInventoryReload]);
+  },[tenant?.id,visible,scope,reviewedResult,triggerInventoryReload,activeNiche]);
   const reset=useCallback(()=>{ if(busy) return; const clear=()=>{ setDraft(emptyDraft(activeNiche.defaultSpecialist));setError(null);setAllowPhotoWarnings(false); }; if(visible.savedId) clear(); else showAlert('Discard capture draft?', 'Unsaved identification and selected photos will be removed from this draft. No inventory records are deleted.', [{ text:'Keep draft',style:'cancel' },{ text:'Discard draft',style:'destructive',onPress:clear }]); },[busy,activeNiche.defaultSpecialist,visible.savedId,showAlert]);
   return { allowPhotoWarnings,setAllowPhotoWarnings,activeNiche,profile,slots,images:visible.images,addCapturedPhoto,removeCapturedPhoto,result:visible.result,busy:busy || !ready,savedId:visible.savedId,error,phase,answers:visible.answers,mode:visible.mode,specialistId,capture,identify,save,reset,answer,correctTitle,changeMode,changeSpecialist };
 }

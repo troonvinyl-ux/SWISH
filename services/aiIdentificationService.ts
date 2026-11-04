@@ -408,14 +408,18 @@ export async function identifyItemWithAI(
     // 'curiosities_collectibles' for a bicycle identification request).
     // Rule: if the caller passed a niche-specific specialist and the AI returns
     // a generic specialist, retain the caller's niche specialist.
-    const GENERIC_SPECIALISTS = new Set(['curiosities_collectibles', 'antiques']);
+    const GENERIC_SPECIALISTS = new Set(['curiosities_collectibles']);
     const NICHE_SPECIFIC_SPECIALISTS = new Set([
       'bicycles', 'motocross', 'clothing', 'trainers_sneakers',
       'coins', 'islamic_silver', 'banknotes', 'gold', 'silver',
       'pokemon_cards', 'trading_cards', 'stamps', 'vinyl_records',
-      'books', 'retro_games', 'retro_consoles', 'fossils', 'beauty', 'tech', 'surplus_trader',
+      'books', 'retro_games', 'retro_consoles', 'fossils', 'beauty', 'tech', 'surplus_trader', 'collectibles',
     ]);
     const aiSpecialist = id.specialistId as SpecialistId | undefined;
+    const callerNiche = resolveProductionNiche(specialistId);
+    if (callerNiche && aiSpecialist && !getProductionNicheSpecialistIds(callerNiche).includes(aiSpecialist)) {
+      return { result: null, error: 'The returned identification does not match this specialist. Add evidence or request human review; nothing was saved.' };
+    }
     const resolvedSpecialistId: SpecialistId =
       NICHE_SPECIFIC_SPECIALISTS.has(specialistId) &&
       (!aiSpecialist || GENERIC_SPECIALISTS.has(aiSpecialist))

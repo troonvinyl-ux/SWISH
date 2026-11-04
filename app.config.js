@@ -89,14 +89,23 @@ module.exports = ({ config }) => {
   });
   if (!plugins.some(plugin => (Array.isArray(plugin) ? plugin[0] : plugin) === 'expo-router')) plugins.push(['expo-router', { root: routeRoot }]);
   const webBaseUrl = process.env['SWISH_WEB_BASE_URL'];
+  const artworkFiles = { coins: 'coin-flipper.jpeg', motocross: 'mx-flipper.jpeg', bicycles: 'bike-flipper.jpeg', clothing: 'threads-flip.jpeg', trading_cards: 'card-flipper.jpeg', antiques: 'antique-flipper.jpeg', fossils: 'fossil-flipper.jpeg', beauty: 'beauty-flipper.jpeg', tech: 'tech-flipper.jpeg', surplus_flip: 'surplus-flip.png', collectibles: 'collectibles-flipper.png' };
+  const productArtwork = './assets/images/brands/' + artworkFiles[selected];
+  if (!artworkFiles[selected]) throw new Error('Missing product launcher artwork: ' + selected);
+  const brandedPlugins = plugins.map(plugin => {
+    const name = Array.isArray(plugin) ? plugin[0] : plugin;
+    if (name === 'expo-splash-screen') return [name, { ...(Array.isArray(plugin) ? plugin[1] : {}), image: productArtwork }];
+    if (name === 'expo-camera') return [name, { ...(Array.isArray(plugin) ? plugin[1] : {}), cameraPermission: 'Allow ' + niche.name + ' to photograph items for specialist identification.' }];
+    return plugin;
+  });
   return {
     ...baseConfig,
     ...(webBaseUrl ? { experiments: { ...(baseConfig.experiments || {}), baseUrl: webBaseUrl } } : {}),
-    plugins, name: niche.name,
+    plugins: brandedPlugins, name: niche.name, icon: productArtwork,
     slug: process.env['SWISH_OTA_PUBLISH'] === '1' ? 'swish' : niche.slug,
     scheme: niche.scheme,
     ios: { ...config.ios, bundleIdentifier: niche.iosBundleIdentifier },
-    android: { ...config.android, package: niche.androidPackage },
+    android: { ...config.android, package: niche.androidPackage, adaptiveIcon: { ...(config.android?.adaptiveIcon || {}), foregroundImage: productArtwork } },
     extra: { ...(baseConfig.extra || {}), swishNicheId: niche.id, swishAppScheme: niche.scheme },
   };
 };

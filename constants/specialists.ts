@@ -27,7 +27,8 @@ export type SpecialistId =
   | 'surplus_trader'
   | 'fossils'
   | 'beauty'
-  | 'tech';
+  | 'tech'
+  | 'collectibles';
 
 export interface CaptureRequirement {
   id: string;
@@ -76,6 +77,23 @@ export interface SpecialistConfig {
 }
 
 export const SPECIALISTS: Record<SpecialistId, SpecialistConfig> = {
+  collectibles: {
+    id: 'collectibles', name: 'Collectibles & Clearance Finds', shortName: 'Collectibles',
+    description: 'Branded pottery, giftware, bears, silverware, memorabilia and decorative objects; not the coin specialist.',
+    icon: 'category', iconFamily: 'MaterialIcons', color: '#D8AD52', category: 'collectibles',
+    captureRequirements: [
+      { id: 'main', label: 'Main item', description: 'Clear full view of the object', required: true },
+      { id: 'maker', label: 'Maker marks and labels', description: 'Base stamps, labels, tags and hallmarks', required: false },
+      { id: 'detail', label: 'Details and edition', description: 'Pattern, model, date or edition number', required: false },
+      { id: 'condition', label: 'Condition', description: 'Chips, cracks, tarnish, repairs and missing parts', required: true },
+      { id: 'scale', label: 'Size / scale', description: 'Include a ruler or record dimensions', required: false },
+    ],
+    capabilities: { identify: true, classify: true, research: true, assessCondition: true, value: true, predictDemand: true, recommendDisposition: true, generateListing: true, validateListing: true, detectRisk: true },
+    keyAttributes: ['brand','object_type','pattern','model','material','hallmark','edition','dimensions','condition_notes','packaging'],
+    valuationInputs: ['brand','model','edition','material','condition','sold_comparables','packaging'],
+    riskFactors: ['silver_vs_plate_uncertain','unverified_authenticity','misattributed_maker','missing_parts','damage','unsupported_rarity_claim'],
+    typicalMarketplaces: ['ebay'], autoDetectKeywords: ['wedgwood','royal doulton','harrods bear','silver plate','figurine','giftware'], version: '1.0.0',
+  },
   coins: {
     id: 'coins',
     name: 'Coins & Numismatics',

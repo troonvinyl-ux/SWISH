@@ -9,12 +9,11 @@
 //
 // Security: JWT + tenant membership verified before any eBay operation.
 
-import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
 import { corsHeaders } from '../_shared/cors.ts';
-import { buildGetEbayMessageBodyRequest, buildGetEbayMessagesRequest, extractEbayMessageBlocks, extractEbayMessageBody, extractEbayXmlTag, getEbayMessagePagePlan } from '../_shared/ebayMessagePagination.ts';
+import { buildGetEbayMessagesRequest, extractEbayMessageSummaryBlocks, getEbayMessagePagePlan } from '../_shared/ebayMessagePagination.ts';
 
 const EBAY_TRADING_API_URL = 'https://api.ebay.com/ws/api.dll';
 const EBAY_TOKEN_URL       = 'https://api.ebay.com/identity/v1/oauth2/token';
@@ -208,7 +207,7 @@ async function handleSyncMessages(
     }
 
     if (page === 1) pagePlan = getEbayMessagePagePlan(responseXml);
-    msgBlocks.push(...extractEbayMessageBlocks(responseXml));
+    msgBlocks.push(...extractEbayMessageSummaryBlocks(responseXml));
     pagesFetched = page;
   }
 
@@ -216,12 +215,12 @@ async function handleSyncMessages(
   let failed = 0;
 
   for (const msgXml of msgBlocks) {
-    const msgId        = extractEbayXmlTag(msgXml, 'MessageID');
-    const sender       = extractEbayXmlTag(msgXml, 'Sender');
-    const subject      = extractEbayXmlTag(msgXml, 'Subject') || '(no subject)';
-    const isRead       = extractEbayXmlTag(msgXml, 'Read').toLowerCase() === 'true';
-    const creationDate = extractEbayXmlTag(msgXml, 'ReceiveDate') || extractEbayXmlTag(msgXml, 'CreationDate') || new Date().toISOString();
-    const itemId       = extractEbayXmlTag(msgXml, 'ItemID');
+    const msgId        = msgXml.match(/<MessageID>([^<]+)<\/MessageID>/)?.[1];
+    const sender       = msgXml.match(/<Sender>([^<]+)<\/Sender>/)?.[1] ?? '';
+    const subject      = msgXml.match(/<Subject>([^<]+)<\/Subject>/)?.[1] ?? '(no subject)';
+    const isRead       = msgXml.match(/<Read>(.*?)<\/Read>/)?.[1] === 'true';
+    const creationDate = msgXml.match(/<CreationDate>([^<]+)<\/CreationDate>/)?.[1] ?? new Date().toISOString();
+    const itemId       = msgXml.match(/<ItemID>([^<]+)<\/ItemID>/)?.[1] ?? '';
 
     if (!msgId) continue;
 
@@ -352,88 +351,9 @@ async function handleSendReply(
   return jsonResponse({ success: true, ebaySuccess: true, message: 'Reply sent via eBay successfully.' });
 }
 
-// ── Route: get_message_body ───────────────────────────────────────────────────
-
-async function handleGetMessageBody(
-  supabase: ReturnType<typeof adminClient>,
-  tenantId: string,
-  localMessageId: string,
-): Promise<Response> {
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(localMessageId)) {
-    return jsonResponse({ error: 'A valid message ID is required.' }, 400);
-  }
-
-  const { data: message, error: loadError } = await supabase
-    .from('ebay_messages')
-    .select('id, ebay_message_id, body')
-    .eq('id', localMessageId)
-    .eq('tenant_id', tenantId)
-    .maybeSingle();
-
-  if (loadError) return jsonResponse({ error: 'Unable to load this message.' }, 500);
-  if (!message) return jsonResponse({ error: 'Message not found in this business account.' }, 404);
-  if (typeof message.body === 'string' && message.body.trim()) {
-    return jsonResponse({ success: true, body: message.body, cached: true });
-  }
-  if (typeof message.ebay_message_id !== 'string' || !message.ebay_message_id.trim() || message.ebay_message_id.length > 200) {
-    return jsonResponse({ error: 'This message has no valid eBay message reference.' }, 422);
-  }
-
-  const credsResult = await getEbayAccessToken(supabase, tenantId);
-  if ('error' in credsResult) return jsonResponse({ error: credsResult.error }, 400);
-  const { accessToken, clientId } = credsResult;
-
-  let responseXml: string;
-  try {
-    const response = await fetch(EBAY_TRADING_API_URL, {
-      method: 'POST',
-      headers: {
-        'X-EBAY-API-SITEID': '3',
-        'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
-        'X-EBAY-API-CALL-NAME': 'GetMyMessages',
-        'X-EBAY-API-APP-NAME': clientId,
-        'Content-Type': 'text/xml',
-      },
-      body: buildGetEbayMessageBodyRequest(accessToken, message.ebay_message_id),
-      signal: AbortSignal.timeout(10000),
-    });
-    responseXml = await response.text();
-    if (!response.ok) return jsonResponse({ error: 'eBay could not return the message body. Please retry.' }, 502);
-  } catch {
-    return jsonResponse({ error: 'The eBay message body request timed out or could not connect.' }, 503);
-  }
-
-  const ack = parseAck(responseXml);
-  if (!['Success', 'Warning'].includes(ack)) {
-    return jsonResponse({ error: 'eBay did not return the requested message body.' }, 502);
-  }
-
-  const body = extractEbayMessageBody(responseXml);
-  if (!body) return jsonResponse({ error: 'eBay returned the message header but no message body.' }, 404);
-
-  const { data: updated, error: saveError } = await supabase
-    .from('ebay_messages')
-    .update({ body, updated_at: new Date().toISOString() })
-    .eq('id', localMessageId)
-    .eq('tenant_id', tenantId)
-    .select('id')
-    .maybeSingle();
-
-  if (saveError || !updated) {
-    return jsonResponse({
-      success: true,
-      body,
-      localSyncPending: true,
-      message: 'eBay returned the message body, but SWISH could not cache it. The body is available for this view; retry later to retain it.',
-    });
-  }
-
-  return jsonResponse({ success: true, body, cached: true });
-}
-
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-Deno.serve(withEdgeFunctionLogging('swish-ebay-messages', async (req: Request) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
 
@@ -448,7 +368,7 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-messages', async (req: Request) =
   const daysBack = Number(body.daysBack ?? 30);
   if (!Number.isInteger(daysBack) || daysBack < 1 || daysBack > 365) return jsonResponse({ error: 'daysBack must be between 1 and 365.' }, 400);
   if (!tenantId) return jsonResponse({ error: 'tenantId is required' }, 400);
-  if (!route)    return jsonResponse({ error: 'route is required (sync_messages | get_message_body | send_reply)' }, 400);
+  if (!route)    return jsonResponse({ error: 'route is required (sync_messages | send_reply)' }, 400);
 
   const supabase = adminClient();
   const authHeader = req.headers.get('Authorization');
@@ -459,9 +379,6 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-messages', async (req: Request) =
   }
 
   try {
-    if (route === 'get_message_body') {
-      return await handleGetMessageBody(supabase, tenantId, String(body.messageId ?? ''));
-    }
     if (route === 'sync_messages') {
       return await handleSyncMessages(supabase, tenantId, daysBack);
     }
@@ -479,4 +396,4 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-messages', async (req: Request) =
     console.error('[SWISH] swish-ebay-messages request failed.', { route });
     return jsonResponse({ error: 'Unable to complete the eBay messages request. Please retry or contact support.' }, 500);
   }
-}));
+});

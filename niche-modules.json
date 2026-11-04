@@ -285,6 +285,14 @@
         "surplus-flip.tsx"
       ],
       "scannerRoute": "/surplus-flip"
+    },
+    "collectibles": {
+      "id": "collectibles", "name": "Collectibles Flipper", "slug": "swish-collectibles-flipper",
+      "scheme": "collectiblesflipper", "androidPackage": "com.swish.collectiblesflipper", "iosBundleIdentifier": "com.swish.collectiblesflipper",
+      "entry": "entry/collectibles.tsx", "home": null,
+      "aliases": ["collectibles_flipper", "collectibles-flipper"],
+      "specialists": ["collectibles"], "legacySpecialists": [], "defaultSpecialist": "collectibles", "dedicatedRoutes": [], "scannerRoute": "/capture",
+      "buildSharedRoutes": ["+not-found.tsx", "_layout.tsx", "index.tsx", "login.tsx", "onboarding.tsx", "capture.tsx", "create-listing.tsx", "ebay-account.tsx", "ebay-listing-editor.tsx", "listing-preflight.tsx", "photo-quality-check.tsx", "review-required.tsx", "settings.tsx", "subscription.tsx", "privacy-policy.tsx", "item/[id].tsx", "stock-listing/[id].tsx", "(tabs)/_layout.tsx", "(tabs)/account.tsx", "(tabs)/index.tsx", "(tabs)/inventory.tsx", "(tabs)/listings.tsx", "(tabs)/scan.tsx", "marketplaces.tsx", "research.tsx"]
     }
   },
   "contractVersion": 1,

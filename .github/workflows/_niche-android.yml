@@ -14,6 +14,11 @@ jobs:
     env:
       SWISH_NICHE: ${{ inputs.niche }}
       EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
+      SWISH_RELEASE_KEYSTORE_BASE64: ${{ secrets.SWISH_RELEASE_KEYSTORE_BASE64 }}
+      SWISH_KEYSTORE_STORE_PASSWORD: ${{ secrets.SWISH_KEYSTORE_STORE_PASSWORD }}
+      SWISH_KEYSTORE_KEY_PASSWORD: ${{ secrets.SWISH_KEYSTORE_KEY_PASSWORD }}
+      SWISH_KEYSTORE_KEY_ALIAS: ${{ secrets.SWISH_KEYSTORE_KEY_ALIAS }}
+      SWISH_RELEASE_CERT_SHA256: ${{ vars.SWISH_RELEASE_CERT_SHA256 || secrets.SWISH_RELEASE_CERT_SHA256 }}
       EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
     steps:
@@ -110,9 +115,15 @@ jobs:
             ~/.gradle/wrapper
           key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'pnpm-lock.yaml', 'package-lock.json', 'app.config.js') }}
           restore-keys: ${{ runner.os }}-gradle-
-      - name: Compile APK
+      - name: Configure existing persistent production signing
+        run: node scripts/configure-niche-signing.mjs
+      - name: Compile APK and retain compiler evidence
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon --max-workers=1 --console=plain -Dorg.gradle.jvmargs="-Xmx5g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" -Dkotlin.compiler.execution.strategy=in-process
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ../dist
+          ./gradlew assembleRelease --no-daemon --max-workers=1 --console=plain -Dorg.gradle.jvmargs="-Xmx5g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" -Dkotlin.compiler.execution.strategy=in-process 2>&1 | tee ../dist/android-build.log
       - name: Inspect real APK before upload
         run: |
           APK=android/app/build/outputs/apk/release/app-release.apk
@@ -120,11 +131,25 @@ jobs:
           mkdir -p dist
           cp "$APK" "dist/${SWISH_NICHE}.apk"
           sha256sum "dist/${SWISH_NICHE}.apk" > "dist/${SWISH_NICHE}.sha256"
+          cp /tmp/swish-expo-config.json "dist/${SWISH_NICHE}-runtime-config.json"
+          cp ".swish-build/${SWISH_NICHE}/import-closure.json" "dist/${SWISH_NICHE}-import-closure.json"
       - uses: actions/upload-artifact@v7
         with:
           name: swish-${{ inputs.niche }}-apk
           path: |
             dist/${{ inputs.niche }}.apk
             dist/${{ inputs.niche }}.sha256
+            dist/${{ inputs.niche }}-runtime-config.json
+            dist/${{ inputs.niche }}-import-closure.json
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 90
+      - name: Retain build failure diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: swish-${{ inputs.niche }}-build-evidence
+          path: |
+            dist/android-build.log
+            .swish-build/${{ inputs.niche }}/import-closure.json
+          if-no-files-found: warn
+          retention-days: 90

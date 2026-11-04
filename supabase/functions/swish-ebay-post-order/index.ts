@@ -26,7 +26,6 @@
 //     dispatchPhotoUrl?: string // URL of dispatch proof photo (optional)
 //   }
 
-import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
@@ -745,7 +744,7 @@ async function handleSyncCases(
 
 // ── Main Handler ──────────────────────────────────────────────────────────────
 
-Deno.serve(withEdgeFunctionLogging('swish-ebay-post-order', async (req: Request) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
 
@@ -799,4 +798,4 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-post-order', async (req: Request)
     console.error(`[SWISH Dispatch] Request failed (route=${route}).`);
     return jsonResponse({ error: 'Unable to complete the eBay fulfilment request.' }, 500);
   }
-}));
+});

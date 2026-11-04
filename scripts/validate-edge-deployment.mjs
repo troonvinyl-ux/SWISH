@@ -33,7 +33,9 @@ export function validateEdgeDeployment(root = process.cwd()) {
     const deployedPath = path.resolve(root, deployed);
     if (!fs.existsSync(sourcePath) || !fs.existsSync(deployedPath)) {
       errors.push('missing canonical/deployable asset pair: ' + canonical + ' -> ' + deployed);
-    } else if (!fs.readFileSync(sourcePath).equals(fs.readFileSync(deployedPath))) {
+    } else if (canonical.endsWith('.json')
+      ? JSON.stringify(JSON.parse(fs.readFileSync(sourcePath,'utf8'))) !== JSON.stringify(JSON.parse(fs.readFileSync(deployedPath,'utf8')))
+      : !fs.readFileSync(sourcePath).equals(fs.readFileSync(deployedPath))) {
       errors.push('stale deployment asset mirror: ' + deployed);
     }
   }
