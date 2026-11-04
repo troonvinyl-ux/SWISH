@@ -76,6 +76,7 @@ jobs:
       - name: Prepare and validate isolated route tree
         run: |
           node scripts/prepare-niche-routes.js
+          node scripts/prepare-niche-assets.mjs
           node scripts/verify-niche-module.js
           npx expo config --type public --json > /tmp/swish-expo-config.json
           node - <<'NODE'
