@@ -9,9 +9,9 @@ const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
 describe('S1-03 registered niche audit', () => {
   const registry = JSON.parse(read('niche-modules.json'));
 
-  test('all ten registered products have unique Android/iOS identities and existing entry files', () => {
+  test('all eleven registered products have unique Android/iOS identities and existing entry files', () => {
     const products = Object.entries(registry.products) as Array<[string, any]>;
-    expect(products).toHaveLength(10);
+    expect(products).toHaveLength(11);
     const androidPackages = products.map(([, product]) => product.androidPackage);
     const iosBundles = products.map(([, product]) => product.iosBundleIdentifier);
     expect(new Set(androidPackages).size).toBe(products.length);
@@ -58,7 +58,7 @@ describe('S1-03 registered niche audit', () => {
   });
 
 
-  test('all ten niches have descriptors that match the canonical registry', () => {
+  test('all eleven niches have descriptors that match the canonical registry', () => {
     for (const [id, product] of Object.entries(registry.products) as Array<[string, any]>) {
       const descriptorPath = path.join(root, 'niches', id, 'module.json');
       expect(fs.existsSync(descriptorPath)).toBe(true);

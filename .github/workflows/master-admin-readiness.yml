@@ -15,6 +15,7 @@ on:
       - 'niche-modules.json'
       - 'scripts/prepare-niche-routes.js'
       - 'scripts/verify-niche-module.js'
+      - 'scripts/prepare-niche-assets.mjs'
       - 'app.json'
       - 'app.config.js'
       - '.github/workflows/publish-ota-update.yml'
@@ -43,6 +44,7 @@ on:
       - 'niche-modules.json'
       - 'scripts/prepare-niche-routes.js'
       - 'scripts/verify-niche-module.js'
+      - 'scripts/prepare-niche-assets.mjs'
       - 'app.json'
       - 'app.config.js'
       - '.github/workflows/publish-ota-update.yml'
@@ -168,10 +170,14 @@ jobs:
   niche-builds:
     name: Branded configuration and Android bundle
     runs-on: ubuntu-latest
+    env:
+      EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
     strategy:
       fail-fast: false
       matrix:
-        niche: [coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech]
+        niche: [coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech, collectibles]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -184,10 +190,29 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
       - name: Install locked dependencies
         run: bash scripts/install-dependencies.sh
+      - name: Prepare selected niche-only brand artwork
+        env:
+          SWISH_NICHE: ${{ matrix.niche }}
+        run: node scripts/prepare-niche-assets.mjs
       - name: Validate branded Expo config
         env:
           SWISH_NICHE: ${{ matrix.niche }}
-        run: npx expo config --type public
+        run: |
+          npx expo config --type public --json > /tmp/swish-expo-config.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const registry = require('./niche-modules.json');
+          const niche = process.env.SWISH_NICHE;
+          const product = registry.products[niche];
+          const config = JSON.parse(fs.readFileSync('/tmp/swish-expo-config.json', 'utf8'));
+          const router = (config.plugins || []).find(p => Array.isArray(p) && p[0] === 'expo-router');
+          const splash = (config.plugins || []).find(p => Array.isArray(p) && p[0] === 'expo-splash-screen');
+          const runtime = (config.version || '1.0.0') + '-' + niche + '-isolated-api36-v1';
+          if (!product || config.name !== product.name || config.android?.package !== product.androidPackage || config.ios?.bundleIdentifier !== product.iosBundleIdentifier || config.scheme !== product.scheme) throw new Error('Canonical package, scheme or branding mismatch: ' + niche);
+          if (config.extra?.swishNicheId !== niche || router?.[1]?.root !== '.swish-build/' + niche + '/app') throw new Error('Niche entry/route isolation mismatch: ' + niche);
+          if (!config.icon || config.android?.adaptiveIcon?.foregroundImage !== config.icon || splash?.[1]?.image !== config.icon) throw new Error('Niche icon/splash mismatch: ' + niche);
+          if (config.runtimeVersion !== runtime || config.updates?.requestHeaders?.['expo-channel-name'] !== 'production-' + niche) throw new Error('Niche runtime/channel mismatch: ' + niche);
+          NODE
       - name: Verify exact per-niche route and module boundary
         env:
           SWISH_NICHE: ${{ matrix.niche }}

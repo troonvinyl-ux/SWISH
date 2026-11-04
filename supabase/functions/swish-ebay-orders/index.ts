@@ -1,3 +1,4 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // SWISH — eBay Orders Import Edge Function v2
 //
 // CRITICAL CHANGES v2:
@@ -655,7 +656,7 @@ async function refreshMultiQuantityListingStatuses(
 
 // ── Main handler ───────────────────────────────────────────────────────────────
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withEdgeFunctionLogging('swish-ebay-orders', async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
 
@@ -804,4 +805,4 @@ Deno.serve(async (req: Request) => {
     console.error('swish-ebay-orders unhandled error:', err.message);
     return jsonResponse({ error: 'Unable to synchronize eBay orders. Please retry.' }, 500);
   }
-});
+}));

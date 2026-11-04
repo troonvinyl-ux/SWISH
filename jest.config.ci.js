@@ -3,6 +3,7 @@
 module.exports = {
   testEnvironment: 'node',
   moduleNameMapper: {
+    '^expo/virtual/env(?:\\.js)?$': '<rootDir>/__mocks__/expoVirtualEnv.js',
     '^@/(.*)$': '<rootDir>/$1',
   },
   transform: {

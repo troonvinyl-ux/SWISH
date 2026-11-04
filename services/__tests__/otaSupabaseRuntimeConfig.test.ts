@@ -2,6 +2,9 @@ jest.mock('@supabase/supabase-js', () => ({
   createClient: jest.fn(() => ({ auth: {} })),
 }));
 
+jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
+jest.mock('react-native-url-polyfill/auto', () => ({}));
+
 jest.mock('expo-constants', () => ({
   expoConfig: {
     extra: {

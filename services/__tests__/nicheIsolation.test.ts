@@ -192,8 +192,8 @@ describe('curiosities_collectibles niche contamination guard', () => {
 // ── 3. Production niche gate ─────────────────────────────────────────────────
 
 describe('Production niche gate', () => {
-  test('PRODUCTION_NICHE_IDS contains all ten SWISH niches including Surplus Flip', () => {
-    expect(PRODUCTION_NICHE_IDS).toHaveLength(10);
+  test('PRODUCTION_NICHE_IDS contains all eleven SWISH niches including Collectibles Flipper', () => {
+    expect(PRODUCTION_NICHE_IDS).toHaveLength(11);
     expect(PRODUCTION_NICHE_IDS).toContain('surplus_flip');
   });
 

@@ -4,7 +4,7 @@
   "sourcePrompt": "SWISH Modular Production Readiness Master Directive",
   "repository": "troonvinyl-ux/SWISH",
   "defaultBranch": "main",
-  "lastReviewed": "2026-11-02",
+  "lastReviewed": "2026-11-04",
   "rules": {
     "noRebuild": true,
     "noNewDatabase": true,
@@ -46,7 +46,7 @@
           "id": "S1-03",
           "title": "Audit every registered niche for real functionality and isolation",
           "status": "IMPLEMENTED",
-          "evidence": "Static audit covers all ten canonical niche identities and now all ten descriptor files, including tech and surplus_flip added in PR #126 (merged as e3df8fe19b1d3444919ddac77dadd41a5429acf1). services/__tests__/registeredNicheAudit.test.ts checks descriptor parity against canonical registry fields. PR #126 CI passed niche-config-checks (run 41460220384), regression/niche isolation and all ten branded Android bundle jobs (run 41460220912), and all ten web exports (run 41460220448). This verifies source/config/build contracts, not real scanner-to-listing workflows or live tenant/RLS isolation. Shared-capture niches and bespoke-home gaps remain; keep IMPLEMENTED, not VERIFIED."
+          "evidence": "Updated 2026-11-04 against main 4ac2b419796871eba694a4898572a0d0c9892725: canonical registry contains 11 unique products. This release PR adds the missing Collectibles entry route and module descriptor, specialist classification/capture profile and regression checks. CI/device/runtime isolation remains to be verified; status remains IMPLEMENTED."
         },
         {
           "id": "S1-04",
@@ -58,7 +58,7 @@
           "id": "S1-05",
           "title": "Reconcile open PRs, branches and current main before implementation",
           "status": "IN PROGRESS",
-          "evidence": "Reconciled and integrated on 2026-11-02. PR #139 (Antique Flipper scanner) merged as b1976e62a9d3b540452f3b9af594a04d2b123d27; PR #141 (eBay message header/body retrieval) merged as 7d4644e5eeae6507e765e80db8b157607e2106dd; PR #140 (Android scanner Back navigation, canonical-only repricing authorization and narrow-screen photo-quality layout) merged as a9c0bebeca602f54bc833de3ec9c283dc00fcef6. Rechecked main at a9c0bebeca602f54bc833de3ec9c283dc00fcef6 and confirmed no open PRs. Post-merge workflows were triggered. This closes the repository/branch reconciliation task only; physical Android acceptance, live eBay seller-account acceptance and deployed OnSpace parity remain open under S3/S7.\n\nExecution snapshot, 2 Nov 2026: PR #147 merged as `407fa5d` (finance diagnostics) and PR #148 merged as `79c7c77` (OTA runtime-only gate). PR #142 (head `170eb6a`), #143, #144 (head `b66ac44`) and #145 remain open on branches based on older main snapshot `ccebd4b`; none is safe to merge until replayed/rebased against current main `79c7c77`. PR #144 now has a server-side owner check for inventory preservation; PR #145 has a successful isolated Test Lab APK artifact. This reconciliation is in progress, not complete.\n\nLatest reconciliation check, 2 Nov 2026: current main is `1cdbd2d82ae0693df55201b4f65c4bc94bbc45fd`. Open PRs #142–#145 were rechecked and remain based on the older `ccebd4b` snapshot; none was merged or represented as current-main verified. PR #142 still depends on an undeployed migration and live HTTP 500/BootFailure status endpoint. PR #144 still depends on the unconfirmed server-only `SWISH_MASTER_ADMIN_EMAIL` secret. PR #145 is an isolated debug Test Lab APK only. Keep these changes isolated until safely replayed and all dependencies resolved."
+          "evidence": "2026-11-04: main is 4ac2b419796871eba694a4898572a0d0c9892725. PR #167 remains open at 467ad03a6cb3912f8ba6a00c8f212ee987917bc7, based on 1d7b77599e58c44f03c625a10e87701851ab4077; it is 72 commits ahead/2 behind and overlaps Collectibles registry, routes, validators and release workflows. Changes were selectively reconciled onto a branch from current main; no wholesale merge or force-push. Further PR/CI verification remains open."
         }
       ]
     },
@@ -262,7 +262,7 @@
           "id": "S7-04",
           "title": "Build and inspect release APKs only at release milestones",
           "status": "IN PROGRESS",
-          "evidence": "PR #132 run 41465023973 passed Android JavaScript bundles and branded configurations for all ten niches plus the private Master Admin launcher. No native APK/AAB was produced by these checks. Native release artifacts, persistent signing and owner APK/AAB inspection remain outstanding; continue to reserve builds for release milestones.\n\nExecution update, 2 Nov 2026: isolated Test Lab APK artifact built in run `41519696063` (`swish-test-lab-debug-apk`). The extracted binary manifest reports package `com.swish.testlab`, target SDK 36, compile SDK 36, minimum SDK 24 and version code 1. ZIP integrity passed and an APK v2 signing block is present; signing certificate identity was not independently verified. This is a debug Test Lab artifact, not a production niche release AAB/APK. No physical-device installation or camera/back-button acceptance has occurred."
+          "evidence": "2026-11-04 main release baseline 4ac2b419796871eba694a4898572a0d0c9892725: Android suite matrix omitted Collectibles; main had the 11th registry record but no app/entry/collectibles.tsx; foundation and production-register validators still expected ten. Main Actions run 41881723265 failed with no jobs; other runs exposed the missing entry, stale Edge specialist mirror, TypeScript/lint defects and a regression in the previously merged eBay message-body route. This PR adds the missing build/release contracts, strict signing/metadata evidence and an index. No APK or device test is claimed until Actions artifacts exist."
         },
         {
           "id": "S7-05",
@@ -355,7 +355,9 @@
     "An isolated Test Lab debug APK now builds and its API 36 manifest was inspected; physical-device launches, production release signing/AABs, web parity, deployment and external CI billing constraints still require evidence.",
     "OTA workflow incident, 2 Nov 2026: the old run `41535796254` published no-runtime updates to Master (`e2e72090-73a4-4358-8a1f-b5e0867c7e55`), Coins (`6b2e67fe-f0df-48a6-a6b5-4f609f2e7f8e`) and Motocross (`32e6e84d-9bc1-41a4-a9f9-df6a515b9be8`). Bicycles and the other seven niche jobs were cancelled before publication. PR #148 merged the runtime-only preflight and same-group cancellation; replacement run `41536576920` completed successfully with preflight success and the OTA publish matrix skipped. No application runtime source changed in the three published no-op updates.",
     "PR #144's inventory-preservation exception now fails closed unless the server-only `SWISH_MASTER_ADMIN_EMAIL` secret matches the verified JWT email. Live secret configuration and authenticated owner-only test remain unverified.",
-    "PRs #142, #143, #144 and #145 remain on older branch bases and must be replayed/rebased against current main before merge; do not merge stale branches."
+    "PRs #142, #143, #144 and #145 remain on older branch bases and must be replayed/rebased against current main before merge; do not merge stale branches.",
+    "11-app Android testing release remains unverified until the focused release PR passes and all eleven signed APK artifacts are retained from one source SHA.",
+    "Physical installation, launch, authentication and real inventory/eBay workflow acceptance have not been performed by this repository-only workflow."
   ],
   "changeLog": [
     {
@@ -527,6 +529,11 @@
     {
       "date": "2026-11-02",
       "change": "Rechecked stale PRs #142–#145 against current main and recorded completed 14-job main verification run 41537431800; live integration remains explicitly skipped."
+    },
+    {
+      "date": "2026-11-04",
+      "change": "Started focused 11-app Android testing release from main 4ac2b419. Reconciled Collectibles PR #167 selectively rather than merging its stale branch; recorded actual CI failures and kept APK/device/production acceptance unverified.",
+      "sourceCommit": "4ac2b419796871eba694a4898572a0d0c9892725"
     }
   ],
   "sourcePromptPath": "docs/SWISH_MODULAR_PRODUCTION_MASTER_DIRECTIVE.md"

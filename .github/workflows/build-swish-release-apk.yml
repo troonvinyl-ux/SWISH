@@ -30,9 +30,6 @@ name: Build signed SWISH APK (persistent keystore)
 # ──────────────────────────────────────────────────────────────────────────────
 
 on:
-  push:
-    branches:
-      - 'release/master-admin-*'
   workflow_dispatch:
 
 jobs:
@@ -61,7 +58,6 @@ jobs:
 
       - name: Install dependencies
         run: bash scripts/install-dependencies.sh
-      - name: Verify public Supabase config before Master Admin prebuild
       - name: Load public Supabase configuration from repository .env when needed
         shell: bash
         run: |
@@ -83,6 +79,7 @@ jobs:
           if (out.length) fs.appendFileSync(process.env.GITHUB_ENV, out.join('\n') + '\n', { mode: 0o600 });
           console.log(`Loaded ${out.length} public Supabase setting(s) for signed Master Admin; values withheld.`);
           NODE
+      - name: Verify public Supabase config before Master Admin prebuild
         env:
           SWISH_MASTER_ADMIN: '1'
           EXPO_NO_DOTENV: '1'

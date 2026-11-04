@@ -76,6 +76,7 @@ jobs:
       - name: Prepare and validate isolated route tree
         run: |
           node scripts/prepare-niche-routes.js
+          node scripts/prepare-niche-assets.mjs
           node scripts/verify-niche-module.js
           npx expo config --type public --json > /tmp/swish-expo-config.json
           node - <<'NODE'
@@ -83,13 +84,18 @@ jobs:
           const config = JSON.parse(fs.readFileSync('/tmp/swish-expo-config.json', 'utf8'));
           const product = require('./niche-modules.json').products[process.env.SWISH_NICHE];
           const router = config.plugins.find(p => Array.isArray(p) && p[0] === 'expo-router');
-          if (config.extra.swishNicheId !== product.id || config.android.package !== product.androidPackage) throw new Error('Build identity mismatch');
+          const splash = config.plugins.find(p => Array.isArray(p) && p[0] === 'expo-splash-screen');
+          const version = config.version || '1.0.0';
+          const expectedRuntime = version + '-' + product.id + '-isolated-api36-v1';
+          if (config.extra.swishNicheId !== product.id || config.android.package !== product.androidPackage || config.name !== product.name) throw new Error('Build identity mismatch');
+          if (config.scheme !== product.scheme || config.ios?.bundleIdentifier !== product.iosBundleIdentifier) throw new Error('Scheme or iOS bundle identity mismatch');
           if (router?.[1]?.root !== `.swish-build/${product.id}/app`) throw new Error('Router isolation root mismatch');
+          if (!config.icon || config.android?.adaptiveIcon?.foregroundImage !== config.icon || splash?.[1]?.image !== config.icon) throw new Error('Launcher icon, adaptive icon and splash must use the selected niche artwork');
           if (config.extra?.supabase?.url !== process.env.EXPO_PUBLIC_SUPABASE_URL) throw new Error('Supabase URL was not embedded in Expo runtime config');
           if (config.extra?.supabase?.anonKey !== process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) throw new Error('Supabase anon key was not embedded in Expo runtime config');
           if (!config.updates?.url?.includes(process.env.EXPO_PROJECT_ID)) throw new Error('EAS update URL was not embedded');
-          if (!config.runtimeVersion) throw new Error('Runtime version is missing; OTA compatibility cannot be established');
-          if (config.updates?.requestHeaders?.['expo-channel-name'] !== `production-${process.env.SWISH_NICHE}`) throw new Error('Niche OTA channel does not match the installed app');
+          if (config.runtimeVersion !== expectedRuntime) throw new Error('Runtime version does not match selected niche/app version');
+          if (config.updates?.requestHeaders?.['expo-channel-name'] !== `production-${product.id}`) throw new Error('Niche OTA channel does not match the installed app');
           NODE
       - name: Install Android 16 SDK platform and Build Tools
         shell: bash
@@ -132,7 +138,10 @@ jobs:
           cp "$APK" "dist/${SWISH_NICHE}.apk"
           sha256sum "dist/${SWISH_NICHE}.apk" > "dist/${SWISH_NICHE}.sha256"
           cp /tmp/swish-expo-config.json "dist/${SWISH_NICHE}-runtime-config.json"
+          cp /tmp/swish-apk-scheme.txt "dist/${SWISH_NICHE}-scheme-verification.txt"
           cp ".swish-build/${SWISH_NICHE}/import-closure.json" "dist/${SWISH_NICHE}-import-closure.json"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA" || { echo "::error::Build checkout does not match the pinned workflow SHA."; exit 1; }
+          node scripts/create-niche-apk-metadata.mjs
       - uses: actions/upload-artifact@v7
         with:
           name: swish-${{ inputs.niche }}-apk
@@ -140,7 +149,10 @@ jobs:
             dist/${{ inputs.niche }}.apk
             dist/${{ inputs.niche }}.sha256
             dist/${{ inputs.niche }}-runtime-config.json
+            dist/${{ inputs.niche }}-scheme-verification.txt
             dist/${{ inputs.niche }}-import-closure.json
+            dist/${{ inputs.niche }}-metadata.json
+            dist/${{ inputs.niche }}-signing.txt
           if-no-files-found: error
           retention-days: 90
       - name: Retain build failure diagnostics

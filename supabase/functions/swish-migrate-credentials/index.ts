@@ -1,3 +1,4 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // SWISH — swish-migrate-credentials Edge Function
 //
 // One-tenant-at-a-time admin operation: checks marketplace_connectors rows
@@ -39,7 +40,7 @@ function error(msg: string, status = 400) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withEdgeFunctionLogging('swish-migrate-credentials', async (req: Request) => {
   // CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -217,4 +218,4 @@ Deno.serve(async (req: Request) => {
   }));
 
   return json(summary, failed > 0 ? 207 : 200); // 207 Multi-Status if partial failures
-});
+}));

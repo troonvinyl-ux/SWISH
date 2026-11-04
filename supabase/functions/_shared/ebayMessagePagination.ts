@@ -15,6 +15,11 @@ export function extractEbayXmlTag(xml: string, tag: string): string {
   return xml.match(pattern)?.[1]?.trim() ?? '';
 }
 
+export function extractEbayMessageSummaryBlocks(xml: string): string[] {
+  const pattern = /<(?:[A-Za-z0-9_.-]+:)?MessageSummary\b[^>]*>([\s\S]*?)<\/(?:[A-Za-z0-9_.-]+:)?MessageSummary\s*>/gi;
+  return Array.from(xml.matchAll(pattern), match => match[1]);
+}
+
 export function extractEbayMessageBlocks(xml: string): string[] {
   const pattern = /<(?:[A-Za-z0-9_.-]+:)?Message\b[^>]*>([\s\S]*?)<\/(?:[A-Za-z0-9_.-]+:)?Message\s*>/gi;
   return Array.from(xml.matchAll(pattern), match => match[1]);

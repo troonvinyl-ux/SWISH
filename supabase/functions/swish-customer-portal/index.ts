@@ -1,3 +1,4 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // SWISH — Stripe Customer Portal Edge Function
 // Creates a Stripe Billing Portal session so users can manage/cancel their subscription.
 
@@ -16,7 +17,7 @@ const logStep = (step: string, details?: any) => {
   console.log(`[customer-portal] ${step}${detailsStr}`);
 };
 
-serve(async (req) => {
+serve(withEdgeFunctionLogging('swish-customer-portal', async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -90,4 +91,4 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 },
     );
   }
-});
+}));

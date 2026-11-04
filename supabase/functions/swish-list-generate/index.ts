@@ -1,3 +1,4 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // SWISH Listing Generator Edge Function v2
 //
 // CRITICAL SAFETY RULES:
@@ -360,7 +361,7 @@ function buildEbayDescriptionHtml(listing: GeneratedListing, nicheId?: string): 
   ].join('');
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withEdgeFunctionLogging('swish-list-generate', async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -830,4 +831,4 @@ Return ONLY this exact JSON:
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-});
+}));

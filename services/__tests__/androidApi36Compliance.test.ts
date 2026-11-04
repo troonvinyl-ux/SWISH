@@ -23,7 +23,8 @@ test('isolated niche and Master Admin APK builds install and verify Android 16 S
   expect(read('scripts/verify-apk.sh')).toContain("targetSdkVersion:'36'");
   expect(read('scripts/verify-master-admin-apk.sh')).toContain("targetSdkVersion:'36'");
   expect(read('.github/workflows/build-swish-suite.yml')).toContain("release/apk-suite-*");
-  expect(read('.github/workflows/build-swish-release-apk.yml')).toContain("release/master-admin-*");
+  expect(read('.github/workflows/build-swish-release-apk.yml')).toContain('workflow_dispatch:');
+  expect(read('.github/workflows/build-swish-release-apk.yml')).not.toContain('release/master-admin-*');
 });
 
 test('generated Gradle properties are checked fail-closed before native compilation', () => {
@@ -34,9 +35,9 @@ test('generated Gradle properties are checked fail-closed before native compilat
   expect(verifier).toContain('process.exit(1)');
 });
 
-test('EAS exposes isolated APK and Android App Bundle profiles for all ten niches', () => {
+test('EAS exposes isolated APK and Android App Bundle profiles for all eleven niches', () => {
   const eas = JSON.parse(read('eas.json'));
-  const niches = ['coins', 'motocross', 'bicycles', 'clothing', 'surplus_flip', 'trading_cards', 'antiques', 'fossils', 'beauty', 'tech'];
+  const niches = ['coins', 'motocross', 'bicycles', 'clothing', 'surplus_flip', 'trading_cards', 'antiques', 'fossils', 'beauty', 'tech', 'collectibles'];
   for (const niche of niches) {
     expect(eas.build[niche]).toMatchObject({ env: { SWISH_NICHE: niche }, android: { buildType: 'apk' } });
     expect(eas.build[niche + '-play']).toMatchObject({ env: { SWISH_NICHE: niche }, android: { buildType: 'app-bundle' } });

@@ -12,6 +12,8 @@ on:
       - 'hooks/**'
       - 'assets/**'
       - 'niche-modules.json'
+      - 'scripts/prepare-niche-assets.mjs'
+      - 'scripts/prepare-niche-routes.js'
       - 'scripts/**'
       - 'app.config.js'
       - 'eas.json'
@@ -48,6 +50,10 @@ jobs:
   export-web:
     name: Export web — ${{ matrix.niche }}
     runs-on: ubuntu-latest
+    env:
+      EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -63,6 +69,7 @@ jobs:
           - trading_cards
           - beauty
           - tech
+          - collectibles
 
     steps:
       - name: Checkout
@@ -86,10 +93,28 @@ jobs:
           npx tsc --noEmit
           npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand
 
+      - name: Prepare niche-only brand artwork
+        env:
+          SWISH_NICHE: ${{ matrix.niche }}
+        run: node scripts/prepare-niche-assets.mjs
+
       - name: Validate branded app identity
         env:
           SWISH_NICHE: ${{ matrix.niche }}
-        run: pnpm exec expo config --type public
+        run: |
+          pnpm exec expo config --type public --json > /tmp/swish-web-expo-config.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const registry = require('./niche-modules.json');
+          const niche = process.env.SWISH_NICHE;
+          const product = registry.products[niche];
+          const config = JSON.parse(fs.readFileSync('/tmp/swish-web-expo-config.json', 'utf8'));
+          const splash = (config.plugins || []).find(p => Array.isArray(p) && p[0] === 'expo-splash-screen');
+          const runtime = (config.version || '1.0.0') + '-' + niche + '-isolated-api36-v1';
+          if (!product || config.name !== product.name || config.android?.package !== product.androidPackage || config.ios?.bundleIdentifier !== product.iosBundleIdentifier || config.scheme !== product.scheme) throw new Error('Canonical app identity mismatch: ' + niche);
+          if (config.extra?.swishNicheId !== niche || !config.icon || config.android?.adaptiveIcon?.foregroundImage !== config.icon || splash?.[1]?.image !== config.icon) throw new Error('Niche branding/icon/splash mismatch: ' + niche);
+          if (config.runtimeVersion !== runtime || config.updates?.requestHeaders?.['expo-channel-name'] !== 'production-' + niche) throw new Error('Niche OTA runtime/channel mismatch: ' + niche);
+          NODE
 
       - name: Export static web application
         env:

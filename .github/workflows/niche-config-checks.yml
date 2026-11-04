@@ -29,6 +29,12 @@ on:
       - 'supabase/migrations/**'
       - 'shared/**'
       - 'scripts/validate-foundation.mjs'
+      - 'scripts/prepare-niche-assets.mjs'
+      - 'scripts/prepare-niche-routes.js'
+      - 'scripts/create-niche-apk-metadata.mjs'
+      - 'scripts/create-apk-testing-index.mjs'
+      - 'scripts/verify-ota-runtime-compatibility.mjs'
+      - 'scripts/verify-niche-module.js'
       - 'scripts/sync-backend-registry.mjs'
       - 'niche-modules.json'
       - 'services/nicheRouting.ts'
@@ -94,6 +100,12 @@ on:
       - 'supabase/migrations/**'
       - 'shared/**'
       - 'scripts/validate-foundation.mjs'
+      - 'scripts/prepare-niche-assets.mjs'
+      - 'scripts/prepare-niche-routes.js'
+      - 'scripts/verify-niche-module.js'
+      - 'scripts/create-niche-apk-metadata.mjs'
+      - 'scripts/create-apk-testing-index.mjs'
+      - 'scripts/verify-ota-runtime-compatibility.mjs'
       - 'scripts/sync-backend-registry.mjs'
       - 'niche-modules.json'
       - 'services/nicheRouting.ts'
@@ -230,11 +242,22 @@ jobs:
       - name: Bundle Android production JavaScript
         run: npx expo export --platform android --output-dir dist-ci-android && rm -rf dist-ci-android
 
-      - name: Validate all ten Expo branded configurations
+      - name: Validate release helper script syntax
+        run: |
+          node --check scripts/prepare-niche-assets.mjs
+          node --check scripts/prepare-niche-routes.js
+          node --check scripts/verify-niche-module.js
+          node --check scripts/create-niche-apk-metadata.mjs
+          node --check scripts/create-apk-testing-index.mjs
+          node --check scripts/verify-ota-runtime-compatibility.mjs
+
+      - name: Validate all eleven Expo branded configurations
         shell: bash
         run: |
           set -euo pipefail
-          for niche in coins motocross bicycles clothing trading_cards antiques fossils beauty tech surplus_flip; do
+          for niche in coins motocross bicycles clothing surplus_flip trading_cards antiques fossils beauty tech collectibles; do
             echo "Validating branded config: $niche"
             SWISH_NICHE="$niche" npx expo config --type public >/dev/null
+            SWISH_NICHE="$niche" node scripts/prepare-niche-assets.mjs
+            SWISH_NICHE="$niche" node scripts/verify-niche-module.js
           done

@@ -7,7 +7,7 @@ on:
         required: true
         type: choice
         default: surplus_flip
-        options: [coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech]
+        options: [coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech, collectibles]
 permissions:
   contents: read
 jobs:

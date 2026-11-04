@@ -16,7 +16,7 @@ This file is the canonical human-readable companion to `SWISH_FOUNDATION_MASTER_
 
 ## Initial state
 
-The initial task statuses are conservative. Existing handover documentation is evidence of prior work, not proof that every live integration or release gate currently passes. All ten registered niche modules are listed in the JSON-derived dashboard, but none is certified by registration alone.
+The initial task statuses are conservative. Existing handover documentation is evidence of prior work, not proof that every live integration or release gate currently passes. All eleven registered niche modules are listed in the JSON-derived dashboard, but none is certified by registration alone.
 
 ## Current known release risks
 

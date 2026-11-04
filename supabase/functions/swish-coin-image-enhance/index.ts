@@ -1,3 +1,4 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // SWISH Shared AI Image Preparation
 //
 // Generates a separate, AI-rendered visual reference from a object photograph.
@@ -35,7 +36,7 @@ function extractImageUrl(payload: any): string | null {
   return null;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withEdgeFunctionLogging('swish-coin-image-enhance', async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'POST required' }, 405);
 
@@ -114,4 +115,4 @@ Deno.serve(async (req) => {
     console.error('[swish-coin-image-enhance] request failed.');
     return jsonResponse({ error: 'Image enhancement failed safely. The original photo is unchanged.' }, 500);
   }
-});
+}));

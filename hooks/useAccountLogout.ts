@@ -36,18 +36,23 @@ export function useAccountLogout({ confirmationMessage = defaultMessage }: Accou
     if (!alive.current || inFlight.current || authBusy.current || currentUserId.current !== expectedUserId) return;
     inFlight.current = true;
     setSigningOut(true);
-    let result: { error: string | null };
-    try { result = await logout(); }
-    catch { result = { error: 'Sign-out could not be completed. Retry; your saved records and marketplace connections are unchanged.' }; }
-    if (!alive.current) return;
-    if (result.error) {
+    try {
+      const result = await logout();
+      if (!alive.current) return;
+      if (result.error) {
+        inFlight.current = false;
+        setSigningOut(false);
+        showAlert('Unable to log out', result.error);
+        return;
+      }
+      // AuthProvider clears account state; existing scoped providers discard old drafts.
+      setLogoutConfirmed(true);
+    } catch {
+      if (!alive.current) return;
       inFlight.current = false;
       setSigningOut(false);
-      showAlert('Unable to log out', result.error);
-      return;
+      showAlert('Unable to log out', 'Sign-out could not be completed. Retry; your saved records and marketplace connections are unchanged.');
     }
-    // AuthProvider clears account state; existing scoped providers discard old drafts.
-    setLogoutConfirmed(true);
   }, [logout, showAlert]);
 
   const requestLogout = useCallback(() => {
