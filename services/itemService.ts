@@ -257,6 +257,17 @@ export async function getItemStatusCounts(
     query = query.in('specialist_id', specialistIds);
   }
 
+  if (specialistIds?.length && specialistIds.every(id => resolveProductionNiche(id) === 'antiques')) {
+    const counts: Record<string, number> = {};
+    // PostgREST caps rows per response. Count every Antique status page instead of
+    // displaying a successful-looking truncated/failed count as zero.
+    for (let offset = 0; ; offset += 1000) {
+      const page = await supabase.from('items').select('id,status').eq('tenant_id', tenantId).in('specialist_id', specialistIds).order('id').range(offset, offset + 999);
+      if (page.error) throw new Error(`Inventory counts unavailable: ${page.error.message}`);
+      for (const row of page.data ?? []) counts[row.status] = (counts[row.status] ?? 0) + 1;
+      if ((page.data?.length ?? 0) < 1000) return counts;
+    }
+  }
   const { data } = await query;
   const counts: Record<string, number> = {};
   (data ?? []).forEach((row) => {
@@ -497,6 +508,7 @@ export async function updateItem(
     expectedProfit: 'expected_profit',
     saleProb30d: 'sale_prob_30d',
     attributes: 'attributes',
+    media: 'media',
     warnings: 'warnings',
     tags: 'tags',
     soldPrice: 'sold_price',

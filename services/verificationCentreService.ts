@@ -12,6 +12,7 @@ async function invoke(body: Record<string, unknown>): Promise<{ results: Verific
 }
 export function loadVerificationResults(tenantId: string) { return invoke({ action: 'list', tenantId }); }
 export function runSafeVerification(tenantId: string, platform: string) { return invoke({ action: 'run', tenantId, platform }); }
+export function runAntiqueVerification(tenantId: string, platform: string) { return invoke({ action: 'antiques', tenantId, platform }); }
 export function runEbayVerification(tenantId: string, platform: string) { return invoke({ action: 'ebay', tenantId, platform }); }
 export function recordModuleObservation(tenantId: string, nicheId: ProductionNicheId, platform: string) { return invoke({ action: 'mounted', tenantId, nicheId, platform }); }
 export function recordNavigationFailure(tenantId: string, nicheId: ProductionNicheId) { return invoke({ action: 'failed', tenantId, nicheId, platform: 'unknown' }); }

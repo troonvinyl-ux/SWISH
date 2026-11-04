@@ -1,14 +1,16 @@
 import { AuthRouter } from '@/template';
 import { Redirect } from 'expo-router';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
+import { describeAccessFailure } from '@/services/backendAvailabilityService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '@/hooks/useApp';
 import { membershipDestination } from '@/services/moduleAccessService';
 import { Colors, Spacing, Typography, Radius } from '@/constants/theme';
 function MembershipRouter() {
   const app = useApp();
-  if (app.tenantLoading || app.nichePreferencesLoading || app.moduleLoading) return <SafeAreaView style={styles.screen}><ActivityIndicator color={Colors.primary} /><Text style={styles.body}>Verifying your specialist access…</Text></SafeAreaView>;
-  if (app.tenantError || app.accessError || !app.accessReady) return <SafeAreaView style={styles.screen}><Text style={styles.title}>Account verification required</Text><Text style={styles.body}>{app.tenantError ?? app.accessError ?? 'Your memberships have not been verified.'}</Text><Pressable onPress={() => { void app.reloadTenant(); }} style={({ pressed }) => [styles.button, { opacity: pressed ? 0.7 : 1 }]}><Text style={styles.buttonText}>Retry verification</Text></Pressable></SafeAreaView>;
+  const failure = describeAccessFailure(app.tenantError ?? app.accessError);
+  if (app.tenantLoading || app.nichePreferencesLoading || app.moduleLoading || (!app.accessReady && app.subscriptionLoading)) return <SafeAreaView style={styles.screen}><ActivityIndicator color={Colors.primary} /><Text style={styles.body}>Verifying your specialist access…</Text></SafeAreaView>;
+  if (app.tenantError || app.accessError || !app.accessReady) return <SafeAreaView style={styles.screen}><Text style={styles.title}>{failure.title}</Text><Text accessibilityRole="alert" style={styles.body}>{failure.message}</Text><Pressable accessibilityLabel={failure.retryLabel} onPress={() => { void (app.tenant ? app.refreshSubscription() : app.reloadTenant()); }} style={({ pressed }) => [styles.button, { opacity: pressed ? 0.7 : 1 }]}><Text style={styles.buttonText}>{failure.retryLabel}</Text></Pressable></SafeAreaView>;
   const destination = app.fixedNicheId && app.activeNicheId === app.fixedNicheId ? '/(tabs)' : membershipDestination(app.enabledNiches, app.isMasterAdmin, app.activeNicheId);
   return <Redirect href={destination as any} />;
 }

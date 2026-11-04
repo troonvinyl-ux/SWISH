@@ -1671,7 +1671,8 @@ serveModule(async (req: Request) => {
     if (!hasNewImages && !hasExistingUrls) return new Response(JSON.stringify({ error: 'At least one image is required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
     const specialistSystemPrompt = SPECIALIST_SYSTEM_PROMPTS[specialist] ?? (profile ? `You are SWISH's ${profile.nicheId} identification specialist. ${profile.recognition}` : SPECIALIST_SYSTEM_PROMPTS['curiosities_collectibles']);
-    const fullSystemPrompt = specialistSystemPrompt + MASTER_EVIDENCE_RULES + (profile ? '\n' + specialistOutputInstructions(profile) : '');
+    const antiqueEvidenceRules = `Classify the actual object: ceramic, porcelain, glass, furniture, artwork, silverware, decorative object, book or unknown. Do not use coin taxonomy or numismatic fields. Read maker/brand, literal marks/signatures, material, style/design, pattern, period or approximate age, origin, dimensions and condition only where supported. Style does not establish date. Photograph a ruler for dimensions; never estimate exact sizes. Rarity, provenance, original/reproduction and authenticity are unverified unless independently evidenced. Label estimates and competing attributions. If a maker, mark, date or origin is unclear, ask for one useful additional view or user documentation. Never invent a maker, provenance or comparable sale.`;
+    const fullSystemPrompt = specialistSystemPrompt + (profile?.nicheId === 'antiques' ? '\n' + antiqueEvidenceRules + '\nAll valuation fields must be zero; identity is a proposal, not authentication.' : MASTER_EVIDENCE_RULES) + (profile ? '\n' + specialistOutputInstructions(profile) : '');
     const coinMode = isCoinLikeSpecialist(specialist);
     const vehicleMode = isVehicleSpecialist(specialist) && captureMode !== 'part';
     const identificationSchema = profile && !coinMode ? `Return ONLY a JSON object with canonicalTitle, specialistId, objectType (a relevant category from the specialist taxonomy), identificationState (observation_only|candidate), confidence (0..1), confidenceReason, identificationSource (detected|inferred), condition, conditionNotes, attributesConfirmed, attributesInferred, attributes, candidateIdentification { primaryCandidate, alternativeCandidates, whyCandidateSelected, whyUncertain }, evidenceSupporting, evidenceContradictory, missingInformation, warnings, suggestedDisposition, dispositionDecision. Include specialistAnalysis as specified above. Prices MUST be zero and saleProb30d MUST be null. Do not emit coinFields or medalFields for non-numismatic objects.` : OUTPUT_SCHEMA;
@@ -1704,6 +1705,8 @@ The caller will use only the requested output (title or description). Do not inv
       ? 'MANDATORY FIRST STEP: Classify vehicle type (motocross/enduro/trail/supermoto/pit_bike/unknown) and manufacturer BEFORE model identification.'
       : clothingMode
       ? 'MANDATORY FIRST STEP: Read the brand label exactly as shown. Then read the care label. Then: garment type, era, condition, authentication risk.'
+      : profile?.nicheId === 'antiques'
+      ? 'MANDATORY FIRST STEP: Classify the antique object or book from its form, construction and literal marks. Use the antique taxonomy; no coin fields.'
       : 'MANDATORY FIRST STEP: Classify object type (coin/medal/token/jeton/commemorative_piece/banknote/jewellery/motorcycle/garment/unknown).';
 
     const userContent: any[] = [{

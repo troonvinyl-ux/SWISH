@@ -34,8 +34,8 @@ export default function AntiqueFlipperHome() {
       return;
     }
     if (title === 'Market Value' || title === 'Condition Assessment') {
-      // Use the existing canonical item editor, never a nonexistent specialist page.
-      router.push(firstItem ? (`/stock-listing/${firstItem.id}`) as any : ('/(tabs)/inventory' as any));
+      const destination = title === 'Market Value' ? '/antique-value' : '/antique-condition';
+      router.push(firstItem ? (`${destination}?id=${firstItem.id}`) as any : ('/(tabs)/inventory' as any));
       return;
     }
     router.push(route as any);

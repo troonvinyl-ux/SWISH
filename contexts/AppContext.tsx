@@ -36,6 +36,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const userRef = useRef(user?.id); userRef.current = user?.id;
   const generation = useRef(0); const accessRequest = useRef(0); const scopeRequest = useRef(0);
+  const tenantFlight = useRef<{ uid: string; version: number } | null>(null);
+  const accessFlight = useRef<{ uid: string; version: number } | null>(null);
   const tenantRef = useRef<Tenant | null>(null); const accessRef = useRef<ModuleAccessSnapshot | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loadedUserId, setLoadedUserId] = useState<string | null>(null);
@@ -86,8 +88,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [clearModule]);
   const loadAccess = useCallback(async () => {
     const account = tenantRef.current; const uid = userRef.current;
-    if (!account || !uid) return;
-    const version = ++accessRequest.current; setSubscriptionLoading(true);
+    if (!account || !uid || accessFlight.current?.uid === uid) return;
+    const version = ++accessRequest.current; accessFlight.current = { uid, version }; setSubscriptionLoading(true);
     try {
       const result = await loadModuleAccess(account.id);
       if (uid !== userRef.current || version !== accessRequest.current) return;
@@ -105,12 +107,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (uid === userRef.current && version === accessRequest.current && scoped.error) setAccessError(scoped.error);
       }
       setReloadSignal(v => v + 1);
-    } finally { if (uid === userRef.current && version === accessRequest.current) setSubscriptionLoading(false); }
+    } catch (cause) {
+      if (uid === userRef.current && version === accessRequest.current) {
+        accessRef.current = null; setAccess(null); clearModule();
+        setAccessError(cause instanceof Error ? cause.message : 'Membership verification could not be reached. Retry.');
+      }
+    } finally {
+      if (accessFlight.current?.version === version) accessFlight.current = null;
+      if (uid === userRef.current && version === accessRequest.current) setSubscriptionLoading(false);
+    }
   }, [openModule, clearModule]);
   const loadTenant = useCallback(async () => {
-    const uid = user?.id; const version = ++generation.current;
-    const valid = () => uid === userRef.current && version === generation.current;
+    const uid = user?.id;
     if (!uid) { setTenantLoading(false); return; }
+    // One initialization per user/generation. Retry taps cannot queue more pool requests.
+    if (tenantFlight.current?.uid === uid && tenantFlight.current.version === generation.current) return;
+    const version = ++generation.current; tenantFlight.current = { uid, version };
+    const valid = () => uid === userRef.current && version === generation.current;
     setTenantLoading(true); setTenantError(null);
     try {
       let result = await getUserPrimaryTenant();
@@ -124,15 +137,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       if (!valid()) return;
       if (result.error || !result.tenant) throw new Error(result.error ?? 'Business account unavailable.');
-      const config = await getBusinessConfig(result.tenant.id);
-      if (!valid()) return;
-      if (config.error) throw new Error(config.error);
-      tenantRef.current = result.tenant; setTenant(result.tenant); setBusinessConfig(config.config); setLoadedUserId(uid);
+      // Verify identity/membership first. Optional business settings are not account verification.
+      tenantRef.current = result.tenant; setTenant(result.tenant); setLoadedUserId(uid);
       await loadAccess();
+      if (!valid() || !accessRef.current) return;
+      // openModule already reads its scoped configuration; do not duplicate that request.
+      if (activeRef.current === 'general') {
+        try {
+          const config = await getBusinessConfig(result.tenant.id);
+          if (!valid()) return;
+          setBusinessConfig(config.config); setModuleError(config.error);
+        } catch { if (valid()) setModuleError('Business settings are temporarily unavailable. Retry settings before listing.'); }
+      }
     } catch (error) { if (valid()) { tenantRef.current = null; setTenant(null); setLoadedUserId(uid); setTenantError(error instanceof Error ? error.message : 'Account load failed.'); } }
-    finally { if (valid()) setTenantLoading(false); }
+    finally { if (tenantFlight.current?.version === version) tenantFlight.current = null; if (valid()) setTenantLoading(false); }
   }, [user?.id, user?.email, user?.username, loadAccess]);
   useEffect(() => {
+    tenantFlight.current = null; accessFlight.current = null;
     tenantRef.current = null; accessRef.current = null; setTenant(null); setAccess(null); setBusinessConfig(null); setLoadedUserId(null);
     setAccessError(null); setModuleError(null); setModuleLoading(false); setSubscriptionLoading(false); clearModule(); void loadTenant();
     return () => { generation.current++; accessRequest.current++; scopeRequest.current++; };

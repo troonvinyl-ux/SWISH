@@ -105,7 +105,8 @@ export async function generateListing(
     return { listing: null, error: message };
   }
 
-  return { listing: data?.listing ?? null, error: null };
+  if (data?.error || !data?.listing) return { listing: null, error: data?.error ?? 'Listing generation returned no draft.' };
+  return { listing: data.listing, error: null };
 }
 
 // ── Save a generated listing to the DB ────────────────────────────────────────
@@ -385,15 +386,28 @@ export async function refreshListingStats(
 // active niche — prevents cross-niche count bleed (e.g. MX listings showing
 // in the Coins tab badge).
 
+const liveCountFlights = new Map<string, Promise<number>>();
 export async function getLiveListingCount(
   tenantId: string,
   specialistIds?: string[],
 ): Promise<number> {
   if (!tenantId?.trim() || !specialistIds?.length) return 0;
-  const { count, error } = await getSupabaseClient().from('swish_inventory_tab_rows')
-    .select('item_id', { count: 'exact', head: true }).eq('tenant_id', tenantId)
-    .in('specialist_id', specialistIds).eq('inventory_tab', 'live');
-  return error ? 0 : count ?? 0;
+  const key = JSON.stringify([tenantId, [...new Set(specialistIds)].sort()]);
+  const pending = liveCountFlights.get(key);
+  if (pending) return pending;
+  // Effect restarts share the actual in-flight request instead of filling the pool.
+  // No persisted cache and no cross-tenant or cross-niche result sharing.
+  const request = (async () => {
+    try {
+      const { count, error } = await getSupabaseClient().from('swish_inventory_tab_rows')
+        .select('item_id', { count: 'exact', head: true }).eq('tenant_id', tenantId)
+        .in('specialist_id', specialistIds).eq('inventory_tab', 'live');
+      return error ? 0 : count ?? 0;
+    } catch { return 0; }
+  })();
+  liveCountFlights.set(key, request);
+  try { return await request; }
+  finally { if (liveCountFlights.get(key) === request) liveCountFlights.delete(key); }
   /* Legacy counter retained only as historical reference; shared lifecycle above is authoritative.
   const supabase = getSupabaseClient();
   // If no specialist filter, count all active listings for the tenant
@@ -560,7 +574,7 @@ export async function submitListingToMarketplace(
   // fallback may fail for numismatic titles. Resolve and persist it here first.
   onStep?.('checking_policies');
 
-  const { data: listingRow } = await supabase
+  const { data: listingRow, error: listingReadError } = await supabase
     .from('listings')
     .select('category_id, items(attributes, specialist_id)')
     .eq('id', listingId)
@@ -572,9 +586,15 @@ export async function submitListingToMarketplace(
   // against the EBAY_GB Taxonomy API and cause eBay error 21919303.
   // The edge function will use get_category_suggestions to resolve the title
   // if no validated categoryId is present.
+  if (listingReadError || !listingRow) return { success: false, step: 'failed', error: listingReadError?.message ?? 'Listing could not be reopened before submission.' };
   const itemAttributes = (listingRow?.items as any)?.attributes ?? {};
   if (itemAttributes._manifest_review_required === true) return { success:false,step:'failed',error:'Manifest stock has not been physically reviewed. Save editor changes and confirm the manifest inspection before publishing.' };
   const nicheId = resolveProductionNiche((listingRow?.items as any)?.specialist_id) ?? '';
+  if (nicheId === 'antiques') {
+    const { checkAntiqueListing } = await import('@/services/listingEditorService');
+    const checked = await checkAntiqueListing(tenantId, listingId);
+    if (!checked.ready) return { success: false, step: 'failed', error: checked.error ?? 'Antique preflight not confirmed.' };
+  }
   const safety = evaluateSpecialistSafety(nicheId, itemAttributes);
   if (safety.blocked) return { success:false,step:'failed',error:safety.reasons.join(' ') };
   const attributeCategoryId = String(
@@ -694,6 +714,12 @@ export async function submitListingToMarketplace(
     };
   }
 
+  if (nicheId === 'antiques') {
+    const { data: persisted, error: persistenceError } = await supabase.from('listings').select('external_listing_id,status,items!inner(status)').eq('id', listingId).eq('tenant_id', tenantId).maybeSingle();
+    if (!ebayData.externalListingId || persistenceError || persisted?.external_listing_id !== ebayData.externalListingId || persisted?.status !== 'active' || !['listed','active'].includes((persisted?.items as any)?.status)) {
+      return { success: false, step: 'failed', externalListingId: ebayData.externalListingId, error: 'eBay accepted the item but SWISH reconciliation is not confirmed. Do not republish or create a duplicate. Synchronise this listing and inspect its saved ID.', warnings: ebayData.warnings };
+    }
+  }
   onStep?.('done');
 
   return {

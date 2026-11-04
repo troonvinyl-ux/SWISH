@@ -13,7 +13,8 @@ import { getSupabaseClient } from '@/template';
 import { FunctionsFetchError, FunctionsHttpError } from '@supabase/supabase-js';
 import { SpecialistId } from '@/constants/specialists';
 import { EvidenceSource, ConfidenceTier, DispositionDecision } from '@/constants/config';
-import { createItem, Item } from '@/services/itemService';
+import { createItem, getItem, Item } from '@/services/itemService';
+import { decode } from 'base64-arraybuffer';
 import { resolveProductionNiche, getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 import { getSpecialistProfile, normalizeSpecialistAnalysis, recordValue, textList, type SpecialistAnalysis } from '@/shared/specialistIntelligence';
 
@@ -334,7 +335,7 @@ export async function identifyItemWithAI(
     if (preflight.error) return { result:null,error:preflight.error };
     // Compress any new captures; skip if using existing URLs only
     const base64Images = images.length > 0
-      ? await Promise.all(images.map(img => compressForAI(img.enhancedUri ?? img.uri)))
+      ? await Promise.all(images.map(img => compressForAI(resolveProductionNiche(specialistId) === 'antiques' ? img.uri : img.enhancedUri ?? img.uri)))
       : [];
 
     const supabase = getSupabaseClient();
@@ -496,7 +497,8 @@ export async function identifyItemWithAI(
 // the permanent public https:// URLs.
 export async function uploadItemImages(
   itemId: string,
-  images: CapturedImage[]
+  images: CapturedImage[],
+  normalizeOriginals = false,
 ): Promise<{ urls: string[]; errors: string[] }> {
   const supabase = getSupabaseClient();
   const urls: string[] = [];
@@ -511,11 +513,17 @@ export async function uploadItemImages(
         continue;
       }
 
-      const fileName = `${itemId}/${i + 1}_${img.slotId}.jpg`;
+      const fileName = `${itemId}/${i + 1}_${img.slotId.replace(/[^a-zA-Z0-9_-]/g, '_')}.jpg`;
+      // Antique original evidence is re-encoded, not AI-generated. JPEG bytes must
+      // match the declared MIME type, including PNG/HEIC library uploads.
+      const originalUri = normalizeOriginals
+        ? (await ImageManipulator.manipulateAsync(img.uri, [], { compress: 0.95, format: ImageManipulator.SaveFormat.JPEG })).uri
+        : img.uri;
 
       if (Platform.OS === 'web') {
         // Web: fetch blob and upload
-        const response = await fetch(img.uri);
+        const response = await fetch(originalUri);
+        if (!response.ok) throw new Error('Original photograph could not be read.');
         const blob = await response.blob();
         const { error: uploadErr } = await supabase.storage
           .from(ITEM_IMAGES_BUCKET)
@@ -529,14 +537,10 @@ export async function uploadItemImages(
         }
       } else {
         // Native: read as base64 and convert to ArrayBuffer
-        const base64 = await FileSystem.readAsStringAsync(img.uri, {
+        const base64 = await FileSystem.readAsStringAsync(originalUri, {
           encoding: FileSystem.EncodingType.Base64,
         });
-        const binaryStr = atob(base64);
-        const bytes = new Uint8Array(binaryStr.length);
-        for (let j = 0; j < binaryStr.length; j++) {
-          bytes[j] = binaryStr.charCodeAt(j);
-        }
+        const bytes = new Uint8Array(decode(base64));
         const { error: uploadErr } = await supabase.storage
           .from(ITEM_IMAGES_BUCKET)
           .upload(fileName, bytes.buffer, {
@@ -556,6 +560,8 @@ export async function uploadItemImages(
 
       if (urlData?.publicUrl) {
         urls.push(urlData.publicUrl);
+      } else {
+        errors.push(`Slot ${img.slotLabel}: Uploaded photo has no permanent URL.`);
       }
     } catch (e: any) {
       errors.push(`Slot ${img.slotLabel}: ${e.message ?? 'Upload failed'}`);
@@ -569,18 +575,69 @@ export async function uploadItemImages(
 export async function updateItemMedia(
   tenantId: string,
   itemId: string,
-  permanentUrls: string[]
+  permanentUrls: string[],
+  expectedUpdatedAt?: string,
 ): Promise<void> {
+  if (!tenantId?.trim() || !itemId?.trim()) throw new Error('Item and tenant are required to save photographs.');
+  if (!Array.isArray(permanentUrls) || permanentUrls.some(url => typeof url !== 'string' || !url.startsWith('https://'))) {
+    throw new Error('Upload original photographs before linking them to inventory.');
+  }
+  const media = [...new Set(permanentUrls)];
   const supabase = getSupabaseClient();
-  const { error, count } = await supabase
-    .from('items')
-    .update({
-      media: permanentUrls,
-      updated_at: new Date().toISOString(),
-    }, { count: 'exact' })
-    .eq('id', itemId)
-    .eq('tenant_id', tenantId);
-  if (error || count === 0) throw new Error(error?.message ?? 'Photos could not be linked to this item. Retry the upload.');
+  let query = supabase.from('items').update({ media, updated_at: new Date().toISOString() })
+    .eq('id', itemId).eq('tenant_id', tenantId);
+  if (expectedUpdatedAt) query = query.eq('updated_at', expectedUpdatedAt);
+  const { data, error } = await query.select('id').maybeSingle();
+  if (error || !data) {
+    throw new Error(`Photographs were uploaded but could not be linked to inventory: ${error?.message ?? 'Item changed or access was denied. Reload and retry.'}`);
+  }
+  // Do not report success from PATCH alone: re-read the canonical persisted URLs.
+  const readback = await supabase.from('items').select('media').eq('id', itemId).eq('tenant_id', tenantId).maybeSingle();
+  if (readback.error || !readback.data || JSON.stringify(readback.data.media) !== JSON.stringify(media)) {
+    throw new Error('Photo links could not be confirmed after saving. Reload the item before retrying.');
+  }
+}
+
+/** Recover already-uploaded original captures for one authorized Antique item.
+ * Never substitutes AI references, eBay images, or files belonging to another item.
+ * The ordinary authenticated client and existing RLS remain the only write path. */
+export async function recoverAntiqueItemPhotos(tenantId: string, itemId: string): Promise<{ item: Item | null; error: string | null }> {
+  try {
+    const original = await getItem(itemId);
+    if (original.error || !original.item || original.item.tenantId !== tenantId || resolveProductionNiche(original.item.specialistId) !== 'antiques') {
+      return { item: null, error: original.error ?? 'Antique item ownership could not be verified.' };
+    }
+    if (original.item.media.length > 0) return original;
+    const supabase = getSupabaseClient();
+    const storage = supabase.storage.from(ITEM_IMAGES_BUCKET);
+    const files: string[] = [];
+    // Only direct, numbered capture files; references/ and nested folders are excluded.
+    for (let offset = 0; ; offset += 100) {
+      const page = await storage.list(itemId, { limit: 100, offset, sortBy: { column: 'name', order: 'asc' } });
+      if (page.error) throw new Error(`Stored photographs could not be read: ${page.error.message}`);
+      for (const file of page.data ?? []) {
+        if (file.id && /^[1-9]\d*_[a-zA-Z0-9_-]+\.(?:jpe?g|png|webp)$/i.test(file.name)) files.push(file.name);
+      }
+      if ((page.data?.length ?? 0) < 100) break;
+      if (offset >= 900) throw new Error('Too many stored files to recover safely. Review this item before retrying.');
+    }
+    if (!files.length) return { item: null, error: 'No original captured photos were found for this item. Return to the scanner to retry retained photos.' };
+    files.sort((a, b) => Number(a.split('_')[0]) - Number(b.split('_')[0]) || a.localeCompare(b));
+    const urls = files.map(name => {
+      const { data } = storage.getPublicUrl(`${itemId}/${name}`);
+      if (!data?.publicUrl?.startsWith('https://')) throw new Error('A stored photograph has no permanent public URL.');
+      return data.publicUrl;
+    });
+    // Optimistic concurrency prevents recovery from replacing photos added elsewhere.
+    await updateItemMedia(tenantId, itemId, urls, original.item.updatedAt);
+    const readback = await getItem(itemId);
+    if (readback.error || !readback.item || readback.item.tenantId !== tenantId || urls.some(url => !readback.item!.media.includes(url))) {
+      return { item: null, error: readback.error ?? 'Recovered photo links could not be confirmed. Reload the item.' };
+    }
+    return readback;
+  } catch (cause) {
+    return { item: null, error: cause instanceof Error ? cause.message : 'Photograph recovery failed. Existing inventory is unchanged.' };
+  }
 }
 
 // ── Persist an AI identification result as a real database Item ───────────────
@@ -702,6 +759,7 @@ export async function saveIdentifiedItem(
     acquisitionId?: string;
     mediaUris?: string[];
     acquiredCost?: number;
+    quantity?: number;
   } = {}
 ): Promise<{ item: Item | null; error: string | null }> {
   // v2: identification engine no longer provides market values.
@@ -742,12 +800,12 @@ export async function saveIdentifiedItem(
     catalogueNumber: usableText(catalogue.reference ?? result.numistaN ?? result.coinFields?.catalogueHint),
     ruler: usableText(catalogue.issuer ?? result.coinFields?.issuer),
     denomination: usableText(catalogue.denomination ?? result.coinFields?.denomination),
-    period: usableText(catalogue.period ?? result.coinFields?.period),
+    period: usableText(catalogue.period ?? result.coinFields?.period ?? attrs.period),
     mint: usableText(catalogue.mint ?? result.coinFields?.mint),
     material: usableText(catalogue.material ?? result.coinFields?.composition ?? attrs.material ?? attrs.composition),
     manufacturer: usableText(attrs.manufacturer ?? attrs.brand ?? attrs.maker),
-    countryOfOrigin: usableText(catalogue.country ?? result.coinFields?.country ?? attrs.country_manufacture),
-    yearMade: usableText(result.attributes?.user_supplied_year ?? yearRange ?? result.coinFields?.period ?? attrs.year ?? attrs.year_range),
+    countryOfOrigin: usableText(catalogue.country ?? result.coinFields?.country ?? attrs.country_manufacture ?? attrs.country_of_origin),
+    yearMade: usableText(result.attributes?.user_supplied_year ?? yearRange ?? result.coinFields?.period ?? attrs.year ?? attrs.year_range ?? attrs.age),
     weightGrams: Number.isFinite(measuredWeight) && measuredWeight > 0 ? measuredWeight : undefined,
     diameterMm: Number.isFinite(measuredDiameter) && measuredDiameter > 0 ? measuredDiameter : undefined,
     acquisitionId: options.acquisitionId,
@@ -786,7 +844,27 @@ export async function saveIdentifiedItem(
     warnings: result.warnings,
     tags: [],
     acquiredCost,
+    quantity: options.quantity ?? 1,
   });
+}
+
+/** Apply re-identification to an existing Antique item without zeroing its valuation.
+ * CAS and a persisted readback prevent fake UI success or stale attribute replacement. */
+export async function applyAntiqueIdentification(tenantId: string, itemId: string, result: AIIdentificationResult, media: string[]) {
+  const original = await getItem(itemId);
+  if (original.error || !original.item || original.item.tenantId !== tenantId || resolveProductionNiche(original.item.specialistId) !== 'antiques' || resolveProductionNiche(result.specialistId) !== 'antiques') return { item: null, error: 'Antique item ownership could not be verified.' };
+  const item = original.item;
+  const attributes = { ...item.attributes, ...result.attributes,
+    ebay_item_specifics: item.attributes.ebay_item_specifics ?? [],
+    ebay_category_id: item.attributes.ebay_category_id ?? '', ebay_category_name: item.attributes.ebay_category_name ?? '',
+    niche_id: 'antiques', _specialist_analysis: result.specialistAnalysis ?? item.attributes._specialist_analysis,
+    _identification_evidence: { supporting: result.evidenceSupporting, contradictory: result.evidenceContradictory, missing: result.missingInformation, candidates: result.candidateIdentification, source: 'ai_proposal', recordedAt: new Date().toISOString() },
+    _valuation_needs_review: item.canonicalTitle !== result.canonicalTitle || item.condition !== result.condition };
+  const { data, error } = await getSupabaseClient().from('items').update({ canonical_title: result.canonicalTitle, condition: result.condition, condition_notes: result.conditionNotes, identification_confidence: result.confidence, identification_source: result.identificationSource, attributes, media: [...new Set(media)], warnings: result.warnings }).eq('id', itemId).eq('tenant_id', tenantId).eq('updated_at', item.updatedAt).select('id').maybeSingle();
+  if (error || !data) return { item: null, error: error?.message ?? 'The item changed during identification. Reload and review before retrying.' };
+  const readback = await getItem(itemId);
+  if (readback.error || !readback.item || readback.item.canonicalTitle !== result.canonicalTitle) return { item: null, error: 'Identification saved but readback failed. Reload this item; do not create a duplicate.' };
+  return readback;
 }
 
 function buildDescription(result: AIIdentificationResult): string {

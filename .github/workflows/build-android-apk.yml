@@ -1,18 +1,12 @@
-name: Build SWISH Android APK
+name: Build one unified SWISH APK
 on:
   workflow_dispatch:
-    inputs:
-      niche:
-        description: Canonical branded application
-        required: true
-        type: choice
-        default: surplus_flip
-        options: [coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech]
 permissions:
   contents: read
 jobs:
-  build-apk:
-    uses: ./.github/workflows/_niche-android.yml
+  unified:
+    uses: ./.github/workflows/build-swish-unified.yml
     with:
-      niche: ${{ inputs.niche }}
+      build_android: true
+      build_ios: false
     secrets: inherit

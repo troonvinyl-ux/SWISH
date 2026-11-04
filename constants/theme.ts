@@ -8,6 +8,9 @@ export const Colors = {
   surfaceElevated: '#18191F',
   surfaceBorder: '#1E2028',
   surfaceHighlight: '#22242C',
+  specialistSurface: '#17130D',
+  specialistBorder: '#554322',
+  specialistGold: '#D8AD52',
 
   // Brand
   primary: '#FFE600',

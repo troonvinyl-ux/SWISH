@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { useApp } from '@/hooks/useApp';
 import { NICHES, isProductionNiche, type ProductionNicheId } from '@/constants/niches';
+import { nicheToEntryRoute } from '@/services/nicheRouting';
 
 /** Adapter between trusted AppContext membership/scope APIs and the master-home UI. */
 export function useUnifiedShell() {
@@ -9,7 +10,7 @@ export function useUnifiedShell() {
   const router = useRouter();
   const modules = useMemo(() => app.enabledNiches
     .filter(isProductionNiche)
-    .map(id => ({ id, name: NICHES[id].name, niche: NICHES[id] })), [app.enabledNiches]);
+    .map(id => ({ id, name: NICHES[id].name, niche: NICHES[id], route: nicheToEntryRoute(id) })), [app.enabledNiches]);
 
   const enter = useCallback(async (id: ProductionNicheId) => {
     if (!modules.some(module => module.id === id)) return false;
@@ -29,6 +30,7 @@ export function useUnifiedShell() {
     tenantLoading: app.tenantLoading,
     nichePreferencesLoading: app.nichePreferencesLoading,
     moduleLoading: app.moduleLoading,
+    moduleError: app.accessError,
     accessReady: app.accessReady,
     canSwitchNiche: app.canSwitchNiche,
     isMasterAdmin: app.isMasterAdmin,

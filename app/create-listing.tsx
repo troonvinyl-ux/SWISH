@@ -41,7 +41,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
-import { useAntiqueCategory } from '@/hooks/useAntiqueCategory';
+import { useAntiqueCategory, useAntiqueCategorySuggestions } from '@/hooks/useAntiqueCategory';
+import { AntiqueCategorySuggestions } from '@/components/feature/AntiqueCategorySuggestions';
 import { useAlert } from '@/template';
 import { getItem, Item } from '@/services/itemService';
 import { generateListing, saveListing, getItemListings } from '@/services/listingService';
@@ -174,12 +175,14 @@ function InlineCategoryPicker({
   visible,
   currentId,
   tenantId,
+  suggestedQuery,
   onSelect,
   onClose,
 }: {
   visible: boolean;
   currentId: string;
   tenantId?: string;
+  suggestedQuery?: string;
   onSelect: (id: string, name: string) => void;
   onClose: () => void;
 }) {
@@ -357,11 +360,12 @@ function InlineCategoryPicker({
   useEffect(() => {
     if (!visible) return;
     setBreadcrumbs([]);
-    setSearch('');
+    setSearch(suggestedQuery ?? '');
     setCustomId('');
     setRemoteSuggestionsActive(false);
     setLiveError(null);
-    loadCategories('');
+    if (suggestedQuery && tenantId) void searchLiveCategories(suggestedQuery);
+    else void loadCategories('');
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
@@ -475,7 +479,8 @@ function InlineCategoryPicker({
             }}
             onSubmitEditing={() => searchLiveCategories(search)}
             returnKeyType="search"
-            placeholder="Search e.g. Mughal Rupee, Medal, Militaria..."
+            accessibilityLabel="Search eBay categories"
+            placeholder={suggestedQuery ? 'Search pottery, ceramic, porcelain…' : 'Search eBay categories…'}
             placeholderTextColor={Colors.textTertiary}
             autoCorrect={false}
           />
@@ -931,7 +936,7 @@ function CombinedAnalysisSummary({
         )}
         <Pressable onPress={onSuggestCategory} disabled={suggestingCategory} style={[cas.aiSuggestBtn, suggestingCategory && { opacity: 0.65 }]}>
           {suggestingCategory ? <ActivityIndicator size="small" color={Colors.primary} /> : <MaterialIcons name="auto-awesome" size={15} color={Colors.primary} />}
-          <Text style={cas.aiSuggestBtnText}>{suggestingCategory ? 'Finding best eBay category…' : 'Suggest category with AI'}</Text>
+          <Text style={cas.aiSuggestBtnText}>{suggestingCategory ? 'Searching eBay categories…' : 'Suggest eBay category'}</Text>
         </Pressable>
       </View>
     </View>
@@ -980,6 +985,9 @@ export default function CreateListingScreen() {
   const { showAlert } = useAlert();
 
   const [item, setItem] = useState<Item | null>(null);
+  const antiqueSuggestions = useAntiqueCategorySuggestions(item);
+  const categorySaveLock = useRef(false);
+  const [categorySaving, setCategorySaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [stage, setStage] = useState<Stage>('analyse');
 
@@ -1068,6 +1076,8 @@ export default function CreateListingScreen() {
     setEbaySearchRunning(false);
     setEbaySearchDone(true);
 
+    // Antique visual matches are context, not permission to silently select a category.
+    if (isAntique) return;
     // Auto-suggest category from eBay results if none confirmed yet
     if (result.available && !confirmedCategory) {
       const ebayTopCat = deriveCategorySuggestion(result);
@@ -1093,7 +1103,7 @@ export default function CreateListingScreen() {
         setConfirmedCategory(prev => prev ? { ...prev, source: 'combined' } : prev);
       }
     }
-  }, [tenant, ebaySearchRunning, confirmedCategory]);
+  }, [tenant, ebaySearchRunning, confirmedCategory, isAntique]);
 
   // ── Category change — opens inline picker, NO navigation to listing editor ─
 
@@ -1105,14 +1115,16 @@ export default function CreateListingScreen() {
 
   const handleCategorySelected = useCallback(async (catId: string, catName: string) => {
     if (isAntique) {
-      if (!item || !tenant) return;
+      if (!item || !tenant || categorySaveLock.current) return false;
+      categorySaveLock.current = true; setCategorySaving(true);
       try {
         const saved = await chooseAntiqueCategory(item.id, catId, catName);
-        if (saved.error || !saved.attributes) { showAlert('Category not saved', saved.error ?? 'Save was not confirmed.'); return; }
-        setItem(previous => previous ? { ...previous, attributes: saved.attributes } : previous);
+        if (saved.error || !saved.attributes) { showAlert('Category not saved', saved.error ?? 'Save was not confirmed.'); return false; }
+        setItem(previous => previous?.id === item.id ? { ...previous, attributes: saved.attributes } : previous);
         setConfirmedCategory({ id: catId, name: catName, source: 'user' });
-      } catch { showAlert('Category not saved', 'The category request failed. Reload this item before continuing.'); }
-      return;
+        return true;
+      } catch { showAlert('Category not saved', 'The category request failed. Reload this item before continuing.'); return false; }
+      finally { categorySaveLock.current = false; setCategorySaving(false); }
     }
     setConfirmedCategory({ id: catId, name: catName, source: 'user' });
     // Persist to item attributes so the listing editor + edge function can read it
@@ -1138,7 +1150,8 @@ export default function CreateListingScreen() {
 
   // ── Title-based category suggestion works even if visual search has no usable image ──
   const handleSuggestCategory = useCallback(async () => {
-    if (!item || !tenant) return;
+    if (!item || !tenant || categorySaveLock.current) return;
+    if (isAntique) { await antiqueSuggestions.suggest(); return; }
     const title = String(item.canonicalTitle || '').trim();
     if (title.length < 2) {
       showAlert('Add an item title', 'Enter a more descriptive item title before asking AI to suggest an eBay category.');
@@ -1198,7 +1211,7 @@ export default function CreateListingScreen() {
     } finally {
       setSuggestingCategory(false);
     }
-  }, [item, tenant, handleCategorySelected, showAlert]);
+  }, [item, tenant, handleCategorySelected, showAlert, isAntique, antiqueSuggestions.suggest]);
 
   // ── Legacy handleConfirmCategory kept for backwards compat ───────────────
   const handleConfirmCategory = useCallback(async (catId?: string, catName?: string) => {
@@ -1422,15 +1435,18 @@ export default function CreateListingScreen() {
             confirmedCategory={confirmedCategory}
             onCategoryChange={handleCategoryChange}
             onSuggestCategory={handleSuggestCategory}
-            suggestingCategory={suggestingCategory}
+            suggestingCategory={suggestingCategory || antiqueSuggestions.busy || categorySaving}
           />
         ) : null}
+
+        {isAntique ? <AntiqueCategorySuggestions hint={antiqueSuggestions.hint} suggestions={antiqueSuggestions.suggestions} source={antiqueSuggestions.source} error={antiqueSuggestions.error} busy={antiqueSuggestions.busy} saving={categorySaving} onSuggest={() => void antiqueSuggestions.suggest()} onSelect={(id, name) => { void handleCategorySelected(id, name); }} /> : null}
 
         {/* Inline category picker — opened directly, no listing ID needed */}
         <InlineCategoryPicker
           visible={showCategoryPicker}
           currentId={confirmedCategory?.id ?? ''}
           tenantId={tenant?.id}
+          suggestedQuery={isAntique ? antiqueSuggestions.hint?.query : undefined}
           onSelect={handleCategorySelected}
           onClose={() => setShowCategoryPicker(false)}
         />
