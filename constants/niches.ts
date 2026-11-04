@@ -363,9 +363,9 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     terms: { item: 'Collectible', items: 'Collectibles', itemPlural: 'collectibles', scan: 'Identify Item', identify: 'Identify', condition: 'Condition', catalogue: 'Maker / model' },
     quickActions: [
       { icon: 'qr-code-scanner', label: 'Identify Item', route: '/(tabs)/scan' },
-      { icon: 'storefront', label: 'eBay Hub', route: '/ebay-hub' },
-      { icon: 'receipt-long', label: 'Orders', route: '/orders' },
+      { icon: 'add-circle', label: 'Create Listing', route: '/create-listing' },
       { icon: 'inventory-2', label: 'Stock', route: '/(tabs)/inventory' },
+      { icon: 'link', label: 'Connect eBay', route: '/ebay-account' },
     ],
     keyAttributes: ['brand', 'object_type', 'pattern', 'model', 'material', 'hallmark', 'edition', 'condition_notes'],
     acquisitionSources: ['House clearances', 'Estate sales', 'Charity shops', 'Car boot sales', 'Auctions', 'Clearance lots'],
