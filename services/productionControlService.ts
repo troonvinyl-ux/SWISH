@@ -176,9 +176,10 @@ async function loadSnapshot(): Promise<ProductionSnapshot> {
   const modules = data<{ products: Record<string, ProductionNiche> }>(1, 'Niche registry');
   const products = modules?.products;
   const niches = products && typeof products === 'object' && !Array.isArray(products) ? Object.values(products) : [];
-  const validNiches = niches.length === 10 && Object.entries(products ?? {}).every(([id, niche]) => niche && niche.id === id && typeof niche.name === 'string' && niche.name.trim().length > 0 && typeof niche.entry === 'string' && niche.entry.trim().length > 0) && new Set(niches.map(niche => niche.id)).size === 10;
+  const expectedNicheCount = Object.keys(bundledModules.products).length;
+  const validNiches = niches.length === expectedNicheCount && Object.entries(products ?? {}).every(([id, niche]) => niche && niche.id === id && typeof niche.name === 'string' && niche.name.trim().length > 0 && typeof niche.entry === 'string' && niche.entry.trim().length > 0) && new Set(niches.map(niche => niche.id)).size === expectedNicheCount;
   const validation = validateProductionRegister(registerJson, validNiches ? niches.map(niche => niche.id) : []);
-  if (!validNiches) errors.push('Canonical registry must contain ten complete, unique niche registrations.');
+  if (!validNiches) errors.push('Canonical registry must contain ' + expectedNicheCount + ' complete, unique niche registrations.');
   errors.push(...validation);
   const pulls = data<ProductionPull[]>(2, 'Pull requests');
   const runs = data<{ workflow_runs: ProductionRun[] }>(3, 'Recent workflows');
