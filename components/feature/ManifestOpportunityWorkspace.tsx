@@ -9,13 +9,13 @@ import { useManifestOpportunity } from '@/hooks/useManifestOpportunity';
 import { useAuctionLink } from '@/hooks/useAuctionLink';
 import { useApp } from '@/hooks/useApp';
 import { useAlert } from '@/template';
+import { useAccountLogout } from '@/hooks/useAccountLogout';
 import { lotMoney,friendlyLotMessage } from '@/services/manifestExperienceService';
 import type { LotLine } from '@/services/lotEconomicsService';
 import { LOT_STEPS,LOT_COST_GROUPS,SALE_OPTIONS } from '@/constants/manifestExperience';
 import { Colors,Spacing,Radius,Typography,Shadow } from '@/constants/theme';
 import { ManifestProgress } from './ManifestProgress';
 import { BrandArtwork } from './BrandArtwork';
-import { LogoutButton } from '@/components/auth/LogoutButton';
 import { ManifestProductCard } from './ManifestProductCard';
 import { LotAction,LotFold,LotNumberField } from './ManifestControls';
 
@@ -23,6 +23,7 @@ interface ManifestOpportunityWorkspaceProps {isHomeTab?:boolean}
 export function ManifestOpportunityWorkspace({isHomeTab=false}:ManifestOpportunityWorkspaceProps){
   const workflow=useManifestOpportunity();const {activeNiche}=useApp();const router=useRouter();const {showAlert}=useAlert();const auction=useAuctionLink();
   const {draft,evaluation,step,simpleAdvice,biddingAdvice}=workflow;
+  const {requestLogout,disabled:logoutDisabled}=useAccountLogout({confirmationMessage:draft.lines.length?'Log out to sign in with another account. Saved watched lots and purchased inventory are kept. Unwatched changes to this lot will be cleared; cancel and watch the lot first if you want to keep them.':undefined});
   const [pasted,setPasted]=useState('');const [showPaste,setShowPaste]=useState(false);const [detailsOpen,setDetailsOpen]=useState(false);const [costsOpen,setCostsOpen]=useState(false);const [checksOpen,setChecksOpen]=useState(false);const [saveOpen,setSaveOpen]=useState(false);
   const list=useRef<FlatList<LotLine>>(null);const invalid=evaluation.base.status==='invalid'||evaluation.errors.length>0;
   const watchAllowed=workflow.watchReady&&!workflow.auctionLinkError;
@@ -41,7 +42,7 @@ export function ManifestOpportunityWorkspace({isHomeTab=false}:ManifestOpportuni
     <KeyboardAvoidingView style={s.screen} behavior={Platform.OS==='ios'?'padding':'height'}>
       <FlatList ref={list} style={s.screen} data={data} keyExtractor={row=>row.id} initialNumToRender={4} windowSize={5} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={s.content}
         ListHeaderComponent={<View style={s.block}>
-          <View style={s.topRow}>{!isHomeTab?<Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={()=>router.canGoBack()?router.back():router.replace('/(tabs)')} style={({pressed})=>[s.iconButton,pressed?s.pressed:null]}><MaterialIcons name="arrow-back" size={24} color={Colors.textPrimary}/></Pressable>:null}<View style={s.flex}><Text style={s.eyebrow}>{activeNiche.shortName.toUpperCase()} FLIPS</Text><Text style={s.title}>Worth the bid?</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Watched lots" disabled={workflow.busy} onPress={()=>router.push('/watched-lots' as any)} style={({pressed})=>[s.iconButton,pressed?s.pressed:null]}><MaterialIcons name="bookmarks" size={24} color={Colors.primary}/></Pressable><LogoutButton disabled={workflow.busy} confirmationMessage={draft.lines.length ? 'Log out to sign in with another account. Saved watched lots and purchased inventory are kept. Unwatched changes to this lot will be cleared; cancel and watch the lot first if you want to keep them.' : undefined}/></View>
+          <View style={s.topRow}>{!isHomeTab?<Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={()=>router.canGoBack()?router.back():router.replace('/(tabs)')} style={({pressed})=>[s.iconButton,pressed?s.pressed:null]}><MaterialIcons name="arrow-back" size={24} color={Colors.textPrimary}/></Pressable>:null}<View style={s.flex}><Text style={s.eyebrow}>{activeNiche.shortName.toUpperCase()} FLIPS</Text><Text style={s.title}>Worth the bid?</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Watched lots" disabled={workflow.busy} onPress={()=>router.push('/watched-lots' as any)} style={({pressed})=>[s.iconButton,pressed?s.pressed:null]}><MaterialIcons name="bookmarks" size={24} color={Colors.primary}/></Pressable><Pressable accessibilityRole="button" accessibilityLabel="Log out" disabled={workflow.busy||logoutDisabled} onPress={requestLogout} style={({pressed})=>[s.iconButton,pressed?s.pressed:null]}><MaterialIcons name="logout" size={24} color={Colors.textPrimary}/></Pressable></View>
           <View style={s.stepper}>{LOT_STEPS.map((label,index)=><Pressable key={label} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{selected:step===index+1,disabled:workflow.busy||index+1>step}} disabled={workflow.busy||index+1>step} onPress={()=>workflow.setStep((index+1) as 1|2|3)} style={({pressed})=>[s.step,pressed?s.pressed:null]}><View style={[s.stepCircle,step===index+1?s.activeCircle:null]}>{step>index+1?<MaterialIcons name="check" size={20} color={Colors.primary}/>:<Text style={[s.stepNumber,step===index+1?s.inverse:null]}>{index+1}</Text>}</View><Text style={[s.stepLabel,step===index+1?s.activeText:null]}>{label}</Text></Pressable>)}</View>
           {workflow.busy?<ManifestProgress phase={workflow.phase}/>:null}
           {workflow.error?<View style={s.error}><MaterialIcons name="error-outline" size={22} color={Colors.danger}/><Text accessibilityRole="alert" style={[s.body,s.flex]}>{workflow.error}</Text></View>:null}
