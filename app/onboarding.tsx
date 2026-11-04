@@ -417,7 +417,7 @@ export default function OnboardingScreen() {
       type NicheClassification004 =
         | 'coins' | 'motocross' | 'bicycles' | 'clothing'
         | 'trading_cards' | 'antiques' | 'fossils' | 'beauty'
-        | 'tech' | 'surplus_flip' | 'unclassified';
+        | 'tech' | 'surplus_flip' | 'collectibles' | 'unclassified';
 
       const NICHE_TO_CLASSIFICATION: Record<NicheId, NicheClassification004> = {
         coins: 'coins',
