@@ -355,7 +355,7 @@ export const NICHES: Record<NicheId, NicheConfig> = {
   },
 
   collectibles: {
-    id: 'collectibles', name: 'SWISH Collectibles', shortName: 'Collectibles',
+    id: 'collectibles', name: 'Collectibles Flipper', shortName: 'Collectibles',
     tagline: 'Identify, value and flip every clearance find',
     description: 'Specialist identification and resale preparation for branded pottery, giftware, bears, silverware, memorabilia, glass and decorative objects.',
     icon: 'category', color: '#D8AD52', accentColor: '#9C742E',
