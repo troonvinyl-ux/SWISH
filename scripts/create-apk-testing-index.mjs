@@ -43,7 +43,7 @@ const rows = products.map(([id, product]) => {
   const shaText = shaPath ? fs.readFileSync(shaPath, 'utf8').trim() : '';
   const sourceMatches = metadata && metadata.sourceSha === expectedSha;
   const checksumMatches = metadata && shaText.includes(metadata.apkSha256);
-  const status = metadata && apkArtifact && sourceMatches && checksumMatches && metadata.assetBoundaryVerified
+  const status = metadata && apkArtifact && sourceMatches && checksumMatches && metadata.assetBoundaryVerified && metadata.schemeVerified
     ? 'PASS — signed APK and niche boundary verified'
     : evidenceArtifact ? 'FAILED — build evidence retained, no verified APK' : 'NOT PRODUCED — no verified APK artifact';
   return {
@@ -55,6 +55,7 @@ const rows = products.map(([id, product]) => {
     evidenceArtifactUrl: artifactUrl(evidenceArtifact),
     androidPackage: metadata?.androidPackage ?? product.androidPackage,
     appScheme: metadata?.appScheme ?? product.scheme,
+    schemeVerified: Boolean(metadata?.schemeVerified),
     appVersion: metadata?.appVersion ?? null,
     androidVersionCode: metadata?.androidVersionCode ?? null,
     sourceSha: metadata?.sourceSha ?? expectedSha,
@@ -109,7 +110,7 @@ for (const row of rows) {
   const evidence = row.evidenceArtifactUrl ? ' · [build log](' + row.evidenceArtifactUrl + ')' : '';
   const specialist = (row.selectedSpecialists || []).join(', ');
   const routeAssets = row.routeCount === null ? '—' : row.routeCount + ' / ' + row.assetCount + (row.assetBoundaryVerified ? ' (verified)' : ' (unverified)');
-  table.push('| ' + md(row.productName) + ' | ' + link + evidence + ' | ' + md(row.androidPackage) + ' | ' + md(row.appScheme) + ' | ' + md(row.launcherIcon) + ' / ' + md(row.splashImage) + ' | ' + md(row.appVersion) + ' / ' + md(row.androidVersionCode) + ' | ' + md(row.sourceSha) + ' | ' + md(row.signingFingerprintSha256) + ' | ' + md(row.runtimeVersion) + ' / ' + md(row.otaChannel) + ' | ' + md(specialist) + ' | ' + md(routeAssets) + ' | ' + md(row.buildStatus) + '; ' + md(row.automatedTestStatus) + ' | ' + md(row.deviceTestStatus) + ' |');
+  table.push('| ' + md(row.productName) + ' | ' + link + evidence + ' | ' + md(row.androidPackage) + ' | ' + md(row.appScheme + (row.schemeVerified ? ' ✓' : ' (unverified)')) + ' | ' + md(row.launcherIcon) + ' / ' + md(row.splashImage) + ' | ' + md(row.appVersion) + ' / ' + md(row.androidVersionCode) + ' | ' + md(row.sourceSha) + ' | ' + md(row.signingFingerprintSha256) + ' | ' + md(row.runtimeVersion) + ' / ' + md(row.otaChannel) + ' | ' + md(specialist) + ' | ' + md(routeAssets) + ' | ' + md(row.buildStatus) + '; ' + md(row.automatedTestStatus) + ' | ' + md(row.deviceTestStatus) + ' |');
 }
 table.push('', 'Successful APK artifacts include SHA-256 checksums, Expo runtime configuration, import-closure/asset reports and signing fingerprints. A successful CI build does not establish device installation, launch, login, live data isolation or production readiness.');
 fs.writeFileSync('dist/apk-testing-index.md', table.join('\n') + '\n');
