@@ -191,7 +191,7 @@ const CATEGORY_NAME_NICHE_KEYWORDS: Array<{ keywords: string[]; niche: NicheClas
 
 const TITLE_NICHE_KEYWORDS: Array<{ patterns: RegExp[]; niche: NicheClassification; confidence: 'high' | 'medium' }> = [
   {
-    patterns: [/\\bwedgwood\\b/i, /\\bharrods?\\b.*\\b(bear|teddy)\\b/i, /\\banniversary\\b.*\\b(bear|teddy)\\b/i, /\\broyal doulton\\b/i, /\\broyal worcester\\b/i, /\\bsilver[- ]plate\\b/i, /\\bcollectible (bear|figurine|ornament|giftware)\\b/i],
+    patterns: [/\bwedgwood\b/i, /\bharrods?\b.*\b(bear|teddy)\b/i, /\banniversary\b.*\b(bear|teddy)\b/i, /\broyal doulton\b/i, /\broyal worcester\b/i, /\bsilver[- ]plate\b/i, /\bcollectible (bear|figurine|ornament|giftware)\b/i],
     niche: 'collectibles', confidence: 'high',
   },
   {
