@@ -354,6 +354,28 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     version: '1.0.0',
   },
 
+  collectibles: {
+    id: 'collectibles', name: 'SWISH Collectibles', shortName: 'Collectibles',
+    tagline: 'Identify, value and flip every clearance find',
+    description: 'Specialist identification and resale preparation for branded pottery, giftware, bears, silverware, memorabilia, glass and decorative objects.',
+    icon: 'category', color: '#D8AD52', accentColor: '#9C742E',
+    specialists: NICHE_MODULES.collectibles.specialists as SpecialistId[], defaultSpecialist: 'collectibles_flipper',
+    terms: { item: 'Collectible', items: 'Collectibles', itemPlural: 'collectibles', scan: 'Identify Item', identify: 'Identify', condition: 'Condition', catalogue: 'Maker / model' },
+    quickActions: [
+      { icon: 'qr-code-scanner', label: 'Identify Item', route: '/(tabs)/scan' },
+      { icon: 'storefront', label: 'eBay Hub', route: '/ebay-hub' },
+      { icon: 'receipt-long', label: 'Orders', route: '/orders' },
+      { icon: 'inventory-2', label: 'Stock', route: '/(tabs)/inventory' },
+    ],
+    keyAttributes: ['brand', 'object_type', 'pattern', 'model', 'material', 'hallmark', 'edition', 'condition_notes'],
+    acquisitionSources: ['House clearances', 'Estate sales', 'Charity shops', 'Car boot sales', 'Auctions', 'Clearance lots'],
+    marketplaces: ['eBay'],
+    captureInstructions: ['Photograph the whole item', 'Capture maker marks, labels, base stamps and hallmarks', 'Show damage, repairs and missing parts', 'Include a ruler or measured dimensions', 'Photograph original packaging and edition numbers'],
+    hasMeasurements: true,
+    measurementLabels: { weight: 'Weight (g)', size: 'Dimensions (cm)' },
+    version: '1.0.0',
+  },
+
   beauty: {
     id: 'beauty',
     name: 'SWISH Beauty',
