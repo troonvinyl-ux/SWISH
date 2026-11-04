@@ -35,7 +35,8 @@ for (const route of [...shared, ...admin]) {
 }
 
 const generated = path.join(root, '.swish-build', niche, 'app');
-const allowed = new Set([...shared, product.entry, product.home, ...(product.dedicatedRoutes || [])].filter(Boolean));
+const selectedShared = new Set(product.buildSharedRoutes || registry.sharedRoutes);
+const allowed = new Set([...selectedShared, product.entry, product.home, ...(product.dedicatedRoutes || [])].filter(Boolean));
 const actual = new Set();
 function walk(directory) {
   if (!fs.existsSync(directory)) throw new Error('Generated niche route tree is missing: ' + directory);
