@@ -296,7 +296,7 @@
       "entry": "entry/collectibles.tsx",
       "home": null,
       "aliases": [
-        "collectibles",
+        "collectibles_flipper",
         "collectibles-flipper"
       ],
       "specialists": [
