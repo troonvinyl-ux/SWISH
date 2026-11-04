@@ -31,7 +31,7 @@ permissions:
   contents: read
 jobs:
   niche-apks:
-    if: ${{ github.event_name == 'push' || inputs.include_all_niches }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' || inputs.include_all_niches }}
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -43,7 +43,7 @@ jobs:
     secrets: inherit
   release-index:
     name: Generate 11-app Android testing index
-    if: ${{ always() && (github.event_name == 'push' || inputs.include_all_niches) }}
+    if: ${{ always() && (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.include_all_niches) }}
     needs: niche-apks
     runs-on: ubuntu-latest
     permissions:
