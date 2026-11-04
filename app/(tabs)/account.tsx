@@ -42,7 +42,7 @@ export default function AccountScreen() {
         {ownerAction('Switch niche', 'Return to your subscribed SWISH workspaces.', 'apps', '/niche-select')}
         {ownerAction('Master Admin', 'Owner console, module verification and diagnostics.', 'admin-panel-settings', '/master-admin')}
         {ownerAction('eBay Admin', 'Connection status and marketplace administration.', 'store', '/ebay-admin')}
-        {ownerAction('Diagnostics', 'Inspect app and module health.', 'monitor-heart', '/master-diagnostics')}
+        {ownerAction('Diagnostics', 'Inspect app and module health.', 'bug-report', '/master-diagnostics')}
         {ownerAction('Settings', 'Account and application settings.', 'settings', '/settings')}
         <Pressable style={[styles.action, styles.signOut]} onPress={requestLogout} disabled={logoutDisabled} accessibilityLabel="Log out of SWISH">
           {signingOut ? <ActivityIndicator color={Colors.danger ?? '#D33'} /> : <MaterialIcons name="logout" size={24} color={Colors.danger ?? '#D33'} />}
