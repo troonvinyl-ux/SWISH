@@ -1,3 +1,4 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // SWISH — eBay Full Sync Edge Function
 //
 // Performs a complete eBay ↔ SWISH data reconciliation (NO image downloads).
@@ -623,7 +624,7 @@ async function verifyTenantAccess(
   }
 }
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withEdgeFunctionLogging('swish-ebay-sync', async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
@@ -845,4 +846,4 @@ Deno.serve(async (req: Request) => {
   };
   console.log(`[EbaySync] Done: ${JSON.stringify(result)}`);
   return json(result);
-});
+}));
