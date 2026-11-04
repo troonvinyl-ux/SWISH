@@ -230,7 +230,7 @@ jobs:
       - name: Bundle Android production JavaScript
         run: npx expo export --platform android --output-dir dist-ci-android && rm -rf dist-ci-android
 
-      - name: Validate all ten Expo branded configurations
+      - name: Validate all eleven Expo branded configurations
         shell: bash
         run: |
           set -euo pipefail
