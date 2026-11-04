@@ -58,7 +58,6 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           BEFORE_SHA: ${{ github.event.before }}
           CURRENT_SHA: ${{ github.sha }}
-        env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/verify-ota-runtime-compatibility.mjs
 
