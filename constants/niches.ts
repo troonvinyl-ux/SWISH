@@ -359,7 +359,7 @@ export const NICHES: Record<NicheId, NicheConfig> = {
     tagline: 'Identify, value and flip every clearance find',
     description: 'Specialist identification and resale preparation for branded pottery, giftware, bears, silverware, memorabilia, glass and decorative objects.',
     icon: 'category', color: '#D8AD52', accentColor: '#9C742E',
-    specialists: NICHE_MODULES.collectibles.specialists as SpecialistId[], defaultSpecialist: 'collectibles_flipper',
+    specialists: NICHE_MODULES.collectibles.specialists as SpecialistId[], defaultSpecialist: 'collectibles',
     terms: { item: 'Collectible', items: 'Collectibles', itemPlural: 'collectibles', scan: 'Identify Item', identify: 'Identify', condition: 'Condition', catalogue: 'Maker / model' },
     quickActions: [
       { icon: 'qr-code-scanner', label: 'Identify Item', route: '/(tabs)/scan' },
