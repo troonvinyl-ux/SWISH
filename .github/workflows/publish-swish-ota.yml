@@ -60,6 +60,11 @@ jobs:
           test -n "$EXPO_PROJECT_ID" || { echo "::error::Add EXPO_PROJECT_ID as a repository Actions variable."; exit 1; }
       - name: Install dependencies
         run: bash scripts/install-dependencies.sh
+      - name: Prepare niche-only brand artwork
+        if: ${{ inputs.target != 'master' }}
+        env:
+          SWISH_NICHE: ${{ inputs.target }}
+        run: node scripts/prepare-niche-assets.mjs
       - name: Verify APK baseline and native OTA compatibility
         env:
           GH_TOKEN: ${{ github.token }}
