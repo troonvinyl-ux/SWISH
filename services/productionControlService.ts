@@ -41,7 +41,7 @@ function isPull(value: unknown): value is ProductionPull {
   return isObject(value) && typeof value.number === 'number' && typeof value.title === 'string' && typeof value.html_url === 'string' && typeof value.draft === 'boolean' && isObject(value.head) && isProductionCommit(value.head.sha) && typeof value.head.ref === 'string' && isObject(value.base) && typeof value.base.ref === 'string';
 }
 const workflowDefinitions = [
-  { file: 'branded-web-builds.yml', label: 'Ten-niche web builds' },
+  { file: 'branded-web-builds.yml', label: 'Eleven-niche web builds' },
   { file: 'niche-config-checks.yml', label: 'Regression, security and native bundle' },
   { file: 'production-readiness-register.yml', label: 'Production register validation' },
   { file: 's2-s3-foundation.yml', label: 'S2–S3 foundation acceptance' },
