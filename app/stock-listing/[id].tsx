@@ -20,7 +20,7 @@ import {
   View, Text, StyleSheet, ScrollView, Pressable, FlatList, KeyboardAvoidingView,
   TextInput, ActivityIndicator, Modal, Dimensions, Platform, Share, Linking,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -35,6 +35,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
+import { useInventoryPhotoRecovery } from '@/hooks/useInventoryPhotoRecovery';
 import { getSupabaseClient } from '@/template';
 import { useAlert } from '@/template';
 import { Item, getItem, updateItem, markItemSold } from '@/services/itemService';
@@ -71,6 +72,7 @@ import {
 import { CommercialIntelligenceCard } from '@/components/feature/CommercialIntelligenceCard';
 import { SpecialistItemFields } from '@/components/feature/SpecialistItemFields';
 import { ManifestInspectionReview } from '@/components/feature/ManifestInspectionReview';
+import { resolveProductionNiche } from '@/services/nicheRouting';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const GALLERY_HEIGHT = 320;
@@ -1334,11 +1336,7 @@ function MvStatRow({ label, value, accent }: { label: string; value: string; acc
 
 // ── Niche evidence helpers ───────────────────────────────────────────────────
 function isCoinNiche(specialistId: string | undefined): boolean {
-  const id = specialistId ?? '';
-  return id === 'coins' || id === 'coins_uk' || id === 'coins_world' ||
-    id === 'islamic_silver' || id === 'banknotes' || id === 'gold' ||
-    id === 'silver' || id === 'ancient_artefacts' ||
-    id.includes('coin') || id.includes('numismatic');
+  return resolveProductionNiche(specialistId) === 'coins';
 }
 
 function getNicheEvidenceLabel(specialistId: string | undefined): string {
@@ -1842,8 +1840,14 @@ export default function StockListingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, businessConfig } = useApp();
+  const { tenant, businessConfig, activeNicheId, fixedNicheId, accessReady, moduleLoading, subscriptionLoading, moduleEpoch, triggerInventoryReload } = useApp();
   const { showAlert } = useAlert();
+  const nicheId = resolveProductionNiche(fixedNicheId ?? activeNicheId);
+  const ready = Boolean(tenant?.id && nicheId && accessReady && !moduleLoading && !subscriptionLoading);
+  const scope = `${tenant?.id}:${nicheId}:${moduleEpoch}:${id}`;
+  const currentScope = useRef(scope); currentScope.current = scope;
+  const detailRequest = useRef(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [item, setItem] = useState<Item | null>(null);
   const [listings, setListings] = useState<SavedListing[]>([]);
@@ -1867,6 +1871,10 @@ export default function StockListingScreen() {
   const [editValue, setEditValue] = useState('');
   const [reValueResult, setReValueResult] = useState<MarketValueResult | null>(null);
   const [commercialIntel, setCommercialIntel] = useState<ItemCommercialIntelligence | null>(null);
+  const onPhotosRecovered = useCallback((recovered: Item) => {
+    setItem(previous => previous?.id === recovered.id && previous.tenantId === recovered.tenantId ? recovered : previous);
+  }, []);
+  const photoRecovery = useInventoryPhotoRecovery(item, onPhotosRecovered);
 
   // SWISH Intelligence expandable state
   const [intelligenceExpanded, setIntelligenceExpanded] = useState(false);
@@ -1885,23 +1893,23 @@ export default function StockListingScreen() {
   const [descDraft, setDescDraft] = useState('');
 
   const load = useCallback(async () => {
-    if (!id) { setLoading(false); return; }
-    const [itemRes, listingsRes] = await Promise.all([getItem(id), getItemListings(id)]);
-    setItem(itemRes.item);
-    const baseLis = listingsRes.listings;
-    if (baseLis.length > 0) {
-      try {
-        const supabase = getSupabaseClient();
-        const { data: catRows } = await supabase.from('listings').select('id, category_id').in('id', baseLis.map((l: any) => l.id));
-        const catMap: Record<string, string> = {};
-        for (const row of (catRows ?? [])) { if (row.category_id) catMap[row.id] = row.category_id; }
-        setListings(baseLis.map((l: any) => (catMap[l.id] ? { ...l, categoryId: catMap[l.id] } : l)));
-      } catch { setListings(baseLis); }
-    } else { setListings(baseLis); }
-    setLoading(false);
-  }, [id]);
+    if (!id || !ready) return;
+    const version = ++detailRequest.current;
+    setLoading(true); setLoadError(null);
+    try {
+      const [itemRes, listingsRes] = await Promise.all([getItem(id), getItemListings(id)]);
+      if (currentScope.current !== scope || detailRequest.current !== version) return;
+      if (itemRes.error || listingsRes.error) throw new Error(itemRes.error ?? listingsRes.error ?? 'Detail read failed.');
+      if (!itemRes.item || itemRes.item.tenantId !== tenant?.id || resolveProductionNiche(itemRes.item.specialistId) !== nicheId) throw new Error('This coin or item is not authorised in the active account and niche.');
+      setItem(itemRes.item);
+      // mapListing already supplies categoryId; do not repeat the same DB query.
+      setListings(listingsRes.listings);
+    } catch (error) {
+      if (currentScope.current === scope && detailRequest.current === version) { setItem(null); setListings([]); setLoadError(error instanceof Error ? error.message : 'Item details unavailable.'); }
+    } finally { if (currentScope.current === scope && detailRequest.current === version) setLoading(false); }
+  }, [id, ready, scope, tenant?.id, nicheId]);
 
-  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => { void load(); return () => { detailRequest.current++; }; }, [load]));
 
   const handleRunEbayVisualSearch = useCallback(async (targetItem: Item) => {
     if (!tenant || ebayVisualLoading) return;
@@ -2076,7 +2084,14 @@ export default function StockListingScreen() {
         showAlert('Save Failed', error);
         return;
       }
-      setItem(prev => prev ? { ...prev, ...updates } : prev);
+      const readback = await getItem(item.id);
+      if (readback.error || !readback.item || readback.item.tenantId !== tenant.id || Object.entries(updates).some(([key, expected]) => String(readback.item?.[key as keyof Item] ?? '') !== String(expected ?? ''))) {
+        showAlert('Save not verified', readback.error ?? 'The changed fields did not match the persisted coin record. Reload before retrying.');
+        return;
+      }
+      if (currentScope.current !== scope) return;
+      setItem(readback.item);
+      triggerInventoryReload();
       setEditing(null);
       setEditValue('');
     } catch (error: any) {
@@ -2084,7 +2099,7 @@ export default function StockListingScreen() {
     } finally {
       setSaving(false);
     }
-  }, [item, editValue, tenant?.id, showAlert]);
+  }, [item, editValue, tenant?.id, showAlert, scope, triggerInventoryReload]);
 
   const handleGenerateListing = useCallback(async () => {
     if (!item || !tenant) return;
@@ -2347,12 +2362,13 @@ export default function StockListingScreen() {
   const draftListings = useMemo(() => listings.filter(l => l.status === 'draft' || l.status === 'pending'), [listings]);
   const canonicalAttrs = useMemo(() => item ? canonicalizeAttributes(item.attributes) : [], [item?.attributes]);
 
-  if (loading) { return <View style={s.container}><ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 100 }} /></View>; }
-  if (!item) {
+  if (loading && ready) { return <View style={s.container}><ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 100 }} /></View>; }
+  if (!ready || !item || item.tenantId !== tenant?.id || resolveProductionNiche(item.specialistId) !== nicheId) {
     return (
       <View style={[s.container, s.center]}>
         <MaterialIcons name="error-outline" size={48} color={Colors.textTertiary} />
-        <Text style={s.emptyTitle}>Item not found</Text>
+        <Text accessibilityRole="alert" style={s.emptyTitle}>{loadError ?? (!ready ? 'Waiting for verified account and coin workspace' : 'Item not found in this account and niche')}</Text>
+        <Pressable onPress={() => void load()} disabled={!ready} style={({ pressed }) => [s.backLink, { opacity: pressed ? 0.7 : 1 }]}><Text style={s.backLinkText}>Retry detail read</Text></Pressable>
         <Pressable onPress={() => router.back()} style={s.backLink}><Text style={s.backLinkText}>Go back</Text></Pressable>
       </View>
     );
@@ -2391,6 +2407,8 @@ export default function StockListingScreen() {
       <ScrollView contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
 
         {/* ── PHOTOS ── */}
+        {photoRecovery.busy ? <View style={s.reviewBanner}><ActivityIndicator color={Colors.gold} /><Text style={s.reviewBannerSub}>Restoring original captured photos from this item’s storage…</Text></View> : null}
+        {photoRecovery.error ? <View style={s.reviewBanner}><MaterialIcons name="error-outline" size={20} color={Colors.warning} /><View style={s.flex}><Text accessibilityRole="alert" style={s.reviewBannerSub}>{photoRecovery.error}</Text><Pressable accessibilityLabel="Retry recovery of this item's captured photos" onPress={() => void photoRecovery.retry()} disabled={photoRecovery.busy} style={({ pressed }) => [s.listingEditBtn, pressed ? { opacity: 0.7 } : null]}><Text style={s.listingEditBtnText}>Retry captured photos</Text></Pressable></View></View> : null}
         <View style={{ marginHorizontal: -Spacing.base }}>
           <ImageGallery
             media={item.media ?? []}

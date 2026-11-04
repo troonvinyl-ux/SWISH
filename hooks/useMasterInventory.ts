@@ -1,19 +1,24 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { AppState, InteractionManager } from 'react-native';
 import { useApp } from './useApp';
-import { useAlert } from '@/template';
-import { loadInventoryView, buildInventoryViews, syncInventoryOrders, type InventoryViewItem, type InventoryTab } from '@/services/inventoryViewService';
+import { useAlert, useAuth } from '@/template';
+import { useFocusEffect } from 'expo-router';
+import { loadInventoryView, buildInventoryViews, buildAllInventoryRows, syncInventoryOrders, type InventoryViewItem, type InventoryTab } from '@/services/inventoryViewService';
 import { submitListingToMarketplace, endListing, type SubmitStep } from '@/services/listingService';
 import { fetchAndStoreEbayImages, itemNeedsImages } from '@/services/ebayImageService';
 import type { Item } from '@/services/itemService';
 import type { ListingWithItem } from '@/services/listingService';
 
 export function useMasterInventory() {
-  const { tenant, fixedNicheId, activeNicheId, inventoryReloadSignal, subscriptionLoading } = useApp();
+  const { tenant, fixedNicheId, activeNicheId, inventoryReloadSignal, subscriptionLoading, accessReady, moduleLoading, moduleEpoch, accessError, tenantError, moduleError } = useApp();
+  const { user } = useAuth();
+  const ready = Boolean(user && tenant?.id && accessReady && !moduleLoading && !subscriptionLoading);
+  const readyRef = useRef(ready); readyRef.current = ready;
+  const alive = useRef(true);
   const nicheId = fixedNicheId ?? activeNicheId;
-  const scope = `${tenant?.id ?? ''}:${nicheId}`;
+  const scope = `${user?.id ?? ''}:${tenant?.id ?? ''}:${nicheId}:${moduleEpoch}`;
   const scopeRef = useRef(scope); scopeRef.current = scope;
-  const request = useRef(0); const pendingScope = useRef<string | null>(null); const imagesStarted = useRef(new Set<string>());
+  const request = useRef(0); const pending = useRef<{ scope: string; promise: Promise<void> } | null>(null); const imagesStarted = useRef(new Set<string>());
   const { showAlert } = useAlert();
   const [snapshot, setSnapshot] = useState<{ scope: string; items: Item[]; listings: ListingWithItem[]; error: string | null }>({ scope: '', items: [], listings: [], error: null });
   const [loading, setLoading] = useState(false); const [refreshing, setRefreshing] = useState(false);
@@ -21,13 +26,15 @@ export function useMasterInventory() {
   const [submitStep, setSubmitStep] = useState<SubmitStep | null>(null); const [submitTitle, setSubmitTitle] = useState('');
   const [syncing, setSyncing] = useState(false);
   const reload = useCallback(async () => {
-    if (!tenant?.id || subscriptionLoading || pendingScope.current === scope) return;
-    pendingScope.current = scope; const version = ++request.current;
+    if (!tenant?.id || !ready) return;
+    if (pending.current?.scope === scope) return pending.current.promise;
+    const version = ++request.current;
     setLoading(true);
-    try {
+    const task = (async () => { try {
       const result = await loadInventoryView(tenant.id, nicheId);
-      if (scopeRef.current !== scope || request.current !== version) return;
-      setSnapshot({ scope, ...result });
+      if (!alive.current || !readyRef.current || scopeRef.current !== scope || request.current !== version) return;
+      // Never replace a verified snapshot with a failed read disguised as empty.
+      setSnapshot(previous => result.error ? { ...previous, scope, items: previous.scope === scope ? previous.items : [], listings: previous.scope === scope ? previous.listings : [], error: result.error } : { scope, ...result });
       // Restore automatic image persistence, scoped to verified items in this niche.
       const ids = result.items.filter(item => (item.attributes._ebay_item_id || item.marketplace === 'ebay') && itemNeedsImages(item.media, item.attributes)).map(item => item.id);
       if (!result.error && ids.length && !imagesStarted.current.has(scope)) {
@@ -46,13 +53,21 @@ export function useMasterInventory() {
         // settle, cancel the queued work rather than competing with the new screen.
         if (scopeRef.current !== scope) imageTask.cancel();
       }
-    } catch (error: any) { if (scopeRef.current === scope && request.current === version) setSnapshot({ scope, items: [], listings: [], error: error?.message ?? 'Inventory could not be loaded' }); }
-    finally { if (pendingScope.current === scope) pendingScope.current = null; if (scopeRef.current === scope && request.current === version) setLoading(false); }
-  }, [tenant?.id, nicheId, scope, showAlert, subscriptionLoading]);
-  useEffect(() => { void reload(); const timer = setInterval(() => { void reload(); }, 30_000); const sub = AppState.addEventListener('change', state => { if (state === 'active') void reload(); });
-    return () => { request.current++; clearInterval(timer); sub.remove(); }; }, [reload]);
+    } catch (error: any) { if (alive.current && readyRef.current && scopeRef.current === scope && request.current === version) setSnapshot(previous => ({ scope, items: previous.scope === scope ? previous.items : [], listings: previous.scope === scope ? previous.listings : [], error: error?.message ?? 'Inventory could not be loaded' })); }
+    finally { if (pending.current?.scope === scope) pending.current = null; if (alive.current && scopeRef.current === scope && request.current === version) setLoading(false); }
+    })();
+    pending.current = { scope, promise: task };
+    return task;
+  }, [tenant?.id, nicheId, scope, showAlert, ready]);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; request.current++; pending.current = null; }; }, []);
+  useFocusEffect(useCallback(() => { void reload(); }, [reload]));
+  useEffect(() => { void reload(); const timer = setInterval(() => { if(AppState.currentState==='active')void reload(); }, 90_000); const sub = AppState.addEventListener('change', state => { if (state === 'active') void reload(); });
+    // Subscription verification can restart the effect for an unchanged scope.
+    // Keep its pending request valid instead of blocking a replacement for 90s.
+    return () => { clearInterval(timer); sub.remove(); }; }, [reload]);
   useEffect(() => { if (inventoryReloadSignal > 0) void reload(); }, [inventoryReloadSignal, reload]);
-  const views = useMemo(() => snapshot.scope === scope ? buildInventoryViews(snapshot.items, snapshot.listings) : { stock: [], draft: [], live: [], sold: [] }, [snapshot, scope]);
+  const views = useMemo(() => ready && snapshot.scope === scope ? buildInventoryViews(snapshot.items, snapshot.listings) : { stock: [], draft: [], live: [], sold: [] }, [snapshot, scope, ready]);
+  const allItems = useMemo(() => ready && snapshot.scope === scope ? buildAllInventoryRows(snapshot.items, views) : [], [snapshot, scope, ready, views]);
   const refresh = useCallback(async () => { setRefreshing(true); try { await reload(); } finally { setRefreshing(false); } }, [reload]);
   const counts = useMemo(() => ({ stock: views.stock.length, draft: views.draft.length, live: views.live.length, sold: views.sold.length }), [views]);
   const submit = useCallback(async (item: InventoryViewItem) => {
@@ -87,6 +102,8 @@ export function useMasterInventory() {
       await reload();
     } finally { setSyncing(false); }
   }, [tenant?.id, nicheId, scope, syncing, showAlert, reload]);
-  return { nicheId, views, counts, activeTab, setActiveTab, reload, refresh, refreshing, submit, end, syncSold, syncing, submitStep, submitTitle,
-    error: snapshot.scope === scope ? snapshot.error : null, loading: snapshot.scope !== scope || loading };
+  return { nicheId, views, counts, allItems, activeTab, setActiveTab, reload, refresh, refreshing, submit, end, syncSold, syncing, submitStep, submitTitle,
+    ready, scope,
+    error: tenantError ?? accessError ?? (!ready ? moduleError : null) ?? (snapshot.scope === scope ? snapshot.error : null),
+    loading: Boolean(tenant?.id) && (!ready || snapshot.scope !== scope || loading) };
 }

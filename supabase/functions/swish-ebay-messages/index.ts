@@ -9,6 +9,7 @@
 //
 // Security: JWT + tenant membership verified before any eBay operation.
 
+import { serveModule } from '../_shared/moduleScope.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
@@ -160,6 +161,7 @@ async function handleSyncMessages(
   supabase: ReturnType<typeof adminClient>,
   tenantId: string,
   daysBack = 30,
+  specialistIds?: string[],
 ): Promise<Response> {
   const credsResult = await getEbayAccessToken(supabase, tenantId);
   if ('error' in credsResult) {
@@ -213,6 +215,12 @@ async function handleSyncMessages(
 
   let synced = 0;
   let failed = 0;
+  let allowedExternalIds: Set<string> | null = null;
+  if (specialistIds) {
+    const linked = await supabase.from('listings').select('external_listing_id,items!inner(specialist_id)').eq('tenant_id',tenantId).in('items.specialist_id',specialistIds);
+    if (linked.error) return jsonResponse({error:'Message module links unavailable'},503);
+    allowedExternalIds = new Set((linked.data ?? []).map(row => String(row.external_listing_id ?? '')));
+  }
 
   for (const msgXml of msgBlocks) {
     const msgId        = msgXml.match(/<MessageID>([^<]+)<\/MessageID>/)?.[1];
@@ -222,7 +230,7 @@ async function handleSyncMessages(
     const creationDate = msgXml.match(/<CreationDate>([^<]+)<\/CreationDate>/)?.[1] ?? new Date().toISOString();
     const itemId       = msgXml.match(/<ItemID>([^<]+)<\/ItemID>/)?.[1] ?? '';
 
-    if (!msgId) continue;
+    if (!msgId || (allowedExternalIds && !allowedExternalIds.has(itemId))) continue;
 
     // Existing schema has item_id, not ebay_item_id, and no unique message-ID constraint.
     // The server-only command serializes tenant/provider ID and preserves operator flags.
@@ -353,7 +361,7 @@ async function handleSendReply(
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-Deno.serve(async (req: Request) => {
+serveModule(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
 
@@ -380,7 +388,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     if (route === 'sync_messages') {
-      return await handleSyncMessages(supabase, tenantId, daysBack);
+      return await handleSyncMessages(supabase, tenantId, daysBack, body.specialistIds);
     }
     if (route === 'send_reply') {
       return await handleSendReply(supabase, tenantId, {

@@ -1,6 +1,20 @@
-// Reuse the canonical specialist editor rather than a second condition persistence path.
-import { Redirect, useLocalSearchParams } from 'expo-router';
-export default function AntiqueConditionScreen(){
- const {id}=useLocalSearchParams<{id?:string}>();
- return <Redirect href={(id ? `/stock-listing/${encodeURIComponent(id)}` : '/(tabs)/inventory') as any}/>;
+import { View, Text, TextInput, Pressable, ScrollView, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useAntiqueCondition } from '@/hooks/useAntiqueCondition';
+import { Colors, Spacing, Radius, Typography } from '@/constants/theme';
+export default function AntiqueConditionScreen() {
+  const {id}=useLocalSearchParams<{id:string}>();const router=useRouter();
+  const editor=useAntiqueCondition(typeof id==='string'?id:'');
+  return <SafeAreaView style={s.screen}><KeyboardAvoidingView style={s.flex} behavior={Platform.OS==='ios'?'padding':'height'}><ScrollView style={s.flex} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+    <Pressable accessibilityLabel="Go back" onPress={()=>router.back()} style={({pressed})=>[s.back,pressed?s.pressed:null]}><MaterialIcons name="arrow-back" size={24} color={Colors.gold}/></Pressable>
+    <Text style={s.eyebrow}>ANTIQUE FLIPPER · CONDITION</Text><Text style={s.title}>Assess your antique</Text>
+    <Text style={s.body}>{editor.item?.canonicalTitle??'Loading item…'}</Text><Text style={s.body}>Record chips, hairlines, cracks, repairs, replacements and restoration. Photographs do not certify authenticity or originality. eBay condition codes are chosen separately using the selected category.</Text>
+    <Text style={s.label}>Condition</Text><TextInput accessibilityLabel="Antique condition" editable={!editor.busy&&Boolean(editor.item)} value={editor.condition} onChangeText={value=>editor.change('condition',value)} style={s.input}/>
+    <Text style={s.label}>Condition notes · maximum 1,000 characters</Text><TextInput accessibilityLabel="Antique condition notes" editable={!editor.busy&&Boolean(editor.item)} multiline value={editor.notes} onChangeText={value=>editor.change('notes',value)} style={[s.input,s.multiline]}/>
+    {editor.error?<View style={s.errorBox}><MaterialIcons name="error-outline" size={20} color={Colors.danger}/><Text accessibilityRole="alert" style={s.error}>{editor.error}</Text></View>:null}
+    <Pressable disabled={editor.busy||!editor.item} onPress={()=>void editor.save()} style={({pressed})=>[s.button,pressed||editor.busy?s.pressed:null]}>{editor.busy?<ActivityIndicator color={Colors.background}/>:<Text style={s.buttonText}>{editor.saved?'Saved and reloaded':'Save condition'}</Text>}</Pressable>
+  </ScrollView></KeyboardAvoidingView></SafeAreaView>;
 }
+const s=StyleSheet.create({screen:{flex:1,backgroundColor:Colors.background},flex:{flex:1},content:{padding:Spacing.base,gap:Spacing.base,paddingBottom:Spacing.xxxl},back:{width:48,height:48,alignItems:'center',justifyContent:'center',backgroundColor:Colors.specialistSurface,borderRadius:Radius.md},eyebrow:{color:Colors.gold,fontSize:Typography.size.sm,fontWeight:Typography.weight.semibold},title:{color:Colors.textPrimary,fontSize:Typography.size.xl,fontWeight:Typography.weight.bold},body:{color:Colors.textSecondary,fontSize:Typography.size.base,lineHeight:26},label:{color:Colors.textPrimary,fontSize:Typography.size.base,fontWeight:Typography.weight.semibold},input:{minHeight:48,padding:Spacing.base,borderWidth:1,borderColor:Colors.specialistBorder,borderRadius:Radius.md,color:Colors.textPrimary,backgroundColor:Colors.specialistSurface,fontSize:Typography.size.base,includeFontPadding:false},multiline:{minHeight:160,lineHeight:26,textAlignVertical:'top'},errorBox:{flexDirection:'row',gap:Spacing.sm,padding:Spacing.base,backgroundColor:Colors.dangerDim,borderRadius:Radius.md},error:{flex:1,color:Colors.danger,fontSize:Typography.size.base,lineHeight:26},button:{minHeight:52,padding:Spacing.base,borderRadius:Radius.md,backgroundColor:Colors.gold,alignItems:'center',justifyContent:'center'},buttonText:{fontSize:Typography.size.base,fontWeight:Typography.weight.semibold,color:Colors.background},pressed:{opacity:0.65}});

@@ -686,6 +686,10 @@ async function getCategoryAspects(
         };
       }
 
+      // Antique forced-live checks must not interpret an unknown error as empty requirements.
+      if (forceLive) return { aspects: [], isLeaf: null, source: 'ebay_error', ebayStatus: res.status,
+        error: 'eBay did not return category requirements. This category remains unverified; retry or choose another live category.' };
+
       // HTTP 400 but NOT a "not a leaf" error → this is a leaf with no defined aspects
       // (e.g. Greek coins, Byzantine coins — valid to list but eBay has no required specifics)
       console.log(`[cat-svc] Category ${categoryId}: HTTP ${res.status} but NOT a "not a leaf" error — treating as leaf with no aspects`);

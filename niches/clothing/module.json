@@ -15,7 +15,7 @@
   "androidPackage": "com.swish.threadsflip",
   "iosBundleIdentifier": "com.swish.threadsflip",
   "entryRoute": "/entry/clothing",
-  "scannerRoute": "/threads-flip?tab=identify",
+  "scannerRoute": "/capture",
   "dedicatedRoutes": [
     "threads-flip.tsx"
   ],

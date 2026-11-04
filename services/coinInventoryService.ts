@@ -5,6 +5,7 @@
 import { getSupabaseClient } from '@/template';
 import { NICHE_MODULES, isProductionNiche } from '@/constants/niches';
 import { inferImportNiche } from '@/shared/ebayImportScope';
+import { getProductionNicheSpecialistIds } from './nicheRouting';
 
 // ── KC Inventory ID generation ────────────────────────────────────────────────
 
@@ -74,15 +75,20 @@ export async function searchCoins(
   filter: CoinSearchFilter,
   limit = 200,
 ): Promise<{ items: any[]; error: string | null }> {
+  if (!tenantId?.trim()) return { items: [], error: 'A verified tenant is required.' };
   const supabase = getSupabaseClient();
+  const permission = await supabase.rpc('swish_can_access_niche', { p_tenant_id: tenantId, p_niche_id: 'coins' });
+  if (permission.error || permission.data !== true) return { items: [], error: permission.error?.message ?? 'Open the authorised Coins workspace before searching.' };
   let query = supabase
     .from('items')
     .select('*')
     .eq('tenant_id', tenantId)
-    .order('inventory_id', { ascending: true, nullsFirst: false });
+    .in('specialist_id', getProductionNicheSpecialistIds('coins'))
+    .order('inventory_id', { ascending: true, nullsFirst: false })
+    .order('id', { ascending: true });
 
   if (filter.query) {
-    const q = filter.query;
+    const q = filter.query.replace(/[(),%_\\]/g, ' ').trim().slice(0, 120);
     query = query.or(
       `canonical_title.ilike.%${q}%,catalogue_number.ilike.%${q}%,folder_number.ilike.%${q}%,ruler.ilike.%${q}%,denomination.ilike.%${q}%,inventory_id.ilike.%${q}%,mint.ilike.%${q}%`
     );
@@ -96,9 +102,17 @@ export async function searchCoins(
   if (filter.status) query = query.eq('status', filter.status);
   if (filter.acquisitionId) query = query.eq('acquisition_id', filter.acquisitionId);
 
-  const { data, error } = await query.limit(limit);
-  if (error) return { items: [], error: error.message };
-  return { items: data ?? [], error: null };
+  // This search API has an explicit result limit; fetch in server-sized pages.
+  const maximum = Number.isFinite(limit) ? Math.max(1, Math.floor(limit)) : 200;
+  const items: any[] = [];
+  for (let offset = 0; offset < maximum; offset += 200) {
+    const size = Math.min(200, maximum - offset);
+    const { data, error } = await query.range(offset, offset + size - 1);
+    if (error) return { items: [], error: error.message };
+    items.push(...(data ?? []));
+    if ((data?.length ?? 0) < size) break;
+  }
+  return { items, error: null };
 }
 
 // ── eBay import record creation ───────────────────────────────────────────────
