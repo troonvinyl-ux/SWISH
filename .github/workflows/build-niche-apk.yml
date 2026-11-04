@@ -14,5 +14,5 @@ jobs:
   build-apk:
     uses: ./.github/workflows/_niche-android.yml
     with:
-      niche: ${{ inputs.niche || 'clothing' }}
+      niche: ${{ inputs.niche || 'collectibles' }}
     secrets: inherit
