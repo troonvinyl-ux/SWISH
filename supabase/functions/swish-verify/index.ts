@@ -1,3 +1,4 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // SWISH swish-verify Edge Function
 // Runs the mandatory listing verification gate using AI + rule-based checks.
 // Called before any listing is allowed to publish.
@@ -17,7 +18,7 @@ interface VerifyRequest {
   override_notes?: string;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withEdgeFunctionLogging('swish-verify', async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -304,4 +305,4 @@ Return an empty array if no issues found. Maximum 3 warnings.`,
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-});
+}));
