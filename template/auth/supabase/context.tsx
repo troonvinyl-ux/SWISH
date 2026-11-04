@@ -12,6 +12,7 @@ interface AuthContextState {
 
 interface AuthContextActions {
   setOperationLoading: (loading: boolean) => void;
+  setAuthenticatedUser: (user: AuthUser) => void;
 }
 
 type AuthContextType = AuthContextState & AuthContextActions;
@@ -41,53 +42,46 @@ export function AuthProvider({ children }: AuthProviderProps) {
     updateState({ operationLoading: loading });
   };
 
+  const setAuthenticatedUser = (user: AuthUser) => {
+    updateState({ user, loading: false, initialized: true });
+  };
+
   useEffect(() => {
     let isMounted = true;
-    let authSubscription: any = null;
+    let authEventReceived = false;
+
+    const authSubscription = authService.onAuthStateChange((authUser) => {
+      authEventReceived = true;
+      if (isMounted) updateState({ user: authUser });
+    });
 
     const initializeAuth = async () => {
-      
       try {
         const currentUser = await authService.getCurrentUser();
-        
         if (isMounted) {
-          updateState({ 
-            user: currentUser, 
-            loading: false, 
-            initialized: true 
-          });
+          const sessionUpdate = authEventReceived ? {} : { user: currentUser };
+          updateState({ ...sessionUpdate, loading: false, initialized: true });
         }
-
-        authSubscription = authService.onAuthStateChange((authUser) => {
-          if (isMounted) {
-            updateState({ user: authUser });
-          }
-        });
-
       } catch (error) {
         console.warn('[Template:AuthProvider] Auth initialization failed:', error);
         if (isMounted) {
-          updateState({ 
-            user: null, 
-            loading: false, 
-            initialized: true 
-          });
+          const sessionUpdate = authEventReceived ? {} : { user: null };
+          updateState({ ...sessionUpdate, loading: false, initialized: true });
         }
       }
     };
 
-    initializeAuth();
-
+    void initializeAuth();
     return () => {
       isMounted = false;
-      if (authSubscription?.unsubscribe) {
-        authSubscription.unsubscribe();
-      }
+      authSubscription?.unsubscribe?.();
     };
-  }, []); // Empty dependency array ensures single execution
+  }, []);
+
   const contextValue: AuthContextType = {
     ...state,
     setOperationLoading,
+    setAuthenticatedUser,
   };
 
   return (
