@@ -58,6 +58,7 @@ const nativePatterns = [
   /^app\.json$/,
   /^eas\.json$/,
   /^niche-modules\.json$/,
+  /^scripts\/prepare-niche-assets\.mjs$/,
   /^package\.json$/,
   /^(?:pnpm-lock\.yaml|package-lock\.json|yarn\.lock)$/,
   /^(?:metro|babel|react-native)\.config\.(?:js|cjs|mjs)$/,
