@@ -285,6 +285,27 @@
         "surplus-flip.tsx"
       ],
       "scannerRoute": "/surplus-flip"
+    },
+    "collectibles": {
+      "id": "collectibles",
+      "name": "Collectibles Flipper",
+      "slug": "swish-collectibles-flipper",
+      "scheme": "collectiblesflipper",
+      "androidPackage": "com.swish.collectiblesflipper",
+      "iosBundleIdentifier": "com.swish.collectiblesflipper",
+      "entry": "entry/collectibles.tsx",
+      "home": null,
+      "aliases": [
+        "collectibles_flipper",
+        "collectibles-flipper"
+      ],
+      "specialists": [
+        "collectibles_flipper"
+      ],
+      "legacySpecialists": [],
+      "defaultSpecialist": "collectibles_flipper",
+      "dedicatedRoutes": [],
+      "scannerRoute": "/capture"
     }
   },
   "contractVersion": 1,
