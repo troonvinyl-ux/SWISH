@@ -14,7 +14,6 @@
 // POST body:
 //   { tenantId: string, mode?: 'full' | 'data_only' | 'refresh_token_only', itemIds?: string[] }
 
-import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 import registry from '../_shared/niche-modules.json' with { type: 'json' };
@@ -624,7 +623,7 @@ async function verifyTenantAccess(
   }
 }
 
-Deno.serve(withEdgeFunctionLogging('swish-ebay-sync', async (req: Request) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
@@ -846,4 +845,4 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-sync', async (req: Request) => {
   };
   console.log(`[EbaySync] Done: ${JSON.stringify(result)}`);
   return json(result);
-}));
+});

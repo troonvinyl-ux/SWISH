@@ -5,7 +5,6 @@
 // This is intentionally a visual aid only: generated pixels can alter small
 // details, so original photographs remain the source of truth for listings.
 
-import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 
@@ -36,7 +35,7 @@ function extractImageUrl(payload: any): string | null {
   return null;
 }
 
-Deno.serve(withEdgeFunctionLogging('swish-coin-image-enhance', async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'POST required' }, 405);
 
@@ -115,4 +114,4 @@ Deno.serve(withEdgeFunctionLogging('swish-coin-image-enhance', async (req) => {
     console.error('[swish-coin-image-enhance] request failed.');
     return jsonResponse({ error: 'Image enhancement failed safely. The original photo is unchanged.' }, 500);
   }
-}));
+});

@@ -12,7 +12,6 @@
 // POST body:
 //   { tenantId: string, daysBack?: number (default 30), mode?: 'fulfillment_api' | 'trading_api' | 'both' }
 
-import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 import registry from '../_shared/niche-modules.json' with { type: 'json' };
@@ -656,7 +655,7 @@ async function refreshMultiQuantityListingStatuses(
 
 // ── Main handler ───────────────────────────────────────────────────────────────
 
-Deno.serve(withEdgeFunctionLogging('swish-ebay-orders', async (req: Request) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
 
@@ -805,4 +804,4 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-orders', async (req: Request) => 
     console.error('swish-ebay-orders unhandled error:', err.message);
     return jsonResponse({ error: 'Unable to synchronize eBay orders. Please retry.' }, 500);
   }
-}));
+});

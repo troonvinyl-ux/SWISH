@@ -5,7 +5,6 @@
 //
 // Security: JWT + tenant membership required.
 
-import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 
@@ -83,7 +82,7 @@ Return ONLY valid JSON (no markdown fences) in this exact structure:
 
 All monetary values in GBP (numbers only). ROI as decimal (0.3 = 30%). Labour hours as decimals.`;
 
-Deno.serve(withEdgeFunctionLogging('swish-decompose', async (req: Request) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -258,4 +257,4 @@ Recommend the strategy that MAXIMISES net profit per labour hour, not just gross
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-}));
+});

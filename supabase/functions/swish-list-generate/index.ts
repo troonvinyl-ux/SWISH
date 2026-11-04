@@ -16,7 +16,6 @@
 //   6. AI PRICE LOCK: The AI may suggest a price range but NEVER bypasses the
 //      valuation confidence gate. 0 price means user must enter manually.
 
-import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { profileForSpecialist, specialistNiche } from '../_shared/specialistRegistry.ts';
@@ -361,7 +360,7 @@ function buildEbayDescriptionHtml(listing: GeneratedListing, nicheId?: string): 
   ].join('');
 }
 
-Deno.serve(withEdgeFunctionLogging('swish-list-generate', async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -831,4 +830,4 @@ Return ONLY this exact JSON:
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-}));
+});

@@ -19,8 +19,7 @@
     "antique-guides.tsx",
     "antique-condition.tsx",
     "antique-value.tsx",
-    "(tabs)/antique-more.tsx",
-    "antique-restoration.tsx"
+    "(tabs)/antique-more.tsx"
   ],
   "responsibilities": "Antique and collectible identification, maker/period/material, provenance evidence, condition and valuation.",
   "sharedCapabilities": [

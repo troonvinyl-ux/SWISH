@@ -2,7 +2,6 @@
 // Creates a Stripe Checkout session for the £9.99/month SWISH Niche Premium subscription.
 // POST body: { nicheId?: string } — optional nicheId stored in session metadata.
 
-import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
@@ -15,7 +14,7 @@ const corsHeaders = {
 
 const PRICE_ID = "price_1UPAIlI5Y99su2PXUrM192qL";
 
-serve(withEdgeFunctionLogging('swish-create-checkout', async (req) => {
+serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -131,4 +130,4 @@ serve(withEdgeFunctionLogging('swish-create-checkout', async (req) => {
       status: 500,
     });
   }
-}));
+});

@@ -1,29 +1,19 @@
 import React, { createContext, useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppState, Platform } from 'react-native';
+import { AppState } from 'react-native';
 import Constants from 'expo-constants';
 import { useAuth } from '@/template';
 import { Tenant, getUserPrimaryTenant, provisionTenant } from '@/services/tenantService';
 import { BusinessConfig, getBusinessConfig } from '@/services/businessConfigService';
 import { NicheId, NicheConfig, NICHES, PRODUCTION_NICHE_IDS, isProductionNiche } from '@/constants/niches';
 import { checkSubscription, type SubscriptionStatus } from '@/services/subscriptionService';
-import { resolveNicheFromNativeAppId, resolveNicheFromNativeAppScheme } from '@/services/nicheRouting';
 
 const NICHE_STORAGE_PREFIX = '@swish_active_niches';
 export const SWISH_MASTER_ADMIN_EMAIL = 'troonvinyl@gmail.com';
 /** Presentation-only legacy owner hint. Server permissions never use this email. */
 export function isSwishMasterAdmin(email?: string | null) { return (email ?? '').trim().toLowerCase() === SWISH_MASTER_ADMIN_EMAIL; }
 const CONFIGURED_BUILD_NICHE = Constants.expoConfig?.extra?.swishNicheId;
-const NATIVE_BUILD_APP_ID = Platform.OS === 'android'
-  ? Constants.expoConfig?.android?.package
-  : Platform.OS === 'ios' ? Constants.expoConfig?.ios?.bundleIdentifier : null;
-const NATIVE_BUILD_APP_SCHEME = Constants.expoConfig?.scheme;
-// Immutable native package/scheme identity takes priority over mutable account
-// preferences or a missing/stale Expo extra field.
-const FIXED_BUILD_NICHE_ID: NicheId | null =
-  resolveNicheFromNativeAppId(NATIVE_BUILD_APP_ID) ??
-  resolveNicheFromNativeAppScheme(NATIVE_BUILD_APP_SCHEME) ??
-  (isProductionNiche(CONFIGURED_BUILD_NICHE) ? CONFIGURED_BUILD_NICHE : null);
+const FIXED_BUILD_NICHE_ID: NicheId | null = isProductionNiche(CONFIGURED_BUILD_NICHE) ? CONFIGURED_BUILD_NICHE : null;
 interface AppContextType {
   isMasterAdmin: boolean;
   subscriptionStatus: SubscriptionStatus | null; subscriptionLoading: boolean; subscriptionTier: string | null; refreshSubscription: () => Promise<void>;

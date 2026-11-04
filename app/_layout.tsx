@@ -111,7 +111,6 @@ export default function RootLayout() {
                 <Stack.Screen name="master-diagnostics" />
                 <Stack.Screen name="reiss-ebay-test" />
                 <Stack.Screen name="production-control" />
-                <Stack.Screen name="edge-function-logs" />
                 <Stack.Screen name="dispatch" />
                 <Stack.Screen name="tasks" />
                 <Stack.Screen name="stock-listing/[id]" />

@@ -27,7 +27,6 @@
 //   get_sync_stats          — admin stats
 //   test                    — health check with live eBay round-trip
 
-import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -1023,7 +1022,7 @@ function filterCurated(query: string): CatSuggestion[] {
 // Main Handler
 // ═════════════════════════════════════════════════════════════════════════════
 
-Deno.serve(withEdgeFunctionLogging('swish-ebay-category', async (req: Request): Promise<Response> => {
+Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
@@ -1176,4 +1175,4 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-category', async (req: Request): 
   }
 
   return json({ success: false, error: `Unknown route: ${route}` }, 400);
-}));
+});
