@@ -30,6 +30,7 @@ on:
       - 'shared/**'
       - 'scripts/validate-foundation.mjs'
       - 'scripts/prepare-niche-assets.mjs'
+      - 'scripts/prepare-niche-routes.js'
       - 'scripts/create-niche-apk-metadata.mjs'
       - 'scripts/create-apk-testing-index.mjs'
       - 'scripts/verify-ota-runtime-compatibility.mjs'
@@ -100,6 +101,7 @@ on:
       - 'shared/**'
       - 'scripts/validate-foundation.mjs'
       - 'scripts/prepare-niche-assets.mjs'
+      - 'scripts/prepare-niche-routes.js'
       - 'scripts/verify-niche-module.js'
       - 'scripts/create-niche-apk-metadata.mjs'
       - 'scripts/create-apk-testing-index.mjs'
@@ -243,6 +245,7 @@ jobs:
       - name: Validate release helper script syntax
         run: |
           node --check scripts/prepare-niche-assets.mjs
+          node --check scripts/prepare-niche-routes.js
           node --check scripts/verify-niche-module.js
           node --check scripts/create-niche-apk-metadata.mjs
           node --check scripts/create-apk-testing-index.mjs
