@@ -171,7 +171,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        niche: [coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech]
+        niche: [coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech, collectibles]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
