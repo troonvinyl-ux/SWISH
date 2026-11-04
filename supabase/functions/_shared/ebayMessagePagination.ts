@@ -16,7 +16,7 @@ export function extractEbayXmlTag(xml: string, tag: string): string {
 }
 
 export function extractEbayMessageSummaryBlocks(xml: string): string[] {
-  const pattern = /<(?:[A-Za-z0-9_.-]+:)?MessageSummary\\b[^>]*>([\\s\\S]*?)<\\/(?:[A-Za-z0-9_.-]+:)?MessageSummary\\s*>/gi;
+  const pattern = /<(?:[A-Za-z0-9_.-]+:)?MessageSummary\b[^>]*>([\s\S]*?)<\/(?:[A-Za-z0-9_.-]+:)?MessageSummary\s*>/gi;
   return Array.from(xml.matchAll(pattern), match => match[1]);
 }
 
