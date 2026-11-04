@@ -85,7 +85,7 @@ serve(async (req) => {
     const expectedSchemeByNiche: Record<string, string> = {
       coins: "coinflipper", motocross: "flippermx", bicycles: "bikeflipper",
       clothing: "threadsflip", surplus_flip: "surplusflip", trading_cards: "cardflipper",
-      antiques: "antiqueflipper", fossils: "fossilflipper", beauty: "beautyflipper", tech: "techflipper",
+      antiques: "antiqueflipper", fossils: "fossilflipper", beauty: "beautyflipper", tech: "techflipper", collectibles: "collectiblesflipper",
     };
     const expectedScheme = expectedSchemeByNiche[nicheId];
     const requestedScheme = typeof body.appScheme === "string" ? body.appScheme : undefined;
