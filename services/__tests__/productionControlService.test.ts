@@ -5,7 +5,7 @@ const mainSha = 'a'.repeat(40);
 const oldSha = 'b'.repeat(40);
 const repository = 'troonvinyl-ux/SWISH';
 const run = (id = 1, sha = mainSha) => ({ id, name: 'Renamed workflow', display_title: 'Test run', html_url: `https://github.com/${repository}/actions/runs/${id}`, status: 'completed', conclusion: 'success', head_branch: 'main', head_sha: sha, created_at: '2026-11-01T12:00:00Z', event: 'push' });
-const response = (body: unknown, status = 200, headers: Record<string, string> = {}) => ({ ok: status >= 200 && status < 300, status, headers: { get: (name: string) => headers[name] ?? null }, json: async () => body });
+const response = (body: unknown, status = 200, headers: Record<string, string> = {}) => ({ ok: status >= 200 && status < 300, status, headers: { get: (name: string) => headers[name] ?? null }, json: async () => body, text: async () => typeof body === 'string' ? body : JSON.stringify(body) });
 const mockFetch = jest.fn();
 const originalFetch = global.fetch;
 let service: typeof import('../productionControlService');
