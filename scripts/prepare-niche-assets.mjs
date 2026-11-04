@@ -52,4 +52,4 @@ fs.writeFileSync(path.join(buildRoot, 'asset-scope.json'), JSON.stringify({
   selectedSpecialists: product.specialists,
   defaultSpecialist: product.defaultSpecialist
 }, null, 2) + '\n');
-console.log('Prepared niche-only brand artwork for ' + niche + '; ' + (brandAssets.length - 1) + ' other product images are no longer statically imported.');
+console.log('Prepared niche-only brand artwork for ' + niche + '; ' + (brandAssets.length - 2) + ' other product images are no longer statically imported.');
