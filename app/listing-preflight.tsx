@@ -15,6 +15,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { getSupabaseClient } from '@/template';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
+import { isProductionNiche } from '@/constants/niches';
 import { useAntiquePreflight } from '@/hooks/useAntiquePreflight';
 import { useAlert } from '@/template';
 import { submitListingToMarketplace, SubmitStep, SubmitResult } from '@/services/listingService';
@@ -31,7 +32,8 @@ export default function ListingPreflightScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { tenant, activeNicheId, fixedNicheId, triggerInventoryReload } = useApp();
-  const isAntique = (fixedNicheId ?? activeNicheId) === 'antiques';
+  const nicheId = fixedNicheId ?? activeNicheId;
+  const isAntique = isProductionNiche(nicheId);
   const checkAntique = useAntiquePreflight();
   const [antiqueReady, setAntiqueReady] = useState(false);
   const [antiqueError, setAntiqueError] = useState<string | null>(null);
@@ -207,7 +209,7 @@ export default function ListingPreflightScreen() {
       // ── Condition ──────────────────────────────────────────────────────────
       const condition = item?.condition ?? '';
       if (!condition) {
-        updateCheck('condition', { status: 'warn', detail: 'No condition set — will default to "Very Good"' });
+        updateCheck('condition', { status: 'warn', detail: 'No condition recorded. Select a category-supported condition in the editor; none is inferred.' });
       } else {
         updateCheck('condition', { status: 'pass', detail: condition });
       }
@@ -223,7 +225,7 @@ export default function ListingPreflightScreen() {
       } else if (media.length > 0) {
         updateCheck('images', { status: 'warn', detail: `${media.length} local image${media.length === 1 ? '' : 's'} — not yet uploaded to permanent storage. Use "Fetch Image from eBay" on the item screen.` });
       } else {
-        updateCheck('images', { status: 'warn', detail: 'No photos — listing will be submitted without images' });
+        updateCheck('images', { status: 'warn', detail: 'No photos attached. Upload original photographs before submission.' });
       }
 
       // ── Business Policies ─────────────────────────────────────────────────
@@ -258,7 +260,7 @@ export default function ListingPreflightScreen() {
       if (isAntique) {
         const antique = await checkAntique(listingId);
         setAntiqueReady(antique.ready); setAntiqueError(antique.error);
-        updateCheck('condition', { status: antique.ready ? 'pass' : 'warn', detail: antique.ready ? 'Supported category condition policy and saved condition notes checked live.' : 'Category-specific conditions are not confirmed. Complete the Antique checks below.' });
+        updateCheck('condition', { status: antique.ready ? 'pass' : 'warn', detail: antique.ready ? 'Supported category condition policy and saved condition notes checked live.' : 'Category-specific conditions are not confirmed. Complete the specialist checks below.' });
       }
     } catch (e: any) {
       setScanError(e?.message ?? 'Preflight scan failed');
@@ -267,7 +269,7 @@ export default function ListingPreflightScreen() {
     }
   }, [listingId, tenant, updateCheck, isAntique, checkAntique]);
 
-  useEffect(() => { runPreflight(); }, [runPreflight]);
+  useEffect(() => () => { if (catSearchTimeout.current) clearTimeout(catSearchTimeout.current); }, []);
 
   // ── Category picker logic ─────────────────────────────────────────────────
 
@@ -275,8 +277,8 @@ export default function ListingPreflightScreen() {
   const hasRun = useRef(false);
   useFocusEffect(
     useCallback(() => {
-      if (hasRun.current) {
-        // Reset and rescan every time screen gains focus
+      {
+        // One scan per focus; avoid duplicate mount/effect requests
         setChecks(prev => prev.map(c => ({ ...c, status: 'pending' as const })));
         setSubmitResult(null);
         setSubmitStep(null);
@@ -516,7 +518,7 @@ export default function ListingPreflightScreen() {
       );
     }
     };
-    if (isAntique) showAlert('Publish this Antique item to eBay?', `This is a real public listing on your connected eBay UK account and may incur fees. Approve only if you own the item and have reviewed the saved category, condition, price, shipping policy, specifics and photographs.\n\n${listingData?.title ?? ''}\nSWISH draft: ${listingId}`, [{text:'Cancel',style:'cancel'},{text:'Publish reviewed item',onPress:()=>{void proceed();}}]);
+    if (isAntique) showAlert(nicheId === 'antiques' ? 'Publish this Antique item to eBay?' : 'Publish this reviewed item to eBay?', `This is a real public listing on your connected eBay UK account and may incur fees. Approve only if you own the item and have reviewed the saved category, condition, price, shipping policy, specifics and photographs.\n\n${listingData?.title ?? ''}\nSWISH draft: ${listingId}`, [{text:'Cancel',style:'cancel'},{text:'Publish reviewed item',onPress:()=>{void proceed();}}]);
     else await proceed();
   }, [listingId, tenant, canSubmit, showAlert, router, itemId, isAntique, listingData?.title, triggerInventoryReload]);
 
@@ -581,7 +583,7 @@ export default function ListingPreflightScreen() {
             </View>
             {failCount === 0 ? (
               <Text style={[s.summaryStatus, { color: Colors.success }]}>
-                {isAntique && !antiqueReady ? 'Antique checks incomplete — submission blocked' : warnCount > 0 ? 'Ready to submit — review warnings below' : 'All checks passed — ready to submit'}
+                {isAntique && !antiqueReady ? 'Specialist checks incomplete — submission blocked' : warnCount > 0 ? 'Ready to submit — review warnings below' : 'All checks passed — ready to submit'}
               </Text>
             ) : (
               <Text style={[s.summaryStatus, { color: Colors.danger }]}>
@@ -591,7 +593,7 @@ export default function ListingPreflightScreen() {
           </View>
         )}
 
-        {isAntique ? <View style={s.checkCard}><View style={s.flex}><Text style={s.checkLabel}>Antique category, specifics & persistence</Text><Text style={s.checkDetail}>{antiqueReady ? 'Current eBay leaf category, full item-specific requirements, supported condition, original photos and saved fields validated. This is API preflight, not a published listing.' : antiqueError ?? 'NOT TESTED: waiting for category-specific validation.'}</Text><Pressable onPress={()=>router.push(`/ebay-listing-editor?id=${listingId}` as any)} style={s.pickCatBtn}><Text style={s.pickCatBtnText}>Review saved draft and requirements</Text></Pressable></View></View> : null}
+        {isAntique ? <View style={s.checkCard}><View style={s.flex}><Text style={s.checkLabel}>Specialist category, specifics & persistence</Text><Text style={s.checkDetail}>{antiqueReady ? 'Current eBay leaf category, full item-specific requirements, supported condition, original photos and saved fields validated. This is API preflight, not a published listing.' : antiqueError ?? 'NOT TESTED: waiting for category-specific validation.'}</Text><Pressable onPress={()=>router.push(`/ebay-listing-editor?id=${listingId}` as any)} style={s.pickCatBtn}><Text style={s.pickCatBtnText}>Review saved draft and requirements</Text></Pressable></View></View> : null}
 
         {/* Checks */}
         {checks.map(check => (

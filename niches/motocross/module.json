@@ -12,7 +12,7 @@
   "androidPackage": "com.swish.flippermx",
   "iosBundleIdentifier": "com.swish.flippermx",
   "entryRoute": "/entry/motocross",
-  "scannerRoute": "/flipper-mx",
+  "scannerRoute": "/capture",
   "dedicatedRoutes": [
     "flipper-mx.tsx",
     "mx-acquisition.tsx"

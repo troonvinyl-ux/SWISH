@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 2, "id": "collectibles", "name": "Collectibles Flipper",
+  "specialistIds": ["collectibles"], "legacySpecialistIds": [], "defaultSpecialistId": "collectibles",
+  "androidPackage": "com.swish.collectiblesflipper", "iosBundleIdentifier": "com.swish.collectiblesflipper",
+  "entryRoute": "/entry/collectibles", "scannerRoute": "/capture", "dedicatedRoutes": [],
+  "responsibilities": "Branded pottery, giftware, bears, silverware, memorabilia and decorative objects. Excludes coin-only workflows.",
+  "sharedCapabilities": ["auth","tenant-and-subscription","inventory-persistence","ebay-oauth-listings-drafts-orders-sync","shared-ai-orchestration","reusable-ui-primitives"],
+  "isolationModel": "shared-core-with-registered-niche-configuration",
+  "verification": { "status": "implemented; runtime and paid backend registration acceptance pending" }
+}

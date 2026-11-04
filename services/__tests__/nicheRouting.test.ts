@@ -5,11 +5,11 @@ import { nicheToScannerRoute, resolveProductionNiche } from '@/services/nicheRou
 
 describe('production niche scanner routing', () => {
   test.each([
-    ['coins', '/coin-flipper?tab=capture'],
-    ['motocross', '/flipper-mx'],
-    ['bicycles', '/bike-flipper'],
-    ['clothing', '/threads-flip?tab=identify'],
-    ['surplus_flip', '/surplus-flip'],
+    ['coins', '/capture'],
+    ['motocross', '/capture'],
+    ['bicycles', '/capture'],
+    ['clothing', '/capture'],
+    ['surplus_flip', '/capture'],
     ['antiques', '/antique-capture'],
     ['trading_cards', '/capture'],
     ['fossils', '/capture'],

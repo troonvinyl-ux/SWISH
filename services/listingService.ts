@@ -590,10 +590,10 @@ export async function submitListingToMarketplace(
   const itemAttributes = (listingRow?.items as any)?.attributes ?? {};
   if (itemAttributes._manifest_review_required === true) return { success:false,step:'failed',error:'Manifest stock has not been physically reviewed. Save editor changes and confirm the manifest inspection before publishing.' };
   const nicheId = resolveProductionNiche((listingRow?.items as any)?.specialist_id) ?? '';
-  if (nicheId === 'antiques') {
+  if (nicheId) {
     const { checkAntiqueListing } = await import('@/services/listingEditorService');
-    const checked = await checkAntiqueListing(tenantId, listingId);
-    if (!checked.ready) return { success: false, step: 'failed', error: checked.error ?? 'Antique preflight not confirmed.' };
+    const checked = await checkAntiqueListing(tenantId, listingId, nicheId);
+    if (!checked.ready) return { success: false, step: 'failed', error: checked.error ?? 'Specialist preflight not confirmed.' };
   }
   const safety = evaluateSpecialistSafety(nicheId, itemAttributes);
   if (safety.blocked) return { success:false,step:'failed',error:safety.reasons.join(' ') };
@@ -714,7 +714,7 @@ export async function submitListingToMarketplace(
     };
   }
 
-  if (nicheId === 'antiques') {
+  if (nicheId) {
     const { data: persisted, error: persistenceError } = await supabase.from('listings').select('external_listing_id,status,items!inner(status)').eq('id', listingId).eq('tenant_id', tenantId).maybeSingle();
     if (!ebayData.externalListingId || persistenceError || persisted?.external_listing_id !== ebayData.externalListingId || persisted?.status !== 'active' || !['listed','active'].includes((persisted?.items as any)?.status)) {
       return { success: false, step: 'failed', externalListingId: ebayData.externalListingId, error: 'eBay accepted the item but SWISH reconciliation is not confirmed. Do not republish or create a duplicate. Synchronise this listing and inspect its saved ID.', warnings: ebayData.warnings };

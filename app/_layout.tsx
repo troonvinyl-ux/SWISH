@@ -129,6 +129,9 @@ export default function RootLayout() {
                 <Stack.Screen name="command-centre" />
                 <Stack.Screen name="islamic-batch" />
                 <Stack.Screen name="create-listing" />
+                <Stack.Screen name="capture" />
+                <Stack.Screen name="antique-capture" />
+                <Stack.Screen name="specialist-workspace" />
                 <Stack.Screen name="review-required" />
                 <Stack.Screen name="silver-batch" />
                 <Stack.Screen name="listing-preflight" />

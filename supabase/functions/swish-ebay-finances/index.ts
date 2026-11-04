@@ -3,7 +3,7 @@
 // Routes: sync_transactions | get_payouts | get_funds_summary | get_summary
 // POST body: { tenantId, route?, daysBack? }
 
-import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
+import { serveModule } from '../_shared/moduleScope.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials, isEncrypted } from '../_shared/credentialCrypto.ts';
 import { ebayFinancesSignatureHeaders } from '../_shared/ebayDigitalSignature.ts';
@@ -135,7 +135,7 @@ async function getToken(
   return { accessToken: creds.accessToken };
 }
 
-Deno.serve(withEdgeFunctionLogging('swish-ebay-finances', async (req: Request) => {
+serveModule(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jr({ error: 'Method not allowed' }, 405);
   let body: unknown;
@@ -171,6 +171,8 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-finances', async (req: Request) =
     return jr({ error: 'Unable to verify authentication. Please sign in again.' }, 401);
   }
 
+  const scopedClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_ANON_KEY') ?? '', { global: {headers:{Authorization:authHeader}},auth:{persistSession:false} });
+  const moduleScoped = Array.isArray((body as Record<string,unknown>).specialistIds);
   const refreshForFinances = route === 'sync_transactions' || route === 'get_funds_summary' || route === 'get_payouts';
   let tr: Awaited<ReturnType<typeof getToken>>;
   try {
@@ -249,9 +251,10 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-finances', async (req: Request) =
           const ebayOrderId = tx.orderId ?? tx.legacyOrderId ?? null;
           let swishOrderId: string | null = null;
           if (ebayOrderId) {
-            const { data: ord } = await supabase.from('orders').select('id').eq('tenant_id', tenantId).eq('external_order_id', ebayOrderId).maybeSingle();
+            const { data: ord } = await (moduleScoped ? scopedClient : supabase).from('orders').select('id').eq('tenant_id', tenantId).eq('external_order_id', ebayOrderId).maybeSingle();
             swishOrderId = ord?.id ?? null;
           }
+          if (moduleScoped && !swishOrderId) continue;
           const { data: existingTx, error: existingTxError } = await supabase
             .from('ebay_financials')
             .select('id')
@@ -375,7 +378,7 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-finances', async (req: Request) =
     }
 
     if (route === 'get_summary') {
-      const { data: txData, error: txReadError } = await supabase.from('ebay_financials')
+      const { data: txData, error: txReadError } = await (moduleScoped ? scopedClient : supabase).from('ebay_financials')
         .select('transaction_type, amount, booking_entry').eq('tenant_id', tenantId).gte('transaction_date', fromDate);
       if (txReadError) return jr({ success: false, error: 'Financial summary could not be loaded. Please retry.' }, 503);
       const rows = txData ?? [];
@@ -404,4 +407,4 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-finances', async (req: Request) =
     console.error('[SWISH Finances] Request failed:', err instanceof Error ? err.message : 'unknown error');
     return jr({ error: 'Financial request failed. Please retry; contact support if the issue continues.' }, 500);
   }
-}));
+});

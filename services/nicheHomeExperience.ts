@@ -8,6 +8,13 @@ export interface NicheHomeExperience {
 }
 
 const EXPERIENCES: Record<string, NicheHomeExperience> = {
+  collectibles: {
+    headline: 'Read the maker marks. Identify the model. Price the evidence.',
+    focusTitle: 'Clearance find evidence checklist', focusBody: 'Document the complete object and marks before attributing a maker or edition.',
+    evidenceChecks: ['Base stamps, labels, tags and edition numbers','Exact model, pattern and measured dimensions','Chips, repairs and missing parts','Original packaging and provenance'],
+    cautionTitle: 'Silver is not the same as silver plate',
+    cautionBody: 'Photographs cannot certify sterling content, authenticity or rarity. Keep uncertain objects for human review and separate asking prices from realised sales.',
+  },
   trading_cards: {
     headline: 'Identify the card. Record its condition. Decide whether grading is worth it.',
     focusTitle: 'Card evidence checklist',

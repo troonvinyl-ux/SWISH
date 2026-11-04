@@ -15,7 +15,7 @@ export function useNicheListingCount() {
       try{const count=await getLiveListingCount(tenant.id,getProductionNicheSpecialistIds(niche));if(!cancelled)setSnapshot({scope,count});}
       finally{busy=false;}
     };
-    void refresh();const timer=setInterval(()=>{void refresh();},30_000);const sub=AppState.addEventListener('change',state=>{if(state==='active')void refresh();});
+    void refresh();const timer=setInterval(()=>{void refresh();},90_000);const sub=AppState.addEventListener('change',state=>{if(state==='active')void refresh();});
     return()=>{cancelled=true;clearInterval(timer);sub.remove();};
   },[tenant?.id,niche,scope,inventoryReloadSignal,accessReady,moduleLoading]);
   return snapshot.scope===scope?snapshot.count:0;

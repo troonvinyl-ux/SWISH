@@ -12,7 +12,7 @@
   "androidPackage": "com.swish.surplusflip",
   "iosBundleIdentifier": "com.swish.surplusflip",
   "entryRoute": "/entry/surplus-flip",
-  "scannerRoute": "/surplus-flip",
+  "scannerRoute": "/capture",
   "dedicatedRoutes": [
     "surplus-flip.tsx"
   ],

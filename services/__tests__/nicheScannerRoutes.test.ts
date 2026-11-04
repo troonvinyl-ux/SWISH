@@ -5,23 +5,24 @@ import { SPECIALISTS } from '@/constants/specialists';
 
 describe('One-tap niche scanner routing', () => {
   test.each([
-    ['coins', '/coin-flipper?tab=capture'],
-    ['motocross', '/flipper-mx'],
-    ['bicycles', '/bike-flipper'],
-    ['clothing', '/threads-flip?tab=identify'],
-    ['surplus_flip', '/surplus-flip'],
+    ['coins', '/capture'],
+    ['motocross', '/capture'],
+    ['bicycles', '/capture'],
+    ['clothing', '/capture'],
+    ['surplus_flip', '/capture'],
     ['trading_cards', '/capture'],
     ['antiques', '/antique-capture'],
     ['fossils', '/capture'],
     ['beauty', '/capture'],
     ['tech', '/capture'],
+    ['collectibles','/capture'],
   ])('%s opens its own capture workflow', (niche, route) => {
     expect(nicheToScannerRoute(niche)).toBe(route);
   });
 
   test('legacy aliases resolve to the same scanner as their canonical niche', () => {
-    expect(nicheToScannerRoute('threads_flip')).toBe('/threads-flip?tab=identify');
-    expect(nicheToScannerRoute('mx')).toBe('/flipper-mx');
+    expect(nicheToScannerRoute('threads_flip')).toBe('/capture');
+    expect(nicheToScannerRoute('mx')).toBe('/capture');
     expect(nicheToScannerRoute('books')).toBe('/antique-capture');
   });
 

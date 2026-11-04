@@ -1,0 +1,59 @@
+name: Antique Flipper functional regressions (no release)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install existing project dependencies
+        run: npm install --ignore-scripts --package-lock=false
+      - name: Record exact source
+        run: |
+          mkdir -p verification-output
+          git rev-parse HEAD > verification-output/source-sha.txt
+      - name: Run Antique workflow, photos, category and availability mocked regressions
+        id: antique
+        continue-on-error: true
+        run: npx jest --config jest.config.ci.js --runInBand services/__tests__/antiqueWorkflow.test.ts services/__tests__/inventoryPhotoPersistence.test.ts services/__tests__/antiqueCategoryAvailability.test.ts --json --outputFile=verification-output/antique-jest.json
+      - name: Run complete service regression suite
+        id: full
+        if: always()
+        continue-on-error: true
+        run: npx jest --config jest.config.ci.js --runInBand --json --outputFile=verification-output/full-jest.json
+      - name: TypeScript diagnostic gate
+        id: types
+        if: always()
+        continue-on-error: true
+        run: npx tsc --noEmit > verification-output/typescript.txt 2>&1
+      - name: Shared backend asset parity
+        id: parity
+        if: always()
+        continue-on-error: true
+        run: node scripts/sync-backend-registry.mjs --check > verification-output/shared-parity.txt 2>&1
+      - name: Retain actual execution evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: antique-functional-verification-${{ github.sha }}
+          path: verification-output/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Fail closed when any gate failed
+        if: always()
+        env:
+          ANTIQUE: ${{ steps.antique.outcome }}
+          FULL: ${{ steps.full.outcome }}
+          TYPES: ${{ steps.types.outcome }}
+          PARITY: ${{ steps.parity.outcome }}
+        run: |
+          test "$ANTIQUE" = success
+          test "$FULL" = success
+          test "$TYPES" = success
+          test "$PARITY" = success
