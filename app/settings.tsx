@@ -28,6 +28,7 @@ import { getLearningStats, LearningStats } from '@/services/aiLearningService';
 import { getPartialImageItems } from '@/services/ebayImageService';
 import { getSupabaseClient } from '@/template';
 import { NICHES, NICHE_LIST, NicheId } from '@/constants/niches';
+import { resolveProductionNiche } from '@/services/nicheRouting';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 
 // Enable LayoutAnimation on Android
@@ -3072,8 +3073,8 @@ const nichStyles = StyleSheet.create({
 export default function SettingsScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, businessConfig, reloadBusinessConfig, triggerInventoryReload, activeNiche, activeNicheId, setActiveNiche } = useApp();
-  const isCollectiblesBuild = activeNicheId === 'collectibles';
+  const { tenant, businessConfig, reloadBusinessConfig, triggerInventoryReload, activeNiche, activeNicheId, fixedNicheId, setActiveNiche } = useApp();
+  const isCollectiblesBuild = resolveProductionNiche(fixedNicheId ?? activeNicheId) === 'collectibles';
   const { logout, user } = useAuth();
   const { showAlert } = useAlert();
 
