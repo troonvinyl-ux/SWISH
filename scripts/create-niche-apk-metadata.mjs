@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 // Produce auditable metadata for one signed niche APK. This is not device certification.
 const fs = require('node:fs');
 const path = require('node:path');
