@@ -19,12 +19,45 @@ export default function AccountScreen() {
   const threads = { background: '#0C080C', surface: '#160E16', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5', muted: '#9A7090' };
   const { signingOut, requestLogout, disabled: logoutDisabled } = useAccountLogout();
   const effectiveNicheId = fixedNicheId ?? activeNicheId;
+  const owner = isMasterAdmin && isSwishMasterAdmin(user?.email);
+
+  // The owner can enter a branded niche during testing. Do not let the
+  // build-time niche lock hide the workspace switcher or owner controls.
+  if (effectiveNicheId === 'collectibles' && owner) {
+    const ownerAction = (title: string, detail: string, icon: React.ComponentProps<typeof MaterialIcons>['name'], route: string) => (
+      <Pressable style={styles.action} onPress={() => router.push(route as any)}>
+        <MaterialIcons name={icon} size={24} color={Colors.primary} />
+        <View style={styles.copy}>
+          <Text style={styles.actionTitle}>{title}</Text>
+          <Text style={styles.description}>{detail}</Text>
+        </View>
+        <MaterialIcons name="chevron-right" size={24} color={Colors.textTertiary} />
+      </Pressable>
+    );
+    return (
+      <View style={[styles.screen, { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + Spacing.lg }]}>
+        <Text style={styles.eyebrow}>COLLECTIBLES FLIPPER · OWNER</Text>
+        <Text style={styles.title}>More & workspace</Text>
+        <Text style={styles.email}>{user?.email ?? 'Owner account'}</Text>
+        {ownerAction('Switch niche', 'Return to your subscribed SWISH workspaces.', 'apps', '/niche-select')}
+        {ownerAction('Master Admin', 'Owner console, module verification and diagnostics.', 'admin-panel-settings', '/master-admin')}
+        {ownerAction('eBay Admin', 'Connection status and marketplace administration.', 'store', '/ebay-admin')}
+        {ownerAction('Diagnostics', 'Inspect app and module health.', 'monitor-heart', '/master-diagnostics')}
+        {ownerAction('Settings', 'Account and application settings.', 'settings', '/settings')}
+        <Pressable style={[styles.action, styles.signOut]} onPress={requestLogout} disabled={logoutDisabled} accessibilityLabel="Log out of SWISH">
+          {signingOut ? <ActivityIndicator color={Colors.danger ?? '#D33'} /> : <MaterialIcons name="logout" size={24} color={Colors.danger ?? '#D33'} />}
+          <View style={styles.copy}>
+            <Text style={[styles.actionTitle, { color: Colors.danger ?? '#D33' }]}>{signingOut ? 'Signing out…' : 'Sign out'}</Text>
+            <Text style={styles.description}>Sign out of this SWISH account on this device.</Text>
+          </View>
+        </Pressable>
+      </View>
+    );
+  }
   if (effectiveNicheId === 'antiques') return <Redirect href={"/(tabs)/antique-more" as any} />;
   // Branded niche apps use More as their settings destination. Keep niche
   // switching in the unbranded/master workspace only.
   if (fixedNicheId || isThreadsFlip || (effectiveNicheId && !isMasterAdmin)) return <SettingsScreen embedded />;
-  const owner = isMasterAdmin && isSwishMasterAdmin(user?.email);
-
   return (
     <View testID={isThreadsFlip ? "threads-flip-screen-account" : undefined} accessibilityLabel={isThreadsFlip ? "Threads Flip account and workspace" : undefined} style={[styles.screen, { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + Spacing.lg }, isThreadsFlip && { backgroundColor: threads.background }]}>
       <Text style={[styles.eyebrow, isThreadsFlip && { color: threads.pink }]}>{isThreadsFlip ? 'THREADS FLIP · ACCOUNT' : 'SWISH ACCOUNT'}</Text>
