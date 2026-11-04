@@ -21,6 +21,7 @@ import ThreadsFlipScreen from '@/app/threads-flip';
 import SurplusFlipScreen from '@/app/surplus-flip';
 import AntiqueFlipperHome from '@/app/antique-flipper';
 import { NicheOverview } from '@/components/feature/NicheOverview';
+import { CollectiblesDashboard } from '@/components/feature/CollectiblesDashboard';
 
 export default function NicheHomeScreen() {
   const { activeNicheId, fixedNicheId, tenant, tenantLoading } = useApp();
@@ -46,6 +47,7 @@ export default function NicheHomeScreen() {
   if (product === 'clothing') return <ThreadsFlipScreen key={effectiveNicheId} isHomeTab />;
   if (product === 'surplus_flip') return <SurplusFlipScreen key={effectiveNicheId} isHomeTab />;
   if (product === 'antiques') return <AntiqueFlipperHome key={effectiveNicheId} />;
+  if (product === 'collectibles') return <CollectiblesDashboard key={effectiveNicheId} />;
   if (product) return <NicheOverview key={effectiveNicheId} />;
   return <Redirect href={"/niche-select" as any} />;
 }

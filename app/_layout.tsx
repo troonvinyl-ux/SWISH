@@ -88,6 +88,7 @@ export default function RootLayout() {
               <NicheRouteBoundary>
               <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="index" />
+                <Stack.Screen name="swish" />
                 <Stack.Screen name="(tabs)" />
                 <Stack.Screen name="login" />
                 <Stack.Screen name="onboarding" />
@@ -145,6 +146,7 @@ export default function RootLayout() {
                 <Stack.Screen name="entry/motocross" />
                 <Stack.Screen name="entry/bicycles" />
                 <Stack.Screen name="entry/clothing" />
+                <Stack.Screen name="entry/collectibles" />
                 <Stack.Screen name="buy-decision" />
                 <Stack.Screen name="research" />
                 <Stack.Screen name="deep-id-lab" />
