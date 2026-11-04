@@ -1,0 +1,169 @@
+name: Build unified SWISH testing artifacts
+on:
+  workflow_dispatch:
+    inputs:
+      build_android:
+        type: boolean
+        default: true
+      build_ios:
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      build_android:
+        type: boolean
+        default: true
+      build_ios:
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      SWISH_NICHE: ''
+      SWISH_MASTER_ADMIN: '0'
+      SWISH_RELEASE_CHANNEL: preview-unified
+      EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: bash scripts/install-dependencies.sh
+      - run: npx tsc --noEmit
+      - run: npx expo lint
+      - run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand
+      - run: node scripts/validate-unified-modules.mjs
+      - run: node scripts/sync-backend-registry.mjs --check
+      - name: Export shared browser experience without publishing
+        run: npx expo export --platform web --output-dir dist/unified-web
+      - name: Retain website artifact and source evidence
+        run: |
+          printf '%s\n' "$GITHUB_SHA" > dist/unified-web-source-sha.txt
+          tar -czf dist/unified-web.tar.gz -C dist unified-web
+          sha256sum dist/unified-web.tar.gz > dist/unified-web.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: swish-unified-web
+          path: |
+            dist/unified-web
+            dist/unified-web.tar.gz
+            dist/unified-web.sha256
+            dist/unified-web-source-sha.txt
+  android:
+    needs: verify
+    if: inputs.build_android
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SWISH_NICHE: ''
+      SWISH_MASTER_ADMIN: '0'
+      SWISH_RELEASE_CHANNEL: preview-unified
+      EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      SWISH_RELEASE_KEYSTORE_BASE64: ${{ secrets.SWISH_RELEASE_KEYSTORE_BASE64 }}
+      SWISH_KEYSTORE_STORE_PASSWORD: ${{ secrets.SWISH_KEYSTORE_STORE_PASSWORD }}
+      SWISH_KEYSTORE_KEY_PASSWORD: ${{ secrets.SWISH_KEYSTORE_KEY_PASSWORD }}
+      SWISH_KEYSTORE_KEY_ALIAS: ${{ secrets.SWISH_KEYSTORE_KEY_ALIAS }}
+      SWISH_RELEASE_CERT_SHA256: ${{ vars.SWISH_RELEASE_CERT_SHA256 || secrets.SWISH_RELEASE_CERT_SHA256 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: bash scripts/install-dependencies.sh
+      - name: Verify original signing configuration is present, never generate credentials
+        run: |
+          node -e "for(const k of ['SWISH_RELEASE_KEYSTORE_BASE64','SWISH_KEYSTORE_STORE_PASSWORD','SWISH_KEYSTORE_KEY_PASSWORD','SWISH_KEYSTORE_KEY_ALIAS','SWISH_RELEASE_CERT_SHA256']) if(!process.env[k]) throw Error('Missing original signing setting: '+k)"
+      - name: Verify unified app identity and update configuration
+        run: |
+          mkdir -p dist
+          npx expo config --type public --json > dist/unified-runtime-config.json
+          node scripts/verify-unified-config.mjs dist/unified-runtime-config.json
+      - name: Generate native project with preserved package identity
+        run: npx expo prebuild --platform android --clean
+      - run: node scripts/verify-android-sdk-config.mjs
+      - run: node scripts/configure-niche-signing.mjs
+      - name: Compile single APK
+        run: |
+          set -euo pipefail
+          cd android
+          ./gradlew assembleRelease --no-daemon --max-workers=1 --console=plain -Dorg.gradle.jvmargs="-Xmx5g -XX:MaxMetaspaceSize=1g" 2>&1 | tee ../dist/unified-android-build.log
+      - name: Verify actual APK, certificate and runtime; retain checksums
+        run: bash scripts/verify-unified-apk.sh android/app/build/outputs/apk/release/app-release.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: swish-unified-android
+          path: |
+            dist/swish-unified.apk
+            dist/swish-unified.sha256
+            dist/unified-android-evidence.json
+            dist/unified-signature.txt
+            dist/unified-badging.txt
+            dist/unified-runtime-config.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: swish-unified-android-diagnostics
+          path: dist/unified-android-build.log
+          if-no-files-found: warn
+  ios:
+    needs: verify
+    if: inputs.build_ios
+    runs-on: macos-latest
+    timeout-minutes: 90
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
+      SWISH_NICHE: ''
+      SWISH_MASTER_ADMIN: '0'
+      SWISH_RELEASE_CHANNEL: preview-unified
+      SWISH_APPROVED_IOS_BUNDLE_ID: ${{ vars.SWISH_APPROVED_IOS_BUNDLE_ID }}
+      SWISH_APPROVED_IOS_TEAM_ID: ${{ vars.SWISH_APPROVED_IOS_TEAM_ID }}
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: bash scripts/install-dependencies.sh
+      - name: Require existing approved iOS identity and credentials
+        run: |
+          test -n "$EXPO_TOKEN" || { echo 'Missing owner-authorized EAS access'; exit 1; }
+          mkdir -p dist
+          npx expo config --type public --json > dist/unified-runtime-config.json
+          node scripts/verify-unified-config.mjs dist/unified-runtime-config.json ios
+      - name: Build with existing remote credentials only; do not submit or reset provisioning
+        run: npx --yes eas-cli@27.2.0 build --platform ios --profile unified-ios-testing --non-interactive --wait --json > dist/unified-ios-build.json
+      - name: Download and inspect the actual existing-identity iOS artifact
+        run: node scripts/verify-unified-ios.mjs dist/unified-ios-build.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: swish-unified-ios
+          path: |
+            dist/swish-unified.ipa
+            dist/unified-ios-evidence.json
+            dist/unified-ios-build.json
+            dist/swish-unified-ipa.sha256
+          if-no-files-found: error
+# No OTA publication, App Store submission, Google Play upload or database writes.

@@ -1,4 +1,5 @@
 // Bounded, authenticated status-only reconciliation. Never creates listings or guesses sale prices.
+import { serveModule } from '../_shared/moduleScope.ts';
 import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
@@ -6,7 +7,7 @@ import { decryptCredentials, encryptCredentials } from '../_shared/credentialCry
 import { parseEbayListingStatus } from '../_shared/listingStatus.ts';
 import registry from '../_shared/niche-modules.json' with { type: 'json' };
 const response = (data: unknown, status=200) => new Response(JSON.stringify(data), {status,headers:{...corsHeaders,'Content-Type':'application/json'}});
-Deno.serve(withEdgeFunctionLogging('swish-ebay-listing-status', async req => {
+serveModule(withEdgeFunctionLogging('swish-ebay-listing-status', async req => {
   if(req.method==='OPTIONS') return new Response('ok',{headers:corsHeaders});
   if(req.method!=='POST') return response({error:'Method not allowed'},405);
   try {

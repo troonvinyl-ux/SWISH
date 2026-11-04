@@ -5,6 +5,7 @@
 //
 // Security: JWT + tenant membership required.
 
+import { serveModule } from '../_shared/moduleScope.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 
@@ -82,7 +83,7 @@ Return ONLY valid JSON (no markdown fences) in this exact structure:
 
 All monetary values in GBP (numbers only). ROI as decimal (0.3 = 30%). Labour hours as decimals.`;
 
-Deno.serve(async (req: Request) => {
+serveModule(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -148,6 +149,7 @@ Deno.serve(async (req: Request) => {
 
     // Build analysis prompt
     const userPrompt = `
+ACTIVE SPECIALIST MODULE: ${body.nicheId ?? 'legacy collection workflow'}. Keep the originating niche immutable. Items outside this module require review, not automatic import into this module.
 ACQUISITION TO DECOMPOSE:
 Title: ${acquisition_title}
 Description: ${acquisition_description || 'None provided'}

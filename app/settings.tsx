@@ -13,6 +13,7 @@ import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
+import { MembershipSummary } from '@/components/feature/MembershipSummary';
 import { useAlert } from '@/template';
 import { useAuth } from '@/template';
 import {
@@ -1027,7 +1028,7 @@ function DataSyncCard({ tenantId, onSyncComplete }: { tenantId: string; onSyncCo
     setFullSync({ ...EMPTY_EBAY_SYNC, state: 'fetching', phase: 'Fetching eBay listings...' });
     try {
       const { data, error } = await supabase.functions.invoke('swish-ebay-sync', {
-        body: { tenantId, mode },
+        body: { tenantId, mode: mode === 'images_only' ? 'full' : mode },
       });
       if (error) {
         let msg = error.message ?? 'Unknown error';
@@ -3072,7 +3073,7 @@ const nichStyles = StyleSheet.create({
 export default function SettingsScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, businessConfig, reloadBusinessConfig, triggerInventoryReload, activeNiche, activeNicheId, setActiveNiche } = useApp();
+  const { tenant, businessConfig, reloadBusinessConfig, triggerInventoryReload, activeNiche, activeNicheId, setActiveNiche, canSwitchNiche, isMasterAdmin } = useApp();
   const { logout, user } = useAuth();
   const { showAlert } = useAlert();
 
@@ -3194,7 +3195,7 @@ export default function SettingsScreen({ embedded = false }: { embedded?: boolea
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 48 }]}
         showsVerticalScrollIndicator={false}
       >
-        {!embedded ? (
+        {canSwitchNiche ? (
           <>
             {/* Niche switching belongs to the unbranded/master workspace only. */}
             <SectionHead title="Trading Vertical" />
@@ -3202,7 +3203,7 @@ export default function SettingsScreen({ embedded = false }: { embedded?: boolea
               <SettingRow
                 icon="storefront"
                 label="Switch Niche"
-                desc={`Currently: ${activeNiche?.name ?? 'SWISH'}`}
+                desc={`Currently: ${activeNiche?.name ?? 'SWISH'} · verified memberships only`}
                 onPress={() => router.push('/niche-select' as any)}
                 color={activeNiche?.color ?? Colors.primary}
               />
@@ -3214,7 +3215,8 @@ export default function SettingsScreen({ embedded = false }: { embedded?: boolea
         {(() => {
           const tierVal = (tenant as any)?.subscriptionTier ?? (tenant as any)?.subscription_tier ?? '';
           const isLifetime = tierVal === 'lifetime' || tierVal === 'professional' || tierVal === 'enterprise';
-          if (!isLifetime || embedded) return null;
+          // Legacy local/tier-based switching is retired; verified shell membership routing is authoritative.
+          return null;
           const NICHE_OPTIONS = [
             { id: 'coins', label: 'Coin Flipper', icon: 'toll', color: '#F5C842', desc: 'Coins · Numismatics · Ancient' },
             { id: 'motocross', label: 'Flipper MX', icon: 'two-wheeler', color: '#FF5500', desc: 'Motocross · Enduro · Parts' },
@@ -3400,7 +3402,7 @@ export default function SettingsScreen({ embedded = false }: { embedded?: boolea
               />
               <Divider />
             </CardGroup>
-            <NichesSubscriptionsSection tenantId={tenant.id} isOwner={isOwner} />
+            <MembershipSummary />
           </>
         ) : null}
 
@@ -3439,7 +3441,7 @@ export default function SettingsScreen({ embedded = false }: { embedded?: boolea
             </Text>
           </View>
         </View>
-        <AdvancedSection
+        {isMasterAdmin ? <AdvancedSection
           controls={controls}
           onKillSwitch={handleKillSwitch}
           onResume={handleResume}
@@ -3447,8 +3449,8 @@ export default function SettingsScreen({ embedded = false }: { embedded?: boolea
           onGoToBusinessConfig={() => router.push('/onboarding' as any)}
           businessConfig={businessConfig}
           tenantId={tenant?.id ?? null}
-          isOwner={isOwner}
-        />
+          isOwner={isMasterAdmin}
+        /> : null}
 
         {/* ── Legal ───────────────────────────────────────────────── */}
         <SectionHead title="Legal" />

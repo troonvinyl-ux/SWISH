@@ -48,14 +48,15 @@ export function nicheToScannerRoute(value: string | null | undefined): string {
   return NICHE_MODULES[niche].scannerRoute;
 }
 
-export function isRouteAllowedForBuild(pathname: string, fixedNiche: string | null): boolean {
+export function isRouteAllowedForModule(pathname: string, nicheId: string | null): boolean { return isRouteAllowedForBuild(pathname, nicheId, true); }
+export function isRouteAllowedForBuild(pathname: string, fixedNiche: string | null, unified = false): boolean {
   if (!fixedNiche) return true;
   const niche = resolveProductionNiche(fixedNiche);
   if (!niche) return false;
   const route = pathname.split('?')[0].replace(/^\//, '').replace(/\/$/, '');
   if (moduleRegistry.adminOnlyRoutes.some(file => file.replace(/\.tsx$/, '') === route)) return false;
   const config = NICHE_MODULES[niche];
-  const allowed = [...(config.buildSharedRoutes ?? moduleRegistry.sharedRoutes), config.entry, config.home, ...config.dedicatedRoutes].filter((file): file is string => Boolean(file));
+  const allowed = [...(unified ? moduleRegistry.sharedRoutes : config.buildSharedRoutes ?? moduleRegistry.sharedRoutes), config.entry, config.home, ...config.dedicatedRoutes].filter((file): file is string => Boolean(file));
   // Expo omits tab groups from usePathname; normalize both representations.
   if (!allowed.some(file => {
     const pattern = file.replace(/\.tsx$/, '').replace(/\([^/]+\)\//g, '').replace(/\[[^/]+\]/g, '[id]');
@@ -80,7 +81,7 @@ export function getAuthenticatedHomeRoute(options: {
   activeNicheId: string | null;
   onboardingRequired: boolean;
 }): string {
-  if (options.isMasterAdmin && !options.fixedNicheId) return '/master-admin';
+  if (options.isMasterAdmin && !options.fixedNicheId) return '/swish';
   if (options.onboardingRequired) return '/onboarding';
-  return nicheToEntryRoute(options.fixedNicheId ?? options.activeNicheId) ?? '/niche-select';
+  return nicheToEntryRoute(options.fixedNicheId ?? options.activeNicheId) ?? '/swish';
 }

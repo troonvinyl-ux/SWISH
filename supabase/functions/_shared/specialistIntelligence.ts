@@ -10,6 +10,17 @@ export interface SpecialistProfile {
 export const SPECIALIST_PROFILE_VERSION = '2026-10-30.1';
 const field = (key: string, label: string, specific?: string): SpecialistField => ({ key, label, specific });
 export const SPECIALIST_PROFILES: Record<string, SpecialistProfile> = {
+  collectibles: {
+    nicheId: 'collectibles', focus: 'Exact toy, comic, figure, memorabilia and vintage variant identification', modes: [{ id: 'item', label: 'Collectible / clearance find' }],
+    taxonomy: ['toy','action figure','comic','board game','memorabilia','pop culture','vintage collectible','pottery','giftware','bear','silverware','glass','decorative object'],
+    fields: [field('brand','Maker / brand','Brand'),field('object_type','Object type','Type'),field('pattern','Pattern','Pattern'),field('model','Model','Model'),field('character','Character','Character'),field('franchise','Franchise','Franchise'),field('series','Series','Series'),field('issue_number','Comic issue number','Issue Number'),field('publisher','Publisher','Publisher'),field('year','Printed year','Year Manufactured'),field('completeness','Completeness'),field('date_mark','Date mark'),field('material','Material','Material'),field('hallmark','Literal hallmark'),field('edition','Edition','Edition'),field('dimensions','Measured dimensions'),field('condition_notes','Condition observations'),field('packaging','Packaging')],
+    recognition: 'Read complete copyright marks, publisher details, issue numbers, logos, base stamps, tags, maker marks, labels and edition numbers. Identify toy/figure brand, character, franchise, series, variant, size and included accessories; comics require publisher, issue, printing, date and cover evidence; games require edition, contents and language. Distinguish licensed originals, reproductions and uncertain authenticity without inventing certification. Never assign professional comic or toy grades from photos. Compare exact forms and models. Distinguish silver, silver plate and unknown metal; appearance cannot certify sterling content. Coins and archaeological attribution are separate workflows. Never reassign an existing record or invent authenticity, age or rarity.',
+    conditionRules: 'Document chips, cracks, repairs, tarnish, missing parts and packaging; photographs cannot certify hidden repairs or metal content.',
+    valuationRules: 'Compare exact maker/model/pattern, character, franchise, comic issue/printing, game edition, variant, size, condition, packaging and completeness using realised sale evidence. Separate active asking prices and model estimates; unknown sold-data access remains unavailable.',
+    listingRules: 'Use evidence-supported manufacturer, object type, pattern, model, material and edition with category-specific fields. Disclose uncertainty; never claim sterling, rarity or authentication without evidence.',
+    sourcingChecks: ['Read the complete mark','Verify model, edition and missing parts','Document condition and fragile packaging costs'],
+    sources: [{ label: 'eBay category-specific requirements', url: 'https://www.ebay.co.uk/sellercentre/listings/item-specifics' }],
+  },
   coins: {
     nicheId: 'coins', focus: 'Legends, two-face attribution and physical contradictions', modes: [{ id: 'item', label: 'Coin / collectible' }],
     taxonomy: ['coin', 'medal', 'token', 'banknote', 'precious metal', 'artefact'],

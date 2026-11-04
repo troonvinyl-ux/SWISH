@@ -17,7 +17,7 @@ module.exports = ({ config }) => {
     ? { url: process.env['EXPO_PUBLIC_SUPABASE_URL'], anonKey: process.env['EXPO_PUBLIC_SUPABASE_ANON_KEY'] }
     : config.extra?.supabase;
   const easProjectId = process.env['EXPO_PROJECT_ID'] || process.env['EAS_PROJECT_ID'] || config.extra?.eas?.projectId;
-  if (!selected && !masterAdminBuild && !easProjectId && !publicSupabase) return config;
+  if (!selected && !masterAdminBuild && !testLabBuild && !easProjectId && !publicSupabase) return { ...config, name: 'SWISH', extra: { ...(config.extra || {}), swishUnifiedBuild: true } };
   const otaConfig = easProjectId ? {
     runtimeVersion: niche ? `${config.version || '1.0.0'}-${selected}-isolated-api36-v1` : { policy: 'appVersion' },
     updates: { ...config.updates, url: `https://u.expo.dev/${easProjectId}`, checkAutomatically: 'ON_LOAD', fallbackToCacheTimeout: 0,
@@ -53,7 +53,7 @@ module.exports = ({ config }) => {
     };
   }
 
-  if (masterAdminBuild) {
+  if (masterAdminBuild && process.env['SWISH_LEGACY_BUILD'] === '1') {
     // The Master Admin is a launcher shell, not a bundled copy of all ten
     // niche products. Its route tree contains only auth, owner console and
     // diagnostics; each niche opens from its own installed APK via deep link.
@@ -80,7 +80,16 @@ module.exports = ({ config }) => {
       extra: { ...(baseConfig.extra || {}), swishMasterAdminBuild: true },
     };
   }
-  if (!niche) return baseConfig;
+  if (!niche) {
+    const channel = process.env['SWISH_RELEASE_CHANNEL'] || 'preview-unified';
+    return { ...baseConfig, name: 'SWISH',
+      // Preserve original package, bundle ID and URI scheme. Never infer a new iOS identity.
+      runtimeVersion: { policy: 'fingerprint' },
+      updates: { ...(baseConfig.updates || {}), enabled: !!easProjectId, checkAutomatically: 'ON_LOAD', fallbackToCacheTimeout: 0,
+        requestHeaders: { ...(baseConfig.updates?.requestHeaders || {}), 'expo-channel-name': channel } },
+      extra: { ...(baseConfig.extra || {}), swishUnifiedBuild: true, swishReleaseChannel: channel },
+    };
+  }
   // Prepare for every Expo consumer (prebuild, EAS, export, OTA), not just one workflow.
   const routeRoot = prepareNicheRoutes(selected);
   const plugins = (config.plugins || []).map(plugin => {
@@ -106,6 +115,6 @@ module.exports = ({ config }) => {
     scheme: niche.scheme,
     ios: { ...config.ios, bundleIdentifier: niche.iosBundleIdentifier },
     android: { ...config.android, package: niche.androidPackage, adaptiveIcon: { ...(config.android?.adaptiveIcon || {}), foregroundImage: productArtwork } },
-    extra: { ...(baseConfig.extra || {}), swishNicheId: niche.id, swishAppScheme: niche.scheme },
+    extra: { ...(baseConfig.extra || {}), swishUnifiedBuild: false, swishNicheId: niche.id, swishAppScheme: niche.scheme },
   };
 };

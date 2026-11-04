@@ -30,12 +30,14 @@
 //   get_category_children   — browse cached/live EBAY_GB category branches
 //   get_category_suggestions— search only live/cached eBay leaf categories
 
+import { serveModule } from '../_shared/moduleScope.ts';
 import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 import { assessListingConfidence } from '../_shared/listingConfidencePolicy.ts';
 import { requirePaidNiche, nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
 import { specialistNiche } from '../_shared/specialistRegistry.ts';
+import { evaluateSpecialistSafety } from '../_shared/specialistIntelligence.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -330,6 +332,11 @@ async function fetchSellerPoliciesFromEbay(accessToken: string): Promise<SellerP
     fetch(`${EBAY_ACCOUNT_API}/payment_policy?marketplace_id=EBAY_GB`, { headers, ...accountTimeout }),
   ]);
 
+  // A JSON error body is not a successful policy lookup. Never turn 401/403
+  // into empty policies and report an apparently healthy connector.
+  for (const [name, response] of [['fulfillment', fpResp], ['returns', rpResp], ['payment', ppResp]] as const) {
+    if (!response.ok) throw new Error(`eBay ${name} policy API returned HTTP ${response.status}. Check existing consent scopes, account restrictions and token refresh.`);
+  }
   const [fpData, rpData, ppData] = await Promise.all([fpResp.json(), rpResp.json(), ppResp.json()]);
 
   const extractPolicies = (data: any): PolicySummary[] => {
@@ -891,8 +898,9 @@ async function getEbayCategoryAspects(
 function mapConditionId(condition: string, conditionGrade: string): string {
   const c = (condition ?? '').toLowerCase();
   const g = (conditionGrade ?? '').toLowerCase();
-  if (c.includes('new') || c.includes('sealed') || c.includes('mint') || g === 'mint') return '1000';
-  if (c.includes('like new') || c.includes('near mint') || g.includes('nm')) return '1500';
+  if (c.includes('like new') || c.includes('near mint') || g === 'nm') return '1500';
+  if (c === 'new' || c === 'new with tags' || c === 'new in box' || c === 'sealed') return '1000';
+  // A numismatic Mint grade or powered-on device is not evidence of retail-new condition.
   if (c.includes('excellent') || c.includes('very fine') || g.includes('ef') || g.includes('vf')) return '2500';
   if (c.includes('good') || g === 'f' || g === 'fine') return '3000';
   if (c.includes('acceptable') || c.includes('poor') || c.includes('worn')) return '5000';
@@ -1315,6 +1323,25 @@ async function handleRequest(req: Request): Promise<Response> {
   const auth = await verifyTenantMembership(supabase, authHeader, tenantId, internalSecret);
   if (!auth.ok) return jsonResponse({ error: auth.error }, 401);
 
+  // Apply the same stored-resource entitlement gate before EVERY marketplace write.
+  if (['publish', 'revise', 'end', 'revise_sku'].includes(route)) {
+    if (!body.listingId || !auth.userId) return jsonResponse({ error: 'Authenticated saved listing required.' }, 400);
+    const { data: resource, error: resourceError } = await supabase.from('listings')
+      .select('item_id, items!inner(tenant_id,specialist_id,attributes)')
+      .eq('id', body.listingId).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle();
+    const ownedItem = (resource as any)?.items;
+    const niche = specialistNiche(String(ownedItem?.specialist_id ?? ''));
+    if (resourceError || !ownedItem || ownedItem.tenant_id !== tenantId || !niche || (body.nicheId && body.nicheId !== niche)) {
+      return jsonResponse({ error: 'Listing does not belong to this business and specialist.' }, 403);
+    }
+    try { await requirePaidNiche(supabase, { id: auth.userId, email: auth.userEmail }, tenantId, niche); }
+    catch (error) { const denied = nicheAccessResponse(error); if (denied) return denied; throw error; }
+    if (route === 'publish' || route === 'revise') {
+      const safety = evaluateSpecialistSafety(niche, ownedItem.attributes ?? {});
+      if (safety.blocked) return jsonResponse({ error: safety.reasons.join(' '), code: 'SPECIALIST_SAFETY_REVIEW_REQUIRED' }, 422);
+    }
+  }
+
   // ── Route: get_api_usage — eBay Developer Analytics rate-limit dashboard ──
   // Uses the server-held application credentials. Never expose credentials/tokens to the client.
   if (route === 'get_api_usage') {
@@ -1380,7 +1407,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const { data: conn } = await supabase.from('marketplace_connectors').select('store_category_tree').eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle();
       const existingObj = (() => { try { const e = conn?.store_category_tree; return typeof e === 'string' ? JSON.parse(e) : (e ?? {}); } catch { return {}; } })();
       await supabase.from('marketplace_connectors').update({ store_category_tree: { ...existingObj, policies }, policies_cached_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay');
-      return jsonResponse({ success: true, policies });
+      return jsonResponse({ success: true, policies, diagnostics: { live: true, httpStatus: 200, function: 'swish-ebay-list', checkedAt: policies.fetchedAt } });
     } catch (e: any) {
       return jsonResponse({ error: `Failed to fetch policies: ${e.message}` }, 500);
     }
@@ -1861,8 +1888,8 @@ async function handleRequest(req: Request): Promise<Response> {
     // against the verified JWT email before any eBay or database side effect.
     const preserveInventoryStatus = body.preserveInventoryStatus === true;
     if (preserveInventoryStatus) {
-      const configuredOwnerEmail = (Deno.env.get('SWISH_MASTER_ADMIN_EMAIL') ?? '').trim().toLowerCase();
-      if (!configuredOwnerEmail || !auth.userEmail || auth.userEmail.trim().toLowerCase() !== configuredOwnerEmail) {
+      const { data: trustedOwner, error: ownerError } = await supabase.rpc('swish_owner_for_user', { p_user_id: auth.userId });
+      if (ownerError || trustedOwner !== true) {
         return jsonResponse({ error: 'Owner-only inventory preservation is not authorised.' }, 403);
       }
     }
@@ -2334,7 +2361,7 @@ async function handleRequest(req: Request): Promise<Response> {
     const cacheIsRecent = syncedAt > 0 && Date.now() - syncedAt <= 30 * 24 * 60 * 60 * 1000;
     if (!cacheError && cacheIsRecent && Array.isArray(cachedAspectRow?.aspects)) {
       const cachedAspects = cachedAspectRow.aspects.map((aspect: any) => ({
-        aspectName: String(aspect.aspectName ?? aspect.name ?? '').trim(),
+        aspectName: String(aspect.localizedAspectName ?? aspect.aspectName ?? aspect.name ?? '').trim(),
         aspectConstraint: {
           aspectRequired: aspect.aspectConstraint?.aspectRequired === true || aspect.required === true,
           aspectUsage: aspect.aspectConstraint?.aspectUsage ?? aspect.usage ?? (aspect.required === true ? 'REQUIRED' : 'OPTIONAL'),
@@ -2447,7 +2474,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
 // ── Entry point with 90-second hard deadline ─────────────────────────────────
 
-Deno.serve(withEdgeFunctionLogging('swish-ebay-list', async (req: Request): Promise<Response> => {
+serveModule(withEdgeFunctionLogging('swish-ebay-list', async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   const DEADLINE_MS = 90_000;

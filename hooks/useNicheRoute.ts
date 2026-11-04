@@ -1,7 +1,7 @@
 import { usePathname } from 'expo-router';
 import { useAuth } from '@/template';
 import { useApp } from './useApp';
-import { isRouteAllowedForBuild, resolveProductionNiche } from '@/services/nicheRouting';
+import { isRouteAllowedForBuild, isRouteAllowedForModule, resolveProductionNiche } from '@/services/nicheRouting';
 import { moduleForPath } from '@/services/unifiedModuleRegistry';
 import registry from '@/niche-modules.json';
 const publicPaths = ['/', '/login', '/privacy-policy'];
@@ -18,7 +18,7 @@ export function useNicheRoute() {
     if (admin) allowed = app.isMasterAdmin;
     else if (entry) allowed = app.enabledNiches.includes(entry) && (!app.fixedNicheId || app.fixedNicheId === entry);
     else if (shellPaths.includes(path)) allowed = true;
-    else allowed = !!active && app.enabledNiches.includes(active) && isRouteAllowedForBuild(path, active);
+    else allowed = !!active && app.enabledNiches.includes(active) && (app.fixedNicheId ? isRouteAllowedForBuild(path, active) : isRouteAllowedForModule(path, active));
   }
   return { allowed, loading, moduleLoading: app.moduleLoading, authenticated: !!user, productName: app.activeNiche.name };
 }

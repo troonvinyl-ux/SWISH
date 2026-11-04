@@ -3,7 +3,8 @@
 // Route 2 (my_active_listings): Fetches all active seller listings for import.
 // Uses eBay OAuth user token for seller operations; App token for public browse.
 
-import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
+import { serveModule } from '../_shared/moduleScope.ts';
+import { inferImportNiche } from '../_shared/ebayImportScope.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
@@ -323,7 +324,7 @@ function parseItemXml(itemXml: string, ebayStatus: string): Record<string, any> 
   };
 }
 
-Deno.serve(withEdgeFunctionLogging('swish-ebay-browse', async (req: Request) => {
+serveModule(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
@@ -435,6 +436,10 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-browse', async (req: Request) => 
 
     const item = await getItemFull(userToken, credentials.clientId, ebayItemId);
     if (!item) return json({ error: `Could not fetch eBay item ${ebayItemId}` }, 404);
+    if (body.nicheId && inferImportNiche(item.categoryName,item.title) !== body.nicheId) {
+      const linked = await supabase.from('listings').select('id,items!inner(specialist_id)').eq('tenant_id',tenantId).eq('external_listing_id',ebayItemId).in('items.specialist_id',body.specialistIds ?? []);
+      if (linked.error || !linked.data?.length) return json({error:'This external item is outside the active niche or requires classification review.'},403);
+    }
     return json({ item });
   }
 
@@ -782,7 +787,8 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-browse', async (req: Request) => 
     // Enrich items that are missing descriptions / item specifics
     const enriched = await enrichDescriptions(listings);
 
-    return json({ listings: enriched, total: enriched.length });
+    const scoped = body.nicheId ? enriched.filter(item => inferImportNiche(item.categoryName,item.title) === body.nicheId) : enriched;
+    return json({ listings: scoped, total: scoped.length, excludedForReview: enriched.length-scoped.length });
   }
 
   // ── Route: search_by_image — eBay Browse API visual search ─────────────────
@@ -970,4 +976,4 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-browse', async (req: Request) => 
   }
 
   return json({ views, watchers });
-}));
+});

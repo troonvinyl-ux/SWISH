@@ -3,6 +3,8 @@
 // and provides the eBay import pipeline logic.
 
 import { getSupabaseClient } from '@/template';
+import { NICHE_MODULES, isProductionNiche } from '@/constants/niches';
+import { inferImportNiche } from '@/shared/ebayImportScope';
 
 // ── KC Inventory ID generation ────────────────────────────────────────────────
 
@@ -219,7 +221,12 @@ export async function importEbayCandidate(
     : ebayStatus === 'ended' ? 'identified'
     : 'listed';
 
-  // Generate KC inventory ID first
+  const scope = await supabase.rpc('swish_current_module');
+  if (scope.error || scope.data?.tenant_id !== tenantId || !isProductionNiche(scope.data.niche_id)) return {itemId:null,inventoryId:null,error:'Open a verified specialist module before importing.'};
+  const product = NICHE_MODULES[scope.data.niche_id];
+  nicheSpecialistId = nicheSpecialistId ?? product.defaultSpecialist;
+  if (!product.specialists.includes(nicheSpecialistId) || inferImportNiche(candidate.categoryName,candidate.title) !== scope.data.niche_id) return {itemId:null,inventoryId:null,error:'This listing belongs to another niche or needs manual classification review.'};
+  // Generate the existing canonical inventory ID only after scope validation.
   const { inventoryId, error: idErr } = await generateInventoryId(tenantId);
   if (idErr || !inventoryId) return { itemId: null, inventoryId: null, error: idErr ?? 'ID generation failed' };
 
@@ -280,11 +287,7 @@ export async function importEbayCandidate(
 
   // Shared-account imports require a canonical active-niche specialist ID.
   // Do not silently derive or default an item to a different niche.
-  const allowedSpecialists = new Set([
-    'coins', 'coins_uk', 'coins_world', 'coins_currency', 'banknotes', 'gold',
-    'silver', 'islamic_silver', 'ancient_artefacts', 'motocross', 'bicycles',
-    'clothing', 'trainers_sneakers', 'surplus_trader', 'curiosities_collectibles',
-  ]);
+  const allowedSpecialists = new Set(product.specialists);
   if (!nicheSpecialistId || !allowedSpecialists.has(nicheSpecialistId)) {
     return { itemId: null, inventoryId: null, error: 'A valid active niche must be selected before importing this listing.' };
   }
@@ -326,13 +329,13 @@ export async function importEbayCandidate(
       sku: candidate.sku || '',
       quantity: candidate.quantity || 1,
       // Coin-specific fields auto-derived from item specifics
-      ...(ruler ? { ruler } : {}),
-      ...(denomination ? { denomination } : {}),
+      ...(scope.data.niche_id === 'coins' && ruler ? { ruler } : {}),
+      ...(scope.data.niche_id === 'coins' && denomination ? { denomination } : {}),
       ...(yearMade ? { year_made: yearMade } : {}),
       ...(countryOfOrigin ? { country_of_origin: countryOfOrigin } : {}),
       ...(material ? { material } : {}),
       ...(period ? { period } : {}),
-      ...(mint ? { mint } : {}),
+      ...(scope.data.niche_id === 'coins' && mint ? { mint } : {}),
       ...(ebayStatus === 'sold' ? {
         sold_price: candidate.price,
         sold_at: new Date().toISOString(),

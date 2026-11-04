@@ -1,7 +1,4 @@
-// Shared five-area navigation across all niche apps.
-// Home | Scan | Inventory | Listings | More
-// Niche-specific tools remain inside each product's own workspace.
-
+import type { ComponentProps } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,253 +9,27 @@ import { useNicheListingCount } from '@/hooks/useNicheListingCount';
 import { IS_TV } from '@/hooks/useTVNavigation';
 import { NICHES } from '@/constants/niches';
 import { resolveProductionNiche } from '@/services/nicheRouting';
-
-// Derive the home tab icon and label from the active niche
-function useNicheHomeTab() {
-  const { activeNicheId, fixedNicheId } = useApp();
-  const id = resolveProductionNiche(fixedNicheId ?? activeNicheId) ?? '';
-  if (id === 'coins') {
-    return { icon: 'toll' as const, label: 'Coins', isAntiques: false };
-  }
-  if (id === 'motocross') return { icon: 'two-wheeler' as const, label: 'MX', isAntiques: false };
-  if (id === 'bicycles') return { icon: 'pedal-bike' as const, label: 'Bikes', isAntiques: false };
-  if (id === 'clothing') return { icon: 'checkroom' as const, label: 'Fashion', isAntiques: false };
-  if (id === 'surplus_flip') return { icon: 'inventory-2' as const, label: 'Surplus', isAntiques: false };
-  const config = id ? NICHES[id] : null;
-  return { icon: (config?.icon ?? 'dashboard') as React.ComponentProps<typeof MaterialIcons>['name'], label: config?.shortName ?? 'Home', isAntiques: id === 'antiques' };
+interface LabelProps { label:string;focused:boolean;accent:string }
+function TabLabel({label,focused,accent}:LabelProps){return <Text style={[s.label,focused?{color:accent}:null]} numberOfLines={1} allowFontScaling={false}>{label}</Text>;}
+export default function TabLayout(){
+ const insets=useSafeAreaInsets();const {activeNicheId,fixedNicheId}=useApp();const liveCount=useNicheListingCount();
+ const id=resolveProductionNiche(fixedNicheId??activeNicheId);const antiques=id==='antiques';
+ const accent=id==='collectibles'?Colors.primary:antiques?Colors.specialistGold:id?NICHES[id].color:Colors.primary;
+ const tabBarStyle={height:Platform.select({ios:insets.bottom+60,android:insets.bottom+60,default:70}),paddingTop:Spacing.sm,paddingBottom:Platform.select({ios:insets.bottom+Spacing.sm,android:insets.bottom+Spacing.sm,default:Spacing.sm}),paddingHorizontal:Spacing.base,backgroundColor:antiques?Colors.specialistSurface:Colors.surface,borderTopWidth:1,borderTopColor:antiques?Colors.specialistBorder:Colors.surfaceBorder};
+ const tabIcon=(label:string,icon:ComponentProps<typeof MaterialIcons>['name'],focused:boolean)=> <View style={[s.item,focused?{backgroundColor:accent+'18'}:null]}><View style={s.iconWrap}><MaterialIcons name={icon} size={22} color={focused?accent:Colors.textSecondary}/>{label==='Inventory'&&liveCount>0?<View style={s.badge}><Text style={s.badgeText}>{liveCount>99?'99+':liveCount}</Text></View>:null}</View><TabLabel label={label} focused={focused} accent={accent}/></View>;
+ return <>
+  {/* Keep the navigator mounted. Only module content/state changes on switching. */}
+  <Tabs screenOptions={{headerShown:false,tabBarStyle,tabBarActiveTintColor:accent,tabBarInactiveTintColor:Colors.textSecondary,tabBarShowLabel:false}}>
+   <Tabs.Screen name="index" options={{title:'Home',tabBarIcon:({focused})=>tabIcon('Home','home',focused)}}/>
+   <Tabs.Screen name="inventory" options={{title:'Inventory',tabBarIcon:({focused})=>tabIcon('Inventory','inventory-2',focused)}}/>
+   <Tabs.Screen name="scan" options={{title:'Identify',tabBarAccessibilityLabel:'Capture an item with the active specialist',tabBarIcon:()=> <View style={[s.camera,{backgroundColor:accent,shadowColor:accent}]}><MaterialIcons name="photo-camera" size={26} color={Colors.background}/></View>}}/>
+   <Tabs.Screen name="listings" options={{title:'Listings',tabBarIcon:({focused})=>tabIcon('Listings','sell',focused)}}/>
+   <Tabs.Screen name="account" options={{title:'More',tabBarIcon:({focused})=>tabIcon('More','menu',focused)}}/>
+   <Tabs.Screen name="acquisitions" options={{href:null}}/>
+   <Tabs.Screen name="insights" options={{href:null}}/>
+   <Tabs.Screen name="antique-more" options={{href:null}}/>
+  </Tabs>
+  {IS_TV?<View style={s.tv}><Text style={s.label}>Left / right: tabs · OK: select · Back: return</Text></View>:null}
+ </>;
 }
-
-// ── Live listings count ───────────────────────────────────────────────────────
-
-function useLiveListingCount() { return useNicheListingCount(); }
-
-function TabLabel({ label, focused, accentColor = Colors.primary }: { label: string; focused: boolean; accentColor?: string }) {
-  return (
-    <Text
-      style={[styles.tabLabel, focused && { color: accentColor }]}
-      numberOfLines={1}
-      allowFontScaling={false}
-    >
-      {label}
-    </Text>
-  );
-}
-
-/**
- * On Fire Stick / Android TV we show a persistent D-pad guide bar at the
- * bottom of the screen so the user knows which tab is active and can select
- * with OK / Enter.  On phones this component renders nothing.
- */
-function TVTabHint() {
-  if (!IS_TV) return null;
-  return (
-    <View style={styles.tvHint}>
-      <Text style={styles.tvHintText}>
-        ← → Navigate tabs  ·  ↑ ↓ Scroll  ·  OK Select  ·  ← Back
-      </Text>
-    </View>
-  );
-}
-
-export default function TabLayout() {
-  const insets = useSafeAreaInsets();
-  const liveCount = useLiveListingCount();
-  const nicheHome = useNicheHomeTab();
-  const { activeNicheId, fixedNicheId, moduleEpoch } = useApp();
-  const effectiveNicheId = fixedNicheId ?? activeNicheId;
-  const resolvedNicheId = resolveProductionNiche(effectiveNicheId);
-  const isThreadsFlip = resolvedNicheId === 'clothing';
-  const nicheAccent = nicheHome.isAntiques
-    ? '#D8AD52'
-    : resolvedNicheId
-      ? NICHES[resolvedNicheId]?.color ?? Colors.primary
-      : Colors.primary;
-  const threads = { background: '#0C080C', surface: '#160E16', border: '#301830', pink: '#E91E8C', cream: '#FFF0F5' };
-
-  const tabBarStyle = {
-    height: Platform.select({
-      ios: insets.bottom + 64,
-      android: insets.bottom + 64,
-      default: 72,
-    }),
-    paddingTop: Spacing.sm,
-    paddingBottom: Platform.select({
-      ios: insets.bottom + Spacing.sm,
-      android: insets.bottom + Spacing.sm,
-      default: Spacing.sm,
-    }),
-    paddingHorizontal: Spacing.xs,
-    backgroundColor: isThreadsFlip ? threads.surface : nicheHome.isAntiques ? '#17130D' : Colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: isThreadsFlip ? threads.border : nicheHome.isAntiques ? '#554322' : Colors.surfaceBorder,
-  };
-
-  return (
-    <>
-    <Tabs key={`${effectiveNicheId}:${moduleEpoch}`}
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle,
-        tabBarActiveTintColor: nicheAccent,
-        tabBarInactiveTintColor: Colors.textTertiary,
-        tabBarShowLabel: false,
-      }}
-    >
-      {/* ── Tab 1: Niche Home ── */}
-      <Tabs.Screen
-        name="index"
-        options={{
-          tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.tabItem, focused && styles.tabItemActive, focused && { backgroundColor: nicheAccent + '20' }]}>
-              <MaterialIcons name={nicheHome.icon} size={22} color={color} />
-              <TabLabel label="Home" focused={focused} accentColor={nicheAccent} />
-            </View>
-          ),
-        }}
-      />
-
-      {/* ── Tab 2: Scan (centre hero button) ── */}
-      <Tabs.Screen
-        name="scan"
-        options={{ title: 'Scan', tabBarAccessibilityLabel: 'Scan an item with your niche specialist',
-          tabBarIcon: () => (
-            <View style={[styles.scanTab, { backgroundColor: nicheAccent, shadowColor: nicheAccent }]}>
-              <MaterialIcons name="qr-code-scanner" size={26} color={isThreadsFlip ? threads.background : Colors.background} />
-            </View>
-          ),
-        }}
-      />
-
-      {/* ── Tab 3: Master Inventory + Listings ── */}
-      <Tabs.Screen
-        name="inventory"
-        options={{
-          tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.tabItem, focused && styles.tabItemActive, focused && isThreadsFlip && { backgroundColor: '#E91E8C20' }]}>
-              <View style={styles.iconWrap}>
-                <MaterialIcons name="inventory" size={22} color={color} />
-                {liveCount > 0 ? (
-                  <View style={styles.liveBadge}>
-                    <Text style={styles.liveBadgeText}>
-                      {liveCount > 99 ? '99+' : String(liveCount)}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-              <TabLabel label="Inventory" focused={focused} accentColor={nicheAccent} />
-            </View>
-          ),
-        }}
-      />
-
-      {/* ── Tab 4: eBay Hub ── */}
-      <Tabs.Screen
-        name="listings"
-        options={{
-          tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.tabItem, focused && styles.tabItemActive, focused && { backgroundColor: nicheAccent + '20' }]}>
-              <MaterialIcons name="storefront" size={22} color={color} />
-              <TabLabel label="Listings" focused={focused} accentColor={nicheAccent} />
-            </View>
-          ),
-        }}
-      />
-
-      {/* ── Hidden tabs (V2 — keep functional but not in nav) ── */}
-      <Tabs.Screen
-        name="acquisitions"
-        options={{ href: null }}
-      />
-      <Tabs.Screen
-        name="insights"
-        options={{ href: null }}
-      />
-      <Tabs.Screen name="antique-more" options={{ href: null }} />
-      <Tabs.Screen name="account" options={{ tabBarIcon: ({ focused }) => (<View style={[styles.tabItem, focused && styles.tabItemActive, focused && { backgroundColor: nicheAccent + '20' }]}><MaterialIcons name="more-horiz" size={22} color={focused ? nicheAccent : Colors.textTertiary} /><TabLabel label="More" focused={focused} accentColor={nicheAccent} /></View>) }} />
-    </Tabs>
-    <TVTabHint />
-    </>
-  );
-}
-
-const styles = StyleSheet.create({
-  tabItem: {
-    alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: IS_TV ? Spacing.lg : Spacing.sm,
-    paddingVertical: IS_TV ? Spacing.sm : Spacing.xs,
-    borderRadius: Radius.sm,
-    minWidth: IS_TV ? 100 : 48,
-    minHeight: 48,
-  },
-  tabItemActive: {
-    backgroundColor: Colors.primaryDim,
-    borderWidth: IS_TV ? 2 : 0,
-    borderColor: IS_TV ? Colors.primary : 'transparent',
-  },
-  tvHint: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: Colors.surface,
-    paddingVertical: Spacing.xs,
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: Colors.surfaceBorder,
-  },
-  tvHintText: {
-    fontSize: Typography.size.xs,
-    color: Colors.textTertiary,
-    letterSpacing: 0.3,
-  },
-  tabLabel: {
-    fontSize: 11,
-    fontWeight: Typography.weight.medium,
-    color: Colors.textTertiary,
-    letterSpacing: 0.2,
-    textAlign: 'center',
-  },
-  tabLabelActive: {
-    color: Colors.primary,
-  },
-  scanTab: {
-    width: 52,
-    height: 52,
-    borderRadius: Radius.pill,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Platform.OS === 'ios' ? 8 : 0,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  iconWrap: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  liveBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -6,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: Colors.danger,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-    borderWidth: 1.5,
-    borderColor: Colors.surface,
-  },
-  liveBadgeText: {
-    fontSize: 8,
-    fontWeight: Typography.weight.bold,
-    color: '#FFFFFF',
-    lineHeight: 10,
-  },
-});
+const s=StyleSheet.create({item:{alignItems:'center',justifyContent:'center',gap:Spacing.xs,minWidth:48,minHeight:48,borderRadius:Radius.sm,paddingHorizontal:Spacing.xs},label:{fontSize:Typography.size.xs,fontWeight:Typography.weight.medium,color:Colors.textSecondary,textAlign:'center'},camera:{width:52,height:52,borderRadius:Radius.circle,alignItems:'center',justifyContent:'center',shadowOffset:{width:0,height:2},shadowOpacity:0.3,shadowRadius:8,elevation:4},iconWrap:{alignItems:'center',justifyContent:'center'},badge:{position:'absolute',top:-6,right:-8,minWidth:16,height:16,borderRadius:Radius.pill,alignItems:'center',justifyContent:'center',paddingHorizontal:Spacing.xs,backgroundColor:Colors.danger},badgeText:{color:Colors.textPrimary,fontSize:Typography.size.xs,fontWeight:Typography.weight.bold},tv:{position:'absolute',bottom:0,left:0,right:0,padding:Spacing.xs,backgroundColor:Colors.surface,alignItems:'center'}});

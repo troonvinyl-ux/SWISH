@@ -2,7 +2,9 @@ import { getSupabaseClient } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 export interface UnifiedHealth {
   verifiedOwner: boolean; checkedAt: string; authentication: string; backend: string; database: string;
-  ebay: { status: string; last_sync_at: string | null };
+  ebay: { status: string; last_sync_at: string | null; access_token_expires_at?: string | null; can_publish?: boolean; can_read_orders?: boolean; policies_cached_at?: string | null };
+  overview?: { registeredUsers: number | null; activeNicheMemberships: number | null; tenantInventory: number | null; identificationUsageRows: number | null; recordedLoadFailures: number | null };
+  ebayDiagnostics?: { syncRuns: { id: string; sync_type: string; status: string; started_at: string; completed_at: string | null; records_fetched: number }[] | null; apiErrors: { id: string; operation: string; http_status: number | null; ebay_error_code: string | null; created_at: string }[] | null; listingCounts: Record<string, number> | null; listingSampleLimit: number };
   modules: { id: string; name: string; inventoryCount: number | null; listingCount: number | null; dataStatus: string }[];
   isolation: { status: string; observedCrossNicheRows: number | null };
   releases: { platform: string; channel: string; version: string; status: string; source_sha: string; artifact_sha256: string | null }[];
