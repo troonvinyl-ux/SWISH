@@ -160,6 +160,10 @@ const CATEGORY_NAME_NICHE_KEYWORDS: Array<{ keywords: string[]; niche: NicheClas
     niche: 'clothing',
   },
   {
+    keywords: ['collectibles', 'collectables', 'memorabilia', 'giftware', 'collectible bears', 'commemorative items'],
+    niche: 'collectibles',
+  },
+  {
     keywords: ['pokémon', 'pokemon', 'magic gathering', 'trading card', 'sports card', 'ccg', 'tcg', 'yu-gi-oh'],
     niche: 'trading_cards',
   },
@@ -186,6 +190,10 @@ const CATEGORY_NAME_NICHE_KEYWORDS: Array<{ keywords: string[]; niche: NicheClas
 // Higher risk of false positives — results should be treated as 'probable'.
 
 const TITLE_NICHE_KEYWORDS: Array<{ patterns: RegExp[]; niche: NicheClassification; confidence: 'high' | 'medium' }> = [
+  {
+    patterns: [/\\bwedgwood\\b/i, /\\bharrods?\\b.*\\b(bear|teddy)\\b/i, /\\banniversary\\b.*\\b(bear|teddy)\\b/i, /\\broyal doulton\\b/i, /\\broyal worcester\\b/i, /\\bsilver[- ]plate\\b/i, /\\bcollectible (bear|figurine|ornament|giftware)\\b/i],
+    niche: 'collectibles', confidence: 'high',
+  },
   {
     patterns: [
       /\b(coin|denarius|dirham|tetradrachm|drachm|solidus|florin|shilling|penny|sovereign|groat|tanka|rupee|stater|obol|nummus|follis|sesterce|aureus|sestertius)\b/i,
@@ -360,7 +368,7 @@ export function nicheToSpecialistId(niche: NicheClassification): string {
     case 'beauty':        return 'beauty';
     case 'tech':          return 'tech';
     case 'surplus_flip':  return 'surplus_trader';
-    case 'collectibles':  return 'collectibles_flipper';
+    case 'collectibles':  return 'collectibles';
     default:              return 'curiosities_collectibles';
   }
 }
