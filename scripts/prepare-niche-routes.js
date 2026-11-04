@@ -36,7 +36,7 @@ function prepareNicheRoutes(niche, root = path.resolve(__dirname, '..')) {
       const full = path.join(directory, entry.name);
       if (entry.isDirectory()) { walk(full); continue; }
       const relative = path.relative(source, full).split(path.sep).join('/');
-      if (!shared.has(relative) && !admin.has(relative) && !owners.has(relative)) throw new Error('Unclassified route: ' + relative);
+      if (!shared.has(relative) && !admin.has(relative) && !owners.has(relative)) throw new Error('Unclassified app route: ' + relative);
       if (!allowed.has(relative)) { removed.add(relative.replace(/\.tsx$/, '')); continue; }
       save(relative, fs.readFileSync(full, 'utf8'));
     }
