@@ -2,50 +2,11 @@
 
 import { AuthContextType, SendOTPResult, AuthResult, LogoutResult, SignUpResult, GoogleSignInResult } from '../types';
 import { authService } from './service';
-import { configManager } from '../../core/config';
 import { useAuthContext } from './context';
 
 export function useAuth(): AuthContextType {
   const context = useAuthContext();
   
-  const isAuthEnabled = configManager.isModuleEnabled('auth');
-  if (!isAuthEnabled) {
-    return {
-      user: null,
-      loading: false,
-      operationLoading: false,
-      initialized: true,
-      setOperationLoading: () => {},
-      sendOTP: async (): Promise<SendOTPResult> => ({ 
-        error: 'Auth function not enabled, please check configuration' 
-      }),
-      verifyOTPAndLogin: async (): Promise<AuthResult> => ({ 
-        error: 'Auth function not enabled, please check configuration', 
-        user: null 
-      }),
-      signUpWithPassword: async (): Promise<SignUpResult> => ({ 
-        error: 'Auth function not enabled, please check configuration', 
-        user: null 
-      }),
-      signInWithPassword: async (): Promise<AuthResult> => ({ 
-        error: 'Auth function not enabled, please check configuration', 
-        user: null 
-      }),
-      signInWithGoogle: async (): Promise<GoogleSignInResult> => ({ 
-        error: 'Auth function not enabled, please check configuration'
-      }),
-      logout: async (): Promise<LogoutResult> => {
-        console.warn('Auth function not enabled');
-        return { 
-          error: 'Auth function not enabled, please check configuration' 
-        };
-      },
-      refreshSession: async () => {
-        console.warn('Auth function not enabled');
-      },
-    };
-  }
-
   const sendOTP = async (email: string): Promise<SendOTPResult> => {
     context.setOperationLoading(true);
     try {
@@ -65,6 +26,7 @@ export function useAuth(): AuthContextType {
     context.setOperationLoading(true);
     try {
       const result = await authService.verifyOTPAndLogin(email, otp, options);
+      if (!result.error && result.user) context.setAuthenticatedUser(result.user);
       return result;
     } catch (error) {
       console.warn('[Template:useAuth] verifyOTPAndLogin exception:', error);
@@ -97,6 +59,7 @@ export function useAuth(): AuthContextType {
     context.setOperationLoading(true);
     try {
       const result = await authService.signInWithPassword(email, password);
+      if (!result.error && result.user) context.setAuthenticatedUser(result.user);
       return result;
     } catch (error) {
       console.warn('[Template:useAuth] signInWithPassword exception:', error);
