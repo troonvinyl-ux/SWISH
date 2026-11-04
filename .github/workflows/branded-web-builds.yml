@@ -12,6 +12,7 @@ on:
       - 'hooks/**'
       - 'assets/**'
       - 'niche-modules.json'
+      - 'scripts/prepare-niche-assets.mjs'
       - 'scripts/**'
       - 'app.config.js'
       - 'eas.json'
