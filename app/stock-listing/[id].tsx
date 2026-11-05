@@ -2137,6 +2137,18 @@ export default function StockListingScreen() {
         showAlert('Listed on eBay', `\u2713 ${result.listing.title} is live${result.externalListingId ? ` · #${result.externalListingId}` : ''}.${result.warnings.length ? `\\n\\nNotes: ${result.warnings.join(' · ')}` : ''}`);
         return;
       }
+      if (result.externalListingId) {
+        showAlert(
+          'eBay accepted — SWISH sync pending',
+          `eBay returned item #${result.externalListingId}, but SWISH has not confirmed the local save and inventory update. The listing may already be live. Do not submit or retry this draft again until its status is reconciled.`,
+          [
+            { text: 'View on eBay', onPress: () => { void Linking.openURL(`https://www.ebay.co.uk/itm/${encodeURIComponent(result.externalListingId!)}`); } },
+            ...(result.listing ? [{ text: 'Open SWISH draft', onPress: () => router.push(`/ebay-listing-editor?id=${result.listing!.id}` as any) }] : []),
+            { text: 'OK', style: 'cancel' },
+          ],
+        );
+        return;
+      }
       showAlert(
         result.listing ? 'Draft Saved — Publication Needs Attention' : 'Listing Could Not Be Created',
         result.error ?? 'The listing was not confirmed live on eBay. No automatic retry was made.',
