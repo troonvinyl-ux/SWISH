@@ -39,4 +39,22 @@ describe('Unified navigation regression contracts (not installed-device acceptan
   const runner=source('supabase/functions/swish-verification/index.ts');expect(runner).toContain("admin.rpc('swish_owner_for_user'");expect(runner).toContain('owner.data !== true');expect(runner).not.toContain("route: 'publish'");expect(runner).not.toContain("from('items').insert");expect(runner).not.toContain('credential_ref');
  });
  test('client/backend specialist prompts remain byte-identical',()=>{expect(source('shared/specialistIntelligence.ts')).toBe(source('supabase/functions/_shared/specialistIntelligence.ts'));});
+
+ test('all niche More tabs use one shared menu and preserve owner-only controls',()=>{
+  const account=source('app/(tabs)/account.tsx');
+  expect(account).toContain("Master Admin");
+  expect(account).toContain("owner = isMasterAdmin && isSwishMasterAdmin(user?.email)");
+  expect(account).toContain("route: '/settings'");
+  expect(account).not.toContain("effectiveNicheId === 'collectibles'");
+  expect(account).not.toContain("effectiveNicheId === 'antiques'");
+  expect(source('app/(tabs)/antique-more.tsx')).toContain("export { default } from './account'");
+ });
+ test('Master Admin converts render crashes into a recoverable screen',()=>{
+  const admin=source('app/master-admin.tsx');
+  expect(admin).toContain('MasterAdminErrorBoundary');
+  expect(admin).toContain('Master Admin could not be displayed');
+  expect(admin).toContain('Retry Master Admin');
+  expect(admin).toContain('!shell.accessReady');
+ });
+
 });

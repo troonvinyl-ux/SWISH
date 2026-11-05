@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { Component, memo, useMemo, type ReactNode } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Redirect, useRouter } from 'expo-router';
@@ -20,7 +20,7 @@ interface MetricProps { label:string; value:number|null|undefined }
 const Metric=memo(function Metric({label,value}:MetricProps){return <View style={s.metric}><Text style={s.metricValue}>{value==null?'UNKNOWN':value}</Text><Text style={s.body}>{label}</Text></View>;});
 type Section='overview'|'modules'|'verification'|'ebay'|'builds'|'updates'|'health'|'logs'|'readiness';
 const sections:Section[]=['overview','modules','verification','ebay','builds','updates','health','logs','readiness'];
-export default function MasterAdminScreen(){
+function MasterAdminContent(){
  const shell=useUnifiedShell(); const diagnostics=useUnifiedHealth(); const checks=useVerificationCentre(); const production=useProductionControl(shell.isMasterAdmin && shell.accessReady); const router=useRouter(); const {showAlert}=useAlert();
  const health=diagnostics.health;
  const latest=useMemo(()=>new Map(checks.results.map(row=>[`${row.test_id}:${row.platform}`,row] as const).reverse()),[checks.results]);
@@ -30,7 +30,7 @@ export default function MasterAdminScreen(){
  const refresh=()=>{void diagnostics.refresh();void checks.refresh();void production.refresh(false);};
  const confirmAntiques=()=>showAlert('Run read-only Antique audit?', 'Open Antique Flipper first. This checks actual inventory/listing reads and photo links, and records unexecuted workflow tests as NOT TESTED. No AI charge, inventory write or eBay publication is requested.', [{text:'Cancel',style:'cancel'},{text:'Run audit',onPress:()=>{void checks.antiques();}}]);
  const confirmEbay=()=>showAlert('Run live eBay read diagnostics?', 'This uses the existing seller-policy endpoints. It may refresh the encrypted access token and policy cache. It does not publish, revise, end listings or change inventory.', [{text:'Cancel',style:'cancel'},{text:'Run safe API check',onPress:()=>{void checks.ebay();}}]);
- if(shell.tenantLoading || shell.nichePreferencesLoading)return <SafeAreaView style={s.loading}><ActivityIndicator color={Colors.primary}/><Text style={s.body}>Verifying trusted owner access…</Text></SafeAreaView>;
+ if(shell.tenantLoading || shell.nichePreferencesLoading || shell.moduleLoading || !shell.accessReady)return <SafeAreaView style={s.loading}><ActivityIndicator color={Colors.primary}/><Text style={s.body}>Verifying trusted owner access…</Text></SafeAreaView>;
  if(!shell.isMasterAdmin)return <Redirect href="/"/>;
  const link=(title:string,path:string,disabled=false)=><Pressable key={path} disabled={disabled} onPress={()=>router.push(path as any)} style={({pressed})=>[s.action,pressed||disabled?s.pressed:null]}><Text style={s.actionText}>{title}</Text><MaterialIcons name="chevron-right" size={24} color={Colors.primary}/></Pressable>;
  const renderSection=({item}: {item:Section})=>{
@@ -46,4 +46,15 @@ export default function MasterAdminScreen(){
  };
  return <SafeAreaView edges={['top','bottom']} style={s.screen}><StatusBar style="light"/><FlatList data={sections} keyExtractor={item=>item} renderItem={renderSection} showsVerticalScrollIndicator={false} contentContainerStyle={s.content} ListHeaderComponent={<View style={s.header}><Pressable accessibilityLabel="Return to SWISH master home" onPress={()=>{void shell.switchNiche();}} style={({pressed})=>[s.icon,pressed?s.pressed:null]}><MaterialIcons name="arrow-back" size={24} color={Colors.primary}/></Pressable><View style={s.flex}><Text style={s.eyebrow}>SWISH / OWNER OPERATIONS</Text><Text style={s.title}>Master Control</Text></View><MaterialIcons name="admin-panel-settings" size={32} color={Colors.primary}/></View>} ListFooterComponent={<Text style={s.muted}>Verified owner only · safe checks retain diagnostic evidence, never production inventory changes.</Text>}/></SafeAreaView>;
 }
+
+class MasterAdminErrorBoundary extends Component<{children:ReactNode},{failed:boolean}> {
+ state={failed:false};
+ static getDerivedStateFromError(){return {failed:true};}
+ render(){
+  if(this.state.failed)return <SafeAreaView edges={['top','bottom']} style={s.screen}><View style={s.panel}><Text style={s.section}>Master Admin could not be displayed</Text><Text accessibilityRole="alert" style={s.body}>A dashboard component failed while rendering. Your account, inventory and marketplace data have not been changed.</Text><Pressable accessibilityRole="button" onPress={()=>this.setState({failed:false})} style={s.action}><MaterialIcons name="refresh" size={22} color={Colors.primary}/><Text style={s.actionText}>Retry Master Admin</Text></Pressable></View></SafeAreaView>;
+  return this.props.children;
+ }
+}
+export default function MasterAdminScreen(){return <MasterAdminErrorBoundary><MasterAdminContent/></MasterAdminErrorBoundary>;}
+
 const s=StyleSheet.create({screen:{flex:1,backgroundColor:Colors.background},loading:{flex:1,backgroundColor:Colors.background,alignItems:'center',justifyContent:'center',gap:Spacing.base},content:{padding:Spacing.base,gap:Spacing.xxl,width:'100%',maxWidth:960,alignSelf:'center',paddingBottom:Spacing.section},block:{gap:Spacing.base},header:{flexDirection:'row',alignItems:'center',gap:Spacing.md},flex:{flex:1},title:{color:Colors.textPrimary,fontSize:Typography.size.xl,fontWeight:Typography.weight.bold},eyebrow:{color:Colors.primary,fontSize:Typography.size.sm,fontWeight:Typography.weight.semibold,letterSpacing:1},section:{color:Colors.textPrimary,fontSize:Typography.size.lg,fontWeight:Typography.weight.bold},hero:{padding:Spacing.base,gap:Spacing.base,borderRadius:Radius.xl,borderWidth:1,borderColor:Colors.gold,backgroundColor:Colors.surfaceElevated},panel:{padding:Spacing.base,gap:Spacing.md,borderRadius:Radius.lg,borderWidth:1,borderColor:Colors.surfaceBorder,backgroundColor:Colors.surface,marginBottom:Spacing.md},row:{flexDirection:'row',alignItems:'center',flexWrap:'wrap',gap:Spacing.sm},cardTitle:{color:Colors.textPrimary,fontSize:Typography.size.md,fontWeight:Typography.weight.semibold,flexShrink:1},body:{color:Colors.textSecondary,fontSize:Typography.size.base,lineHeight:26,includeFontPadding:false},muted:{color:Colors.textSecondary,fontSize:Typography.size.sm,lineHeight:22},grid:{flexDirection:'row',flexWrap:'wrap',gap:Spacing.sm},metric:{flexBasis:'46%',flexGrow:1,padding:Spacing.md,borderRadius:Radius.md,backgroundColor:Colors.surface},metricValue:{fontSize:Typography.size.xl,fontWeight:Typography.weight.bold,color:Colors.primary},pill:{paddingVertical:Spacing.xs,paddingHorizontal:Spacing.sm,borderRadius:Radius.pill,borderWidth:1,alignSelf:'flex-start'},pillText:{fontSize:Typography.size.sm,fontWeight:Typography.weight.semibold},action:{minHeight:48,padding:Spacing.md,gap:Spacing.sm,flexDirection:'row',alignItems:'center',backgroundColor:Colors.primaryDim,borderRadius:Radius.md},actionText:{fontSize:Typography.size.base,color:Colors.primary,fontWeight:Typography.weight.semibold,flex:1},primary:{minHeight:52,padding:Spacing.base,gap:Spacing.sm,flexDirection:'row',alignItems:'center',justifyContent:'center',backgroundColor:Colors.primary,borderRadius:Radius.md},primaryText:{color:Colors.background,fontSize:Typography.size.base,fontWeight:Typography.weight.bold},icon:{width:48,height:48,alignItems:'center',justifyContent:'center',backgroundColor:Colors.surface,borderRadius:Radius.md},error:{color:Colors.warning,fontSize:Typography.size.base,lineHeight:26},divider:{borderTopWidth:1,borderTopColor:Colors.surfaceBorder,paddingTop:Spacing.md,gap:Spacing.sm},pressed:{opacity:0.65}});
