@@ -43,12 +43,24 @@ describe('Unified navigation regression contracts (not installed-device acceptan
  test('all niche More tabs use one shared menu and preserve owner-only controls',()=>{
   const account=source('app/(tabs)/account.tsx');
   expect(account).toContain("Master Admin");
-  expect(account).toContain("owner = isMasterAdmin && isSwishMasterAdmin(user?.email)");
+  expect(account).toContain('const owner = isMasterAdmin;');
+  expect(account).not.toContain('isSwishMasterAdmin');
   expect(account).toContain("route: '/settings'");
   expect(account).not.toContain("effectiveNicheId === 'collectibles'");
   expect(account).not.toContain("effectiveNicheId === 'antiques'");
   expect(source('app/(tabs)/antique-more.tsx')).toContain("export { default } from './account'");
  });
+ test('Master Admin More visibility relies only on the trusted backend owner grant',()=>{
+  const account=source('app/(tabs)/account.tsx');
+  expect(account).toContain('const owner = isMasterAdmin;');
+  expect(account).toContain('const showOwnerTools = owner && !fixedNicheId');
+  expect(account).not.toContain('isSwishMasterAdmin');
+ });
+ test('unified shell preserves module initialization errors separately from access errors',()=>{
+  const shell=source('hooks/useUnifiedShell.ts');
+  expect(shell).toContain('moduleError: app.moduleError ?? app.accessError');
+ });
+
  test('Master Admin converts render crashes into a recoverable screen',()=>{
   const admin=source('app/master-admin.tsx');
   expect(admin).toContain('MasterAdminErrorBoundary');

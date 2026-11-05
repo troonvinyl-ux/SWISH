@@ -7,7 +7,6 @@ import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '@/template';
 import { useAccountLogout } from '@/hooks/useAccountLogout';
 import { useApp } from '@/hooks/useApp';
-import { isSwishMasterAdmin } from '@/contexts/AppContext';
 import { Colors, Typography, Spacing, Radius } from '@/constants/theme';
 
 type MenuAction = { title: string; detail: string; icon: React.ComponentProps<typeof MaterialIcons>['name']; route: string };
@@ -19,9 +18,9 @@ export default function AccountScreen() {
   const { isMasterAdmin, activeNicheId, fixedNicheId, canSwitchNiche } = useApp();
   const { signingOut, requestLogout, disabled: logoutDisabled } = useAccountLogout();
   const effectiveNicheId = fixedNicheId ?? activeNicheId;
-  const owner = isMasterAdmin && isSwishMasterAdmin(user?.email);
+  const owner = isMasterAdmin;
   // Branded APKs deliberately omit owner-only and cross-niche routes.
-  // Keep those actions in the separate unified Master Admin installation.
+  // Keep owner tools available in the unified SWISH installation.
   const showOwnerTools = owner && !fixedNicheId;
   const showSwitcher = !fixedNicheId && (owner || canSwitchNiche);
   const actions: MenuAction[] = [
