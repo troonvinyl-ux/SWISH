@@ -158,6 +158,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAccessError(null); setModuleError(null); setModuleLoading(false); setSubscriptionLoading(false); clearModule(); void loadTenant();
     return () => { generation.current++; accessRequest.current++; scopeRequest.current++; };
   }, [loadTenant, clearModule]);
+  // Never leave startup verification spinning forever if a backend request stalls.
+  // Invalidate the in-flight generations so a retry can start a fresh request.
+  useEffect(() => {
+    const pending = tenantLoading || subscriptionLoading || moduleLoading ||
+      (Boolean(user?.id) && !loadedUserId && !tenantError && !accessError);
+    if (!pending) return;
+    const timer = setTimeout(() => {
+      generation.current++;
+      accessRequest.current++;
+      scopeRequest.current++;
+      tenantFlight.current = null;
+      accessFlight.current = null;
+      moduleLock.current = false;
+      setTenantLoading(false);
+      setSubscriptionLoading(false);
+      setModuleLoading(false);
+      const message = 'Specialist access verification timed out. The backend did not finish responding. Your membership has not been changed. Tap retry to start a fresh check.';
+      if (!loadedUserId || tenantLoading) setTenantError(message);
+      else setAccessError(message);
+    }, 25000);
+    return () => clearTimeout(timer);
+  }, [tenantLoading, subscriptionLoading, moduleLoading, loadedUserId, tenantError, accessError, user?.id]);
+
   useEffect(() => {
     if (!user?.id) return;
     const timer = setInterval(() => { if (AppState.currentState === 'active') void loadAccess(); }, 240000);
