@@ -176,6 +176,12 @@ const CATEGORY_NAME_NICHE_KEYWORDS: Array<{ keywords: string[]; niche: NicheClas
     niche: 'tech',
   },
   {
+    // Product families owned by Collectibles Flipper. Keep antique ceramics,
+    // trading cards, coins and fossils in their dedicated specialist niches.
+    keywords: ['action figure', 'action figures', 'figurine', 'figurines', 'comic', 'comics', 'comic book', 'board game', 'board games', 'memorabilia', 'pop culture', 'collectible bear', 'diecast', 'model car', 'model train', 'toy soldier', 'vintage toy', 'vintage toys', 'souvenir', 'movie memorabilia', 'music memorabilia', 'sports memorabilia', 'collectables', 'toys'],
+    niche: 'collectibles',
+  },
+  {
     keywords: ['antique', 'vintage watch', 'wristwatch', 'pocket watch', 'fine jewellery', 'militaria', 'ceramics', 'pottery', 'antiquarian book'],
     niche: 'antiques',
   },
@@ -243,7 +249,11 @@ const TITLE_NICHE_KEYWORDS: Array<{ patterns: RegExp[]; niche: NicheClassificati
     confidence: 'high',
   },
   {
-    patterns: [/\b(wedgwood|royal doulton|royal worcester|harrods.{0,20}bear|silver[ -]plated|jasperware|giftware|commemorative figurine)\b/i],
+    patterns: [
+      /\b(wedgwood|royal doulton|royal worcester|harrods.{0,20}bear|silver[ -]plated|jasperware|giftware|commemorative figurine)\b/i,
+      /\b(action figure|action figures|figurine|figurines|comic book|comic books|comics|board game|board games|memorabilia|pop culture|collectible bear|diecast|model car|model train|toy soldier|vintage toy|vintage toys|souvenir|movie memorabilia|music memorabilia|sports memorabilia)\b/i,
+      /\b(lego set|star wars figure|transformers figure|funko pop|hot wheels|matchbox car|teddy bear collection|limited edition figurine)\b/i,
+    ],
     niche: 'collectibles', confidence: 'medium',
   },
   {
