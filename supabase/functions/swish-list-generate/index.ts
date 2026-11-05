@@ -439,7 +439,6 @@ serveModule(async (req) => {
 
     const isCoin = ['coins','coins_uk','coins_world','coins_currency','islamic_silver','banknotes','gold','silver'].includes(item.specialist_id);
     const isClothing = ['clothing','clothing_specialist','trainers_sneakers'].includes(item.specialist_id);
-    const isCollectibles = item.specialist_id === 'collectibles';
     // ── Detect specialist ────────────────────────────────────────────────────
     const specialistId: string = item.specialist_id ?? 'curiosities_collectibles';
     const profile = profileForSpecialist(specialistId);
@@ -590,13 +589,12 @@ SPECIALIST RULES: ${profile?.listingRules ?? 'Use supported item evidence only.'
 ${isMXPart ? 'This is a motorcycle COMPONENT, not a complete bike. Use exact part number/component identity. Fitment is not verified by visual resemblance.' : ''}
 Category IDs must not be invented. Use an empty category_id unless a saved, seller-selected ID is supplied. Current category requirements are checked in the existing editor/publish Taxonomy flow.
 ${profile?.nicheId === 'antiques' ? 'ANTIQUE EVIDENCE: ' + JSON.stringify(item.attributes?._specialist_analysis ?? {}) + '\nInferred maker/date/origin/style are hypotheses, never confirmed claims. Preserve uncertainty, user condition notes and restoration/provenance limitations. Do not fabricate a maker, age, originality or rarity. Return candidate specifics only; actual required fields are fetched from the selected eBay category in the editor.' : ''}
-${isCollectibles ? 'COLLECTIBLES LISTING RULES: Classify the exact object subtype first (action figure/toy, comic, board game, diecast/model vehicle, figurine, memorabilia or other collectible). Build title from confirmed maker/brand, character/franchise, series/model, edition/issue/year/variant only where evidenced. Comics: publisher, title, issue number, printing and cover variant. Figures/toys: manufacturer, character, line/series, model/variant, scale and included accessories. Games: title, edition, language and completeness. Diecast: maker, model, scale and series. Describe packaging, inserts, accessories, completeness, damage and condition honestly. Never infer professional grading, authenticity, rarity or sealed status. Do not use coin, antique or clothing specifics. Return confirmed candidate specifics only; actual required fields must come from the selected eBay leaf category Taxonomy in the existing editor.' : ''}
 Mapped, evidence-based candidate specifics (use only when applicable to the chosen category): ${JSON.stringify(profile ? mappedSpecialistSpecifics(profile,item.attributes ?? {}) : {})}
 
 ITEM DATA:
 - Canonical title: ${item.canonical_title}
 - Object type: ${objectType}
-- Specialist: ${specialistId}${isMXSpecialist ? ' (MOTOCROSS — follow MX title formula below)' : isCollectibles ? ' (COLLECTIBLES — exact subtype and corresponding item specifics)' : ''}
+- Specialist: ${specialistId}${isMXSpecialist ? ' (MOTOCROSS — follow MX title formula below)' : ''}
 - Identification state: ${identificationState}
 - Identification confidence: ${identificationConf}%
 ${isCoin ? `- Numista verification status: ${numistaStatus}` : '- Numista verification: N/A for this specialist'}

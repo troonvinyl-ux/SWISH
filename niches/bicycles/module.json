@@ -13,7 +13,7 @@
   "androidPackage": "com.swish.bikeflipper",
   "iosBundleIdentifier": "com.swish.bikeflipper",
   "entryRoute": "/entry/bicycles",
-  "scannerRoute": "/bike-flipper",
+  "scannerRoute": "/capture",
   "dedicatedRoutes": [
     "bike-flipper.tsx"
   ],

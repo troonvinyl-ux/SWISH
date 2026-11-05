@@ -335,7 +335,7 @@ export async function identifyItemWithAI(
     if (preflight.error) return { result:null,error:preflight.error };
     // Compress any new captures; skip if using existing URLs only
     const base64Images = images.length > 0
-      ? await Promise.all(images.map(img => compressForAI(resolveProductionNiche(specialistId) === 'antiques' ? img.uri : img.enhancedUri ?? img.uri)))
+      ? await Promise.all(images.map(img => compressForAI(resolveProductionNiche(specialistId) === 'coins' ? img.enhancedUri ?? img.uri : img.uri)))
       : [];
 
     const supabase = getSupabaseClient();
@@ -498,7 +498,7 @@ export async function identifyItemWithAI(
 export async function uploadItemImages(
   itemId: string,
   images: CapturedImage[],
-  normalizeOriginals = false,
+  normalizeOriginals = true,
 ): Promise<{ urls: string[]; errors: string[] }> {
   const supabase = getSupabaseClient();
   const urls: string[] = [];

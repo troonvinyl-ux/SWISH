@@ -20,6 +20,9 @@ import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { getProductionNicheSpecialistIds, resolveProductionNiche } from '@/services/nicheRouting';
 import { useMemo } from 'react';
+import { NICHES } from '@/constants/niches';
+import { runNicheEbayOperation } from '@/services/ebaySyncService';
+import { isRouteAllowedForBuild, isRouteAllowedForModule } from '@/services/nicheRouting';
 import { useAlert } from '@/template';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -171,6 +174,10 @@ async function loadEbayMetrics(tenantId: string, specialistIds?: string[], niche
     supabase.functions.invoke('swish-ebay-finances', { body: { tenantId, route: 'get_funds_summary' } }),
   ]);
 
+  // A failed database read is not a zero count or an all-clear result.
+  const requiredReads=[connectorRes,listingCountsRes,ordersDispatchRes,dispatchedTodayRes,salesTodayRes,salesWeekRes,salesMonthRes,messagesRes,returnsRes,casesRes,offersRes];
+  const failedRead=requiredReads.find(result=>result.error);
+  if(failedRead?.error)throw new Error(failedRead.error.message ?? 'Seller metrics are unavailable.');
   const connector = connectorRes.data;
   const isConnected = connector?.status === 'connected';
   const tokenExpiry = connector?.access_token_expires_at ?? null;
@@ -257,21 +264,21 @@ function ConnectionBanner({
   const tokenWarning = msLeft !== null && msLeft > 0 && msLeft < 3 * 24 * 60 * 60 * 1000;
 
   const expiryLabel = tokenExpired
-    ? 'Expired'
-    : tokenDaysLeft === 0 ? `Expires in ${tokenHoursLeft}h`
+    ? 'Access token needs refresh'
+    : tokenDaysLeft === 0 ? msLeft!==null&&msLeft<3600000?'Refresh due within one hour':`Expires in ${tokenHoursLeft}h`
     : tokenDaysLeft === 1 ? 'Expires tomorrow'
     : tokenDaysLeft !== null ? `Expires in ${tokenDaysLeft}d`
     : null;
 
   if (tokenExpired) {
     return (
-      <Pressable onPress={onReconnect} style={[b.banner, b.bannerWarning]}>
+      <Pressable onPress={onRefreshToken} disabled={refreshingToken} style={({pressed})=>[b.banner,b.bannerWarning,pressed?{opacity:0.7}:null]}>
         <MaterialIcons name="warning" size={16} color={Colors.warning} />
         <View style={b.flex}>
           <Text style={[b.bannerTitle, { color: Colors.warning }]}>Token Expired</Text>
-          <Text style={b.bannerSub}>Re-authorise eBay to restore functionality</Text>
+          <Text style={b.bannerSub}>Refresh existing consent first; reconnect only if eBay reports revocation</Text>
         </View>
-        <View style={b.reconnectBtn}><Text style={b.reconnectBtnText}>Reconnect</Text></View>
+        <View style={b.reconnectBtn}><Text style={b.reconnectBtnText}>Refresh</Text></View>
       </Pressable>
     );
   }
@@ -442,6 +449,8 @@ const hc = StyleSheet.create({
 
 // ── Niche theme for eBay Hub header ─────────────────────────────────────────
 function useNicheHubStyle(activeNicheId: string | null | undefined) {
+  const canonical=resolveProductionNiche(activeNicheId);
+  if(canonical){const config=NICHES[canonical];return {nicheId:canonical,accent:config.color,icon:config.icon as any,label:config.shortName,specialistIds:getProductionNicheSpecialistIds(canonical)};}
   // Keep this route resilient if a stale OnSpace bundle omits a nicheRouting
   // export. The Hub must still render; niche filtering falls back conservatively.
   let niche: string | null = null;
@@ -505,7 +514,7 @@ function useNicheHubStyle(activeNicheId: string | null | undefined) {
 function EbayHubScreenContent() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, activeNicheId, fixedNicheId } = useApp();
+  const { tenant, activeNicheId, fixedNicheId, accessReady, moduleLoading, isMasterAdmin, triggerInventoryReload } = useApp();
   const effectiveNicheId = fixedNicheId ?? activeNicheId;
   const isThreadsFlip = effectiveNicheId === 'clothing';
   const { showAlert } = useAlert();
@@ -516,6 +525,10 @@ function EbayHubScreenContent() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [tokenRefreshing, setTokenRefreshing] = useState(false);
+  const [metricsError,setMetricsError]=useState<string|null>(null);
+  const scope=`${tenant?.id}:${effectiveNicheId}`;
+  const currentScope=useRef(scope);currentScope.current=scope;
+  const operationFlight=useRef(false);
 
   // ── eBay Sync state ────────────────────────────────────────────────────────
   interface HubSyncState {
@@ -540,7 +553,7 @@ function EbayHubScreenContent() {
   // makes this effect reload metrics after every setMetrics render.
   const specialistIdsKey = nicheStyle.specialistIds.join('|');
   const load = useCallback(async () => {
-    if (!tenant?.id) {
+    if (!tenant?.id || !accessReady || moduleLoading) {
       setMetrics(emptyEbayMetrics());
       setLoading(false);
       setRefreshing(false);
@@ -549,49 +562,50 @@ function EbayHubScreenContent() {
     try {
       const specialistIds = specialistIdsKey ? specialistIdsKey.split('|') : [];
       const m = await loadEbayMetrics(tenant.id, specialistIds, nicheStyle.nicheId);
-      setMetrics(m);
+      if(currentScope.current!==scope)return;
+      setMetrics(m);setMetricsError(null);
     } catch (e: any) {
       // Keep the hub usable even if a metrics query fails; do not leave a blank screen.
-      setMetrics(current => current ?? emptyEbayMetrics());
-      showAlert('Load Error', e?.message ?? 'Failed to load eBay metrics');
+      if(currentScope.current!==scope)return;
+      setMetricsError(e?.message ?? 'Failed to load eBay metrics. Counts are not verified.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [tenant?.id, showAlert, specialistIdsKey, nicheStyle.nicheId]);
+  }, [tenant?.id, showAlert, specialistIdsKey, nicheStyle.nicheId, scope, accessReady, moduleLoading]);
 
   // ── Silent token refresh ──────────────────────────────────────────────────
   const handleTokenRefresh = useCallback(async () => {
-    if (!tenant?.id || tokenRefreshing) return;
+    if (!tenant?.id || tokenRefreshing || operationFlight.current || !accessReady) return;
+    operationFlight.current=true;
     setTokenRefreshing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('swish-ebay-sync', {
-        body: { tenantId: tenant.id, mode: 'refresh_token_only' },
-      });
-      if (error || !data?.success) router.push('/marketplaces' as any);
+      const { error, requiresReauth } = await runNicheEbayOperation(tenant.id,effectiveNicheId,'token');
+      if(currentScope.current!==scope)return;
+      if(error){showAlert('Token refresh not confirmed',error);if(requiresReauth)router.push('/marketplaces' as any);return;}
       const specialistIds = specialistIdsKey ? specialistIdsKey.split('|') : [];
       const m = await loadEbayMetrics(tenant.id, specialistIds, nicheStyle.nicheId);
       setMetrics(m);
     } catch {
-      router.push('/marketplaces' as any);
+      if(currentScope.current===scope)showAlert('Token service unavailable','Existing connection preserved. Retry later.');
     } finally {
-      setTokenRefreshing(false);
+      operationFlight.current=false;
+      if(currentScope.current===scope)setTokenRefreshing(false);
     }
-  }, [tenant?.id, tokenRefreshing, supabase, router, specialistIdsKey, nicheStyle.nicheId]);
+  }, [tenant?.id, tokenRefreshing, supabase, router, specialistIdsKey, nicheStyle.nicheId,scope,effectiveNicheId,accessReady,showAlert]);
 
   // ── Sync with eBay ────────────────────────────────────────────────────────
   const handleHubSync = useCallback(async () => {
-    if (!tenant?.id || hubSync.phase === 'running') return;
+    if (!tenant?.id || hubSync.phase === 'running' || operationFlight.current || !accessReady) return;
+    operationFlight.current=true;
     setHubSync({ ...EMPTY_SYNC, phase: 'running' });
     setHubImgDl(EMPTY_IMGDL);
     try {
-      const { data, error } = await supabase.functions.invoke('swish-ebay-sync', {
-        body: { tenantId: tenant.id, mode: 'full' },
-      });
+      const { data, error, requiresReauth } = await runNicheEbayOperation(tenant.id,effectiveNicheId,'sync');
+      if(currentScope.current!==scope)return;
       if (error) {
-        let msg = error.message ?? 'Unknown error';
-        try { const t = await (error as any).context?.text?.(); if (t) { try { const p = JSON.parse(t); msg = p.error ?? t; } catch { msg = t; } } } catch {}
-        const isReauth = msg.includes('REQUIRES_REAUTH') || msg.includes('re-authoris');
+        const msg=error;
+        const isReauth=requiresReauth;
         setHubSync(prev => ({ ...prev, phase: 'error', errorMsg: msg, requiresReauth: isReauth }));
         return;
       }
@@ -604,23 +618,22 @@ function EbayHubScreenContent() {
       });
       // Reset image download so the button appears fresh
       setHubImgDl(EMPTY_IMGDL);
-      load();
+      triggerInventoryReload();void load();
     } catch (e: any) {
-      setHubSync(prev => ({ ...prev, phase: 'error', errorMsg: e?.message ?? 'Sync failed' }));
-    }
-  }, [tenant?.id, hubSync.phase, supabase, load]);
+      if(currentScope.current===scope)setHubSync(prev => ({ ...prev, phase: 'error', errorMsg: e?.message ?? 'Sync failed' }));
+    } finally {operationFlight.current=false;}
+  }, [tenant?.id, hubSync.phase, supabase, load,scope,effectiveNicheId,accessReady,triggerInventoryReload]);
 
   // ── Download Images to Storage (second phase) ─────────────────────────────
   const handleHubImageDownload = useCallback(async () => {
-    if (!tenant?.id || hubImgDl.state === 'running') return;
+    if (!tenant?.id || hubImgDl.state === 'running' || operationFlight.current || !accessReady) return;
+    operationFlight.current=true;
     setHubImgDl({ ...EMPTY_IMGDL, state: 'running' });
     try {
-      const { data, error } = await supabase.functions.invoke('swish-image-download', {
-        body: { tenantId: tenant.id, fixTitles: false },
-      });
+      const {data,error}=await runNicheEbayOperation(tenant.id,effectiveNicheId,'images');
+      if(currentScope.current!==scope)return;
       if (error) {
-        let msg = error.message ?? 'Unknown error';
-        try { const t = await (error as any).context?.text?.(); if (t) { try { const p = JSON.parse(t); msg = p.error ?? t; } catch { msg = t; } } } catch {}
+        const msg=error;
         setHubImgDl({ ...EMPTY_IMGDL, state: 'error', errorMsg: msg, requiresReauth: msg.includes('re-authoris') || msg.includes('REQUIRES_REAUTH') });
         return;
       }
@@ -631,13 +644,13 @@ function EbayHubScreenContent() {
         notFound: data?.imagesNotFound ?? 0,
         requiresReauth: data?.requiresReauth ?? false,
       });
-      load();
+      triggerInventoryReload();void load();
     } catch (e: any) {
-      setHubImgDl({ ...EMPTY_IMGDL, state: 'error', errorMsg: e?.message ?? 'Download failed' });
-    }
-  }, [tenant?.id, hubImgDl.state, supabase, load]);
+      if(currentScope.current===scope)setHubImgDl({ ...EMPTY_IMGDL, state: 'error', errorMsg: e?.message ?? 'Download failed' });
+    } finally {operationFlight.current=false;}
+  }, [tenant?.id, hubImgDl.state, supabase, load,scope,effectiveNicheId,accessReady,triggerInventoryReload]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {setMetrics(null);setMetricsError(null);setHubSync(EMPTY_SYNC);setHubImgDl(EMPTY_IMGDL);setTokenRefreshing(false);setLoading(true);void load();}, [load]);
   const onRefresh = useCallback(() => { setRefreshing(true); load(); }, [load]);
 
   // ── Actions ────────────────────────────────────────────────────────────────
@@ -647,12 +660,12 @@ function EbayHubScreenContent() {
     metrics.openReturns > 0 && { id: 'returns', priority: 'high' as const, icon: 'assignment-return', title: `${metrics.openReturns} return${metrics.openReturns > 1 ? 's' : ''} require attention`, count: metrics.openReturns, route: '/ebay-returns', color: Colors.warning },
     metrics.unreadMessages > 0 && { id: 'messages', priority: 'high' as const, icon: 'mail', title: `${metrics.unreadMessages} unread message${metrics.unreadMessages > 1 ? 's' : ''} from buyers`, count: metrics.unreadMessages, route: '/ebay-messages', color: Colors.info },
     metrics.pendingOffers > 0 && { id: 'offers', priority: 'medium' as const, icon: 'local-offer', title: `${metrics.pendingOffers} offer${metrics.pendingOffers > 1 ? 's' : ''} awaiting response`, count: metrics.pendingOffers, route: '/ebay-offers', color: Colors.accent },
-    metrics.draftListings > 0 && { id: 'drafts', priority: 'medium' as const, icon: 'drafts', title: `${metrics.draftListings} listing${metrics.draftListings > 1 ? 's' : ''} ready to publish`, count: metrics.draftListings, route: '/ebay-admin', color: Colors.primary },
+    metrics.draftListings > 0 && { id: 'drafts', priority: 'medium' as const, icon: 'drafts', title: `${metrics.draftListings} listing${metrics.draftListings > 1 ? 's' : ''} ready to publish`, count: metrics.draftListings, route: '/(tabs)/listings', color: Colors.primary },
   ].filter(Boolean) as ActionItem[] : [];
 
   // ── Hub sections ──────────────────────────────────────────────────────────
   const sections: HubSection[] = [
-    { id: 'listings', icon: 'receipt-long', title: 'Listings', description: `${metrics?.activeListings ?? 0} active · ${metrics?.draftListings ?? 0} draft`, route: '/ebay-admin', color: Colors.primary, badge: metrics?.draftListings ?? 0, badgeColor: Colors.warning, available: true },
+    { id: 'listings', icon: 'receipt-long', title: 'Listings', description: `${metrics?.activeListings ?? 0} active · ${metrics?.draftListings ?? 0} draft`, route: '/(tabs)/listings', color: Colors.primary, badge: metrics?.draftListings ?? 0, badgeColor: Colors.warning, available: true },
     { id: 'orders', icon: 'shopping-bag', title: 'Orders', description: `${metrics?.awaitingDispatch ?? 0} awaiting dispatch · ${metrics?.totalOrdersThisMonth ?? 0} this month`, route: '/orders', color: Colors.success, badge: metrics?.awaitingDispatch ?? 0, badgeColor: Colors.danger, available: true },
     { id: 'dispatch', icon: 'local-shipping', title: 'Dispatch', description: 'Pick, pack and dispatch orders with proof photos', route: '/dispatch', color: Colors.warning, badge: metrics?.awaitingDispatch ?? 0, badgeColor: Colors.danger, available: true },
     { id: 'messages', icon: 'mail', title: 'Messages', description: 'Buyer communications with AI reply assistant', route: '/ebay-messages', color: Colors.info, badge: metrics?.unreadMessages ?? 0, badgeColor: Colors.danger, available: true },
@@ -666,7 +679,7 @@ function EbayHubScreenContent() {
     { id: 'draft-roundtrip-test', icon: 'sync-alt', title: 'Draft Category Round-Trip Test', description: 'Test category sync using an unpublished eBay draft (test harness in progress)', route: '/ebay-draft-sync-test', color: Colors.warning, available: true },
     { id: 'marketing', icon: 'campaign', title: 'Marketing', description: 'Promoted listings and seller promotions', route: '/ebay-hub', color: Colors.accent, available: false, apiNote: 'Requires eBay Marketing API approval' },
     { id: 'account', icon: 'manage-accounts', title: 'Account & Policies', description: 'Business policies, selling limits, payment', route: '/ebay-account', color: Colors.textSecondary, available: true },
-    { id: 'sync', icon: 'sync', title: 'Sync Engine', description: 'Synchronise listings, orders, and inventory', route: '/ebay-admin', color: Colors.primary, available: true },
+    { id: 'sync', icon: 'sync', title: 'Sync Engine', description: 'Synchronise listings, orders, and inventory', route: '/(tabs)/listings', color: Colors.primary, available: true },
     { id: 'categories', icon: 'category', title: 'Category Catalogue', description: 'Manage & sync EBAY_GB category catalogue', route: '/ebay-category-admin', color: Colors.accent, available: true },
     { id: 'log', icon: 'history', title: 'Activity Log', description: 'Full eBay API audit trail', route: '/ebay-log', color: Colors.textSecondary, available: true },
   ];
@@ -820,8 +833,8 @@ function EbayHubScreenContent() {
           {hubSync.phase === 'error' ? (
             <View style={s.syncError}>
               <MaterialIcons name="error" size={13} color={Colors.danger} />
-              <Text style={s.syncErrorText} numberOfLines={2}>{hubSync.errorMsg}</Text>
-              <Pressable onPress={() => setHubSync(EMPTY_SYNC)} hitSlop={8}>
+              <Text accessibilityRole="alert" style={s.syncErrorText}>{hubSync.errorMsg}</Text>
+              <Pressable onPress={()=>{void handleHubSync();}} hitSlop={8}>
                 <Text style={[s.syncDismissText, { color: Colors.primary }]}>Retry</Text>
               </Pressable>
             </View>
@@ -841,6 +854,7 @@ function EbayHubScreenContent() {
           ) : null}
         </View>
 
+        {metricsError?<View style={s.syncError}><MaterialIcons name="error-outline" size={24} color={Colors.warning}/><Text accessibilityRole="alert" style={s.syncErrorText}>{metricsError} Figures are unverified until refresh succeeds.</Text></View>:null}
         {/* ── Top Metrics Grid ── */}
         <View style={s.sectionLabel}><Text style={s.sectionTitle}>TODAY</Text></View>
         <View style={s.metricsRow}>
@@ -865,16 +879,16 @@ function EbayHubScreenContent() {
             <View style={s.sectionLabel}><Text style={s.sectionTitle}>ACTION REQUIRED</Text></View>
             <ActionCentre actions={actions} />
           </>
-        ) : (
+        ) : metrics && !metricsError ? (
           <View style={s.allClearCard}>
             <MaterialIcons name="check-circle" size={20} color={Colors.success} />
-            <Text style={s.allClearText}>All clear — no actions required</Text>
+            <Text style={s.allClearText}>No recorded actions in this niche</Text>
           </View>
-        )}
+        ) : null}
 
         {/* ── Hub Sections ── */}
         <View style={s.sectionLabel}><Text style={s.sectionTitle}>SELLER OPERATIONS</Text></View>
-        {sections.map(sec => <HubCard key={sec.id} section={sec} />)}
+        {sections.filter(sec=>sec.id!=='marketing' && (isMasterAdmin || (fixedNicheId?isRouteAllowedForBuild(sec.route,effectiveNicheId):isRouteAllowedForModule(sec.route,effectiveNicheId)))).map(sec => <HubCard key={sec.id} section={sec} />)}
 
         {/* ── API Note ── */}
         <View style={s.apiNoteCard}>
@@ -904,7 +918,7 @@ const s = StyleSheet.create({
   subtitle: { fontSize: Typography.size.xs - 1, color: Colors.textTertiary, marginTop: 2 },
   settingsBtn: { width: 34, height: 34, borderRadius: Radius.md, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder },
 
-  content: { padding: Spacing.base, gap: Spacing.md },
+  content: { padding: Spacing.base, gap: Spacing.md, maxWidth:960,width:'100%',alignSelf:'center' },
   sectionLabel: { marginBottom: -4 },
   sectionTitle: { fontSize: Typography.size.xs, fontWeight: Typography.weight.bold, color: Colors.textTertiary, letterSpacing: 0.6, textTransform: 'uppercase' },
   metricsRow: { flexDirection: 'row', gap: Spacing.sm },

@@ -1,47 +1,33 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '@/hooks/useApp';
 import type { ProductionNicheId } from '@/constants/niches';
 
-/**
- * Resolve and activate a canonical niche before rendering its tab shell.
- * Access is granted only by the existing server-loaded membership snapshot
- * and AppContext.openModule; this hook never grants or changes entitlements.
- */
+/** One activation attempt per workspace; failed attempts require an explicit retry. */
 export function useModuleEntry(nicheId: ProductionNicheId) {
   const app = useApp();
-  const [attempt, setAttempt] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const permitted = app.enabledNiches.includes(nicheId) &&
-    (!app.fixedNicheId || app.fixedNicheId === nicheId);
-  const ready = app.activeNicheId === nicheId && !app.moduleLoading &&
-    app.accessReady && !app.tenantLoading && !app.nichePreferencesLoading;
-  const waiting = app.tenantLoading || app.nichePreferencesLoading ||
-    app.moduleLoading || (permitted && !ready && !error);
-
-  const retry = useCallback(async () => {
-    setError(null);
-    if (!permitted) {
-      setError('This module is not in your verified memberships.');
-      return;
-    }
+  const scope = `${app.tenant?.id ?? ''}:${nicheId}`;
+  const current = useRef(scope); current.current = scope;
+  const attempted = useRef('');
+  const flight = useRef(false);
+  const [failure, setFailure] = useState<{ scope: string; message: string } | null>(null);
+  const error = failure?.scope === scope ? failure.message : null;
+  const permitted = app.enabledNiches.includes(nicheId) && (!app.fixedNicheId || app.fixedNicheId === nicheId);
+  const ready = app.activeNicheId === nicheId && !app.moduleLoading && app.accessReady && !app.tenantLoading && !app.nichePreferencesLoading;
+  const waiting = app.tenantLoading || app.nichePreferencesLoading || app.moduleLoading || (permitted && !ready && !error && !app.moduleError);
+  const attempt = useCallback(async () => {
+    if (flight.current || !app.accessReady || app.tenantLoading || app.nichePreferencesLoading || app.moduleLoading) return;
+    if (!permitted) { setFailure({ scope, message: 'This module is not in your verified memberships.' }); return; }
+    flight.current = true; attempted.current = scope; setFailure(null);
     try {
       const opened = await app.openModule(nicheId);
-      if (!opened) setError('Could not activate this workspace. Check your membership and try again.');
+      if (current.current === scope && !opened) setFailure({ scope, message: 'Workspace activation did not complete. Retry when the backend is available.' });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Workspace activation failed.');
-    }
-  }, [app.openModule, nicheId, permitted]);
-
+      if (current.current === scope) setFailure({ scope, message: cause instanceof Error ? cause.message : 'Workspace activation failed.' });
+    } finally { flight.current = false; }
+  }, [app.accessReady, app.tenantLoading, app.nichePreferencesLoading, app.moduleLoading, app.openModule, nicheId, permitted, scope]);
   useEffect(() => {
-    if (ready || !permitted || app.tenantLoading || app.nichePreferencesLoading || app.moduleLoading) return;
-    void retry();
-  }, [ready, permitted, app.tenantLoading, app.nichePreferencesLoading, app.moduleLoading, retry, attempt]);
-
-  return {
-    permitted,
-    ready,
-    waiting: waiting && !error,
-    error: error ?? app.accessError,
-    retry: () => { setAttempt(value => value + 1); void retry(); },
-  };
+    if (ready || !permitted || error || attempted.current === scope) return;
+    void attempt();
+  }, [ready, permitted, error, scope, attempt]);
+  return { permitted, ready, waiting: waiting && !error, error: app.moduleError ?? error ?? app.accessError, retry: attempt };
 }

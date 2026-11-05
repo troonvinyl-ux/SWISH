@@ -38,6 +38,7 @@ import { assessListingConfidence } from '../_shared/listingConfidencePolicy.ts';
 import { requirePaidNiche, nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
 import { specialistNiche } from '../_shared/specialistRegistry.ts';
 import { evaluateSpecialistSafety } from '../_shared/specialistIntelligence.ts';
+import { normalizeAntiqueAspects, validateAntiqueSpecifics, selectAntiqueCondition, validateAntiqueListingBasics, type AntiqueConditionPolicy } from '../_shared/antiqueListingPolicy.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -878,13 +879,14 @@ async function getEbayCategoryAspects(
     const aspects: CategoryAspect[] = (data.aspects ?? []).map((a: any) => ({
       aspectName: a.localizedAspectName ?? a.aspectName ?? '',
       aspectConstraint: {
+        ...a.aspectConstraint,
         aspectRequired: a.aspectConstraint?.aspectRequired === true,
         aspectUsage: a.aspectConstraint?.aspectUsage ?? 'OPTIONAL',
         itemToAspectCardinality: a.aspectConstraint?.itemToAspectCardinality ?? 'SINGLE',
       },
       aspectValues: (a.aspectValues ?? []).map((v: any) => ({
-        localizedValue: v.localizedValue ?? '',
-      })).slice(0, 30),
+        ...v, localizedValue: v.localizedValue ?? '',
+      })),
     }));
 
     return { aspects };
@@ -894,6 +896,18 @@ async function getEbayCategoryAspects(
 }
 
 // ── Condition ID mapping ─────────────────────────────────────────────────────
+
+/** Current REST metadata replaces deprecated Trading condition-feature lookup. */
+async function getItemConditionPolicy(token: string, categoryId: string): Promise<AntiqueConditionPolicy> {
+  if (!/^\d+$/.test(categoryId)) throw new Error('Select a valid eBay category before condition lookup.');
+  const url = `https://api.ebay.com/sell/metadata/v1/marketplace/EBAY_GB/get_item_condition_policies?filter=${encodeURIComponent(`categoryIds:{${categoryId}}`)}`;
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }, signal: AbortSignal.timeout(10000) });
+  if (!response.ok) throw new Error(`eBay condition metadata HTTP ${response.status}; no condition was inferred.`);
+  const payload = await response.json();
+  const policy = payload.itemConditionPolicies?.find((row: any) => String(row.categoryId) === categoryId);
+  if (!policy || typeof policy.itemConditionRequired !== 'boolean' || !Array.isArray(policy.itemConditions)) throw new Error('eBay did not return condition requirements for this category.');
+  return policy;
+}
 
 function mapConditionId(condition: string, conditionGrade: string): string {
   const c = (condition ?? '').toLowerCase();
@@ -978,6 +992,7 @@ function buildSellerProfiles(
   fulfillmentPolicyId: string,
   returnPolicyId: string,
   paymentPolicyId: string,
+  dispatchDays = 3,
 ): string {
   const parts: string[] = [];
 
@@ -1002,7 +1017,7 @@ function buildSellerProfiles(
   return `<SellerProfiles>
     ${parts.join('\n    ')}
   </SellerProfiles>
-  <DispatchTimeMax>3</DispatchTimeMax>`;
+  <DispatchTimeMax>${Number.isInteger(dispatchDays) && dispatchDays >= 1 && dispatchDays <= 30 ? dispatchDays : 3}</DispatchTimeMax>`;
 }
 
 // ── Build item specifics XML ──────────────────────────────────────────────────
@@ -1043,6 +1058,7 @@ interface PayloadToValidate {
   mediaUrls?: string[];
   itemSpecifics?: Array<{ name: string; value: string }>;
   requiredAspects?: string[];
+  conditionRequired?: boolean;
 }
 
 function validatePayload(p: PayloadToValidate): string | null {
@@ -1052,7 +1068,7 @@ function validatePayload(p: PayloadToValidate): string | null {
   if (!p.categoryId || p.categoryId.trim() === '' || p.categoryId === '0') {
     return 'SWISH could not determine a valid eBay listing category. Please select a final eBay category from the category editor on the item detail screen.';
   }
-  if (!p.conditionId) return 'eBay listing requires a condition to be set.';
+  if (!p.conditionId && p.conditionRequired !== false) return 'eBay listing requires a condition to be set.';
 
   if (!p.fulfillmentPolicyId) {
     return 'Your eBay fulfillment (shipping) policy has not been selected. Go to Settings → eBay Connection → tap "Load Policies" and select your shipping policy before listing.';
@@ -1168,7 +1184,7 @@ function buildBuyItNowXML(params: {
   token: string; title: string; description: string; categoryId: string;
   conditionId: string; price: number; quantity: number;
   itemSpecifics: Array<{ name: string; value: string }>;
-  mediaUrls: string[]; sellerProfilesXml: string; bestOfferEnabled?: boolean;
+  mediaUrls: string[]; sellerProfilesXml: string; bestOfferEnabled?: boolean; conditionDescription?: string; sku?: string;
 }): string {
   const specifics = buildItemSpecifics(params.itemSpecifics);
   const pictures = buildPictureDetails(params.mediaUrls);
@@ -1187,13 +1203,15 @@ function buildBuyItNowXML(params: {
     <Quantity>${Math.max(1, params.quantity)}</Quantity>
     <ListingType>FixedPriceItem</ListingType>
     <ListingDuration>GTC</ListingDuration>
-    <ConditionID>${xmlEscape(params.conditionId)}</ConditionID>
+    ${params.conditionId ? `<ConditionID>${xmlEscape(params.conditionId)}</ConditionID>` : ''}
+    ${params.conditionDescription ? `<ConditionDescription>${xmlEscape(params.conditionDescription)}</ConditionDescription>` : ''}
     <Country>GB</Country>
     <Location>UK</Location>
     ${params.sellerProfilesXml}
     ${pictures}
     ${specifics}
     ${bestOfferXml}
+    ${params.sku?.trim() ? `<SKU>${xmlEscape(params.sku.trim())}</SKU>` : ''}
     <Site>UK</Site>
   </Item>
 </AddFixedPriceItemRequest>`;
@@ -1204,7 +1222,7 @@ function buildAuctionXML(params: {
   conditionId: string; startPrice: number; reservePrice?: number;
   quantity: number; durationDays: number;
   itemSpecifics: Array<{ name: string; value: string }>;
-  mediaUrls: string[]; sellerProfilesXml: string;
+  mediaUrls: string[]; sellerProfilesXml: string; conditionDescription?: string; sku?: string;
 }): string {
   const specifics = buildItemSpecifics(params.itemSpecifics);
   const pictures = buildPictureDetails(params.mediaUrls);
@@ -1226,12 +1244,14 @@ function buildAuctionXML(params: {
     <Quantity>1</Quantity>
     <ListingType>Chinese</ListingType>
     <ListingDuration>${duration}</ListingDuration>
-    <ConditionID>${xmlEscape(params.conditionId)}</ConditionID>
+    ${params.conditionId ? `<ConditionID>${xmlEscape(params.conditionId)}</ConditionID>` : ''}
+    ${params.conditionDescription ? `<ConditionDescription>${xmlEscape(params.conditionDescription)}</ConditionDescription>` : ''}
     <Country>GB</Country>
     <Location>UK</Location>
     ${params.sellerProfilesXml}
     ${pictures}
     ${specifics}
+    ${params.sku?.trim() ? `<SKU>${xmlEscape(params.sku.trim())}</SKU>` : ''}
     <Site>UK</Site>
   </Item>
 </AddItemRequest>`;
@@ -1241,7 +1261,7 @@ function buildReviseBuyItNowXML(params: {
   token: string; externalItemId: string; title: string; description: string;
   categoryId: string; conditionId: string; price: number; quantity: number;
   itemSpecifics: Array<{ name: string; value: string }>;
-  mediaUrls: string[]; sellerProfilesXml: string; bestOfferEnabled?: boolean; sku?: string;
+  mediaUrls: string[]; sellerProfilesXml: string; bestOfferEnabled?: boolean; sku?: string; conditionDescription?: string;
 }): string {
   const specifics = buildItemSpecifics(params.itemSpecifics);
   const skuXml = params.sku?.trim() ? `<SKU>${xmlEscape(params.sku.trim())}</SKU>` : '';
@@ -1262,7 +1282,8 @@ function buildReviseBuyItNowXML(params: {
     ${categoryXml}
     <StartPrice currencyID="GBP">${params.price.toFixed(2)}</StartPrice>
     <Quantity>${Math.max(1, params.quantity)}</Quantity>
-    <ConditionID>${xmlEscape(params.conditionId)}</ConditionID>
+    ${params.conditionId ? `<ConditionID>${xmlEscape(params.conditionId)}</ConditionID>` : ''}
+    ${params.conditionDescription ? `<ConditionDescription>${xmlEscape(params.conditionDescription)}</ConditionDescription>` : ''}
     ${params.sellerProfilesXml}
     ${pictures}
     ${specifics}
@@ -1275,7 +1296,7 @@ function buildReviseAuctionXML(params: {
   token: string; externalItemId: string; title: string; description: string;
   categoryId: string; conditionId: string; reservePrice?: number;
   itemSpecifics: Array<{ name: string; value: string }>;
-  mediaUrls: string[]; sellerProfilesXml: string; sku?: string;
+  mediaUrls: string[]; sellerProfilesXml: string; sku?: string; conditionDescription?: string;
 }): string {
   const specifics = buildItemSpecifics(params.itemSpecifics);
   const skuXml = params.sku?.trim() ? `<SKU>${xmlEscape(params.sku.trim())}</SKU>` : '';
@@ -1295,7 +1316,8 @@ function buildReviseAuctionXML(params: {
     <Description><![CDATA[${params.description.replace(/\]\]>/g, ']]]]><![CDATA[>')}]]></Description>
     ${categoryXml}
     ${reservePriceXml}
-    <ConditionID>${xmlEscape(params.conditionId)}</ConditionID>
+    ${params.conditionId ? `<ConditionID>${xmlEscape(params.conditionId)}</ConditionID>` : ''}
+    ${params.conditionDescription ? `<ConditionDescription>${xmlEscape(params.conditionDescription)}</ConditionDescription>` : ''}
     ${params.sellerProfilesXml}
     ${pictures}
     ${specifics}
@@ -1773,6 +1795,16 @@ async function handleRequest(req: Request): Promise<Response> {
     return jsonResponse({ success: true, resolvedId: result.resolvedId, resolvedName: result.resolvedName, wasResolved: result.wasResolved, confidence: result.confidence });
   }
 
+  if (route === 'get_condition_policies') {
+    try {
+      let token = await getAppToken();
+      if (!token) { const creds = await getEbayCredentials(supabase, tenantId, false); if (!('error' in creds)) token = creds.accessToken; }
+      if (!token) return jsonResponse({ success: false, error: 'eBay condition metadata token unavailable.' }, 503);
+      const policy = await getItemConditionPolicy(token, String(body.categoryId ?? ''));
+      return jsonResponse({ success: true, policy, source: 'ebay_live', marketplaceId: 'EBAY_GB' });
+    } catch (error) { return jsonResponse({ success: false, error: error instanceof Error ? error.message : 'eBay condition metadata unavailable.' }, 503); }
+  }
+
   // ── Route: get_category_aspects ───────────────────────────────────────────
   if (route === 'get_category_aspects') {
     const { categoryId } = body;
@@ -2004,7 +2036,7 @@ async function handleRequest(req: Request): Promise<Response> {
     } = body;
     if (!listingId || !externalListingId) return jsonResponse({ error: 'Saved listingId and externalListingId required for revise' }, 400);
     const { data: ownedListing, error: ownershipError } = await supabase.from('listings')
-      .select('id, item_id, external_listing_id, items!inner(tenant_id)')
+      .select('id, item_id, external_listing_id, items!inner(tenant_id,specialist_id,attributes,media,condition_notes)')
       .eq('id', listingId).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle();
     if (ownershipError || !ownedListing || String(ownedListing.external_listing_id) !== String(externalListingId) ||
         (ownedListing as any).items?.tenant_id !== tenantId) return jsonResponse({ error: 'Listing identity could not be authorized' }, 403);
@@ -2101,13 +2133,35 @@ async function handleRequest(req: Request): Promise<Response> {
     }
 
     const { fulfillmentId, returnId, paymentId } = await getSelectedPolicyIds(supabase, tenantId, {});
-    const sellerProfilesXml = buildSellerProfiles(fulfillmentId, returnId, paymentId);
-    const conditionId = mapConditionId(condition, '');
+    const reviseItem = (ownedListing as any).items;
+    const isAntiqueRevision = Boolean(specialistNiche(reviseItem.specialist_id)); // Shared premium editor, legacy variable name.
+    const sellerProfilesXml = buildSellerProfiles(fulfillmentId, returnId, paymentId, isAntiqueRevision ? Number(reviseItem.attributes?.ebay_listing_options?.dispatchDays ?? 3) : 3);
+    let conditionId = mapConditionId(condition, '');
+    if (isAntiqueRevision) {
+      const token = await getAppToken();
+      if (!token) return jsonResponse({ success: false, error: 'Live eBay taxonomy authorization unavailable. No revision sent.' }, 503);
+      const leaf = await verifyCategoryIsLeaf(token, creds.clientId, resolvedCategoryId, supabase);
+      if (leaf?.isLeaf !== true) return jsonResponse({ success: false, error: 'Selected category is not a verified leaf. No revision sent.' }, 422);
+      const requirements = await getEbayCategoryAspects(token, resolvedCategoryId);
+      if (requirements.error) return jsonResponse({ success: false, error: requirements.error }, 503);
+      resolvedItemSpecifics = Array.isArray(reviseItem.attributes?.ebay_item_specifics) ? reviseItem.attributes.ebay_item_specifics : [];
+      const issue = validateAntiqueSpecifics(resolvedItemSpecifics, normalizeAntiqueAspects(requirements.aspects));
+      if (issue) return jsonResponse({ success: false, error: issue }, 422);
+      const policy = await getItemConditionPolicy(token, resolvedCategoryId);
+      const selected = selectAntiqueCondition(policy, String(reviseItem.attributes?.ebay_condition_id ?? ''));
+      if (selected.error) return jsonResponse({ success: false, error: selected.error }, 422);
+      conditionId = selected.id;
+      const originals: string[] = reviseItem.media ?? [];
+      resolvedMediaUrls = Array.isArray(reviseItem.attributes?.ebay_listing_media) ? reviseItem.attributes.ebay_listing_media : originals;
+      if (resolvedMediaUrls.some(url => !originals.includes(url))) return jsonResponse({ success: false, error: 'Selected photographs do not belong to this inventory item.' }, 422);
+      const invalid = validateAntiqueListingBasics({ title, description, price: Number(price), quantity: Number(quantity), media: resolvedMediaUrls });
+      if (invalid) return jsonResponse({ success: false, error: invalid }, 422);
+    }
     let reviseXml: string;
     if (listingType === 'Chinese') {
-      reviseXml = buildReviseAuctionXML({ token: creds.accessToken, externalItemId: externalListingId, title, description, categoryId: resolvedCategoryId || 'REVISE_PRESERVE', conditionId, itemSpecifics: resolvedItemSpecifics, mediaUrls: resolvedMediaUrls, sellerProfilesXml, sku: String(sku ?? '') });
+      reviseXml = buildReviseAuctionXML({ token: creds.accessToken, externalItemId: externalListingId, title, description, categoryId: resolvedCategoryId || 'REVISE_PRESERVE', conditionId, itemSpecifics: resolvedItemSpecifics, mediaUrls: resolvedMediaUrls, sellerProfilesXml, sku: String(sku ?? ''), ...(isAntiqueRevision ? { conditionDescription: reviseItem.condition_notes ?? conditionDescription } : {}) });
     } else {
-      reviseXml = buildReviseBuyItNowXML({ token: creds.accessToken, externalItemId: externalListingId, title, description, categoryId: resolvedCategoryId || 'REVISE_PRESERVE', conditionId, price: Number(price), quantity: Number(quantity), itemSpecifics: resolvedItemSpecifics, mediaUrls: resolvedMediaUrls, sellerProfilesXml, sku: String(sku ?? '') });
+      reviseXml = buildReviseBuyItNowXML({ token: creds.accessToken, externalItemId: externalListingId, title, description, categoryId: resolvedCategoryId || 'REVISE_PRESERVE', conditionId, price: Number(price), quantity: Number(quantity), itemSpecifics: resolvedItemSpecifics, mediaUrls: resolvedMediaUrls, sellerProfilesXml, bestOfferEnabled: reviseItem.attributes?.ebay_listing_options?.bestOfferEnabled === true, sku: String(sku ?? ''), ...(isAntiqueRevision ? { conditionDescription: reviseItem.condition_notes ?? conditionDescription } : {}) });
     }
     const { xml: revResp, ok: revOk } = await callEbayTradingApi(reviseXml, listingType === 'Chinese' ? 'ReviseItem' : 'ReviseFixedPriceItem', creds.clientId);
     if (!revOk) {
@@ -2125,7 +2179,8 @@ async function handleRequest(req: Request): Promise<Response> {
       if (resolvedCategoryId && resolvedCategoryId !== 'REVISE_PRESERVE') {
         updatePayload.category_id = resolvedCategoryId;
       }
-      await supabase.from('listings').update(updatePayload).eq('id', listingId).eq('tenant_id', tenantId);
+      const local = await supabase.from('listings').update(updatePayload).eq('id', listingId).eq('tenant_id', tenantId).select('id').maybeSingle();
+      if (isAntiqueRevision && (local.error || !local.data)) return jsonResponse({ success: true, externalListingId, warning: 'eBay accepted the revision, but SWISH persistence failed. Synchronise before any further revision.' });
       if (String(sku ?? '').trim()) {
         const cleanSku = String(sku).trim().slice(0, 50);
         const { data: linkedListing } = await supabase.from('listings')
@@ -2157,7 +2212,7 @@ async function handleRequest(req: Request): Promise<Response> {
     .from('listings')
     .select(`id, title, description, price, floor_price, shipping_cost, status, category_id, external_listing_id, publish_claim_id,
       items(id, canonical_title, condition, condition_grade, condition_notes, status, quantity,
-            media, attributes, weight_grams, diameter_mm, specialist_id, identification_confidence)`)
+            media, attributes, sku, weight_grams, diameter_mm, specialist_id, identification_confidence)`)
     .eq('id', listingId)
     .eq('tenant_id', tenantId)
     .maybeSingle();
@@ -2167,6 +2222,9 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 
   const item = (listingRow as any).items as any;
+  const isAntique = Boolean(specialistNiche(String(item?.specialist_id ?? ''))); // All registered niches use the verified editor contract.
+  const antiqueOptions = isAntique ? item?.attributes?.ebay_listing_options ?? {} : {};
+  const effectiveListingType = isAntique ? antiqueOptions.listingType ?? 'FixedPriceItem' : listingType;
   // Service-role access bypasses RLS; authenticated buyer-facing publication must
   // independently enforce the stored item's canonical niche entitlement.
   if (auth.userId) {
@@ -2197,7 +2255,8 @@ async function handleRequest(req: Request): Promise<Response> {
   if (item?.attributes?._manifest_review_required === true) {
     return jsonResponse({ success: false, code: 'MANIFEST_REVIEW_REQUIRED', error: 'This manifest draft needs physical inspection and completed listing fields. Save editor changes, then confirm Manifest stock inspection. Nothing was submitted.' }, 400);
   }
-  const title = (listingRow.title ?? item?.canonical_title ?? '').trim().slice(0, 80);
+  const rawTitle = (listingRow.title ?? item?.canonical_title ?? '').trim();
+  const title = isAntique ? rawTitle : rawTitle.slice(0, 80);
   const description = listingRow.description ?? '';
   const price = Number(listingRow.price ?? 0);
   // BUG F FIX: Category resolution priority:
@@ -2334,15 +2393,38 @@ async function handleRequest(req: Request): Promise<Response> {
     if (name && value && !seenNames.has(name.toLowerCase())) addSpec(name, value);
   }
 
-  const conditionId = mapConditionId(item?.condition ?? '', item?.condition_grade ?? '');
-  const mediaUrls: string[] = ((item?.media ?? []) as string[]).filter((u: string) => typeof u === 'string' && u.startsWith('https://'));
-  const sellerProfilesXml = buildSellerProfiles(fulfillmentId, returnId, paymentId);
-  const quantity = Number(item?.quantity ?? 1) || 1;
+  let conditionId = mapConditionId(item?.condition ?? '', item?.condition_grade ?? '');
+  const originalMedia: string[] = ((item?.media ?? []) as string[]).filter((u: string) => typeof u === 'string' && u.startsWith('https://'));
+  const mediaUrls: string[] = isAntique && Array.isArray(attrs.ebay_listing_media) ? attrs.ebay_listing_media : originalMedia;
+  const sellerProfilesXml = buildSellerProfiles(fulfillmentId, returnId, paymentId, isAntique ? Number(antiqueOptions.dispatchDays ?? 3) : 3);
+  const quantity = isAntique ? Number(item?.quantity ?? 1) : Number(item?.quantity ?? 1) || 1;
+  let conditionRequired = true;
+  let taxonomyToken = creds.accessToken;
+  if (isAntique) {
+    const appToken = await getAppToken();
+    if (!appToken) return jsonResponse({ error: 'Current eBay taxonomy authorization unavailable. Nothing submitted.' }, 503);
+    taxonomyToken = appToken;
+    const leaf = await verifyCategoryIsLeaf(taxonomyToken, creds.clientId, resolvedCategoryId, supabase);
+    if (leaf?.isLeaf !== true) return jsonResponse({ error: 'Selected specialist category is not a verified current eBay leaf. Nothing submitted.' }, 422);
+    const policy = await getItemConditionPolicy(taxonomyToken, resolvedCategoryId);
+    const selected = selectAntiqueCondition(policy, String(attrs.ebay_condition_id ?? ''));
+    if (selected.error) return jsonResponse({ error: selected.error }, 422);
+    conditionId = selected.id;
+    conditionRequired = policy.itemConditionRequired;
+    if (mediaUrls.some(url => !originalMedia.includes(url))) return jsonResponse({ error: 'Use original photographs attached to this inventory item.' }, 422);
+    const issue = validateAntiqueListingBasics({ title, description, price, quantity, media: mediaUrls });
+    if (issue) return jsonResponse({ error: issue }, 422);
+    if (String(item?.condition_notes ?? '').length > 1000) return jsonResponse({ error: 'Condition notes exceed the eBay 1,000-character limit.' }, 422);
+    // Only persisted, reviewed Antique specifics are authoritative. Do not re-add
+    // internal maker/provenance fields or seller-deleted generic defaults.
+    itemSpecifics.splice(0, itemSpecifics.length, ...(Array.isArray(attrs.ebay_item_specifics) ? attrs.ebay_item_specifics : []));
+  }
 
   // Fetch the current eBay category requirements at the server boundary.
   // This keeps every niche on the same source of truth and prevents a green
   // client preflight from submitting a listing with missing required aspects.
-  let categoryAspectResult = await getEbayCategoryAspects(creds.accessToken, resolvedCategoryId);
+  let categoryAspectResult = await getEbayCategoryAspects(taxonomyToken, resolvedCategoryId);
+  if (isAntique && categoryAspectResult.error) return jsonResponse({ error: categoryAspectResult.error, code: 'CATEGORY_ASPECTS_UNAVAILABLE' }, 503);
 
   // If eBay denies Taxonomy access (e.g. OAuth/app permissions), use only a
   // recently synchronised category-aspect cache from SWISH's existing table.
@@ -2378,6 +2460,10 @@ async function handleRequest(req: Request): Promise<Response> {
       }, 503);
     }
   }
+  if (isAntique) {
+    const issue = validateAntiqueSpecifics(itemSpecifics, normalizeAntiqueAspects(categoryAspectResult.aspects));
+    if (issue) return jsonResponse({ error: issue, code: 'SPECIALIST_SPECIFICS_INVALID' }, 422);
+  }
   const requiredAspects = categoryAspectResult.aspects
     .filter((aspect) => aspect.aspectConstraint?.aspectRequired === true || aspect.aspectConstraint?.aspectUsage === 'REQUIRED')
     .map((aspect) => aspect.aspectName)
@@ -2396,18 +2482,19 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 
   if (itemSpecifics.length > 25) return jsonResponse({ error: 'More than 25 item specifics are present. Review them before publishing; nothing was truncated or submitted.' }, 400);
-  const validationError = validatePayload({ title, price, categoryId: resolvedCategoryId, conditionId, fulfillmentPolicyId: fulfillmentId, returnPolicyId: returnId, mediaUrls, itemSpecifics, requiredAspects });
+  const validationError = validatePayload({ title, price, categoryId: resolvedCategoryId, conditionId, fulfillmentPolicyId: fulfillmentId, returnPolicyId: returnId, mediaUrls, itemSpecifics, requiredAspects, conditionRequired });
   if (validationError) return jsonResponse({ error: validationError }, 400);
 
   let requestXml: string;
   let callName: string;
 
-  if (listingType === 'Chinese') {
-    const auctionStartPrice = Number(startPrice ?? Math.max(price * 0.5, 0.99));
-    requestXml = buildAuctionXML({ token: creds.accessToken, title, description, categoryId: resolvedCategoryId, conditionId, startPrice: auctionStartPrice, reservePrice: reservePrice ? Number(reservePrice) : undefined, quantity: 1, durationDays: Number(auctionDays) || 7, itemSpecifics, mediaUrls, sellerProfilesXml });
+  if (effectiveListingType === 'Chinese') {
+    const auctionStartPrice = Number(isAntique ? antiqueOptions.startPrice : startPrice ?? Math.max(price * 0.5, 0.99));
+    if (isAntique && (!Number.isFinite(auctionStartPrice) || auctionStartPrice <= 0 || quantity !== 1 || ![3,5,7,10].includes(Number(antiqueOptions.auctionDays ?? 7)) || (antiqueOptions.reservePrice && (!Number.isFinite(Number(antiqueOptions.reservePrice)) || Number(antiqueOptions.reservePrice) <= auctionStartPrice)))) return jsonResponse({ error: 'Auction requires quantity one, positive start price, a supported duration and a reserve above the start price.' }, 422);
+    requestXml = buildAuctionXML({ token: creds.accessToken, title, description, categoryId: resolvedCategoryId, conditionId, startPrice: auctionStartPrice, reservePrice: isAntique ? antiqueOptions.reservePrice ? Number(antiqueOptions.reservePrice) : undefined : reservePrice ? Number(reservePrice) : undefined, quantity: 1, durationDays: isAntique ? Number(antiqueOptions.auctionDays ?? 7) : Number(auctionDays) || 7, itemSpecifics, mediaUrls, sellerProfilesXml, ...(isAntique ? { conditionDescription: item.condition_notes, sku: item.sku } : {}) });
     callName = 'AddItem';
   } else {
-    requestXml = buildBuyItNowXML({ token: creds.accessToken, title, description, categoryId: resolvedCategoryId, conditionId, price, quantity, itemSpecifics, mediaUrls, sellerProfilesXml });
+    requestXml = buildBuyItNowXML({ token: creds.accessToken, title, description, categoryId: resolvedCategoryId, conditionId, price, quantity, itemSpecifics, mediaUrls, sellerProfilesXml, ...(isAntique ? { conditionDescription: item.condition_notes, sku: item.sku, bestOfferEnabled: antiqueOptions.bestOfferEnabled === true } : {}) });
     callName = 'AddFixedPriceItem';
   }
 
@@ -2430,15 +2517,15 @@ async function handleRequest(req: Request): Promise<Response> {
 
   const warnings: string[] = [];
   try {
-    const { error: listingSaveError } = await supabase.from('listings').update({
+    const { data: persistedListing, error: listingSaveError } = await supabase.from('listings').update({
       publish_claim_id: null,
       publish_claimed_at: null,
       status: 'active',
       external_listing_id: externalListingId,
       published_at: publishedAt,
       updated_at: publishedAt,
-    }).eq('id', listingId).eq('tenant_id', tenantId).eq('publish_claim_id', claimId);
-    if (listingSaveError) throw new Error('Accepted listing could not be saved');
+    }).eq('id', listingId).eq('tenant_id', tenantId).eq('publish_claim_id', claimId).select('id,external_listing_id').maybeSingle();
+    if (listingSaveError || !persistedListing || persistedListing.external_listing_id !== externalListingId) throw new Error('Accepted listing could not be saved');
 
     if (item?.id) {
       const { data: transitioned, error: itemSaveError } = await supabase.rpc('swish_transition_item', {

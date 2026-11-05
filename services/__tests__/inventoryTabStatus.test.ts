@@ -31,11 +31,13 @@ describe('Shared cache status guards',()=>{
  });
 });
 describe('Every niche queries only its own tab at the server',()=>{
- const client:any={from:jest.fn(),select:jest.fn(),eq:jest.fn(),in:jest.fn(),order:jest.fn(),range:jest.fn()};
+ const client:any={from:jest.fn(),select:jest.fn(),eq:jest.fn(),in:jest.fn(),order:jest.fn(),range:jest.fn(),abortSignal:jest.fn(),rpc:jest.fn()};
  beforeEach(()=>{
   jest.clearAllMocks();(getSupabaseClient as jest.Mock).mockReturnValue(client);
   for(const name of ['from','select','eq','in','order'])client[name].mockReturnValue(client);
-  client.range.mockResolvedValue({data:[],error:null});
+  client.range.mockReturnValue(client);
+  client.abortSignal.mockResolvedValue({data:[],error:null});
+  client.rpc.mockReturnValue({abortSignal:jest.fn().mockResolvedValue({data:{stock:3,draft:3,live:3,sold:3},error:null})});
  });
  test.each(PRODUCTION_NICHE_IDS)('%s applies the same isolation to all four tabs',async niche=>{
   const allowed=getProductionNicheSpecialistIds(niche);
@@ -46,11 +48,10 @@ describe('Every niche queries only its own tab at the server',()=>{
  test('unknown niche and missing account fail closed without a query',async()=>{await loadInventoryTab('tenant','unknown','live');await loadInventoryTab('','coins','live');expect(client.from).not.toHaveBeenCalled();});
  test('tab filtering happens before pagination and loads beyond one page',async()=>{
   const row={item:{id:'coin',tenant_id:'tenant',canonical_title:'Coin',specialist_id:'coins',status:'listed',attributes:{},media:[]},listing:null};
-  client.range.mockResolvedValueOnce({data:Array(200).fill(row),error:null}).mockResolvedValueOnce({data:[row],error:null});
+  client.abortSignal.mockResolvedValueOnce({data:Array(200).fill(row),error:null}).mockResolvedValueOnce({data:[row],error:null});
   const result=await loadInventoryTab('tenant','coins','live');expect(result.rows).toHaveLength(201);expect(client.range).toHaveBeenNthCalledWith(2,200,399);
  });
- test('counts request only aggregate headers with the same niche/status constraints',async()=>{
-  client.order.mockReturnValue(client);client.eq.mockImplementation(()=>client);client.then=(resolve:any)=>Promise.resolve({count:3,error:null}).then(resolve);
-  const result=await loadInventoryCounts('tenant','clothing');expect(result.counts).toEqual({stock:3,draft:3,live:3,sold:3});expect(client.select).toHaveBeenCalledWith('item_id',{count:'exact',head:true});delete client.then;
+ test('counts use one RLS-enforced aggregate request with the same niche scope',async()=>{
+  const result=await loadInventoryCounts('tenant','clothing');expect(result.counts).toEqual({stock:3,draft:3,live:3,sold:3});expect(client.rpc).toHaveBeenCalledWith('swish_inventory_tab_counts',{p_tenant_id:'tenant',p_niche_id:'clothing'});expect(client.rpc).toHaveBeenCalledTimes(1);expect(client.from).not.toHaveBeenCalled();
  });
 });
