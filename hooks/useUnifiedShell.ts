@@ -35,6 +35,8 @@ export function useUnifiedShell() {
     canSwitchNiche: app.canSwitchNiche,
     isMasterAdmin: app.isMasterAdmin,
     activeNicheId: app.activeNicheId,
+    fixedNicheId: app.fixedNicheId,
+    activeNiche: app.activeNiche,
     enter,
     switchNiche,
     refreshSubscription: app.refreshSubscription,

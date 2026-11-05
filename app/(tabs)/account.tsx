@@ -20,10 +20,13 @@ export default function AccountScreen() {
   const { signingOut, requestLogout, disabled: logoutDisabled } = useAccountLogout();
   const effectiveNicheId = fixedNicheId ?? activeNicheId;
   const owner = isMasterAdmin && isSwishMasterAdmin(user?.email);
-  const showSwitcher = owner || (!fixedNicheId && canSwitchNiche);
+  // Branded APKs deliberately omit owner-only and cross-niche routes.
+  // Keep those actions in the separate unified Master Admin installation.
+  const showOwnerTools = owner && !fixedNicheId;
+  const showSwitcher = !fixedNicheId && (owner || canSwitchNiche);
   const actions: MenuAction[] = [
     ...(showSwitcher ? [{ title: 'Switch niche', detail: 'Open another authorised SWISH workspace.', icon: 'apps' as const, route: '/niche-select' }] : []),
-    ...(owner ? [
+    ...(showOwnerTools ? [
       { title: 'Master Admin', detail: 'Owner console, module verification and diagnostics.', icon: 'admin-panel-settings' as const, route: '/master-admin' },
       { title: 'eBay Admin', detail: 'Connection status and marketplace administration.', icon: 'store' as const, route: '/ebay-admin' },
       { title: 'Diagnostics', detail: 'Inspect app and module health.', icon: 'monitor-heart' as const, route: '/master-diagnostics' },

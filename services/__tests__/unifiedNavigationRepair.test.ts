@@ -57,4 +57,16 @@ describe('Unified navigation regression contracts (not installed-device acceptan
   expect(admin).toContain('!shell.accessReady');
  });
 
+ test('branded niche More menus do not expose routes omitted from the installed APK',()=>{
+  const account=source('app/(tabs)/account.tsx');
+  expect(account).toContain('const showOwnerTools = owner && !fixedNicheId');
+  expect(account).toContain('const showSwitcher = !fixedNicheId && (owner || canSwitchNiche)');
+  const shell=source('hooks/useUnifiedShell.ts');
+  expect(shell).toContain('fixedNicheId: app.fixedNicheId');
+  expect(shell).toContain('activeNiche: app.activeNiche');
+  const more=source('components/feature/ModuleMore.tsx');
+  expect(more).toContain("const showAppUpdates = allowed('/app-updates')");
+  expect(more).toContain('const showOwnerTools = shell.isMasterAdmin && !shell.fixedNicheId');
+ });
+
 });
