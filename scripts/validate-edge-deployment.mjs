@@ -27,6 +27,7 @@ export function validateEdgeDeployment(root = process.cwd()) {
     ['shared/nicheAuthorization.ts', 'supabase/functions/_shared/nicheAuthorization.ts'],
     ['shared/specialistIntelligence.ts', 'supabase/functions/_shared/specialistIntelligence.ts'],
     ['shared/ebayMessagePagination.ts', 'supabase/functions/_shared/ebayMessagePagination.ts'],
+    ['shared/ebayRevisionContract.ts', 'supabase/functions/_shared/ebayRevisionContract.ts'],
   ];
   for (const [canonical, deployed] of mirrors) {
     const sourcePath = path.resolve(root, canonical);

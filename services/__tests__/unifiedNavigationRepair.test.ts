@@ -19,7 +19,8 @@ describe('Unified navigation regression contracts (not installed-device acceptan
   expect(guard).toContain('{children}</View>');expect(guard).not.toMatch(/if\s*\(loading\s*\|\|\s*moduleLoading\)\s*return/);
  });
  test('card selection uses the canonical entry and module errors are not redirects',()=>{
-  expect(source('hooks/useUnifiedShell.ts')).toContain('router.replace(moduleEntryPath(id)');
+  expect(source('hooks/useUnifiedShell.ts')).toContain('await app.openModule(id)');
+  expect(source('hooks/useUnifiedShell.ts')).toContain("router.replace('/(tabs)')");
   expect(source('components/layout/ModuleEntry.tsx')).not.toMatch(/if\s*\(!permitted\s*\|\|\s*error\)\s*return\s*<Redirect/);
   expect(source('app/index.tsx')).toContain('app.isMasterAdmin, app.activeNicheId');
  });
@@ -42,9 +43,12 @@ describe('Unified navigation regression contracts (not installed-device acceptan
 
  test('all niche More tabs use one shared menu and preserve owner-only controls',()=>{
   const account=source('app/(tabs)/account.tsx');
-  expect(account).toContain("Master Admin");
-  expect(account).toContain("owner = isMasterAdmin && isSwishMasterAdmin(user?.email)");
-  expect(account).toContain("route: '/settings'");
+  expect(account).toContain('<ModuleMore');
+  const more=source('components/feature/ModuleMore.tsx');
+  expect(more).toContain('Master Admin');
+  expect(more).toContain('shell.isMasterAdmin && !shell.fixedNicheId');
+  expect(account).not.toContain('isSwishMasterAdmin(user?.email)');
+  expect(more).toContain("route: '/settings'");
   expect(account).not.toContain("effectiveNicheId === 'collectibles'");
   expect(account).not.toContain("effectiveNicheId === 'antiques'");
   expect(source('app/(tabs)/antique-more.tsx')).toContain("export { default } from './account'");
@@ -54,13 +58,15 @@ describe('Unified navigation regression contracts (not installed-device acceptan
   expect(admin).toContain('MasterAdminErrorBoundary');
   expect(admin).toContain('Master Admin could not be displayed');
   expect(admin).toContain('Retry Master Admin');
-  expect(admin).toContain('!shell.accessReady');
+  expect(admin).toContain('!owner.allowed');
+  expect(admin).toContain('Retry server verification');
  });
 
  test('branded niche More menus do not expose routes omitted from the installed APK',()=>{
   const account=source('app/(tabs)/account.tsx');
-  expect(account).toContain('const showOwnerTools = owner && !fixedNicheId');
-  expect(account).toContain('const showSwitcher = !fixedNicheId && (owner || canSwitchNiche)');
+  expect(account).toContain('<ModuleMore');
+  expect(source('components/feature/ModuleMore.tsx')).toContain('shell.isMasterAdmin && !shell.fixedNicheId');
+  expect(source('components/feature/ModuleMore.tsx')).toContain('shell.canSwitchNiche');
   const shell=source('hooks/useUnifiedShell.ts');
   expect(shell).toContain('fixedNicheId: app.fixedNicheId');
   expect(shell).toContain('activeNiche: app.activeNiche');

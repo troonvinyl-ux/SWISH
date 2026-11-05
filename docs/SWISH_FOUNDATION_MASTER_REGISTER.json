@@ -4,7 +4,32 @@
   "sourcePrompt": "SWISH Modular Production Readiness Master Directive",
   "repository": "troonvinyl-ux/SWISH",
   "defaultBranch": "main",
-  "lastReviewed": "2026-11-04",
+  "lastReviewed": "2026-11-05",
+  "currentExecution": {
+    "directive": "SWISH Master Admin, Minority Report Home Experience and S1–S7",
+    "baselineMainSha": "a3b3c7e8fabfd2c37f1ac70f6ea743e06ceb52ed",
+    "architecture": "One unified SWISH APK, existing auth/backend/inventory, all 11 isolated niches; Master Admin inside the unified app",
+    "releaseDecision": "BLOCKED",
+    "productionReady": false,
+    "audit": "docs/SWISH_COMMAND_CENTRE_AUDIT_20261105.md",
+    "report": "docs/SWISH_COMMAND_CENTRE_IMPLEMENTATION_20261105.md",
+    "originalWorkstreamIdsPreserved": true,
+    "originalTaskCount": 34,
+    "releaseScopeMapping": {
+      "C8-BUILDS": "Historical per-niche APK scope superseded by one unified artifact; all 11 niche workflow gates remain mandatory.",
+      "C10-RELEASE": "One unified release containing all 11 niches, not eleven separate applications.",
+      "S7-04": "Inspect the single existing-identity unified APK/IPA at the release milestone; all 11 modules need acceptance.",
+      "S7-07": "Google Play requirements apply to the approved unified package; historical separate-package evidence retained, not reused as unified certification."
+    },
+    "acceptanceContract": {
+      "taskField": "acceptance",
+      "required": ["commitSha", "checkedAt", "result", "method", "evidence", "criteriaPassed"],
+      "passRules": "Current live main commit, valid past timestamp, PASS, all original task criteria passed and resolved evidence. Limited safe probes and historical VERIFIED labels do not promote tasks.",
+      "diagnostics": "Existing swish_verification_results records actual safe reads and per-task blockers; READINESS:<taskId>:<sourceSha> is not full task acceptance.",
+      "metadata": "Readiness assessment derives priority, workstream, dependencies, implementation notes, verification method, result, evidence, timestamp and smallest safe review target while retaining historical task records. Missing acceptance is NOT VERIFIED."
+    },
+    "executionLimitations": ["No terminal, CI dispatch, Git write/merge or installed-device tool in this editor", "No current-source TypeScript/Jest/lint/native build pass claimed", "Existing safe Edge runner must be exercised with an actual owner JWT after deployment"]
+  },
   "completionProgramme": {
     "directive": "SWISH Master Completion Directive",
     "status": "BLOCKED",
@@ -402,6 +427,10 @@
     "PRs #142, #143, #144 and #145 remain on older branch bases and must be replayed/rebased against current main before merge; do not merge stale branches."
   ],
   "changeLog": [
+    {
+      "date": "2026-11-05",
+      "change": "Inspected current public main and existing architecture; mapped remaining five headers; added necessary read-only canonical reporting with explicit owner/tenant/entitlement boundaries; repaired portfolio login routing and owner retry; enhanced existing Master Admin with bounded inspectors and S1–S7 current-commit acceptance controls. SQL no-JWT denial, owner aggregate/count reconciliation and role-simulation boundary checks executed. No original task promoted; current-source CI, actual owner/subscriber JWT UI, Edge runtime, Git merge and installed-device/build acceptance remain unverified. Unified release scope supersedes historical separate APK programme without discarding evidence."
+    },
     {
       "date": "2026-11-04",
       "change": "Implemented consent staging and atomic callback claims, restored missing listing telemetry dependency and Antique routes, added 11-product Collectibles configuration without reclassification, guarded marketplace writes and order resources, added sale metadata/server-only reconciliation function, extended native branding/build/signing/evidence gates and authored regressions. Catalog/privilege postconditions verified only. Full Git synchronization, actual test/build execution, Collectibles CHECK/snapshot migration, deployed boot recovery, binary exclusion and seller/device acceptance remain blocked. No final source commit, PR merge, new APK or production certification claimed. Historical S2 source passes downgraded for current-baseline recheck; dated evidence retained."

@@ -5,8 +5,9 @@ import { PRODUCTION_NICHE_IDS, isProductionNiche, type ProductionNicheId } from 
 
 export interface ModuleAccessSnapshot { owner: boolean; nicheIds: ProductionNicheId[]; verifiedAt: number; tenantId: string; billingStatus: SubscriptionStatus | null }
 export function membershipDestination(ids: readonly string[], owner: boolean, activeId?: string | null): string {
-  if (activeId && ids.includes(activeId)) return '/(tabs)';
+  // Login always opens the portfolio for owner/multi-niche accounts, even after a restored session.
   if (owner || ids.length > 1) return '/swish';
+  if (activeId && ids.includes(activeId)) return '/(tabs)';
   return ids.length === 1 ? '/(tabs)' : '/swish';
 }
 /** Billing and platform role are verified by existing backend identity, not user metadata. */

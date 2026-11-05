@@ -37,14 +37,15 @@ Deno.serve(async request => {
     ]);
     const listingCounts: Record<string, number> | null = listingStates.error ? null : {};
     if (listingCounts) for (const row of listingStates.data ?? []) listingCounts[row.status ?? 'unknown'] = (listingCounts[row.status ?? 'unknown'] ?? 0) + 1;
-    const modules = await Promise.all(Object.entries(registry.products).map(async ([id, module]) => {
-      const specialists = [...new Set([...module.specialists, ...module.legacySpecialists])];
-      const [inventory, listings] = await Promise.all([
-        db.from('items').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).in('specialist_id', specialists),
-        db.from('listings').select('id,items!inner(specialist_id)', { count: 'exact', head: true }).eq('tenant_id', tenantId).in('items.specialist_id', specialists),
-      ]);
-      return { id, name: module.name, route: module.modulePath ?? '/' + module.entry.replace(/\.tsx$/, ''), configured: true, inventoryCount: inventory.error ? null : inventory.count, listingCount: listings.error ? null : listings.count, dataStatus: inventory.error || listings.error ? 'unavailable' : 'query_completed' };
-    }));
+    // One authenticated aggregate replaces 22 per-niche count queries. Tenant scope
+    // preserves the existing diagnostic contract; the command home uses platform scope.
+    const portfolio = await client.rpc('swish_command_snapshot', { p_tenant_id: tenantId, p_platform: false });
+    const modules = Object.entries(registry.products).map(([id, module]) => {
+      const row = portfolio.error ? null : portfolio.data?.modules?.find((value: { id: string }) => value.id === id);
+      return { id, name: module.name, route: module.modulePath ?? '/' + module.entry.replace(/\.tsx$/, ''), configured: true,
+        inventoryCount: row?.inventory ?? null, listingCount: row ? row.live + row.drafts : null,
+        dataStatus: row ? 'query_completed' : 'unavailable' };
+    });
     let isolation: { status: string; observedCrossNicheRows: number | null } = { status: 'NOT TESTED: open a module first', observedCrossNicheRows: null };
     if (current.data?.niche_id && Object.hasOwn(registry.products, current.data.niche_id)) {
       const module = (registry.products as Record<string, { specialists: string[]; legacySpecialists: string[] }>)[current.data.niche_id];

@@ -57,6 +57,8 @@ import { startCheckout } from '@/services/subscriptionService';
 import { processCoinImage, CoinImageTool } from '@/services/coinImageProcessing';
 import { generateCoinImageReference } from '@/services/coinImageEnhancementService';
 import { BrandArtwork } from '@/components/feature/BrandArtwork';
+import { InventoryAccountScope } from '@/components/feature/InventoryAccountScope';
+import { useInventory } from '@/hooks/useInventory';
 
 // ── Coin Flipper design tokens ────────────────────────────────────────────────
 const CF = {
@@ -352,6 +354,7 @@ function HomeTab({ onTabSelect, isPremium, tenant, onUpgrade, onPeriodSelect, se
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ht.content}>
       <BrandArtwork nicheId="coins" />
+      <InventoryAccountScope/>
       <Pressable onPress={()=>router.push('/lot-opportunity' as any)} accessibilityRole="button" accessibilityLabel="Evaluate a coin collection before buying" style={({pressed})=>[ht.periodDetail,pressed?{opacity:0.8}:null]}>
         <MaterialIcons name="widgets" size={24} color={CF.gold}/><View style={{flex:1,gap:Spacing.xs}}><Text style={ht.periodDetailName}>Buying a whole collection?</Text><Text style={ht.periodDetailSub}>Add the list and bid. See what is worth your money.</Text></View><MaterialIcons name="arrow-forward" size={24} color={CF.gold}/>
       </Pressable>
@@ -1542,27 +1545,13 @@ const ls = StyleSheet.create({
 // ── Insights tab ──────────────────────────────────────────────────────────────
 function InsightsTab({ tenant, onTabSelect }: { tenant: any; onTabSelect: (t: CFTab) => void }) {
   const router = useRouter();
-  const [stats, setStats] = useState<{ items: number; listed: number; sold: number; totalValue: number } | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const COIN_SPECIALISTS = ['coins', 'coins_uk', 'coins_world', 'islamic_silver', 'banknotes', 'gold', 'silver', 'ancient_artefacts', 'curiosities_collectibles'];
-
-  useEffect(() => {
-    if (!tenant?.id) { setLoading(false); return; }
-    const supabase = getSupabaseClient();
-    Promise.all([
-      supabase.from('items').select('id, status, expected_selling_price').eq('tenant_id', tenant.id).in('specialist_id', COIN_SPECIALISTS),
-      supabase.from('listings').select('id, items!inner(specialist_id)').eq('tenant_id', tenant.id).eq('status', 'active').in('items.specialist_id', COIN_SPECIALISTS),
-      supabase.from('sales').select('sale_price, items!inner(specialist_id)').eq('tenant_id', tenant.id).in('items.specialist_id', COIN_SPECIALISTS),
-    ]).then(([itemsRes, listingsRes, salesRes]) => {
-      const items = itemsRes.data ?? [];
-      const listed = listingsRes.data?.length ?? 0;
-      const sold = salesRes.data?.length ?? 0;
-      const totalValue = items.reduce((acc: number, i: any) => acc + (Number(i.expected_selling_price) || 0), 0);
-      setStats({ items: items.length, listed, sold, totalValue });
-      setLoading(false);
-    }).catch(() => setLoading(false));
-  }, [tenant?.id]);
+  // Reuse the canonical scoped hook; legacy hardcoded catch-all IDs are not coins.
+  const inventory = useInventory();
+  const loading = inventory.loading;
+  const stats = !loading && !inventory.syncError ? {
+    items: inventory.stats.activeTotal, listed: inventory.stats.liveCount,
+    sold: inventory.stats.soldCount, totalValue: inventory.totalValue,
+  } : null;
 
   const INSIGHT_ACTIONS = [
     { icon: 'inventory-2',  label: 'Full Inventory',    sub: 'Browse all coins in stock',           color: CF.gold,        action: () => router.push('/(tabs)/inventory' as any) },
@@ -1573,6 +1562,7 @@ function InsightsTab({ tenant, onTabSelect }: { tenant: any; onTabSelect: (t: CF
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ins.content}>
+      <InventoryAccountScope total={inventory.stats.grandTotal} verified={!loading} error={inventory.syncError}/>
       {loading ? (
         <View style={{ alignItems: 'center', paddingVertical: Spacing.xl }} accessibilityLabel="Loading stats"><ActivityIndicator color={CF.gold} /></View>
       ) : stats ? (
