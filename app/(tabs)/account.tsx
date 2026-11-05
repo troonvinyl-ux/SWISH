@@ -28,8 +28,7 @@ export default function AccountScreen() {
       { title: 'eBay Admin', detail: 'Connection status and marketplace administration.', icon: 'store' as const, route: '/ebay-admin' },
       { title: 'Diagnostics', detail: 'Inspect app and module health.', icon: 'monitor-heart' as const, route: '/master-diagnostics' },
     ] : []),
-    { title: 'eBay Connection', detail: 'Seller account, policies and marketplace connection.', icon: 'link' as const, route: '/ebay-account' },
-    { title: 'Settings', detail: 'Account, preferences and application settings.', icon: 'settings' as const, route: '/settings' },
+    { title: 'Settings & eBay Connection', detail: 'Account, seller connection, business policies and app preferences.', icon: 'settings' as const, route: '/settings' },
   ];
   const nicheLabel = effectiveNicheId ? String(effectiveNicheId).replace(/[_-]/g, ' ').toUpperCase() : 'SWISH';
 
