@@ -30,7 +30,7 @@ export function useUnifiedShell() {
     tenantLoading: app.tenantLoading,
     nichePreferencesLoading: app.nichePreferencesLoading,
     moduleLoading: app.moduleLoading,
-    moduleError: app.accessError,
+    moduleError: app.accessError ?? app.moduleError,
     accessReady: app.accessReady,
     canSwitchNiche: app.canSwitchNiche,
     isMasterAdmin: app.isMasterAdmin,

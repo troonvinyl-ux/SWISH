@@ -14,5 +14,6 @@ export function loadVerificationResults(tenantId: string) { return invoke({ acti
 export function runSafeVerification(tenantId: string, platform: string) { return invoke({ action: 'run', tenantId, platform }); }
 export function runAntiqueVerification(tenantId: string, platform: string) { return invoke({ action: 'antiques', tenantId, platform }); }
 export function runEbayVerification(tenantId: string, platform: string) { return invoke({ action: 'ebay', tenantId, platform }); }
+export function runProgrammeVerification(tenantId: string, platform: string, sourceSha: string, stageId = 'ALL') { return invoke({ action: 'programme', tenantId, platform, sourceSha, stageId }); }
 export function recordModuleObservation(tenantId: string, nicheId: ProductionNicheId, platform: string) { return invoke({ action: 'mounted', tenantId, nicheId, platform }); }
 export function recordNavigationFailure(tenantId: string, nicheId: ProductionNicheId) { return invoke({ action: 'failed', tenantId, nicheId, platform: 'unknown' }); }

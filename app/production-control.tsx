@@ -10,9 +10,11 @@ import { useProductionControl } from '@/hooks/useProductionControl';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { classifyProductionWorkflowJob } from '@/services/productionControlEvidence';
 import { PRODUCTION_REPOSITORY } from '@/services/productionControlService';
+import { useOwnerAuthorization } from '@/hooks/useOwnerAuthorization';
+import { ReadinessAuditPanel } from '@/components/feature/ReadinessAuditPanel';
 
 const github = `https://github.com/${PRODUCTION_REPOSITORY}`;
-const sections = ['next', 'stages', 'certification', 'pulls', 'workflows', 'runs', 'risks'] as const;
+const sections = ['audit', 'next', 'stages', 'certification', 'pulls', 'workflows', 'runs', 'risks'] as const;
 type SectionId = typeof sections[number];
 type Tone = 'good' | 'bad' | 'warn' | 'muted';
 const statusTone = (status: string): Tone => status === 'VERIFIED' || status === 'PASSED' ? 'good' : status === 'FAILED' || status === 'BLOCKED' ? 'bad' : ['NOT STARTED', 'SKIPPED'].includes(status) ? 'muted' : 'warn';
@@ -34,9 +36,9 @@ function Section({ title, subtitle, children }: SectionProps) {
 export default function ProductionControlScreen() {
   const { user, loading: authLoading } = useAuth();
   const { isMasterAdmin, tenantLoading, nichePreferencesLoading } = useApp();
-  const accessLoading = authLoading || tenantLoading || nichePreferencesLoading;
-  const ownerAccessDenied = !isMasterAdmin;
-  const allowed = !accessLoading && !ownerAccessDenied;
+  const owner = useOwnerAuthorization();
+  const accessLoading = owner.loading;
+  const allowed = owner.allowed;
   // Hook is always mounted, but it cannot fetch repository data before owner authorization.
   const control = useProductionControl(allowed);
   const router = useRouter();
@@ -53,10 +55,11 @@ export default function ProductionControlScreen() {
   }, [showAlert]);
 
   if (accessLoading) return <SafeAreaView style={styles.loading}><ActivityIndicator color={Colors.primary}/><Text style={styles.body}>Checking owner access…</Text></SafeAreaView>;
-  if (!allowed) return <Redirect href={"/master-admin" as any} />;
+  if (!allowed) return <SafeAreaView edges={['top','bottom']} style={styles.loading}><Text style={styles.title}>Owner authorization required</Text><Text accessibilityRole="alert" style={styles.body}>{owner.error??'The server did not authorize this readiness centre.'}</Text><Pressable onPress={()=>{void owner.retry();}} style={({pressed})=>[styles.iconButton,pressed?styles.pressed:null]}><Text style={styles.linkText}>Retry</Text></Pressable><Pressable onPress={back} style={({pressed})=>[styles.link,pressed?styles.pressed:null]}><Text style={styles.linkText}>Return to Master Admin</Text></Pressable></SafeAreaView>;
   const sourceLabel = snapshot.source === 'LIVE' ? 'LIVE REGISTER' : snapshot.source === 'CACHED' ? 'CACHED EVIDENCE' : 'BUNDLED / OFFLINE';
 
   const renderSection = ({ item }: { item: SectionId }) => {
+    if (item === 'audit') return <ReadinessAuditPanel snapshot={snapshot}/>;
     if (item === 'next') return <Section title="Next acceptance work" subtitle="The first unfinished programme stage, not the latest green workflow.">
       <View style={styles.card}>
         <Pill label={overview.currentStage?.status ?? (overview.tasks.length ? 'REVIEW RELEASE GATES' : 'REGISTER UNAVAILABLE')} tone="warn"/>
@@ -121,7 +124,7 @@ export default function ProductionControlScreen() {
             <View style={styles.wrapRow}><Text style={styles.rowText}>{job.name}</Text><Pill label={classifyProductionWorkflowJob(job)} tone={statusTone(classifyProductionWorkflowJob(job))}/></View>
             {job.steps?.filter(step => /complete regression suite|shared server authorization boundaries|bundle android production javascript|validate all ten expo branded|validate production register/i.test(step.name)).map(step => <View key={step.name} style={styles.wrapRow}><Text style={styles.body}>{step.name}</Text><Pill label={classifyProductionWorkflowJob(step)} tone={statusTone(classifyProductionWorkflowJob(step))}/></View>)}
           </View>)}
-          {workflow.label === 'Ten-niche web builds' ? <View style={styles.task}>
+          {workflow.artifacts.length > 0 ? <View style={styles.task}>
             <Text style={styles.cardTitle}>Build artifacts</Text>
             {workflow.artifacts.length === 0 ? <Text style={styles.body}>No downloadable artifacts are confirmed.</Text> : workflow.artifacts.map(artifact => {
               const expiry = Date.parse(artifact.expires_at);
@@ -164,13 +167,13 @@ export default function ProductionControlScreen() {
         <View style={styles.wrapRow}><Text style={styles.cardTitle}>Evidence before release</Text><Pill label={sourceLabel} tone={snapshot.source === 'LIVE' ? 'muted' : 'warn'}/></View>
         <Pill label={overview.verdict} tone={overview.complete ? 'good' : snapshot.source === 'LIVE' && overview.risks.length ? 'bad' : 'warn'}/>
         <View style={styles.metrics}>
-          <Metric label="REGISTER-VERIFIED TASKS" value={snapshot.register ? `${overview.verified} / ${overview.tasks.length}` : '—'} detail="Historical evidence, not certification"/>
+          <Metric label="CURRENT-VERIFIED TASKS" value={snapshot.register ? `${overview.assessment.verified} / ${overview.tasks.length}` : '—'} detail="Full current-source acceptance only"/>
           <Metric label="CERTIFIED NICHES" value={`${overview.certified} / ${snapshot.niches.length}`} detail={`${overview.gatesVerified} / ${overview.gatesTotal} current gates`}/>
           <Metric label="NEXT STAGE" value={overview.currentStage?.id ?? '—'} detail={overview.currentStage?.name ?? 'Review acceptance'}/>
           <Metric label="BLOCKED TASKS" value={String(overview.blocked)} detail={`${overview.risks.length} recorded release risks`}/>
         </View>
         <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: overview.readiness }} accessibilityLabel="Programme task completion, not production readiness" style={styles.progressTrack}><View style={[styles.progressFill, { width: `${overview.readiness}%` }]}/></View>
-        <Text style={styles.body}>{overview.readiness}% of programme tasks are register-verified. Build success and implemented work do not make a product production-ready.</Text>
+        <Text style={styles.body}>{overview.readiness}% of programme tasks have current-commit acceptance. Historical task labels do not count toward release readiness.</Text>
         <Text style={styles.muted}>{snapshot.mainSha ? `Loaded main ${snapshot.mainSha.slice(0, 10)}` : 'Main commit not confirmed'} · {snapshot.refreshedAt ? `Evidence loaded ${new Date(snapshot.refreshedAt).toLocaleString()}` : 'Using the register packaged with this app'}</Text>
       </View>
       {snapshot.errors.length > 0 ? <View style={styles.errorBox}><View style={styles.row}><MaterialIcons name="error-outline" size={22} color={Colors.danger}/><Text style={styles.cardTitle}>Some evidence sources are unavailable</Text></View>{snapshot.errors.slice(0, 6).map((error, index) => <Text key={index} style={styles.body}>{error}</Text>)}</View> : null}

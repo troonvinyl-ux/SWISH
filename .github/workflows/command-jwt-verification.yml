@@ -1,0 +1,60 @@
+name: SWISH approved command and readiness JWT checks
+on:
+  workflow_dispatch:
+    inputs:
+      approved_reads:
+        description: Approve owner/subscriber authenticated read-only command and authorization probes
+        required: true
+        type: boolean
+        default: false
+      approved_diagnostic_evidence:
+        description: Approve existing readiness programme diagnostic retention only; no inventory or seller writes
+        required: true
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: swish-approved-command-jwt
+  cancel-in-progress: false
+jobs:
+  verification:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.approved_reads && inputs.approved_diagnostic_evidence }}
+    environment: swish-approved-jwt-verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Credential-free runner safety tests (mock transport only)
+        run: node --test scripts/verify-command-jwt.test.mjs
+      - name: Execute bounded existing-endpoint JWT verification
+        env:
+          SWISH_APPROVED_JWT_READS: '1'
+          SWISH_APPROVED_DIAGNOSTIC_EVIDENCE: '1'
+          SWISH_ANON_KEY: ${{ secrets.SWISH_ANON_KEY }}
+          SWISH_OWNER_JWT: ${{ secrets.SWISH_OWNER_JWT }}
+          SWISH_SUBSCRIBER_JWT: ${{ secrets.SWISH_SUBSCRIBER_JWT }}
+          SWISH_OWNER_USER_ID: ${{ secrets.SWISH_OWNER_USER_ID }}
+          SWISH_SUBSCRIBER_USER_ID: ${{ secrets.SWISH_SUBSCRIBER_USER_ID }}
+          SWISH_OWNER_TENANT_ID: ${{ secrets.SWISH_OWNER_TENANT_ID }}
+          SWISH_SUBSCRIBER_TENANT_ID: ${{ secrets.SWISH_SUBSCRIBER_TENANT_ID }}
+          SWISH_FOREIGN_TENANT_ID: ${{ secrets.SWISH_FOREIGN_TENANT_ID }}
+          SWISH_SUBSCRIBER_NICHES: ${{ vars.SWISH_SUBSCRIBER_NICHES }}
+        run: node scripts/verify-command-jwt.mjs
+      - name: Retain sanitized observed evidence including failed or blocked checks
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: command-jwt-evidence-${{ github.sha }}
+          path: command-jwt-evidence.json
+          retention-days: 7
+          if-no-files-found: warn
+# Requires operator-created protected environment, approved existing fixtures and fresh JWTs.
+# No pull-request/push trigger, service role, login/refresh, module switching, AI,
+# seller/provider calls, inventory writes, cleanup, native builds or deployment.

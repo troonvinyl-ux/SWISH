@@ -80,7 +80,7 @@ export default function MasterInventoryScreen() {
   const effectiveFilter = searchScope === state.scope ? filter : '';
   const filters = FILTERS[id ?? ''] ?? [[`All ${config.terms.items}`, '']]; const banner = BANNERS[id ?? ''];
   const counts = { stock: state.views.stock.length, draft: state.views.draft.length, live: state.views.live.length, sold: state.views.sold.length };
-  const data = useMemo(() => (showAllCoins ? state.allItems : state.views[state.activeTab]).filter(item => {
+  const data = useMemo(() => (showAllCoins ? state.allItems : state.views[state.activeTab]).filter((item: InventoryViewItem) => {
     const haystack = `${item.canonical_title} ${item.catalogueNumber ?? ''} ${item.inventoryId ?? ''} ${item.ruler ?? ''} ${item.denomination ?? ''} ${item.mint ?? ''} ${item.material ?? ''} ${JSON.stringify(item.attributes)}`.toLowerCase();
     return (!effectiveSearch.trim() || haystack.includes(effectiveSearch.trim().toLowerCase())) && (showAllCoins || state.activeTab !== 'stock' || !effectiveFilter || haystack.includes(effectiveFilter));
   }), [state.allItems, state.views, state.activeTab, showAllCoins, effectiveSearch, effectiveFilter]);
@@ -109,7 +109,7 @@ export default function MasterInventoryScreen() {
       setBulkListing(true);
       try {
         if (state.activeTab === 'stock') {
-          const results = await publishGeneratedListings(data.map(item => ({
+          const results = await publishGeneratedListings(data.map((item: InventoryViewItem) => ({
             itemId: item.id, tenantId: tenant.id,
             categoryId: String(item.attributes?.ebay_category_id ?? '') || undefined,
           })));
@@ -118,8 +118,8 @@ export default function MasterInventoryScreen() {
           await state.reload();
           showAlert('Bulk listing complete', `${live} of ${results.length} items confirmed live on eBay.${failed ? ` ${failed} need attention; no automatic retry was made.` : ''}`);
         } else {
-          const drafts = data.filter(item => item.listing?.id);
-          const results = await submitListingsInBulk(tenant.id, drafts.map(item => item.listing!.id));
+          const drafts = data.filter((item: InventoryViewItem) => item.listing?.id);
+          const results = await submitListingsInBulk(tenant.id, drafts.map((item: InventoryViewItem) => item.listing!.id));
           const live = results.filter(result => result.result.success).length;
           const failed = results.length - live;
           await state.reload();
@@ -188,7 +188,7 @@ export default function MasterInventoryScreen() {
       />
     </KeyboardAvoidingView>
     <BulkReIdentifyModal visible={showReIdentify} items={data} tenantId={tenant?.id ?? ''} progress={progress} onProgress={setProgress} onClose={closeBulk} />
-    {tenant ? <BulkReValueSheet visible={showReValue} onClose={closeBulk} tenantId={tenant.id} items={data.map(item => ({ id: item.id, canonical_title: item.canonical_title, specialist_id: item.specialist_id, condition: item.condition ?? '', attributes: item.attributes, media: item.media }))} autonomousMode={businessConfig?.autoValue === true || businessConfig?.automationLevel === 'autonomous'} /> : null}
+    {tenant ? <BulkReValueSheet visible={showReValue} onClose={closeBulk} tenantId={tenant.id} items={data.map((item: InventoryViewItem) => ({ id: item.id, canonical_title: item.canonical_title, specialist_id: item.specialist_id, condition: item.condition ?? '', attributes: item.attributes, media: item.media }))} autonomousMode={businessConfig?.autoValue === true || businessConfig?.automationLevel === 'autonomous'} /> : null}
     <Modal visible={state.submitStep !== null} transparent animationType="fade" onRequestClose={() => {}}><View style={s.overlay}><View style={s.modal}><ActivityIndicator color={config.color} /><Text style={s.emptyTitle}>Submitting to eBay</Text><Text style={s.sub}>{state.submitTitle}</Text><Text style={s.info}>{state.submitStep?.replace(/_/g, ' ')}</Text></View></View></Modal>
   </SafeAreaView>;
 }

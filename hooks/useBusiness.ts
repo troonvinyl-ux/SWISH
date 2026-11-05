@@ -9,28 +9,15 @@ import { CapitalState, computeCapitalState, listCapitalTransactions, CapitalTran
 // ── Business Config Hook ─────────────────────────────────────────────────────
 
 export function useBusinessConfig() {
-  const { tenant } = useApp();
-  const [config, setConfig] = useState<BusinessConfig | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const load = useCallback(async () => {
-    if (!tenant) return;
-    setLoading(true);
-    const { config: c } = await getBusinessConfig(tenant.id);
-    setConfig(c);
-    setLoading(false);
-  }, [tenant?.id]);
-
-  useEffect(() => { load(); }, [load]);
-
+  // Reuse the root provider's scoped settings instead of each screen issuing three more reads.
+  const { tenant,businessConfig,reloadBusinessConfig,accessReady,moduleLoading } = useApp();
   const save = useCallback(async (updates: Partial<BusinessConfig>) => {
-    if (!tenant) return { error: 'No tenant' };
-    const { config: updated, error } = await upsertBusinessConfig(tenant.id, updates);
-    if (updated) setConfig(updated);
+    if (!tenant || !accessReady || moduleLoading) return { error: 'Verified workspace required' };
+    const { error } = await upsertBusinessConfig(tenant.id, updates);
+    if (!error) await reloadBusinessConfig();
     return { error };
-  }, [tenant?.id]);
-
-  return { config, loading, save, reload: load };
+  }, [tenant?.id,accessReady,moduleLoading,reloadBusinessConfig]);
+  return { config:businessConfig, loading:moduleLoading, save, reload:reloadBusinessConfig };
 }
 
 // ── Opportunities Hook ────────────────────────────────────────────────────────

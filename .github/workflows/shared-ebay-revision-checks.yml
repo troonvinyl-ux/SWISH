@@ -1,0 +1,88 @@
+name: Shared eBay description and seller-price revision regressions
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'shared/ebayRevisionContract.ts'
+      - 'services/ebayRevisionService.ts'
+      - 'hooks/useListingEditor.ts'
+      - 'supabase/functions/swish-ebay-list/**'
+      - 'supabase/functions/_shared/ebay*'
+      - 'supabase/functions/swish-ebay-sync/**'
+      - 'services/__tests__/ebayRevisionReadback.test.ts'
+      - 'supabase/tests/ebay_revision_readback.test.ts'
+permissions:
+  contents: read
+jobs:
+  regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Install existing dependencies
+        run: npm install --ignore-scripts --package-lock=false
+      - name: Record exact source
+        run: |
+          mkdir -p verification-output
+          git rev-parse HEAD > verification-output/source-sha.txt
+      - name: Focused shared revision regressions (no seller writes)
+        id: focused
+        continue-on-error: true
+        run: npx jest --config jest.config.ci.js --runInBand services/__tests__/ebayRevisionReadback.test.ts services/__tests__/premiumNicheParity.test.ts services/__tests__/listingEditorSpecifics.test.ts services/__tests__/antiqueWorkflow.test.ts --json --outputFile=verification-output/revision-jest.json
+      - name: XML parser round-trip tests (no live eBay calls)
+        id: parser
+        if: always()
+        continue-on-error: true
+        run: deno test supabase/tests/ebay_revision_readback.test.ts > verification-output/xml-parser.txt 2>&1
+      - name: Edge function type checks
+        id: edge
+        if: always()
+        continue-on-error: true
+        run: deno check supabase/functions/swish-ebay-list/index.ts supabase/functions/swish-ebay-sync/index.ts > verification-output/edge-types.txt 2>&1
+      - name: TypeScript gate
+        id: types
+        if: always()
+        continue-on-error: true
+        run: npx tsc --noEmit > verification-output/typescript.txt 2>&1
+      - name: Complete regression suite
+        id: full
+        if: always()
+        continue-on-error: true
+        run: npx jest --config jest.config.ci.js --runInBand --json --outputFile=verification-output/full-jest.json
+      - name: Deployment assets and parity
+        id: assets
+        if: always()
+        continue-on-error: true
+        run: |
+          node scripts/sync-backend-registry.mjs --check > verification-output/parity.txt 2>&1
+          node scripts/validate-edge-deployment.mjs > verification-output/deployment-assets.txt 2>&1
+      - name: Upload actual results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-ebay-revision-${{ github.sha }}
+          path: verification-output/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Fail closed on any failed gate
+        if: always()
+        env:
+          FOCUSED: ${{ steps.focused.outcome }}
+          PARSER: ${{ steps.parser.outcome }}
+          EDGE: ${{ steps.edge.outcome }}
+          TYPES: ${{ steps.types.outcome }}
+          FULL: ${{ steps.full.outcome }}
+          ASSETS: ${{ steps.assets.outcome }}
+        run: |
+          test "$FOCUSED" = success
+          test "$PARSER" = success
+          test "$EDGE" = success
+          test "$TYPES" = success
+          test "$FULL" = success
+          test "$ASSETS" = success

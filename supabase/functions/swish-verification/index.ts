@@ -43,6 +43,32 @@ Deno.serve(async request => {
     if (allowed.error || allowed.data !== true) return respond({ error: 'Rendered module entitlement not confirmed', reference }, 403);
     add(`ROUTE-${body.nicheId}`, 'PASS', 'Owner-client observation: specialist dashboard committed after lazy loading, with server session and entitlement matching. This verifies dashboard mounting only, not camera, marketplace operations or another device.', body.nicheId);
    }
+  } else if (action === 'programme') {
+   // Execute only safe reads. Compiler, camera, sandbox writes and release signing
+   // cannot run in this Edge runtime and must remain explicit blockers.
+   const stageId = typeof body.stageId === 'string' ? body.stageId : 'ALL';
+   if (!['ALL','S1','S2','S3','S4','S5','S6','S7'].includes(stageId) || !/^[a-f0-9]{40}$/i.test(body.sourceSha ?? '')) return respond({ error: 'Valid current source and workstream required', reference }, 400);
+   const sourceSha = body.sourceSha;
+   const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 12000);
+   let programme: { stages: { id: string; name: string; tasks: { id: string; title: string }[] }[] };
+   try {
+    const main = await fetch('https://api.github.com/repos/troonvinyl-ux/SWISH/commits/main', { signal: controller.signal, headers: { Accept: 'application/vnd.github+json' } });
+    if (!main.ok || (await main.json()).sha !== sourceSha) return respond({ error: 'Main changed or could not be confirmed. Refresh evidence before auditing.', reference }, 409);
+    const source = await fetch(`https://raw.githubusercontent.com/troonvinyl-ux/SWISH/${sourceSha}/docs/SWISH_FOUNDATION_MASTER_REGISTER.json`, { signal: controller.signal });
+    if (!source.ok) return respond({ error: 'Canonical readiness requirements unavailable', reference }, 503);
+    programme = await source.json();
+    if (!Array.isArray(programme.stages) || programme.stages.length !== 7 || !programme.stages.every(stage => /^S[1-7]$/.test(stage.id) && Array.isArray(stage.tasks) && stage.tasks.every(task => typeof task.id === 'string' && task.id.startsWith(stage.id+'-') && typeof task.title === 'string'))) return respond({ error: 'Canonical programme validation failed', reference }, 503);
+   } finally { clearTimeout(timer); }
+   const database = await client.from('tenants').select('id').eq('id',tenantId).maybeSingle();
+   add(`PROGRAMME-DB-${sourceSha}`, database.error || !database.data ? 'FAIL' : 'PASS', `Actual caller-RLS tenant SELECT executed. Source ${sourceSha}. This is connectivity evidence only.`, null, database.error || !database.data ? 'Caller tenant SELECT failed' : null);
+   const report = await client.rpc('swish_command_snapshot', { p_platform: true });
+   const identities = Array.isArray(report.data?.modules) ? report.data.modules.map((row: { id: string }) => row.id) : [];
+   const registryPassed = !report.error && report.data?.verifiedOwner === true && identities.length === Object.keys(registry.products).length && Object.keys(registry.products).every(id => identities.includes(id));
+   add(`PROGRAMME-AGGREGATES-${sourceSha}`, registryPassed ? 'PASS' : 'FAIL', `Actual owner aggregate RPC executed and all canonical module identities compared. Source ${sourceSha}. Not subscriber isolation or marketplace acceptance.`, null, registryPassed ? null : 'Aggregate reporting query or registry mismatch');
+   for (const stage of programme.stages.filter(stage => stageId === 'ALL' || stage.id === stageId)) for (const task of stage.tasks) {
+    const reason = stage.id==='S1' || stage.id==='S2' ? 'Current-source dependency/static/regression executor and reviewed acceptance evidence required.' : stage.id==='S7' ? 'Current-commit CI, unified signing/artifact, hosted and installed-device verification required. No APK requested by this audit.' : 'Approved isolated fixture, ordinary subscriber sessions and niche workflow/provider/device acceptance required. No production write or paid AI test executed.';
+    add(`READINESS:${task.id}:${sourceSha}`, 'BLOCKED', `${task.id} — ${task.title}. Original ${stage.name} requirement retained. Source ${sourceSha}. Safe owner/tenant/aggregate checks above do not fulfill this complete task.`, null, reason);
+   }
   } else if (action === 'ebay') {
    const current = await client.rpc('swish_current_module'); const nicheId = current.data?.niche_id;
    if (current.error || current.data?.tenant_id !== tenantId || !nicheId) add('EBAY-LIVE', 'BLOCKED', 'Select an entitled module before the existing seller-policy API probe.', null, 'No active module');
@@ -88,7 +114,7 @@ Deno.serve(async request => {
    }
    const connector = await admin.from('marketplace_connectors').select('status,last_sync_at,access_token_expires_at').eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle();
    add('EBAY-CONNECTOR-METADATA', connector.error || !connector.data ? 'BLOCKED' : 'PASS', connector.data ? `Stored connection status: ${connector.data.status}; last sync: ${connector.data.last_sync_at ?? 'UNKNOWN'}; expiry: ${connector.data.access_token_expires_at ?? 'UNKNOWN'}. This is a metadata read, not a live eBay test.` : 'No connector metadata readable.', nicheId, connector.error || !connector.data ? 'Connector not available' : null);
-   for (const [id, explanation] of [['AUTH-SUBSCRIBER','Requires separate ordinary subscriber sessions; owner JWT cannot prove subscriber permissions.'],['INVENTORY-WRITE','Requires approved isolated test records; safe runner does not mutate business records.'],['AI-IDENTIFY','Use real photos in the active module; no synthetic AI request is submitted.'],['AI-VALUATION','Requires a reviewed real item and evidence retrieval; use the valuation workflow.'],['LISTING-GENERATE','Requires explicit real-item draft creation; safe checks never create or publish listings.'],['EBAY-LIVE','Run existing seller-policy diagnostics after opening a module; no token refresh is forced by this runner.'],['PARITY-DEVICES','Requires actual Android, iOS and browser observations for the same source/runtime.'],['UPDATE-COMPATIBILITY','Use App updates to query the configured update service from an installed native build.']]) add(id, 'NOT TESTED', explanation, nicheId);
+   for (const [id, explanation] of [['AUTH-SUBSCRIBER','Requires separate ordinary subscriber sessions; owner JWT cannot prove subscriber permissions.'],['INVENTORY-WRITE','Requires approved isolated test records; safe runner does not mutate business records.'],['AI-IDENTIFY','Use real photos in the active module; no synthetic AI request is submitted.'],['AI-VALUATION','Requires a reviewed real item and evidence retrieval; use the valuation workflow.'],['LISTING-GENERATE','Requires explicit real-item draft creation; safe checks never create or publish listings.'],['PARITY-DEVICES','Requires actual Android, iOS and browser observations for the same source/runtime.'],['UPDATE-COMPATIBILITY','Use App updates to query the configured update service from an installed native build.']]) add(id, 'NOT TESTED', explanation, nicheId);
   } else return respond({ error: 'Unsupported safe test action', reference }, 400);
   const saved = await admin.from('swish_verification_results').insert(results.map(result => ({ ...result, tenant_id: tenantId, user_id: user.id, reference_id: reference }))).select('id,test_id,niche_id,platform,result,evidence,failure_reason,reference_id,created_at');
   if (saved.error) return respond({ error: 'Checks ran but evidence could not be retained; rerun after checking diagnostics storage', reference }, 503);
