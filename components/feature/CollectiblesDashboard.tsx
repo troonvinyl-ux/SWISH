@@ -7,7 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useCollectiblesDashboard } from '@/hooks/useCollectiblesDashboard';
 import { Colors, Spacing, Radius, Typography, Shadow } from '@/constants/theme';
 import { getBrandArtwork } from '@/constants/brandArtwork';
-const actions=[{id:'identify',title:'Identify Item',detail:'Capture · review · save',icon:'photo-camera'},{id:'inventory',title:'My Inventory',detail:'Private Collectibles stock',icon:'inventory-2'},{id:'listing',title:'Create Listing',detail:'Category & eBay specifics',icon:'sell'},{id:'valuation',title:'Market Value',detail:'Comparisons & confidence',icon:'query-stats'},{id:'sync',title:'eBay Sync',detail:'Review imports & updates',icon:'sync'},{id:'opportunities',title:'Opportunities',detail:'Find your next flip',icon:'search'}];
+const actions=[{id:'identify',title:'Identify Item',detail:'Capture · review · save',icon:'photo-camera'},{id:'inventory',title:'My Inventory',detail:'Private Collectibles stock',icon:'inventory-2'},{id:'listing',title:'Create Listing',detail:'Category & eBay specifics',icon:'sell'},{id:'valuation',title:'Market Value',detail:'Comparisons & confidence',icon:'query-stats'},{id:'sync',title:'eBay Sync',detail:'Review imports & updates',icon:'sync'},{id:'opportunities',title:'Market Research',detail:'Find comparable items & demand',icon:'search'}];
 interface CollectiblesDashboardProps {}
 export const CollectiblesDashboard=memo(function CollectiblesDashboard(_props:CollectiblesDashboardProps){
  const dashboard=useCollectiblesDashboard();
