@@ -4,9 +4,10 @@ import { MaterialIcons } from '@expo/vector-icons';
 import type { Item } from '@/services/itemService';
 import { useSpecialistItemFields } from '@/hooks/useSpecialistItemFields';
 import { Colors,Spacing,Typography,Radius } from '@/constants/theme';
-interface SpecialistItemFieldsProps { item:Item;onUpdated:(updates:Partial<Item>)=>void }
-export const SpecialistItemFields=memo(function SpecialistItemFields({ item,onUpdated }:SpecialistItemFieldsProps) {
-  const fields=useSpecialistItemFields(item,onUpdated);const [expanded,setExpanded]=useState(false);
+// Initially-expanded specialist review is part of the shared public component contract.
+export interface SpecialistItemFieldsProps { item:Item;onUpdated:(updates:Partial<Item>)=>void; initiallyExpanded?:boolean }
+export const SpecialistItemFields=memo(function SpecialistItemFields({ item,onUpdated,initiallyExpanded=false }:SpecialistItemFieldsProps) {
+  const fields=useSpecialistItemFields(item,onUpdated);const [expanded,setExpanded]=useState(initiallyExpanded);
   if(!fields.profile) return null;
   return <View style={s.card}>
     <Pressable onPress={()=>setExpanded(value=>!value)} style={({ pressed })=>[s.toggle,pressed ? s.pressed : null]}><MaterialIcons name="fact-check" size={24} color={Colors.primary}/><Text style={s.heading}>Specialist fields</Text><MaterialIcons name={expanded ? 'expand-less' : 'expand-more'} size={24} color={Colors.primary}/></Pressable>

@@ -1,0 +1,63 @@
+name: SWISH command centre and readiness acceptance
+on:
+  pull_request:
+    paths: ['components/feature/**', 'services/**', 'hooks/**', 'app/**', 'constants/**', 'supabase/**', 'docs/SWISH_FOUNDATION_MASTER_REGISTER.json', '.github/workflows/command-centre-verification.yml']
+  push:
+    branches: [main]
+    paths: ['components/feature/**', 'services/**', 'hooks/**', 'app/**', 'constants/**', 'supabase/**', 'docs/SWISH_FOUNDATION_MASTER_REGISTER.json', '.github/workflows/command-centre-verification.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: swish-command-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  source-verification:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: bash scripts/install-dependencies.sh
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Lint
+        if: ${{ !cancelled() }}
+        run: npx expo lint
+      - name: All unit and contract regressions
+        if: ${{ !cancelled() }}
+        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand --json --outputFile=command-centre-jest.json
+      - name: Canonical unified registry and register
+        if: ${{ !cancelled() }}
+        run: |
+          node scripts/validate-unified-modules.mjs
+          node scripts/validate-production-register.mjs
+          node scripts/sync-backend-registry.mjs --check
+          node scripts/validate-edge-deployment.mjs
+      - name: Retain real results and source identity even after failure
+        if: always()
+        run: printf '%s\n' "$GITHUB_SHA" > command-centre-tested-source.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: command-centre-evidence-${{ github.sha }}
+          path: |
+            command-centre-jest.json
+            command-centre-tested-source.txt
+          if-no-files-found: warn
+  edge-graph:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Resolve verification function without executing production requests
+        run: deno info supabase/functions/swish-verification/index.ts
+      - name: Existing server authorization regressions
+        run: deno test --allow-read --allow-env supabase/tests/paidNicheAuthorization.test.ts
+# No native builds, publishing, database writes, paid AI calls or seller operations.

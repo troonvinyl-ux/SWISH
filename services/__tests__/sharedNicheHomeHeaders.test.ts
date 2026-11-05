@@ -13,6 +13,11 @@ const uploads = [
   ['beauty', 'beauty.jpeg'],
   ['trading_cards', 'trading-cards.jpeg'],
   ['antiques', 'antiques.jpeg'],
+  ['surplus_flip', 'surplus.jpeg'],
+  ['clothing', 'clothing.jpeg'],
+  ['fossils', 'fossils.jpeg'],
+  ['collectibles', 'collectibles.jpeg'],
+  ['coins', 'coins.jpeg'],
 ];
 
 describe('Shared Collectibles-style niche home and uploaded headers (source/pure tests)', () => {
@@ -23,7 +28,7 @@ describe('Shared Collectibles-style niche home and uploaded headers (source/pure
     expect(source('constants/brandArtwork.ts')).not.toContain('images/headers');
   });
 
-  test('keeps the approved 12:7 source dimensions and existing artwork for pending uploads', () => {
+  test('keeps the approved 12:7 source dimensions and a defensive legacy artwork fallback', () => {
     const header = source('constants/nicheHeaderArtwork.ts');
     expect(header).toContain('width: 1920, height: 1120, aspectRatio: 12 / 7');
     expect(header).toContain('default: return getBrandArtwork(nicheId)');
