@@ -1,0 +1,34 @@
+{
+  "feature": "Shared source-protected Smart Studio",
+  "version": "smart-studio-1.0.0",
+  "baselineMainShaInspected": "343335b12efa21270faaf70949db9ffe270677b6",
+  "sourceImplemented": true,
+  "databaseSchemaChanged": false,
+  "routingOrEntitlementsChanged": false,
+  "thirdPartySecretsClientSide": false,
+  "originalStorageByteComparisonImplemented": true,
+  "oldFullProductGenerativePathReplaced": true,
+  "tests": {
+    "status": "not_run",
+    "passed": 0,
+    "failed": 0,
+    "countsAreNotCertification": true,
+    "reason": "No shell, test runner or build execution tool available in this editor session."
+  },
+  "typescript": "not_run",
+  "lint": "not_run",
+  "nativeBuild": "not_run",
+  "currentEdgeDeployment": "unverified",
+  "authenticatedLiveRequests": "not_run",
+  "nichesLiveVerified": [],
+  "fixturesDownloaded": [
+    "march-mods-front.jpeg",
+    "march-mods-rear.jpeg",
+    "march-mods-disc1.jpeg",
+    "march-mods-disc2.jpeg"
+  ],
+  "offlineFixtureGeometry": "manual declared central patch, not automatic product-boundary acceptance",
+  "finalVisualAcceptance": "not_verified",
+  "pullRequest": null,
+  "report": "docs/SMART_STUDIO_DELIVERY.md"
+}

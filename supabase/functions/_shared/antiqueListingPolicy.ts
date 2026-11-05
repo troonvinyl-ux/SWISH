@@ -58,7 +58,7 @@ export interface AntiqueConditionPolicy { categoryId: string; itemConditionRequi
 export function selectAntiqueCondition(policy: AntiqueConditionPolicy, selected: string): { id: string; error: string | null } {
   if (!Array.isArray(policy.itemConditions)) return { id: '', error: 'Condition metadata unavailable.' };
   if (!policy.itemConditions.length && policy.itemConditionRequired === false) return { id: '', error: null };
-  if (!selected || !policy.itemConditions.some(row => String(row.conditionId) === selected)) return { id: '', error: 'Select a supported eBay condition for this category. Cosmetic wear is not refurbished condition.' };
+  if (!selected || !policy.itemConditions.some(row => String(row.conditionId) === selected)) return { id: '', error: 'Choose a supported eBay condition that matches this item.' };
   return { id: selected, error: null };
 }
 export function validateAntiqueListingBasics(input: { title: string; description: string; price: number; quantity: number; media: string[] }): string | null {

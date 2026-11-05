@@ -1,4 +1,4 @@
-// Existing endpoint retained for all SWISH niches; no product-generating AI path.
+// Shared direct AI cutout endpoint. Originals are never overwritten.
 import { serveModule } from '../_shared/moduleScope.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
@@ -29,25 +29,23 @@ serveModule(async req=>{
   const key=`${user.id}:${tenantId}:${nicheId}:${cacheKey}`;
   if(flights.has(key))return jsonResponse(await flights.get(key)!);
   const cached=await storage.download(`${prefix}/presentation.png`);
-  if(!cached.error&&cached.data){const metadata=readStudioMetadata(new Uint8Array(await cached.data.arrayBuffer()));const mask=await storage.download(`${prefix}/mask.png`);if(!mask.error&&mask.data?.size&&metadata?.cacheKey===cacheKey&&metadata.sourceHash===sourceHash)return jsonResponse({...metadata,...urls(),enhancedImage:urls().enhancedUri,cached:true});}
+  if(!cached.error&&cached.data){const metadata=readStudioMetadata(new Uint8Array(await cached.data.arrayBuffer()));if(metadata?.quality?.fidelityPassed===true&&metadata?.cacheKey===cacheKey&&metadata.sourceHash===sourceHash)return jsonResponse({...metadata,enhancedUri:urls().enhancedUri,enhancedImage:urls().enhancedUri,cached:true});}
   const recent=(rates.get(user.id)??[]).filter(t=>t>Date.now()-60_000);
   if(recent.length>=12||flights.size>=4)return jsonResponse({error:'Smart Studio is busy. Original photographs remain available.',code:'STUDIO_BUSY'},429);
   rates.set(user.id,[...recent,Date.now()]);if(rates.size>256)rates.delete(rates.keys().next().value!);
   const work=(async()=>{
    const output=await processStudioCopy(imageDataUrl,nicheId,angle,hint,references,config);
    const result:Omit<StudioResult,'originalUri'>={...output.result,sourceHash,cacheKey};
-   if(!output.image||!output.mask)return {...result,warning:result.warnings.join(' ')};
+   if(!output.image)return {...result,warning:result.warnings.join(' ')};
    // Re-encode provenance with the final scoped cache key, without changing pixels.
    const {decodeStudioRaster,encodeStudioPng}=await import('../_shared/smartStudioEngine.ts');
    const bytes=encodeStudioPng(decodeStudioRaster(output.image),result);
-   const mask=await storage.upload(`${prefix}/mask.png`,output.mask,{contentType:'image/png',upsert:false,cacheControl:'31536000'});
-   if(mask.error&&mask.error.message&&!/already exists|duplicate/i.test(mask.error.message))throw new Error('Mask storage failed.');
    const upload=await storage.upload(`${prefix}/presentation.png`,bytes,{contentType:'image/png',upsert:false,cacheControl:'31536000'});
-   if(upload.error){const persisted=await storage.download(`${prefix}/presentation.png`);if(persisted.error||!persisted.data)throw new Error('Presentation storage failed.');const stored=readStudioMetadata(new Uint8Array(await persisted.data.arrayBuffer()));if(stored?.cacheKey!==cacheKey)throw new Error('Stored presentation not verified.');return {...stored,...urls(),enhancedImage:urls().enhancedUri,cached:true};}
-   const verify=await storage.download(`${prefix}/presentation.png`),verifyMask=await storage.download(`${prefix}/mask.png`);
-   if(verify.error||!verify.data||verifyMask.error||!verifyMask.data)throw new Error('Studio storage readback failed.');
-   if(await studioHash(new Uint8Array(await verify.data.arrayBuffer()))!==await studioHash(bytes)||await studioHash(new Uint8Array(await verifyMask.data.arrayBuffer()))!==await studioHash(output.mask))throw new Error('Studio storage bytes differ.');
-   return {...result,...urls(),enhancedImage:urls().enhancedUri,warning:result.warnings.join(' '),generatedBy:'AI boundary detection + source-pixel compositor'};
+   if(upload.error){const persisted=await storage.download(`${prefix}/presentation.png`);if(persisted.error||!persisted.data)throw new Error('Presentation storage failed.');const stored=readStudioMetadata(new Uint8Array(await persisted.data.arrayBuffer()));if(stored?.cacheKey!==cacheKey)throw new Error('Stored presentation not verified.');return {...stored,enhancedUri:urls().enhancedUri,enhancedImage:urls().enhancedUri,cached:true};}
+   const verify=await storage.download(`${prefix}/presentation.png`);
+   if(verify.error||!verify.data)throw new Error('Studio storage readback failed.');
+   if(await studioHash(new Uint8Array(await verify.data.arrayBuffer()))!==await studioHash(bytes))throw new Error('Studio storage bytes differ.');
+   return {...result,enhancedUri:urls().enhancedUri,enhancedImage:urls().enhancedUri,warning:result.warnings.join(' '),generatedBy:'Direct AI cutout + visual detail comparison'};
   })();flights.set(key,work);try{return jsonResponse(await work);}finally{flights.delete(key);}
  }catch{
   console.error('[swish-coin-image-enhance] request failed.');

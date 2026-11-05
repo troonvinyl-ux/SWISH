@@ -2473,6 +2473,7 @@ async function handleRequest(req: Request): Promise<Response> {
   const publishedAt = new Date().toISOString();
 
   const warnings: string[] = [];
+  let reconciliationPending = false;
   try {
     const { data: persistedListing, error: listingSaveError } = await supabase.from('listings').update({
       publish_claim_id: null,
@@ -2492,7 +2493,11 @@ async function handleRequest(req: Request): Promise<Response> {
         p_notes: `eBay listing published: ${externalListingId}`,
         p_marketplace: 'ebay',
       });
-      if (itemSaveError || transitioned !== true) warnings.push('Listing accepted, but item status needs reconciliation.');
+      if (itemSaveError || transitioned !== true) {
+        reconciliationPending = true;
+        console.error(`[SWISH publish] Lifecycle reconciliation failed: code=${itemSaveError?.code ?? 'unconfirmed'}`);
+        warnings.push('Published on eBay; SWISH stock synchronisation is pending. Do not submit again.');
+      }
     }
 
     if (catResult.wasResolved && resolvedCategoryId) {
@@ -2500,11 +2505,14 @@ async function handleRequest(req: Request): Promise<Response> {
     }
   } catch (dbErr: any) {
     console.error(`[SWISH] DB update after successful publish failed: ${dbErr.message}`);
-    warnings.push('Listing is live on eBay but local database update failed — please sync.');
+    reconciliationPending = true;
+    warnings.push('Published on eBay; SWISH database synchronisation is pending. Do not submit again.');
   }
 
   return jsonResponse({
     success: true,
+    accepted: true,
+    reconciliationPending,
     externalListingId,
     publishedAt,
     resolvedCategoryId,

@@ -2,7 +2,7 @@
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { decode } from 'npm:jpeg-js@0.4.4';
 import { encode as encodePng } from 'npm:fast-png@6.2.0';
-import { normalizeStudioDetection, buildStudioTransform, renderStudio, studioRisk, type StudioRaster } from '../functions/_shared/smartStudio.ts';
+import { SMART_STUDIO_VERSION, normalizeStudioDetection, buildStudioTransform, renderStudio, studioRisk, type StudioRaster } from '../functions/_shared/smartStudio.ts';
 import { encodeStudioPng, readStudioMetadata, studioHash } from '../functions/_shared/smartStudioEngine.ts';
 const fixtures=['march-mods-front','march-mods-rear','march-mods-disc1','march-mods-disc2'];
 for(const fixture of fixtures)Deno.test(`real JPEG ${fixture}: original hash unchanged; actual source-pixel PNG and mask`,async()=>{
@@ -20,6 +20,6 @@ for(const fixture of fixtures)Deno.test(`real JPEG ${fixture}: original hash unc
  await Deno.mkdir('verification-output/studio',{recursive:true});await Deno.writeFile(`verification-output/studio/${fixture}-manual-geometry.png`,image);await Deno.writeFile(`verification-output/studio/${fixture}-manual-mask.png`,mask);
 });
 Deno.test('PNG provenance roundtrip and incomplete-product refusal',()=>{
- const data=new Uint8Array([230,231,232,255]);const png=encodeStudioPng({width:1,height:1,data},{version:'smart-studio-1.0.0',status:'ready',quality:{sourcePixelsOnly:true},warnings:['Neutral background']});assertEquals(readStudioMetadata(png)?.version,'smart-studio-1.0.0');
+ const data=new Uint8Array([230,231,232,255]);const png=encodeStudioPng({width:1,height:1,data},{version:SMART_STUDIO_VERSION,status:'ready',quality:{sourcePixelsOnly:true},warnings:['Neutral background']});assertEquals(readStudioMetadata(png)?.version,SMART_STUDIO_VERSION);
  const detection=normalizeStudioDetection({kind:'contour',outline:[[0,0.1],[0.9,0.1],[0.9,0.9],[0,0.9]],confidence:0.95,complete:false,occluded:true,objectCount:1});assert(studioRisk(detection).length>=2);
 });
