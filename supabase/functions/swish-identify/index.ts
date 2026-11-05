@@ -17,6 +17,7 @@ import { corsHeaders } from '../_shared/cors.ts';
 import { requirePaidNiche,nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
 import { canonicalSpecialist, specialistNiche, profileForSpecialist } from '../_shared/specialistRegistry.ts';
 import { normalizeSpecialistAnalysis, specialistOutputInstructions, recordValue, textList } from '../_shared/specialistIntelligence.ts';
+import { IDENTIFICATION_LIMITS, MUSIC_IDENTIFICATION_RULES, validateIdentificationPayload, parseIdentificationJson, guardMusicIdentification, utf8Bytes } from '../_shared/identificationPolicy.ts';
 
 const NUMISTA_API = 'https://api.numista.com/api/v3';
 
@@ -1568,6 +1569,9 @@ async function runCoinResearch(id: any, known: Record<string, any>, numista: Num
 
 // ── Main handler ───────────────────────────────────────────────────────────────
 serveModule(async (req: Request) => {
+  const startedAt = Date.now();
+  let requestId = crypto.randomUUID();
+  const failure = (message: string, status: number, code: string) => new Response(JSON.stringify({ error: message, code, requestId }), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return new Response(JSON.stringify({ error: 'Method not allowed.' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
@@ -1585,9 +1589,12 @@ serveModule(async (req: Request) => {
     const { data: { user }, error: userError } = await userClient.auth.getUser();
     if (userError || !user) return new Response(JSON.stringify({ error: 'Invalid or expired authentication token.' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-    const body = await req.json();
+    let body: Record<string, any>;
+    try { body = await req.json(); } catch { return failure('Identification request must contain valid JSON.', 400, 'INVALID_JSON'); }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return failure('Identification request must be an object.', 400, 'INVALID_INPUT');
+    if (typeof body.requestId === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(body.requestId)) requestId = body.requestId;
     const { images, imageLabels, existingImageUrls, specialistId, acquisitionContext, knownAttributes, tenantId: bodyTenantId, outputMode, captureMode = 'item' } = body;
-    const invalidInput = (error: string) => new Response(JSON.stringify({ error }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    const invalidInput = (error: string) => failure(error, 400, 'INVALID_INPUT');
     if (specialistId != null && typeof specialistId !== 'string') return invalidInput('Invalid specialist selection.');
     const selectedSpecialist = canonicalSpecialist(specialistId ?? 'curiosities_collectibles');
     if (!selectedSpecialist) return invalidInput('Unregistered specialist selection.');
@@ -1596,9 +1603,10 @@ serveModule(async (req: Request) => {
     const newImages = Array.isArray(images) ? images : [];
     const storedImages = Array.isArray(existingImageUrls) ? existingImageUrls : [];
     if (!newImages.length && !storedImages.length) return invalidInput('At least one image is required.');
-    if (newImages.length + storedImages.length > 8 || newImages.some(image => typeof image !== 'string' || !image.trim() || image.length > 7_000_000) || storedImages.some(url => typeof url !== 'string' || !url.startsWith('https://') || url.length > 2048)) return invalidInput('Supply at most eight valid photos within the request size limit.');
-    if (JSON.stringify(body).length > 9_000_000) return invalidInput('Photos exceed the request size limit. Use fewer or smaller images.');
-    if (knownAttributes != null && (typeof knownAttributes !== 'object' || Array.isArray(knownAttributes) || JSON.stringify(knownAttributes).length > 30_000)) return invalidInput('Invalid or oversized known attributes.');
+    const payloadError = validateIdentificationPayload(body);
+    if (payloadError) return invalidInput(payloadError);
+    if (acquisitionContext != null && (typeof acquisitionContext !== 'string' || acquisitionContext.length > 2000)) return invalidInput('Acquisition context is invalid or too long.');
+    console.log(JSON.stringify({ event: 'identify_received', requestId, niche: profile?.nicheId ?? 'unregistered', imageCount: newImages.length + storedImages.length, requestBytes: utf8Bytes(JSON.stringify(body)) }));
     if (typeof bodyTenantId !== 'string' || !bodyTenantId.trim() || bodyTenantId.length > 200) {
       return new Response(JSON.stringify({ error: 'A valid tenantId is required.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
@@ -1672,7 +1680,8 @@ serveModule(async (req: Request) => {
 
     const specialistSystemPrompt = SPECIALIST_SYSTEM_PROMPTS[specialist] ?? (profile ? `You are SWISH's ${profile.nicheId} identification specialist. ${profile.recognition}` : SPECIALIST_SYSTEM_PROMPTS['curiosities_collectibles']);
     const antiqueEvidenceRules = `Classify the actual object: ceramic, porcelain, glass, furniture, artwork, silverware, decorative object, book or unknown. Do not use coin taxonomy or numismatic fields. Read maker/brand, literal marks/signatures, material, style/design, pattern, period or approximate age, origin, dimensions and condition only where supported. Style does not establish date. Photograph a ruler for dimensions; never estimate exact sizes. Rarity, provenance, original/reproduction and authenticity are unverified unless independently evidenced. Label estimates and competing attributions. If a maker, mark, date or origin is unclear, ask for one useful additional view or user documentation. Never invent a maker, provenance or comparable sale.`;
-    const fullSystemPrompt = specialistSystemPrompt + (profile?.nicheId === 'tunes_flip' ? '\nUse only music-release taxonomy. All prices must be zero. Photographs cannot certify playback, condition grade or exact pressing; confirm against the individual catalogue release.' : profile?.nicheId === 'antiques' ? '\n' + antiqueEvidenceRules + '\nAll valuation fields must be zero; identity is a proposal, not authentication.' : MASTER_EVIDENCE_RULES) + (profile ? '\n' + specialistOutputInstructions(profile) : '');
+    const musicMode = profile?.nicheId === 'tunes_flip';
+    const fullSystemPrompt = specialistSystemPrompt + (musicMode ? '\n' + MUSIC_IDENTIFICATION_RULES : profile?.nicheId === 'antiques' ? '\n' + antiqueEvidenceRules + '\nAll valuation fields must be zero; identity is a proposal, not authentication.' : MASTER_EVIDENCE_RULES) + (profile ? '\n' + specialistOutputInstructions(profile) : '');
     const coinMode = isCoinLikeSpecialist(specialist);
     const vehicleMode = isVehicleSpecialist(specialist) && captureMode !== 'part';
     const identificationSchema = profile && !coinMode ? `Return ONLY a JSON object with canonicalTitle, specialistId, objectType (a relevant category from the specialist taxonomy), identificationState (observation_only|candidate), confidence (0..1), confidenceReason, identificationSource (detected|inferred), condition, conditionNotes, attributesConfirmed, attributesInferred, attributes, candidateIdentification { primaryCandidate, alternativeCandidates, whyCandidateSelected, whyUncertain }, evidenceSupporting, evidenceContradictory, missingInformation, warnings, suggestedDisposition, dispositionDecision. Include specialistAnalysis as specified above. Prices MUST be zero and saleProb30d MUST be null. Do not emit coinFields or medalFields for non-numismatic objects.` : OUTPUT_SCHEMA;
@@ -1706,7 +1715,7 @@ The caller will use only the requested output (title or description). Do not inv
       : clothingMode
       ? 'MANDATORY FIRST STEP: Read the brand label exactly as shown. Then read the care label. Then: garment type, era, condition, authentication risk.'
       : profile?.nicheId === 'tunes_flip'
-      ? 'MANDATORY FIRST STEP: Read artist/title, label, barcode, catalogue number and matrix/runout. Compare individual editions; never automatically declare an exact pressing verified.'
+      ? (captureMode === 'cd_box_set' ? 'MANDATORY FIRST STEP: Read the CD/box-set front and rear covers, each numbered disc label and the all-discs contents view. Identify a compilation versus single-artist release. Compare declared catalogue disc count with observed or user-counted discs; never infer all discs are present. Read the CD hub matrix only if visible, not vinyl Side A/Side B runouts. Catalogue identity is confirmed by the user in the separate Discogs workflow; this call only assesses photos.' : 'MANDATORY FIRST STEP: Read artist/title, label, barcode, catalogue number and matrix/runout. Compare individual editions; never automatically declare an exact pressing verified.')
       : profile?.nicheId === 'antiques'
       ? 'MANDATORY FIRST STEP: Classify the antique object or book from its form, construction and literal marks. Use the antique taxonomy; no coin fields.'
       : 'MANDATORY FIRST STEP: Classify object type (coin/medal/token/jeton/commemorative_piece/banknote/jewellery/motorcycle/garment/unknown).';
@@ -1743,40 +1752,60 @@ The caller will use only the requested output (title or description). Do not inv
           : `Photo ${imageIndex + 1} (face not specified)`;
         // Text labels are sent immediately before each image, preserving the
         // capture-slot association without changing the existing images[] API.
-        userContent.push({ type: 'text', text: `IMAGE ${imageIndex + 1} — ${safeLabel}. Treat this as the user-supplied face/angle label, not proof of coin identity.` });
+        userContent.push({ type: 'text', text: `IMAGE ${imageIndex + 1} — ${safeLabel}. This is an intended user-supplied view label, not proof of the object type, edition or identity. Read the actual image contents.` });
         if (typeof img !== 'string') continue;
         if (img.startsWith('http')) userContent.push({ type: 'image_url', image_url: { url: img } });
         else { const dataUri = img.startsWith('data:') ? img : `data:image/jpeg;base64,${img}`; userContent.push({ type: 'image_url', image_url: { url: dataUri } }); }
       }
     }
 
-    const aiResponse = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: coinMode || vehicleMode || clothingMode ? 'google/gemini-2.5-flash' : 'google/gemini-3-flash-preview',
-        messages: [{ role: 'system', content: fullSystemPrompt }, { role: 'user', content: userContent }],
-        temperature: 0.05,
-        max_tokens: profile ? 4500 : 3000,
-      }),
-      signal: AbortSignal.timeout(45_000),
-    });
-
-    if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-      // If AI call failed and user was free-tier, decrement the usage counter
-      // so they don't lose a quota slot for a failed request
+    // Keep the existing models and authorization. Never automatically replay a paid call.
+    const releaseFailedQuota = async () => {
       if (!isPremium && tenantId) {
         try {
-          await adminClient.from('ai_usage').update({
-            count: Math.max(0, currentUsage),
-          }).eq('tenant_id', tenantId).eq('user_id', user.id).eq('feature', FEATURE_KEY).eq('month_key', monthKey).eq('count', currentUsage + 1);
-        } catch {}
+          await adminClient.from('ai_usage').update({ count: Math.max(0, currentUsage) })
+            .eq('tenant_id', tenantId).eq('user_id', user.id).eq('feature', FEATURE_KEY)
+            .eq('month_key', monthKey).eq('count', currentUsage + 1);
+        } catch { /* Existing compare-and-set quota compensation remains best effort. */ }
       }
-      return new Response(JSON.stringify({ error: 'Identification request failed. Please retry.' }), { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    };
+    let aiResponse: Response;
+    try {
+      aiResponse = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: coinMode || vehicleMode || clothingMode ? 'google/gemini-2.5-flash' : 'google/gemini-3-flash-preview',
+          messages: [{ role: 'system', content: fullSystemPrompt }, { role: 'user', content: userContent }],
+          temperature: 0.05,
+          max_tokens: musicMode ? 3200 : profile ? 4500 : 3000,
+          ...(musicMode ? { response_format: { type: 'json_object' } } : {}),
+        }),
+        signal: AbortSignal.timeout(musicMode ? IDENTIFICATION_LIMITS.musicProviderMs : 45_000),
+      });
+    } catch (cause) {
+      await releaseFailedQuota();
+      const timeout = cause instanceof Error && ['TimeoutError', 'AbortError'].includes(cause.name);
+      console.warn(JSON.stringify({ event: 'identify_provider_failure', requestId, code: timeout ? 'AI_TIMEOUT' : 'AI_NETWORK', durationMs: Date.now() - startedAt }));
+      return failure(timeout ? 'OnSpace AI: photo analysis timed out. Your photos are retained; retry Identify.' : 'OnSpace AI: photo analysis could not connect. Your photos are retained; retry Identify.', timeout ? 504 : 502, timeout ? 'AI_TIMEOUT' : 'AI_NETWORK');
     }
 
-    const aiData = await aiResponse.json();
+    if (!aiResponse.ok) {
+      await releaseFailedQuota();
+      console.warn(JSON.stringify({ event: 'identify_provider_failure', requestId, providerStatus: aiResponse.status, durationMs: Date.now() - startedAt }));
+      // No provider response text, prompts, images or credentials enter logs/responses.
+      return failure(aiResponse.status === 429 ? 'OnSpace AI: temporarily rate limited. Wait briefly before retrying Identify.' : 'OnSpace AI: photo analysis is unavailable. Retry Identify with your retained photos.', aiResponse.status === 429 ? 429 : 502, 'AI_UNAVAILABLE');
+    }
+
+    let aiData: any;
+    try { aiData = await aiResponse.json(); } catch {
+      await releaseFailedQuota();
+      return failure('OnSpace AI: analysis returned an unreadable response. Your photos are retained; retry Identify.', 502, 'AI_RESPONSE_INVALID');
+    }
+    if (aiData.choices?.[0]?.finish_reason === 'length') {
+      await releaseFailedQuota();
+      return failure('OnSpace AI: analysis was incomplete. Retry with the front cover, rear cover and clearest label views.', 422, 'AI_RESPONSE_TRUNCATED');
+    }
     const rawContent = aiData.choices?.[0]?.message?.content ?? '';
 
     let identification: any = null;
@@ -1784,38 +1813,19 @@ The caller will use only the requested output (title or description). Do not inv
       // Models sometimes wrap the JSON in Markdown, prepend a short sentence,
       // or return the JSON object as a JSON-encoded string. Normalise those
       // harmless format variations before treating the response as malformed.
-      const parseModelJson = (value: string): any => {
-        const stripFences = (input: string) => input
-          .replace(/^﻿/, '')
-          .replace(/^\s*```(?:json)?\s*/i, '')
-          .replace(/\s*```\s*$/i, '')
-          .trim();
-        const parseOnce = (input: string): any => {
-          const cleaned = stripFences(input);
-          try { return JSON.parse(cleaned); } catch (firstError) {
-            const start = cleaned.indexOf('{');
-            const end = cleaned.lastIndexOf('}');
-            if (start >= 0 && end > start) return JSON.parse(cleaned.slice(start, end + 1));
-            throw firstError;
-          }
-        };
-        let parsed = parseOnce(value);
-        if (typeof parsed === 'string') parsed = parseOnce(parsed);
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-          throw new Error('AI response was not a JSON object');
-        }
-        return parsed;
-      };
-      identification = parseModelJson(rawContent);
+      identification = parseIdentificationJson(rawContent);
     } catch (parseError) {
       // Keep diagnostics useful without returning the model's entire response.
-      console.warn('[swish-identify] AI response JSON parsing failed:', parseError instanceof Error ? parseError.message : 'unknown parse error');
-      return new Response(JSON.stringify({ error: 'AI returned invalid JSON. Please retry identification.', details: 'The model response could not be parsed as a JSON object.' }), { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      console.warn(JSON.stringify({ event: 'identify_invalid_json', requestId, durationMs: Date.now() - startedAt }));
+      await releaseFailedQuota();
+      return failure('OnSpace AI: returned invalid identification JSON. Your photos are retained; retry Identify.', 422, 'AI_RESPONSE_INVALID');
     }
 
     if (typeof identification.canonicalTitle !== 'string' || !identification.canonicalTitle.trim() || typeof identification.confidence !== 'number' || !Number.isFinite(identification.confidence)) {
-      return new Response(JSON.stringify({ error: 'Identification returned an incomplete structured result. Please retry.' }), { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      await releaseFailedQuota();
+      return failure('OnSpace AI: returned incomplete identification details. Your photos are retained; retry Identify.', 422, 'AI_RESULT_INCOMPLETE');
     }
+    if (musicMode && profile) identification = guardMusicIdentification(identification, profile.fields.map(field => field.key), profile.taxonomy);
     identification.specialistId = specialist;
     identification.confidence = Math.max(0, Math.min(1, identification.confidence));
     for (const key of ['evidenceSupporting','evidenceContradictory','missingInformation','warnings']) identification[key] = textList(identification[key],20);
@@ -2051,6 +2061,7 @@ The caller will use only the requested output (title or description). Do not inv
     return new Response(
       JSON.stringify({
         identification: constrained,
+        diagnostics: { requestId, durationMs: Date.now() - startedAt, imageCount: totalImageCount, catalogueVerification: musicMode ? 'User confirmation via Discogs workflow required' : 'Existing specialist pipeline' },
         numistaVerification,
         coinResearch: constrained.coinResearch ?? null,
         quota: {
@@ -2069,7 +2080,7 @@ The caller will use only the requested output (title or description). Do not inv
   } catch (err: any) {
     const accessError=nicheAccessResponse(err);
     if(accessError) return accessError;
-    console.error('[swish-identify v6] Identification request failed.');
-    return new Response(JSON.stringify({ error: 'Identification request failed. Please retry.' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    console.error(JSON.stringify({ event: 'identify_failed', requestId, durationMs: Date.now() - startedAt }));
+    return failure('Photo identification could not complete. Your photos are retained; retry Identify.', 500, 'IDENTIFICATION_FAILED');
   }
 });

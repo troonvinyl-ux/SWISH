@@ -421,8 +421,8 @@ export default function SilverBatchScreen() {
   ) => {
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.85,
-      allowsEditing: true,
+      quality: 1,
+      allowsEditing: false,
       exif: false,
     });
     if (result.canceled || !result.assets?.[0]) return;
@@ -438,8 +438,8 @@ export default function SilverBatchScreen() {
   ) => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.85,
-      allowsEditing: true,
+      quality: 1,
+      allowsEditing: false,
       exif: false,
     });
     if (result.canceled || !result.assets?.[0]) return;
@@ -713,14 +713,9 @@ export default function SilverBatchScreen() {
         if (cap.countermarkUri && !cap.countermarkUri.startsWith('https://'))
           toUpload.push({ uri: cap.countermarkUri, slotId: 'countermark', slotLabel: 'Countermark' });
 
-        // Create a temp item ID for upload path
-        const tempId = cap.itemId ?? `silver_${cap.id.slice(0, 16)}`;
-        let permanentUrls: string[] = [];
-
-        if (toUpload.length > 0) {
-          const { urls } = await uploadItemImages(tempId, toUpload);
-          permanentUrls = urls;
-        }
+        // Original uploads require the canonical persisted item identity. Never
+        // write files beneath an unowned temporary ID or create another item on retry.
+        let permanentUrls: string[] = [cap.obverseUri,cap.reverseUri,cap.countermarkUri].filter((uri):uri is string=>Boolean(uri?.startsWith('https://')));
 
         // 2. Save to SWISH inventory (items table)
         if (!cap.itemId) {
@@ -755,8 +750,10 @@ export default function SilverBatchScreen() {
             warnings: cap.aiWarnings ?? [],
           }).select('id').single();
 
+          if(itemErr||!itemRow)throw new Error(itemErr?.message??'Canonical inventory save failed.');
           if (!itemErr && itemRow) {
             cap.itemId = itemRow.id;
+            setCaptures(prev=>prev.map(c=>c.id===cap.id?{...c,itemId:itemRow.id}:c));
             // Update permanent URL association
             if (permanentUrls.length > 0) {
               await updateItemMedia(tenant.id, itemRow.id, permanentUrls);
@@ -764,6 +761,12 @@ export default function SilverBatchScreen() {
           }
         }
 
+        if(cap.itemId&&toUpload.length){
+          const upload=await uploadItemImages(cap.itemId,toUpload);
+          permanentUrls=[...permanentUrls,...upload.urls];
+          if(permanentUrls.length)await updateItemMedia(tenant.id,cap.itemId,permanentUrls);
+          if(upload.errors.length)throw new Error(`Inventory saved; original photographs need retry. ${upload.errors.join(' ')}`);
+        }
         // 3. Save draft listing
         if (cap.itemId) {
           const strategy = cap.userSaleStrategy ?? cap.saleStrategy ?? 'mixed_lot';
