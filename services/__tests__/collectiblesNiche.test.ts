@@ -17,10 +17,10 @@ describe('Collectibles Flipper classification', () => {
   test('keeps neighbouring specialist categories out of Collectibles', () => {
     expect(classifyListing(null, 'Coins', 'Roman denarius').niche).toBe('coins');
     expect(classifyListing(null, 'Trading Cards', 'Pokémon card').niche).toBe('trading_cards');
-    expect(classifyListing(null, 'Antiques: Ceramics', 'Wedgwood vase').niche).toBe('antiques');
+    expect(classifyListing(null, 'Antiques: Ceramics', 'Antique porcelain vase').niche).toBe('antiques');
     expect(inferImportNiche('Coins', 'Roman coin')).toBe('coins');
     expect(inferImportNiche('Trading Cards', 'Pokémon card')).toBe('trading_cards');
-    expect(inferImportNiche('Antiques: Ceramics', 'Wedgwood vase')).toBe('antiques');
+    expect(inferImportNiche('Antiques: Ceramics', 'Antique porcelain vase')).toBe('antiques');
   });
 
   test('keeps the public and Edge import classifiers identical', () => {
