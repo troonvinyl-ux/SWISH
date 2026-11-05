@@ -10,6 +10,7 @@ import { loadModuleAccess, activateModuleScope, type ModuleAccessSnapshot } from
 import type { SubscriptionStatus } from '@/services/subscriptionService';
 import { restoredModule } from '@/services/moduleNavigationService';
 import { recordNavigationFailure } from '@/services/verificationCentreService';
+import { isBackendUnavailable } from '@/services/backendAvailabilityService';
 
 export const SWISH_MASTER_ADMIN_EMAIL = 'troonvinyl@gmail.com';
 /** Legacy presentation helper only. AppProvider and backend grants NEVER derive roles from this. */
@@ -94,7 +95,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const result = await loadModuleAccess(account.id);
       if (uid !== userRef.current || version !== accessRequest.current) return;
       if (result.error || !result.snapshot) {
-        accessRef.current = null; setAccess(null); setAccessError(result.error); clearModule(); return;
+        const failure = result.error ?? 'Membership verification returned no access snapshot.';
+        // A pool/network outage is not an entitlement decision. Keep the last
+        // server-verified snapshot and active workspace, then retry on the next
+        // scheduled/foreground refresh. Real authorization failures still fail closed.
+        if (accessRef.current && isBackendUnavailable(failure)) {
+          setAccessError(null);
+          return;
+        }
+        accessRef.current = null; setAccess(null); setAccessError(failure); clearModule(); return;
       }
       const first = accessRef.current === null;
       const next = result.snapshot; accessRef.current = next; setAccess(next); setAccessError(null);
@@ -109,8 +118,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setReloadSignal(v => v + 1);
     } catch (cause) {
       if (uid === userRef.current && version === accessRequest.current) {
-        accessRef.current = null; setAccess(null); clearModule();
-        setAccessError(cause instanceof Error ? cause.message : 'Membership verification could not be reached. Retry.');
+        const failure = cause instanceof Error ? cause.message : 'Membership verification could not be reached. Retry.';
+        // Preserve previously verified access only for transient infrastructure
+        // failures; do not preserve it for explicit authorization/entitlement errors.
+        if (accessRef.current && isBackendUnavailable(failure)) {
+          setAccessError(null);
+        } else {
+          accessRef.current = null; setAccess(null); clearModule(); setAccessError(failure);
+        }
       }
     } finally {
       if (accessFlight.current?.version === version) accessFlight.current = null;
