@@ -6,6 +6,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { clamp, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useStockPhotoGallery } from '@/hooks/useStockPhotoGallery';
+import type { ItemSmartStudioController } from '@/hooks/useItemSmartStudio';
+import { ExistingPhotoStudioControls } from './ExistingPhotoStudioControls';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 
 interface ZoomPhotoProps { uri: string; width: number; height: number; panning: boolean; onZoom: (zoomed: boolean) => void }
@@ -24,8 +26,9 @@ interface ItemPhotoGalleryProps {
   onSelectMain: (url: string) => void; onFetch: () => void; fetching: boolean;
   fetchResult: { downloaded: number; failed: number; requiresReauth?: boolean } | null;
   onReconnect: () => void; onReIdentify: () => void;
+  studio?: ItemSmartStudioController;
 }
-export const ItemPhotoGallery = memo(function ItemPhotoGallery({ media, accent, tip, saving, error, onSelectMain, onFetch, fetching, fetchResult, onReconnect, onReIdentify }: ItemPhotoGalleryProps) {
+export const ItemPhotoGallery = memo(function ItemPhotoGallery({ media, accent, tip, saving, error, onSelectMain, onFetch, fetching, fetchResult, onReconnect, onReIdentify, studio }: ItemPhotoGalleryProps) {
   const gallery = useStockPhotoGallery(media);
   const [viewerSize, setViewerSize] = useState({ width: 375, height: 400 });
   const renderPhoto = useCallback(({ item: uri }: { item: string }) => <ZoomPhoto key={`${uri}:${gallery.width}:${gallery.fullscreen}`} uri={uri} width={gallery.width} height={gallery.height} panning={gallery.zoomed} onZoom={gallery.setZoomed} />, [gallery.width, gallery.height, gallery.zoomed, gallery.fullscreen, gallery.setZoomed]);
@@ -42,6 +45,7 @@ export const ItemPhotoGallery = memo(function ItemPhotoGallery({ media, accent, 
       <Pressable disabled={saving || main} accessibilityRole="button" accessibilityLabel={main ? 'This is the saved main image' : 'Set selected photo as main image'} onPress={() => onSelectMain(gallery.activeUrl)} style={({ pressed }) => [s.mainButton, { borderColor: accent, backgroundColor: main ? Colors.surfaceHighlight : Colors.primaryDim }, pressed || saving ? s.pressed : null]}>{saving ? <ActivityIndicator color={accent} /> : <MaterialIcons name={main ? 'check-circle' : 'star-outline'} size={22} color={accent} />}<Text style={[s.mainText, { color: accent }]}>{saving ? 'Saving main image…' : main ? 'Main image selected' : 'Set as main image'}</Text></Pressable>
       <Text style={s.body}>Select a thumbnail, then set it as the main image. This becomes the inventory cover and first photo for listing updates.</Text>
       <Text style={s.caption}>Pinch or double-tap to zoom. Live eBay photos change only after an explicit listing revision.</Text>
+      {studio ? <ExistingPhotoStudioControls originalUri={gallery.activeUrl} studio={studio} accent={accent} disabled={saving || fetching} /> : null}
     </> : <View style={s.empty}><MaterialIcons name="add-photo-alternate" size={40} color={accent} /><Text style={s.emptyTitle}>Add photos of your item</Text><Text style={s.body}>{tip}</Text><Pressable onPress={onReIdentify} style={({ pressed }) => [s.mainButton, pressed ? s.pressed : null]}><Text style={[s.mainText, { color: accent }]}>Capture or choose photos</Text></Pressable></View>}
     {error ? <View style={s.error}><MaterialIcons name="error-outline" size={20} color={Colors.warning} /><Text accessibilityRole="alert" style={s.errorText}>{error}</Text></View> : null}
     {!media.length || fetchResult ? <Pressable disabled={fetching} onPress={fetchResult?.requiresReauth ? onReconnect : onFetch} style={({ pressed }) => [s.fetch, pressed || fetching ? s.pressed : null]}>{fetching ? <ActivityIndicator color={Colors.info} /> : <MaterialIcons name="cloud-download" size={20} color={Colors.info} />}<Text style={s.fetchText}>{fetching ? 'Fetching photos…' : fetchResult?.requiresReauth ? 'Reconnect eBay to fetch photos' : fetchResult?.downloaded ? `${fetchResult.downloaded} photos fetched · Fetch again` : fetchResult?.failed ? 'Photo fetch failed · Retry' : 'Fetch photos from eBay'}</Text></Pressable> : null}

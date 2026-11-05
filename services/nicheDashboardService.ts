@@ -26,6 +26,7 @@ export interface NicheDashboardContent {
   actions: NicheDashboardAction[];
 }
 const HERO_COPY: Record<ProductionNicheId, { headline: string; categories: string; motto?: string }> = {
+  tunes_flip: { headline:'Find the release. Verify the pressing.', categories:'Vinyl · CDs · Cassettes · Box sets', motto:'SCAN · VERIFY · VALUE · LIST · SELL' },
   collectibles: { headline: 'Every find has a story.', categories: 'Toys · Comics · Figures · Memorabilia' },
   tech: { headline: 'Smart tech. Smarter flips.', categories: 'Devices · Cameras · Gaming · Audio' },
   bicycles: { headline: 'Buy smart. Build better. Sell strong.', categories: 'Road · Mountain · Gravel · E-bikes', motto: 'FIND · ASSESS · UPGRADE · FLIP' },
@@ -54,6 +55,13 @@ export function getNicheDashboardContent(nicheId: ProductionNicheId, fixedBuild 
     { id: 'sync', title: 'eBay Sync', detail: 'Review imports & updates', icon: 'sync', route: '/ebay-hub' },
     { id: 'specialist', title: 'Specialist Tools', detail: `${niche.shortName} evidence & checks`, icon: 'fact-check', route: '/specialist-workspace' },
   ];
+  if (nicheId === 'tunes_flip') actions.push(
+    {id:'discogs',title:'Search Discogs',detail:'Artist · catalogue · editions',icon:'search',route:'/music-search'},
+    {id:'barcode',title:'Scan Barcode',detail:'Compare individual releases',icon:'qr-code-scanner',route:'/music-search?barcode=1'},
+    {id:'collection',title:'My Collection',detail:'Format · artist · condition',icon:'library-music',route:'/music-collection'},
+    {id:'sales',title:'Sales & Profit',detail:'Recorded sales, not asking value',icon:'receipt-long',route:'/money'},
+    {id:'tasks',title:'Outstanding Tasks',detail:'Reviews & fulfilment',icon:'assignment',route:'/tasks'}
+  );
   if (allowed('/opportunities')) actions.push({ id: 'opportunities', title: 'Opportunities', detail: 'Find your next flip', icon: 'search', route: '/opportunities' });
   if (nicheId === 'antiques') actions.push({ id: 'condition', title: 'Condition Review', detail: 'Wear · damage · restoration', icon: 'assignment', purpose: 'condition' });
   for (const tool of summary.tools) {

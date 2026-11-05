@@ -23,6 +23,7 @@ export function validateEdgeDeployment(root = process.cwd()) {
   }
 
   const mirrors = [
+    ['shared/smartStudio.ts', 'supabase/functions/_shared/smartStudio.ts'],
     ['shared/identificationPolicy.ts', 'supabase/functions/_shared/identificationPolicy.ts'],
     ['shared/musicRelease.ts', 'supabase/functions/_shared/musicRelease.ts'],
     ['niche-modules.json', 'supabase/functions/_shared/niche-modules.json'],
