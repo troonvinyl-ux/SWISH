@@ -704,7 +704,8 @@ async function runGeminiMarketResearch(imageUrls: string[], title: string, speci
   const baseUrl = Deno.env.get('ONSPACE_AI_BASE_URL');
   if (!apiKey || !baseUrl || (imageUrls.length === 0 && !inlineImageBase64)) return { ...noResult, error: 'Gemini not configured or no images' };
 
-  const nicheContext = specialistId === 'bicycles' ? 'bicycle or cycling component sold on eBay UK'
+  const nicheContext = specialistId === 'collectibles' ? 'a specific collectible such as an action figure, toy, comic, board game, diecast/model vehicle, figurine or pop-culture memorabilia sold on eBay UK. Identify the precise sub-type before comparing prices'
+    : specialistId === 'bicycles' ? 'bicycle or cycling component sold on eBay UK'
     : specialistId === 'motocross' ? 'motocross or off-road motorcycle sold on eBay UK'
     : (specialistId === 'clothing' || specialistId === 'trainers_sneakers') ? 'vintage/branded clothing or trainers sold on eBay UK or Depop'
     : (specialistId.includes('coin') || ['islamic_silver','ancient_artefacts','gold','silver'].includes(specialistId)) ? 'coin, medal, or precious metal collectible sold on eBay UK'
