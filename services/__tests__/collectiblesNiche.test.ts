@@ -28,6 +28,21 @@ describe('Collectibles Flipper classification', () => {
       .toBe(fs.readFileSync('supabase/functions/_shared/ebayImportScope.ts', 'utf8'));
   });
 
+
+  test('uses collectibles-specific market valuation and listing generation', () => {
+    const valuation = fs.readFileSync('supabase/functions/swish-market-value/index.ts', 'utf8');
+    const listing = fs.readFileSync('supabase/functions/swish-list-generate/index.ts', 'utf8');
+    const itemView = fs.readFileSync('app/stock-listing/[id].tsx', 'utf8');
+    const panel = fs.readFileSync('components/feature/NicheValuationPanel.tsx', 'utf8');
+
+    expect(valuation).toContain('a specific collectible such as an action figure');
+    expect(itemView).toContain('Collectibles eBay Product Research & exact-match sold comps');
+    expect(panel).toContain("collectibles: { specialistId: 'collectibles'");
+    expect(listing).toContain("const isCollectibles = item.specialist_id === 'collectibles'");
+    expect(listing).toContain('COLLECTIBLES LISTING RULES');
+    expect(listing).toContain('selected eBay leaf category Taxonomy');
+  });
+
   test('does not force an ambiguous generic title into Collectibles', () => {
     expect(classifyListing(null, null, 'Vintage item').niche).toBe('unclassified');
     expect(inferImportNiche('', 'Vintage item')).toBeNull();
