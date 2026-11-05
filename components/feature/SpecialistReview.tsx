@@ -22,7 +22,7 @@ export const SpecialistReview=memo(function SpecialistReview({ result,profile,an
         {analysis.quality.issues.map((issue,index)=><Text style={s.body} key={index}>{issue}</Text>)}
         {analysis.quality.nextPhoto ? <Text style={s.body}>Next useful image: {analysis.quality.nextPhoto}</Text> : null}
       </View>
-      {profile?.fields.filter(f=>profile.nicheId==='antiques'||analysis.fields[f.key]).map(f=><View key={f.key} style={s.field}>
+      {profile?.fields.map(f=><View key={f.key} style={s.field}>
         <Text style={s.label}>{f.label} · {(analysis.fields[f.key]?.basis ?? 'not established').replace(/_/g,' ')}</Text>
         <TextInput accessibilityLabel={`Correct ${f.label}`} style={s.input} value={answers[f.key] ?? analysis.fields[f.key]?.value ?? ''} onChangeText={value=>onAnswer(f.key,value)} editable={!disabled} maxLength={500}/>
         {analysis.fields[f.key]?.reason ? <Text style={s.body}>{analysis.fields[f.key].reason}</Text> : null}

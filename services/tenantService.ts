@@ -2,6 +2,7 @@
 // Manages tenant provisioning, membership, and settings.
 
 import { getSupabaseClient } from '@/template';
+import { backendRead } from './backendRequestService';
 
 export interface Tenant {
   id: string;
@@ -60,9 +61,10 @@ export async function getUserTenants(): Promise<{ tenants: Tenant[]; error: stri
 
 // Get the user's primary (first/only) tenant
 export async function getUserPrimaryTenant(): Promise<{ tenant: Tenant | null; error: string | null }> {
-  const { tenants, error } = await getUserTenants();
-  if (error) return { tenant: null, error };
-  return { tenant: tenants[0] ?? null, error: null };
+  try {
+    const { data } = await backendRead('primary-tenant', signal => getSupabaseClient().from('tenants').select('*').order('created_at', { ascending: true }).limit(1).abortSignal(signal), 'access');
+    return { tenant: data?.[0] ? mapTenant(data[0]) : null, error: null };
+  } catch (cause) { return { tenant: null, error: cause instanceof Error ? cause.message : 'Business account read failed' }; }
 }
 
 // Provision a brand-new tenant for a user on first signup

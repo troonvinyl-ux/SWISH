@@ -21,7 +21,7 @@
   "androidPackage": "com.swish.coinflipper",
   "iosBundleIdentifier": "com.swish.coinflipper",
   "entryRoute": "/entry/coins",
-  "scannerRoute": "/coin-flipper?tab=capture",
+  "scannerRoute": "/capture",
   "dedicatedRoutes": [
     "coin-flipper.tsx",
     "keen-on-coins.tsx",
