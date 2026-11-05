@@ -26,6 +26,7 @@ export type NicheClassification =
   | 'tech'          // Technology niche
   | 'surplus_flip'  // Surplus lots and manifests
   | 'collectibles'  // Dedicated Collectibles Flipper, not the coin catch-all
+  | 'tunes_flip'    // Music releases only; not generic memorabilia
   | 'unclassified'; // Ambiguous — do not assign to any niche
 
 // ── eBay UK Category ID → Niche mapping ──────────────────────────────────────
@@ -143,6 +144,7 @@ const CATEGORY_ID_TO_NICHE: Record<string, NicheClassification> = {
 // Matches are case-insensitive substring matches.
 
 const CATEGORY_NAME_NICHE_KEYWORDS: Array<{ keywords: string[]; niche: NicheClassification }> = [
+  {keywords:['vinyl records','music cds','audio cassettes','music records'],niche:'tunes_flip'},
   {
     keywords: ['coin', 'numismatic', 'banknote', 'currency', 'medal', 'token', 'exonumia', 'bullion', 'hammered', 'roman coin', 'greek coin', 'british coin', 'world coin'],
     niche: 'coins',
@@ -192,6 +194,7 @@ const CATEGORY_NAME_NICHE_KEYWORDS: Array<{ keywords: string[]; niche: NicheClas
 // Higher risk of false positives — results should be treated as 'probable'.
 
 const TITLE_NICHE_KEYWORDS: Array<{ patterns: RegExp[]; niche: NicheClassification; confidence: 'high' | 'medium' }> = [
+  {patterns:[/\b(vinyl record|vinyl lp|audio cassette|music cd|compact disc|7[- ]inch single|12[- ]inch single)\b/i],niche:'tunes_flip',confidence:'high'},
   {
     patterns: [
       /\b(coin|denarius|dirham|tetradrachm|drachm|solidus|florin|shilling|penny|sovereign|groat|tanka|rupee|stater|obol|nummus|follis|sesterce|aureus|sestertius)\b/i,
@@ -375,6 +378,7 @@ export function nicheToSpecialistId(niche: NicheClassification): string {
     case 'tech':          return 'tech';
     case 'surplus_flip':  return 'surplus_trader';
     case 'collectibles':  return 'collectibles';
+    case 'tunes_flip':    return 'vinyl_records';
     default:              return 'curiosities_collectibles';
   }
 }

@@ -60,6 +60,17 @@ export interface NicheConfig {
 }
 
 export const NICHES: Record<NicheId, NicheConfig> = {
+  tunes_flip: {
+    id:'tunes_flip', name:'Tunes Flip', shortName:'Music', tagline:'Scan · verify the pressing · value · sell',
+    description:'Vinyl, singles, CDs, cassettes and box sets. Confirm exact release and grade media and packaging separately.',
+    icon:'album', color:'#FFE600', accentColor:'#F5C842',
+    specialists:NICHE_MODULES.tunes_flip.specialists as SpecialistId[], defaultSpecialist:'vinyl_records',
+    terms:{item:'Release',items:'Releases',itemPlural:'releases',scan:'Identify Music',identify:'Identify',condition:'Media / sleeve grade',catalogue:'Catalogue / matrix'},
+    quickActions:[{icon:'photo-camera',label:'Identify Music',route:'/(tabs)/scan'},{icon:'search',label:'Search Discogs',route:'/music-search'},{icon:'library-music',label:'My Collection',route:'/music-collection'},{icon:'sell',label:'eBay Listings',route:'/(tabs)/listings'}],
+    keyAttributes:['artist','release_title','format','label','catalogue_number','year','country','media_grade','sleeve_grade','discogs_release_id'],
+    acquisitionSources:['Record fairs','Charity shops','Collections','Auctions','Local record shops'],marketplaces:['eBay'],
+    captureInstructions:['Photograph front and rear packaging','Capture both record labels or disc face','Photograph barcode, catalogue number and matrix/runout','Show surface marks, warps, seam splits and missing inserts','Confirm the exact edition; photos cannot establish audio playback quality'],hasMeasurements:false,version:'1.0.0',
+  },
   collectibles: {
     id: 'collectibles', name: 'Collectibles Flipper', shortName: 'Collectibles',
     tagline: 'Toys · Memorabilia · Comics · Vintage finds',

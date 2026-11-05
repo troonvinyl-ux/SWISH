@@ -35,6 +35,11 @@ function findViolations(check: (source: string) => boolean): string[] {
 }
 
 describe('Server-only API secret boundary', () => {
+  test('Discogs names may appear in owner setup guidance, but runtime secrets never reach the client', () => {
+    expect(findViolations(source => /(?:process\\.env|Deno\\.env|import\\.meta\\.env)[^\\n;]*DISCOGS_/.test(source) || /EXPO_PUBLIC_DISCOGS_/.test(source))).toEqual([]);
+    const discogs = fs.readFileSync(path.join(projectRoot,'supabase/functions/swish-discogs/index.ts'),'utf8');
+    for(const name of ['DISCOGS_CONSUMER_KEY','DISCOGS_CONSUMER_SECRET','DISCOGS_USER_AGENT']) expect(discogs).toContain(`Deno.env.get('${name}')`);
+  });
   test('client source and public Expo config contain no server secret references', () => {
     expect(findViolations(source => secretNames.some(name => source.includes(name)))).toEqual([]);
   });

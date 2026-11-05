@@ -11,7 +11,8 @@ describe('S1-03 registered niche audit', () => {
 
   test('all ten registered products have unique Android/iOS identities and existing entry files', () => {
     const products = Object.entries(registry.products) as Array<[string, any]>;
-    expect(products).toHaveLength(11);
+    expect(products).toHaveLength(12);
+    expect(registry.products.tunes_flip.specialists).toEqual(['vinyl_records']);
     const androidPackages = products.map(([, product]) => product.androidPackage);
     const iosBundles = products.map(([, product]) => product.iosBundleIdentifier);
     expect(new Set(androidPackages).size).toBe(products.length);

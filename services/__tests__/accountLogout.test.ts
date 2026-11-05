@@ -19,16 +19,19 @@ describe('Account logout routing and preservation source contracts', () => {
     const hook = source('hooks/useAccountLogout.ts');
     expect(hook).toContain("{ text: 'Cancel', style: 'cancel' }");
     expect(hook).toContain("showAlert('Unable to log out', result.error)");
-    expect(hook).toContain('const result = await logout();');
+    expect(hook).toContain('result = await logout();');
     const account = source('app/(tabs)/account.tsx');
-    expect(account).toContain('onPress={requestLogout}');
-    expect(account).toContain('accessibilityLabel="Log out of SWISH"');
+    expect(account).toContain('<ModuleMore');
+    const more = source('components/feature/ModuleMore.tsx');
+    expect(more).toContain('onPress={logout.requestLogout}');
+    expect(more).toContain('accessibilityLabel="Sign out"');
   });
   test('retains existing user-keyed preferences, scope reset and fixed-build niche isolation', () => {
     const app = source('contexts/AppContext.tsx');
-    expect(app).toContain('`${NICHE_STORAGE_PREFIX}:${user.id}`');
-    expect(app).toContain('setActiveNicheId(FIXED_BUILD_NICHE_ID');
-    expect(app).toContain('setTenant(null); setBusinessConfig(null); setSubscriptionStatus(null)');
+    expect(app).toContain('userRef.current=user?.id');
+    expect(app).toContain('fixedNiche&&fixedNiche!==id');
+    expect(app).toContain('accessRef.current=null;setTenant(null);setAccess(null);setBusinessConfig(null)');
+    expect(app).toContain('generation.current++;accessRequest.current++;scopeRequest.current++');
     expect(source('contexts/ManifestOpportunityContext.tsx')).toContain('useEffect(() => { setSessions({}); }, [user?.id])');
     expect(source('services/nicheRouting.ts')).toContain('options.fixedNicheId ?? options.activeNicheId');
     for (const file of ['hooks/useAccountLogout.ts']) {

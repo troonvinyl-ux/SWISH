@@ -8,7 +8,6 @@ import {NICHES,isProductionNiche,type NicheId,type NicheConfig,type ProductionNi
 import {resolveNicheFromNativeAppId,resolveNicheFromNativeAppScheme} from '@/services/nicheRouting';
 import {loadModuleAccess,activateModuleScope,type ModuleAccessSnapshot} from '@/services/moduleAccessService';
 import type {SubscriptionStatus} from '@/services/subscriptionService';
-import {restoredModule} from '@/services/moduleNavigationService';
 import {recordNavigationFailure} from '@/services/verificationCentreService';
 import {isBackendUnavailable} from '@/services/backendAvailabilityService';
 const verificationMaxAge=300000;
@@ -99,8 +98,9 @@ export function AppProvider({children}:{children:ReactNode}){
    if(result.error||!result.snapshot){failure(result.error??'Membership verification returned no snapshot.');return;}
    const first=accessRef.current===null,next=result.snapshot;
    accessRef.current=next;setAccess(next);setAccessError(null);
-   const restored=first?await restoredModule(account.id):null;if(!valid())return;
-   const chosen=fixedNiche??(restored&&next.nicheIds.includes(restored)?restored:next.nicheIds.length===1&&!next.owner?next.nicheIds[0]:null);
+   // New logins: one entitlement opens directly; multi/owner starts at the portfolio.
+   // Subsequent membership refreshes preserve the explicitly selected, still-permitted module.
+   const chosen=fixedNiche??(next.nicheIds.length===1&&!next.owner?next.nicheIds[0]:null);
    if(chosen&&next.nicheIds.includes(chosen)&&(first||activeRef.current!==chosen))await openModule(chosen);
    else if(!moduleLock.current&&(first||(activeRef.current!=='general'&&!next.nicheIds.includes(activeRef.current as ProductionNicheId)))){
     clearModule();const scoped=await activateModuleScope(account.id,null);if(valid()&&scoped.error)setModuleError(scoped.error);

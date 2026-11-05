@@ -10,6 +10,16 @@ export interface SpecialistProfile {
 export const SPECIALIST_PROFILE_VERSION = '2026-10-30.1';
 const field = (key: string, label: string, specific?: string): SpecialistField => ({ key, label, specific });
 export const SPECIALIST_PROFILES: Record<string, SpecialistProfile> = {
+  tunes_flip: {
+    nicheId:'tunes_flip',focus:'Exact music release, pressing and separate media/sleeve evidence',modes:[{id:'item',label:'Record / CD / cassette / box set'}],
+    taxonomy:['vinyl','LP','EP','7-inch single','10-inch single','12-inch single','CD','cassette','box set','picture disc','coloured vinyl','promo','test pressing','music collectible'],
+    fields:[field('artist','Artist','Artist'),field('release_title','Release title','Release Title'),field('format','Format','Format'),field('label','Record label','Record Label'),field('catalogue_number','Catalogue number','Catalog Number'),field('year','Release year','Release Year'),field('country','Country','Country/Region of Manufacture'),field('genre','Genre','Genre'),field('style','Style','Style'),field('barcode','Barcode','EAN'),field('matrix','Literal matrix / runout'),field('edition','Edition / pressing','Edition'),field('media_grade','Media grade','Record Grading'),field('sleeve_grade','Sleeve grade','Sleeve Grading'),field('play_test','Playback test and defects'),field('damage_notes','Scratches, marks, warps, ring wear, seam splits, writing/stickers, label damage'),field('missing_inserts','Missing inserts / packaging'),field('discogs_release_id','Individual Discogs release ID'),field('pressing_reviewed','Pressing reviewed (yes / no)')],
+    recognition:'Read artist/title, label, catalogue number, barcode and literal matrix/runout across front/back covers and disc labels. Distinguish master from individual release, mono/stereo, speed/size, country, repress, colour/picture disc, promo/test pressing and limited edition only where evidenced. AI is a proposal: never invent Discogs IDs or claim catalogue lookup occurred. Multiple pressings must remain candidates until the user confirms the exact individual release.',
+    conditionRules:'Grade media and sleeve/packaging separately using M, NM, VG+, VG, G+, G, F, P. Visual inspection cannot establish skips, groove wear, noise or complete playback; play-test findings are manual evidence. Show warps, scratches, surface marks, ring wear, seam splits, writing/stickers, damaged labels, missing inserts and original packaging.',
+    valuationRules:'Match exact artist, release, catalogue number, format, country, pressing and media/sleeve condition. Discogs metadata is not price evidence. Restricted Discogs pricing/sales history must not be used. Active eBay asking prices are not completed sales. Without exact-pressing sold evidence keep value unverified and confidence low; do not invent a rarity premium.',
+    listingRules:'User must review pressing and condition. Use artist, release, format, label, catalogue number, year, country and media/sleeve grades only when supported. Discover current eBay category/aspects; field names here are proposals, not required category schema. Disclose playback status and every defect; use only seller original photographs, never Discogs artwork. Do not claim first pressing, Mint playback or authenticity without evidence.',
+    sourcingChecks:['Compare labels, barcode and matrix to the individual release','Inspect media and sleeve separately; play-test where possible','Record missing inserts, postage, fees and acquisition cost'],sources:[{label:'Data provided by Discogs.',url:'https://www.discogs.com/'},{label:'Discogs API terms',url:'https://support.discogs.com/hc/en-us/articles/360009334593-API-Terms-of-Use'}],
+  },
   collectibles: {
     nicheId: 'collectibles', focus: 'Exact toy, comic, figure, memorabilia and vintage variant identification', modes: [{ id: 'item', label: 'Collectible / clearance find' }],
     taxonomy: ['toy','action figure','comic','board game','memorabilia','pop culture','vintage collectible','pottery','giftware','bear','silverware','glass','decorative object'],
@@ -203,6 +213,11 @@ export function evaluateSpecialistSafety(nicheId: string, attributes: Record<str
   const get = (key: string) => usefulText(attributes[key] ?? recordValue(recordValue(analysis.fields)[key]).value).toLowerCase();
   const yes = (key: string) => /^(true|yes|opened|used|recalled|expired|tester)$/.test(get(key));
   const reasons: string[] = [];
+  if (nicheId === 'tunes_flip') {
+    if(!['yes','true'].includes(get('pressing_reviewed')) && get('discogs_pressing_confirmed')!=='true') reasons.push('Review the exact music release/pressing before listing.');
+    const grade=/^(m|nm|vg\+|vg|g\+|g|f|p)$/;
+    if(!grade.test(get('media_grade'))||!grade.test(get('sleeve_grade'))) reasons.push('Confirm separate media and sleeve grades before listing.');
+  }
   if (nicheId === 'beauty') {
     if (yes('tester') || /not for sale|tester/.test(get('product_type'))) reasons.push('Tester / not-for-sale cosmetics require exclusion.');
     if (/^(decanted|transferred|not original)$/.test(get('packaging_status'))) reasons.push('Cosmetics must remain in original packaging.');

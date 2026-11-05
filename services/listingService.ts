@@ -7,6 +7,7 @@ import { getBusinessConfig } from '@/services/businessConfigService';
 import { isLiveListing } from '@/services/listingLifecycle';
 import { evaluateSpecialistSafety } from '@/shared/specialistIntelligence';
 import { resolveProductionNiche } from '@/services/nicheRouting';
+import { backendRead, shareBackendRequest } from './backendRequestService';
 
 export interface GeneratedListing {
   title: string;
@@ -153,7 +154,9 @@ export async function getItemListings(
     .order('created_at', { ascending: false });
 
   if (error) return { listings: [], error: error.message };
-  return { listings: (data ?? []).map(mapListing), error: null };
+  // Older imported rows may say 'live'; the shared overview's existing live
+  // actions use the canonical 'active' status without altering stored rows.
+  return { listings: (data ?? []).map(row => ({ ...mapListing(row), status: row.status === 'live' ? 'active' : (row.status ?? 'draft') })), error: null };
 }
 
 // ── Update listing status ─────────────────────────────────────────────────────
@@ -319,6 +322,9 @@ export async function getAllListings(
   specialistIds?: string[],
 ): Promise<{ listings: ListingWithItem[]; error: string | null }> {
   if (specialistIds && specialistIds.length === 0) return { listings: [], error: null };
+  if (!tenantId?.trim()) return { listings: [], error: 'A valid account is required' };
+  return shareBackendRequest(`listings:${tenantId}:${statusFilter}:${JSON.stringify(specialistIds)}`, async () => {
+  try {
   const supabase = getSupabaseClient();
 
   let query = supabase
@@ -326,7 +332,8 @@ export async function getAllListings(
     .select('*, items!inner(canonical_title, specialist_id, acquired_cost, media, status, sold_at, sold_price, quantity)')
     .eq('tenant_id', tenantId)
     .eq('items.tenant_id', tenantId)
-    .order('updated_at', { ascending: false });
+    .order('updated_at', { ascending: false })
+    .order('id', { ascending: true });
 
   if (statusFilter && statusFilter !== 'all') {
     query = query.eq('status', statusFilter);
@@ -338,10 +345,15 @@ export async function getAllListings(
     query = query.in('items.specialist_id', specialistIds);
   }
 
-  const { data, error } = await query;
-  if (error) return { listings: [], error: error.message };
+  const data: any[] = [];
+  for (let offset = 0; ; offset += 200) {
+    const page = await backendRead(`listings-page:${tenantId}:${statusFilter}:${JSON.stringify(specialistIds)}:${offset}`, signal => query.range(offset, offset + 199).abortSignal(signal));
+    if (page.error) return { listings: [], error: `Listing relationships unavailable: ${page.error.message}` };
+    data.push(...(page.data ?? []));
+    if ((page.data?.length ?? 0) < 200) break;
+  }
 
-  const listings: ListingWithItem[] = (data ?? []).map((row: any) => ({
+  const listings: ListingWithItem[] = data.map((row: any) => ({
     ...mapListing(row),
     itemTitle: row.items?.canonical_title ?? 'Unknown Item',
     itemSpecialistId: row.items?.specialist_id ?? '',
@@ -355,6 +367,8 @@ export async function getAllListings(
   }));
 
   return { listings, error: null };
+  } catch (cause) { return { listings: [], error: cause instanceof Error ? cause.message : 'Listing relationships unavailable' }; }
+  });
 }
 
 // ── Refresh listing stats from eBay (views + watchers) ───────────────────────
@@ -386,48 +400,15 @@ export async function refreshListingStats(
 // active niche — prevents cross-niche count bleed (e.g. MX listings showing
 // in the Coins tab badge).
 
-const liveCountFlights = new Map<string, Promise<number>>();
-export async function getLiveListingCount(
-  tenantId: string,
-  specialistIds?: string[],
-): Promise<number> {
+export async function getLiveListingCount(tenantId: string, specialistIds?: string[]): Promise<number> {
   if (!tenantId?.trim() || !specialistIds?.length) return 0;
-  const key = JSON.stringify([tenantId, [...new Set(specialistIds)].sort()]);
-  const pending = liveCountFlights.get(key);
-  if (pending) return pending;
-  // Effect restarts share the actual in-flight request instead of filling the pool.
-  // No persisted cache and no cross-tenant or cross-niche result sharing.
-  const request = (async () => {
-    try {
-      const { count, error } = await getSupabaseClient().from('swish_inventory_tab_rows')
-        .select('item_id', { count: 'exact', head: true }).eq('tenant_id', tenantId)
-        .in('specialist_id', specialistIds).eq('inventory_tab', 'live');
-      return error ? 0 : count ?? 0;
-    } catch { return 0; }
-  })();
-  liveCountFlights.set(key, request);
-  try { return await request; }
-  finally { if (liveCountFlights.get(key) === request) liveCountFlights.delete(key); }
-  /* Legacy counter retained only as historical reference; shared lifecycle above is authoritative.
-  const supabase = getSupabaseClient();
-  // If no specialist filter, count all active listings for the tenant
-  if (!specialistIds || specialistIds.length === 0) {
-    const { count, error } = await supabase
-      .from('listings')
-      .select('id', { count: 'exact', head: true })
-      .eq('tenant_id', tenantId)
-      .eq('status', 'active');
-    return error ? 0 : (count ?? 0);
-  }
-  // Filter by niche via items join
-  const { data, error } = await supabase
-    .from('listings')
-    .select('id, items!inner(specialist_id)')
-    .eq('tenant_id', tenantId)
-    .eq('status', 'active')
-    .in('items.specialist_id', specialistIds);
-  return error ? 0 : (data?.length ?? 0);
-  */
+  const niches=[...new Set(specialistIds.map(resolveProductionNiche))];
+  if (niches.length !== 1 || !niches[0]) throw new Error('A single registered inventory niche is required');
+  // Shares the same one-pass server aggregate as the tab counters. Failures are not zero stock.
+  const { data } = await backendRead(`tab-counts:${tenantId}:${niches[0]}`, signal => getSupabaseClient().rpc('swish_inventory_tab_counts', { p_tenant_id:tenantId,p_niche_id:niches[0] }).abortSignal(signal));
+  const count=Number(data?.live);
+  if (!Number.isSafeInteger(count) || count<0) throw new Error('Live inventory count unavailable');
+  return count;
 }
 
 // ── One-step verify + publish ──────────────────────────────────────────────────
@@ -775,9 +756,6 @@ export async function publishGeneratedListing(
       success: false,
       error: published.error ?? 'eBay did not confirm publication. The saved draft is available to retry.',
       warnings: published.warnings ?? [],
-      // Preserve the provider-confirmed ID when local reconciliation needs attention.
-      // The UI can identify a possibly-live listing and prevent blind retries.
-      externalListingId: published.externalListingId,
     };
   }
 

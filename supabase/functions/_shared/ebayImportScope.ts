@@ -2,6 +2,7 @@
 export function inferImportNiche(categoryName: unknown, title: unknown): string | null {
  const category=String(categoryName ?? '').toLowerCase();const text=String(title ?? '').toLowerCase();
  const rules:[string,RegExp][]=[
+ ['tunes_flip',/\b(vinyl|vinyl record|audio cassette|compact disc|music cd|lp record|7[- ]inch single|12[- ]inch single)\b/i],
  ['coins',/\b(coin|coins|numismatic|banknote|banknotes|denarius|dirham|tanka|bullion)\b/i],
  ['motocross',/\b(motocross|enduro|motorcycle|motorbike|pit bike|dirt bike)\b/i],
  ['bicycles',/\b(bicycle|bicycles|cycling|mountain bike|road bike|bmx)\b/i],

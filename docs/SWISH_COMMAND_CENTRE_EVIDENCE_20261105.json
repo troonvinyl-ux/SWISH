@@ -1,0 +1,22 @@
+{
+  "date": "2026-11-05",
+  "inspectedMainSha": "a3b3c7e8fabfd2c37f1ac70f6ea743e06ceb52ed",
+  "releaseVerdict": "BLOCKED",
+  "productionReady": false,
+  "newTaskPromotions": 0,
+  "scope": "Existing unified app and canonical OnSpace Cloud",
+  "executed": [
+    {"id":"CATALOG-RLS","result":"PASS","scope":"RLS enabled on six relevant tables; not effective-policy certification"},
+    {"id":"COMMAND-MIGRATION","result":"PASS","scope":"Read-only reporting function created; no data/RLS/credential changes"},
+    {"id":"COMMAND-NO-JWT","result":"PASS","scope":"Identity-free database call denied"},
+    {"id":"COMMAND-GRANTS","result":"PASS","scope":"anon EXECUTE false, authenticated EXECUTE true"},
+    {"id":"COMMAND-OWNER-SIM","result":"PASS","scope":"Transaction-local SQL role simulation returned all 11 identities; canonical inventory sum reconciled"},
+    {"id":"COMMAND-SUBSCRIBER-SIM","result":"PASS","scope":"Existing separate non-owner fixture: platform/users/foreign tenant denied; own unexpired niche entitlements only"},
+    {"id":"COMMAND-INSPECTORS","result":"PASS","scope":"Seven bounded owner inspectors executed; credential-field keys absent"},
+    {"id":"SPECIALIST-ATTRIBUTION","result":"PASS","scope":"collectibles=collectibles, coins_uk=coins, catch-all=NULL"},
+    {"id":"BASELINE-GITHUB-CI","result":"FAIL","reference":"https://github.com/troonvinyl-ux/SWISH/actions/runs/42065996505","scope":"Inspected pre-change main TypeScript failed; subsequent checks skipped"}
+  ],
+  "notExecuted": ["current-source TypeScript", "current-source Jest", "current-source lint", "new Edge audit actual owner JWT", "ordinary subscriber HTTP/UI isolation", "all 11 controlled specialist workflows", "native/web/desktop UI acceptance", "unified native/signing acceptance"],
+  "limitations": ["SQL subject simulations are not real JWT token/device tests", "No diagnostic PASS promotes a complete S1–S7 task", "No Git write or CI dispatch tool", "No PR/merge/post-change main confirmation", "Admin inspectors are read-only", "Health is stored metadata/outcomes, not live provider certification"],
+  "report": "docs/SWISH_COMMAND_CENTRE_IMPLEMENTATION_20261105.md"
+}

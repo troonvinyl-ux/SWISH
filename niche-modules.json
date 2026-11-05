@@ -286,6 +286,14 @@
       ],
       "modulePath": "/surplus", "scannerRoute": "/capture"
     },
+    "tunes_flip": {
+      "id": "tunes_flip", "name": "Tunes Flip", "slug": "swish-tunes-flip",
+      "scheme": "tunesflip", "androidPackage": "com.swish.tunesflip", "iosBundleIdentifier": "com.swish.tunesflip",
+      "entry": "entry/tunes-flip.tsx", "home": null, "modulePath": "/entry/tunes-flip",
+      "aliases": ["tunes-flip", "tunes", "music", "vinyl_records"],
+      "specialists": ["vinyl_records"], "legacySpecialists": [], "defaultSpecialist": "vinyl_records",
+      "dedicatedRoutes": ["music-search.tsx", "music-collection.tsx"], "scannerRoute": "/capture"
+    },
     "collectibles": {
       "id": "collectibles", "name": "Collectibles Flipper", "slug": "swish-collectibles-flipper",
       "scheme": "collectiblesflipper", "androidPackage": "com.swish.collectiblesflipper", "iosBundleIdentifier": "com.swish.collectiblesflipper",
