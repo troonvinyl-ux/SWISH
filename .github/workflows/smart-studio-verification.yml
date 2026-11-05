@@ -1,0 +1,66 @@
+name: Shared Smart Studio verification
+on:
+  pull_request:
+    paths: ['app/**', 'constants/**', 'services/**', 'hooks/**', 'components/**', 'shared/**', 'supabase/**', 'test-lab/studio/**', '.github/workflows/smart-studio-verification.yml']
+  push:
+    branches: [main]
+    paths: ['app/**', 'constants/**', 'services/**', 'hooks/**', 'components/**', 'shared/**', 'supabase/**', 'test-lab/studio/**', '.github/workflows/smart-studio-verification.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9.15.9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: bash scripts/install-dependencies.sh
+      - name: Source identity
+        run: mkdir -p verification-output && git rev-parse HEAD > verification-output/source-sha.txt
+      - name: TypeScript
+        run: npx tsc --noEmit > verification-output/typescript.txt 2>&1
+      - name: Lint
+        if: ${{ !cancelled() }}
+        run: npx expo lint > verification-output/lint.txt 2>&1
+      - name: Existing-photo studio safety and persistence regressions
+        if: ${{ !cancelled() }}
+        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/existingImageStudio.test.ts services/__tests__/existingStudioStorage.test.ts --json --outputFile=verification-output/existing-photos-jest.json
+      - name: Shared premium sorting, presentation and research regressions
+        if: ${{ !cancelled() }}
+        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/catalogueSort.test.ts services/__tests__/studioPhotoPolicy.test.ts services/__tests__/sharedPremiumWorkspace.test.ts --json --outputFile=verification-output/premium-workspaces-jest.json
+      - name: All existing and studio regressions
+        if: ${{ !cancelled() }}
+        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand --json --outputFile=verification-output/all-jest.json
+      - name: Deployment dependency and mirror validation
+        if: ${{ !cancelled() }}
+        run: node scripts/validate-edge-deployment.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: studio-source-${{ github.sha }}
+          path: verification-output/
+  raster:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with: { deno-version: v2.x }
+      - run: deno check supabase/functions/swish-coin-image-enhance/index.ts
+      - name: Real photograph codec, source preservation and offline geometry
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: deno test --allow-read --allow-write=verification-output supabase/tests/smartStudioFixtures.test.ts | tee studio-raster-results.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: studio-offline-real-photos-${{ github.sha }}
+          path: |
+            verification-output/studio/
+            studio-raster-results.txt
+# No provider credentials, paid model calls, seller calls, deployment or native builds.
+# Offline manually supplied geometry is deliberately NOT marked live automatic acceptance.

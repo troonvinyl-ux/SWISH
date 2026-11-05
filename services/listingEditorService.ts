@@ -1,7 +1,8 @@
+import { availableListingPhotos, preferredListingPhotos } from '@/shared/smartStudio';
 import { getSupabaseClient } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { getProductionNicheSpecialistIds } from './nicheRouting';
-import { normalizeAntiqueAspects, validateAntiqueSpecifics, selectAntiqueCondition, validateAntiqueListingBasics } from '@/shared/antiqueListingPolicy';
+import { normalizeAntiqueAspects, validateAntiqueSpecifics, selectAntiqueCondition, validateAntiqueListingBasics, type AntiqueConditionPolicy } from '@/shared/antiqueListingPolicy';
 export interface EditorSave {
   tenantId: string; listingId: string; title: string; description: string;
   price: string; shippingCost: string; floorPrice: string; ceilingPrice: string;
@@ -123,8 +124,12 @@ export async function saveAntiqueCategory(tenantId: string, itemId: string, cate
   if (persisted.error || persisted.data?.attributes?.ebay_category_id !== categoryId) return { attributes: null, error: 'Category saved but reload could not confirm it. Reload this item before continuing.' };
   return { attributes: persisted.data.attributes, error: null };
 }
+export interface SpecialistPreflightResult {
+  ready: boolean; error: string | null; issue?: 'condition';
+  conditionPolicy?: AntiqueConditionPolicy; conditionId?: string; categoryId?: string;
+}
 /** Read-only preflight via the existing Taxonomy/Metadata API; never a live publication. */
-export async function checkAntiqueListing(tenantId: string, listingId: string, nicheId = 'antiques'): Promise<{ ready: boolean; error: string | null }> {
+export async function checkAntiqueListing(tenantId: string, listingId: string, nicheId = 'antiques'): Promise<SpecialistPreflightResult> {
   try {
     const loaded = await loadListingEditor(tenantId, listingId, nicheId);
     if (loaded.error || !loaded.data) return { ready: false, error: loaded.error };
@@ -139,18 +144,47 @@ export async function checkAntiqueListing(tenantId: string, listingId: string, n
     if (validation.error || validation.data?.valid !== true || validation.data?.isLeaf !== true) return { ready: false, error: validation.error ?? 'The current eBay category could not be verified. No publication allowed.' };
     if (aspects.error || aspects.data?.success !== true) return { ready: false, error: aspects.error ?? 'Current category-specific requirements unavailable.' };
     if (conditions.error || conditions.data?.success !== true || !conditions.data?.policy) return { ready: false, error: conditions.error ?? 'Current condition requirements unavailable.' };
+    const conditionPolicy = conditions.data.policy as AntiqueConditionPolicy;
+    const conditionId = String(attributes.ebay_condition_id ?? '');
+    const condition = selectAntiqueCondition(conditionPolicy, conditionId);
+    if (condition.error) return { ready: false, error: 'Choose the eBay condition that matches this item.', issue: 'condition', conditionPolicy, conditionId, categoryId };
     const specifics = Array.isArray(attributes.ebay_item_specifics) ? attributes.ebay_item_specifics : [];
     const missing = validateAntiqueSpecifics(specifics, normalizeAntiqueAspects(aspects.data.aspects));
-    if (missing) return { ready: false, error: missing };
-    const condition = selectAntiqueCondition(conditions.data.policy, String(attributes.ebay_condition_id ?? ''));
-    if (condition.error) return { ready: false, error: condition.error };
+    if (missing) return { ready: false, error: missing, conditionPolicy, conditionId, categoryId };
     const originalMedia = item.media ?? [];
-    const media = Array.isArray(attributes.ebay_listing_media) ? attributes.ebay_listing_media : originalMedia;
-    if (media.some((url: string) => !originalMedia.includes(url))) return { ready: false, error: 'Listing photos must be original images attached to this inventory item.' };
+    const allowedMedia = availableListingPhotos(originalMedia, attributes);
+    const media = Array.isArray(attributes.ebay_listing_media) ? attributes.ebay_listing_media : preferredListingPhotos(originalMedia, attributes);
+    if (media.some((url: string) => !allowedMedia.includes(url))) return { ready: false, error: 'Select original or accepted clean photos linked to this inventory item.' };
     const options = attributes.ebay_listing_options ?? {};
     const price = options.listingType === 'Chinese' ? Number(options.startPrice) : Number(row.price);
     const basic = validateAntiqueListingBasics({ title: row.title, description: row.description, price, quantity: Number(item.quantity ?? 1), media });
     if (basic) return { ready: false, error: basic };
-    return { ready: true, error: null };
+    return { ready: true, error: null, conditionPolicy, conditionId, categoryId };
   } catch { return { ready: false, error: 'Specialist preflight could not run. No successful validation was inferred.' }; }
+}
+
+/** User-confirmed condition only. Does not change grades, notes, photos or publish. */
+export async function savePreflightCondition(input: { tenantId: string; listingId: string; nicheId: string; categoryId: string; conditionId: string }): Promise<{ error: string | null }> {
+  try {
+    const loaded = await loadListingEditor(input.tenantId, input.listingId, input.nicheId);
+    if (loaded.error || !loaded.data) return { error: loaded.error ?? 'Draft not found in this workspace.' };
+    const row: any = loaded.data;
+    const item = row.items;
+    if (row.external_listing_id || ['live','active','published','publishing','sold','ended'].includes(row.status)) return { error: 'This is no longer a private draft. Reopen its listing editor.' };
+    if (!input.categoryId || String(row.category_id ?? '') !== input.categoryId || String(item?.attributes?.ebay_category_id ?? '') !== input.categoryId) return { error: 'The category changed. Recheck the draft before choosing its condition.' };
+    const result = await invokeListingOperation({ route: 'get_condition_policies', tenantId: input.tenantId, categoryId: input.categoryId });
+    if (result.error || !result.data?.success || !result.data?.policy || String(result.data.policy.categoryId) !== input.categoryId) return { error: result.error ?? 'Current category conditions could not be confirmed. Recheck and retry.' };
+    const selected = selectAntiqueCondition(result.data.policy, input.conditionId);
+    if (selected.error || !selected.id) return { error: selected.error ?? 'Choose a supported condition.' };
+    if (!item?.id || !item.updated_at) return { error: 'Draft version unavailable. Reload before saving.' };
+    const client = getSupabaseClient();
+    const saved = await client.from('items').update({ attributes: { ...item.attributes, ebay_condition_id: selected.id } })
+      .eq('id', item.id).eq('tenant_id', input.tenantId).in('specialist_id', getProductionNicheSpecialistIds(input.nicheId))
+      .eq('updated_at', item.updated_at).select('id').maybeSingle();
+    if (saved.error || !saved.data) return { error: saved.error?.message ?? 'The item changed while saving. Recheck before retrying.' };
+    const readback = await loadListingEditor(input.tenantId, input.listingId, input.nicheId);
+    const persisted: any = readback.data;
+    if (readback.error || !persisted || String(persisted.category_id) !== input.categoryId || String(persisted.items?.attributes?.ebay_category_id) !== input.categoryId || String(persisted.items?.attributes?.ebay_condition_id) !== selected.id) return { error: 'Saved condition could not be confirmed. Recheck the draft; nothing was published.' };
+    return { error: null };
+  } catch { return { error: 'Condition save was not confirmed. Recheck the draft before retrying.' }; }
 }

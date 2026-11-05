@@ -50,7 +50,7 @@ jest.mock('expo-file-system', () => ({
 }));
 
 jest.mock('expo-image-manipulator', () => ({
-  manipulateAsync: jest.fn().mockResolvedValue({ base64: 'compressed_base64', uri: 'file://compressed.jpg' }),
+  manipulateAsync: jest.fn().mockResolvedValue({ base64: 'Y29tcHJlc3NlZA==', uri: 'file://compressed.jpg' }),
   SaveFormat: { JPEG: 'JPEG' },
 }));
 

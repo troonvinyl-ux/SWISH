@@ -24,7 +24,7 @@ export const SectionHeader = memo(({ title, subtitle, action, onAction, badge }:
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
     </View>
     {action && onAction ? (
-      <Pressable onPress={onAction} hitSlop={8}>
+      <Pressable onPress={onAction} hitSlop={8} style={({pressed})=>[styles.actionButton,pressed?{opacity:0.65}:null]}>
         <Text style={styles.action}>{action}</Text>
       </Pressable>
     ) : null}
@@ -50,8 +50,9 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
   subtitle: {
-    fontSize: Typography.size.xs,
-    color: Colors.textTertiary,
+    fontSize: Typography.size.sm,
+    color: Colors.textSecondary,
+    lineHeight:20,
     marginTop: 2,
   },
   badge: {
@@ -65,6 +66,7 @@ const styles = StyleSheet.create({
     fontWeight: Typography.weight.bold,
     color: Colors.primary,
   },
+  actionButton:{minHeight:48,paddingHorizontal:Spacing.sm,justifyContent:'center'},
   action: {
     fontSize: Typography.size.sm,
     fontWeight: Typography.weight.medium,
