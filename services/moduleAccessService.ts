@@ -12,17 +12,20 @@ export function membershipDestination(ids: readonly string[], owner: boolean, ac
 export async function loadModuleAccess(tenantId: string): Promise<{ snapshot: ModuleAccessSnapshot | null; error: string | null }> {
   const client = getSupabaseClient();
   try {
-    // Read the protected owner row under its own-user RLS policy instead of
-    // calling a zero-argument RPC. This avoids a stale PostgREST function-cache
-    // entry turning an ordinary membership check into a misleading account error.
-    const { data: { user }, error: userError } = await client.auth.getUser();
-    if (userError || !user) return { snapshot: null, error: 'Your SWISH sign-in session could not be verified. Sign in again and retry.' };
-    const [ownerRow, billing] = await Promise.all([
-      client.from('swish_platform_owners').select('user_id').eq('user_id', user.id).maybeSingle(),
+    // Resolve the trusted owner role through the existing security-definer RPC.
+    // The backend migration repairs this RPC and refreshes PostgREST's schema cache;
+    // do not require direct client access to the protected owner table.
+    const [ownerResult, billing] = await Promise.all([
+      client.rpc('swish_is_platform_owner'),
       checkSubscription(tenantId),
     ]);
-    if (ownerRow.error) return { snapshot: null, error: 'SWISH owner-verification records are unavailable. The backend migration may need applying or its schema cache refreshing. Your access has not been changed.' };
-    const owner = Boolean(ownerRow.data);
+    if (ownerResult.error) {
+      const detail = ownerResult.error.message || 'Owner verification RPC unavailable.';
+      return { snapshot: null, error: /schema cache|could not find the function|pgrst202|does not exist/i.test(detail)
+        ? 'The SWISH owner-verification database function is missing or the API schema cache is stale. Apply the SWISH backend migrations and reload the database schema. Your access has not been changed.'
+        : detail };
+    }
+    const owner = ownerResult.data === true;
     if (!owner && (billing.error || !billing.status)) return { snapshot: null, error: billing.error ?? 'Membership verification unavailable.' };
     const nicheIds = owner ? [...PRODUCTION_NICHE_IDS] : [...new Set((billing.status?.nicheEntitlements ?? []).filter(isProductionNiche))];
     return { snapshot: { owner, nicheIds, tenantId, billingStatus: billing.status, verifiedAt: Date.now() }, error: null };
