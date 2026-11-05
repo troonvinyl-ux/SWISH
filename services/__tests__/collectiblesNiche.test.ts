@@ -43,6 +43,27 @@ describe('Collectibles Flipper classification', () => {
     expect(listing).toContain('selected eBay leaf category Taxonomy');
   });
 
+
+  test('keeps Collectibles listing editor focused and exposes confirmed eBay outcomes', () => {
+    const editor = fs.readFileSync('app/ebay-listing-editor.tsx', 'utf8');
+    const listingService = fs.readFileSync('services/listingService.ts', 'utf8');
+    const stockDetail = fs.readFileSync('app/stock-listing/[id].tsx', 'utf8');
+    expect(editor).toContain("const isCollectibles=activeNicheId==='collectibles'");
+    expect(editor).toContain('COLLECTIBLES · LISTING WORKSPACE');
+    expect(editor).toContain('collapsible={isCollectibles}');
+    expect(editor.match(/<EditorSection /g)?.length).toBe(7);
+    expect(editor.match(/<\\/EditorSection>/g)?.length).toBe(7);
+    expect(listingService).toContain('externalListingId: published.externalListingId');
+    expect(stockDetail).toContain('eBay accepted — SWISH sync pending');
+    expect(stockDetail).toContain('Do not submit or retry this draft again');
+  });
+
+  test('avoids the zero-argument owner RPC during client membership loading', () => {
+    const access = fs.readFileSync('services/moduleAccessService.ts', 'utf8');
+    expect(access).toContain("from('swish_platform_owners')");
+    expect(access).not.toContain("rpc('swish_is_platform_owner')");
+  });
+
   test('does not force an ambiguous generic title into Collectibles', () => {
     expect(classifyListing(null, null, 'Vintage item').niche).toBe('unclassified');
     expect(inferImportNiche('', 'Vintage item')).toBeNull();
