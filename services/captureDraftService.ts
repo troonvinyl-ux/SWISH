@@ -2,7 +2,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import { Platform } from 'react-native';
 import type { CapturedImage, AIIdentificationResult } from './aiIdentificationService';
-export interface CaptureDraft { images: CapturedImage[]; result: AIIdentificationResult | null; savedId: string | null; mode: string; specialistId: string; answers: Record<string,string> }
+import type { MusicRelease } from '@/shared/musicRelease';
+// Confirmed CC0 release snapshot uses the existing per-user/tenant/niche local draft.
+export interface CaptureDraft { musicRelease?: MusicRelease | null; images: CapturedImage[]; result: AIIdentificationResult | null; savedId: string | null; mode: string; specialistId: string; answers: Record<string,string> }
 const queue = new Map<string,Promise<void>>();
 const keyFor = (scope: string) => `@swish_capture_v1:${scope}`;
 export async function readCaptureDraft(scope: string): Promise<CaptureDraft | null> {

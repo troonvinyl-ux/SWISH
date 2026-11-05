@@ -1,0 +1,17 @@
+jest.mock('react-native',()=>({Platform:{OS:'ios'}}));
+jest.mock('expo-file-system',()=>({readAsStringAsync:jest.fn(),EncodingType:{Base64:'base64'}}));
+jest.mock('expo-crypto',()=>({CryptoDigestAlgorithm:{SHA256:'SHA256'},digestStringAsync:jest.fn().mockResolvedValue('fixture-sha')}));
+jest.mock('@/template',()=>({getSupabaseClient:()=>({storage:{from:()=>mockStorage}})}));
+import { readAsStringAsync } from 'expo-file-system';
+import { encode } from 'base64-arraybuffer';
+import { originalMime,readOriginalBytes,uploadUntouchedOriginal } from '@/services/originalImageService';
+const original=new Uint8Array([255,216,255,225,0,4,35,44,55,66]);
+const mockStorage={download:jest.fn(),upload:jest.fn(),getPublicUrl:jest.fn(()=>({data:{publicUrl:'https://storage.test/original.jpg'}}))};
+beforeEach(()=>{jest.clearAllMocks();(readAsStringAsync as jest.Mock).mockResolvedValue(encode(original.buffer));mockStorage.upload.mockResolvedValue({error:null});mockStorage.download.mockResolvedValueOnce({data:null,error:{message:'Not found'}}).mockResolvedValue({data:{arrayBuffer:async()=>original.buffer},error:null});});
+test('native source is read as bytes without fetch(file://) or manipulation',async()=>{const result=await readOriginalBytes('file://camera');expect(new Uint8Array(result.bytes)).toEqual(original);expect(result.contentType).toBe('image/jpeg');expect(readAsStringAsync).toHaveBeenCalledWith('file://camera',{encoding:'base64'});});
+test('source bytes are uploaded without upsert and independently read back',async()=>{const result=await uploadUntouchedOriginal('item','front','file://camera');expect(result.hash).toBe('fixture-sha');expect(mockStorage.upload).toHaveBeenCalledWith('item/originals/front_fixture-sha.jpg',original.buffer,expect.objectContaining({upsert:false,contentType:'image/jpeg'}));expect(mockStorage.download).toHaveBeenCalledTimes(2);});
+test('byte mismatch never returns an accepted original link',async()=>{mockStorage.download.mockReset().mockResolvedValueOnce({data:null,error:{message:'Not found'}}).mockResolvedValue({data:{arrayBuffer:async()=>new Uint8Array([255,216,99]).buffer},error:null});await expect(uploadUntouchedOriginal('item','front','file://camera')).rejects.toThrow('bytes differ');});
+test('retry reuses verified content-addressed original without uploading again',async()=>{mockStorage.download.mockReset().mockResolvedValue({data:{arrayBuffer:async()=>original.buffer},error:null});await uploadUntouchedOriginal('item','front','file://camera');expect(mockStorage.upload).not.toHaveBeenCalled();});
+test('unsupported HEIC originals are not silently converted',()=>{expect(()=>originalMime(new Uint8Array([0,0,0,24,102,116,121,112]))).toThrow('not allowed');});
+test('PNG and GIF bytes retain the correct declared format',()=>{expect(originalMime(new Uint8Array([137,80,78,71,13,10]))).toEqual({contentType:'image/png',extension:'png'});expect(originalMime(new TextEncoder().encode('GIF89a'))).toEqual({contentType:'image/gif',extension:'gif'});});
+test('generated storage paths cannot be substituted for originals',async()=>{await expect(uploadUntouchedOriginal('item','front','https://storage.test/studio/output.png')).rejects.toThrow('cannot be used as original');expect(mockStorage.upload).not.toHaveBeenCalled();});

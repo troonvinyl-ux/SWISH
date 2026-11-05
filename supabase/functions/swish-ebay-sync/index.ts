@@ -5,6 +5,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 import registry from '../_shared/niche-modules.json' with {type:'json'};
 import { corsHeaders } from '../_shared/cors.ts';
+import { parseLiveContent } from '../_shared/ebayLiveContent.ts';
 import { buildSellingRequest, sellingSectionXml, sellingPagination, tradingDiagnostic, type SellingSection } from '../_shared/ebaySellingRequest.ts';
 const TRADING_API='https://api.ebay.com/ws/api.dll';
 const TOKEN_URL='https://api.ebay.com/identity/v1/oauth2/token';
@@ -73,10 +74,11 @@ async function getItemObservation(id:string,token:string,clientId:string):Promis
  const status=state==='active'&&sold<quantity?'active':sold>0?'sold':'ended';
  const specifics=[...tag(body,'ItemSpecifics').matchAll(/<NameValueList(?:\s[^>]*)?>([\s\S]*?)<\/NameValueList>/g)].map(match=>({name:decode(tag(match[1],'Name')),value:decode(tag(match[1],'Value'))})).filter(row=>row.name&&row.value);
  const photos=[...new Set([...body.matchAll(/<PictureURL>\s*([^<]+)\s*<\/PictureURL>/g)].map(match=>decode(match[1]).trim().replace(/^http:/,'https:')))];
- const category=tag(body,'PrimaryCategory');const price=Number(tag(selling,'CurrentPrice')||tag(body,'StartPrice'));const title=decode(tag(body,'Title'));
+ const content=parseLiveContent(xml,id);
+ const category=tag(body,'PrimaryCategory');const price=content.sellerPrice;const title=content.title;
  if(!title||!Number.isFinite(price)||price<0)throw new Error('GetItem listing data invalid');
  const end=tag(tag(body,'ListingDetails'),'EndTime');
- return {externalId:id,title,description:clean(tag(body,'Description')),status,quantity,sold,price,shipping:Number(tag(body,'ShippingServiceCost')||0),categoryId:tag(category,'CategoryID'),categoryName:decode(tag(category,'CategoryName')),condition:decode(tag(body,'ConditionDisplayName')),conditionNotes:decode(tag(body,'ConditionDescription')),conditionId:tag(body,'ConditionID'),sku:decode(tag(body,'SKU')),watchers:Number(tag(body,'WatchCount')||0),views:Number(tag(body,'HitCount')||0),photos,specifics,endedAt:end&&Number.isFinite(Date.parse(end))&&Date.parse(end)<=Date.now()?end:null};
+ return {externalId:id,title,description:content.description,status,quantity,sold,price,shipping:Number(tag(body,'ShippingServiceCost')||0),categoryId:tag(category,'CategoryID'),categoryName:decode(tag(category,'CategoryName')),condition:decode(tag(body,'ConditionDisplayName')),conditionNotes:decode(tag(body,'ConditionDescription')),conditionId:tag(body,'ConditionID'),sku:decode(tag(body,'SKU')),watchers:Number(tag(body,'WatchCount')||0),views:Number(tag(body,'HitCount')||0),photos,specifics,endedAt:end&&Number.isFinite(Date.parse(end))&&Date.parse(end)<=Date.now()?end:null};
 }
 async function syncItemToSwish(client:ReturnType<typeof adminClient>,tenantId:string,listing:any,item:any,ebay:Observation){
  const previous=item.attributes&&typeof item.attributes==='object'?item.attributes:{};
@@ -126,7 +128,7 @@ serveModule(async(req:Request)=>{
   if(!listings.length)return json({success:true,processed:0,updated:0,failed:0,imagesFetched:0,titlesFixed:0,message:'No imported eBay listings in this niche. Import listings first; no inventory was changed.'});
   // Fetch section-scoped summaries. Never infer ended/sold from an absent external ID.
   const external=new Set<string>();
-  for(const section of ['ActiveList','SoldList','UnsoldList'] as SellingSection[]){
+  for(const section of (Array.isArray(itemIds)&&itemIds.length ? [] : ['ActiveList','SoldList','UnsoldList']) as SellingSection[]){
    let pages=1;for(let page=1;page<=pages;page++){
     if(Date.now()-started>60000)throw new Error('Sync deadline reached before reconciliation; statuses preserved');
     try{const result=await fetchSellingPage(token,clientId,section,page);pages=result.pages;result.ids.forEach(id=>external.add(id));}

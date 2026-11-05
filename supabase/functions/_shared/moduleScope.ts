@@ -55,6 +55,13 @@ export function withModuleScope(handler: Handler): Handler {
     const linked=await client.from('listings').select('external_listing_id').eq('tenant_id',tenant).in('external_listing_id',body.itemIds);
     if(linked.error||new Set(linked.data?.map(row=>row.external_listing_id)).size!==new Set(body.itemIds).size)return json('External items are not linked to this module.',403);
    }
+   // Discogs catalogue evaluation is not permission to export its metadata to a seller marketplace.
+   if(nicheId==='tunes_flip' && /\/(swish-ebay-list|swish-list-generate)(?:\/|$)/.test(new URL(request.url).pathname) && Deno.env.get('DISCOGS_COMMERCIAL_USE_APPROVED')!=='true'){
+    let attributes:any=null;
+    if(body.itemId||body.item_id){const record=await client.from('items').select('attributes').eq('id',body.itemId??body.item_id).eq('tenant_id',tenant).maybeSingle();if(record.error)return json('Music metadata permission check unavailable.',503);attributes=record.data?.attributes;}
+    else if(body.listingId||body.listing_id){const record=await client.from('listings').select('items!inner(attributes)').eq('id',body.listingId??body.listing_id).eq('tenant_id',tenant).maybeSingle();if(record.error)return json('Music metadata permission check unavailable.',503);const item:any=record.data?.items;attributes=Array.isArray(item)?item[0]?.attributes:item?.attributes;}
+    if(attributes?.discogs_release_id)return json('Discogs-derived marketplace use awaits recorded commercial-use permission. Manual user-origin music records can use the existing eBay workflow.',403);
+   }
    const scoped={...body,tenantId:tenant,tenant_id:tenant,nicheId,niche_id:nicheId,specialistIds:specialists,specialistId:body.specialistId ?? product.defaultSpecialist};
    const headers=new Headers(request.headers);headers.set('Content-Type','application/json');headers.delete('Content-Length');
    return handler(new Request(request.url,{method:request.method,headers,body:JSON.stringify(scoped)}));

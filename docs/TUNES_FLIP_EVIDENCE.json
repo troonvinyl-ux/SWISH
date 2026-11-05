@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "nicheId": "tunes_flip",
+  "specialistId": "vinyl_records",
+  "baselineMainSha": "218b6db3cef4ee9a1b6ef07d93a6029bb92b7c87",
+  "releaseVerdict": "BLOCKED",
+  "executed": [
+    {"id":"TF-SQL-REGISTER","method":"Read-only SQL after additive function extension","result":"PASS","scope":"database catalogue/mapping only","observed":{"musicSpecialistOwner":"tunes_flip","canonicalMusicOwner":"tunes_flip","preservedCoinOwner":"coins","unclassifiedOwner":null,"commandContainsMusic":true,"anonymousCommandExecute":false,"authenticatedCommandExecute":true,"existingMusicItems":0}},
+    {"id":"TF-BILLING-CONSTRAINT","method":"Read-only pg_constraint inspection","result":"BLOCKED","observed":"niche_entitlement_known_product allows original ten IDs only; Tunes Flip and Collectibles are excluded"}
+  ],
+  "notExecuted": ["Discogs authenticated connectivity","search/barcode/catalogue/master versions","ordinary subscriber HTTP 403/tenant isolation","inventory fixture create/edit/delete/readback","web/native data parity","eBay sandbox draft/publish/specifics round-trip","TypeScript","lint","Jest","Deno check","unified Android signing/build/device acceptance"],
+  "secrets": {"userReportedConfigured":true,"valuesReadByEditor":false,"runtimeLocation":"Edge Function Deno environment only","providerValidity":"NOT VERIFIED"},
+  "writesDuringVerification": {"inventory":false,"seller":false,"entitlementGrants":false,"securityPolicyChanges":false},
+  "commercialPermission":"NOT RECORDED; subscriber catalogue and Discogs-derived marketplace use blocked",
+  "privateDiscogsOAuth":"NOT IMPLEMENTED; public catalogue does not require callback",
+  "pullRequest":null,
+  "mergedCommit":null,
+  "report":"docs/TUNES_FLIP_IMPLEMENTATION.md"
+}

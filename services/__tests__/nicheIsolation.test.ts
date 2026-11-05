@@ -193,7 +193,8 @@ describe('curiosities_collectibles niche contamination guard', () => {
 
 describe('Production niche gate', () => {
   test('PRODUCTION_NICHE_IDS contains all ten SWISH niches including Surplus Flip', () => {
-    expect(PRODUCTION_NICHE_IDS).toHaveLength(11);
+    expect(PRODUCTION_NICHE_IDS).toHaveLength(12);
+    expect(PRODUCTION_NICHE_IDS).toContain('tunes_flip');
     expect(PRODUCTION_NICHE_IDS).toContain('collectibles');
     expect(PRODUCTION_NICHE_IDS).toContain('surplus_flip');
   });
@@ -285,6 +286,7 @@ describe('All registered niche specialist isolation', () => {
     ['beauty', 'beauty'],
     ['tech', 'tech'],
     ['surplus_flip', 'surplus_trader'],
+    ['tunes_flip', 'vinyl_records'],
   ])('%s resolves and has its canonical default specialist', (niche, specialist) => {
     expect(resolveProductionNiche(niche)).toBe(niche);
     expect(NICHES[niche as NicheId].defaultSpecialist).toBe(specialist);
@@ -674,7 +676,8 @@ describe('Mutation tenant guard', () => {
     const status = fs.readFileSync(path.resolve(__dirname, '../../supabase/functions/swish-ebay-listing-status/index.ts'), 'utf8');
     expect(status).toContain('Every listing must belong to this account and niche');
     expect(status).toContain("rpc('swish_apply_ebay_listing_status'");
-    expect(sync).toContain("rpc('swish_transition_item'");
+    expect(sync).toContain("rpc('swish_apply_ebay_listing_status'");
+    expect(sync).toContain("p_external_id:ebay.externalId");
     expect(sync).not.toContain(".from('items').update({ status: newStatus");
   });
 });

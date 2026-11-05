@@ -10,6 +10,9 @@
 import { getSupabaseClient } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { preflightPhotos } from './photoQualityService';
+import { prepareCapturedImages } from './sharedImagePreparationService';
+import { prepareImageForAI,uploadItemImages,updateItemMedia,type CapturedImage } from './aiIdentificationService';
+const islamicCaptures=(uris:string[]):CapturedImage[]=>uris.map((uri,index)=>({uri,slotId:index===0?'obverse':index===1?'reverse':`detail_${index}`,slotLabel:index===0?'Obverse':index===1?'Reverse':`Detail ${index}`}));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -200,9 +203,11 @@ export async function identifyIslamicSilver(
   try {
     const preflight=await preflightPhotos([...(input.images ?? []),...(input.existingImageUrls ?? [])].map((uri,index)=>({ uri,slotLabel:`Coin photo ${index + 1}` })),input.allowPhotoWarnings ?? false);
     if(preflight.error) return { result:null,error:preflight.error };
+    await prepareCapturedImages(islamicCaptures(input.images??[]),{tenantId:input.tenantId,nicheId:'coins'});
+    const originals:string[]=[];for(const uri of input.images??[])originals.push(await prepareImageForAI(uri));
     const { data, error } = await supabase.functions.invoke('swish-islamic-identify', {
       body: {
-        images: input.images,
+        images: originals,
         existingImageUrls: input.existingImageUrls,
         weight: input.weight,
         diameter: input.diameter,
@@ -391,6 +396,11 @@ async function uploadIslamicImages(
   itemId: string,
   localUris: string[],
 ): Promise<string[]> {
+  const upload=await uploadItemImages(itemId,islamicCaptures(localUris));
+  if(upload.errors.length)throw new Error(upload.errors.join(' '));
+  return upload.urls;
+}
+/* Retired duplicate uploader: the shared uploader now preserves native bytes.
   const supabase = getSupabaseClient();
   const uploadedUrls: string[] = [];
 
@@ -451,6 +461,7 @@ async function uploadIslamicImages(
 
   return uploadedUrls;
 }
+*/
 
 export async function saveIslamicCoinToInventory(
   tenantId: string,
@@ -563,17 +574,16 @@ export async function saveIslamicCoinToInventory(
   if (weightGrams) insertPayload['weight_grams'] = weightGrams;
   if (diameterMm) insertPayload['diameter_mm'] = diameterMm;
 
-  const { data, error: insertError } = await supabase
-    .from('items')
-    .insert(insertPayload)
-    .select('id')
-    .single();
+  const { data, error: insertError } = batchItem.itemId
+    ? await supabase.from('items').select('id').eq('id',batchItem.itemId).eq('tenant_id',tenantId).eq('specialist_id','islamic_silver').single()
+    : await supabase.from('items').insert(insertPayload).select('id').single();
 
   if (insertError || !data) {
     return { itemId: null, mediaUrls: [], error: insertError?.message ?? 'Insert failed' };
   }
 
   const itemId = data.id as string;
+  batchItem.itemId=itemId; // Retain canonical identity immediately for safe media retry.
 
   // Upload images
   const allImageUris = [
@@ -583,13 +593,9 @@ export async function saveIslamicCoinToInventory(
 
   let mediaUrls: string[] = [];
   if (allImageUris.length > 0) {
-    mediaUrls = await uploadIslamicImages(itemId, allImageUris);
-    if (mediaUrls.length > 0) {
-      await supabase
-        .from('items')
-        .update({ media: mediaUrls })
-        .eq('id', itemId);
-    }
+    try{mediaUrls = await uploadIslamicImages(itemId, allImageUris);
+      if(mediaUrls.length)await updateItemMedia(tenantId,itemId,mediaUrls);
+    }catch(cause){return {itemId,mediaUrls,error:`Inventory is saved; original images need retry. ${cause instanceof Error?cause.message:'Upload failed.'}`};}
   }
 
   return { itemId, mediaUrls, error: null };

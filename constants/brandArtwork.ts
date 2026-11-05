@@ -20,6 +20,6 @@ export function getBrandArtwork(nicheId: string | null | undefined): ImageSource
 export const TOOL_ARTWORK: ImageSource = require('@/assets/images/brands/tool-flipper.jpeg');
 export const BRAND_NAMES: Record<string, string> = {
   coins: 'Coin Flipper', motocross: 'MX Flipper', bicycles: 'Bike Flipper', clothing: 'Threads Flip',
-  trading_cards: 'Card Flipper', antiques: 'Antique Flipper', tech: 'Tech Flipper',
+  tunes_flip: 'Tunes Flip', trading_cards: 'Card Flipper', antiques: 'Antique Flipper', tech: 'Tech Flipper',
   beauty: 'Beauty Flipper', fossils: 'Fossil Flipper', surplus_flip: 'Surplus Flip', collectibles: 'Collectibles Flipper',
 };
