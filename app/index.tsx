@@ -9,8 +9,8 @@ import { Colors, Spacing, Typography, Radius } from '@/constants/theme';
 function MembershipRouter() {
   const app = useApp();
   const failure = describeAccessFailure(app.tenantError ?? app.accessError);
+  if (app.tenantError || app.accessError) return <SafeAreaView style={styles.screen}><Text style={styles.title}>{failure.title}</Text><Text accessibilityRole="alert" style={styles.body}>{failure.message}</Text><Pressable accessibilityLabel={failure.retryLabel} onPress={() => { void (app.tenant ? app.refreshSubscription() : app.reloadTenant()); }} style={({ pressed }) => [styles.button, { opacity: pressed ? 0.7 : 1 }]}><Text style={styles.buttonText}>{failure.retryLabel}</Text></Pressable></SafeAreaView>;
   if (app.tenantLoading || app.nichePreferencesLoading || app.moduleLoading || (!app.accessReady && app.subscriptionLoading)) return <SafeAreaView style={styles.screen}><ActivityIndicator color={Colors.primary} /><Text style={styles.body}>Verifying your specialist access…</Text></SafeAreaView>;
-  if (app.tenantError || app.accessError || !app.accessReady) return <SafeAreaView style={styles.screen}><Text style={styles.title}>{failure.title}</Text><Text accessibilityRole="alert" style={styles.body}>{failure.message}</Text><Pressable accessibilityLabel={failure.retryLabel} onPress={() => { void (app.tenant ? app.refreshSubscription() : app.reloadTenant()); }} style={({ pressed }) => [styles.button, { opacity: pressed ? 0.7 : 1 }]}><Text style={styles.buttonText}>{failure.retryLabel}</Text></Pressable></SafeAreaView>;
   const destination = app.fixedNicheId && app.activeNicheId === app.fixedNicheId ? '/(tabs)' : membershipDestination(app.enabledNiches, app.isMasterAdmin, app.activeNicheId);
   return <Redirect href={destination as any} />;
 }
