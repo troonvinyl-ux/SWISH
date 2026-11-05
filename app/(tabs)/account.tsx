@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -37,7 +37,7 @@ export default function AccountScreen() {
   const nicheLabel = effectiveNicheId ? String(effectiveNicheId).replace(/[_-]/g, ' ').toUpperCase() : 'SWISH';
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + Spacing.lg }]}>
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + Spacing.lg }]} showsVerticalScrollIndicator={false}>
       <StatusBar style="light" />
       <Text style={styles.eyebrow}>{nicheLabel} · MORE</Text>
       <Text style={styles.title}>More & workspace</Text>
@@ -59,12 +59,13 @@ export default function AccountScreen() {
           <Text style={styles.description}>Sign out of this SWISH account on this device.</Text>
         </View>
       </Pressable>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.background, paddingHorizontal: Spacing.base, gap: Spacing.md },
+  screen: { flex: 1, backgroundColor: Colors.background },
+  content: { paddingHorizontal: Spacing.base, gap: Spacing.md },
   eyebrow: { color: Colors.primary, fontSize: 11, fontWeight: '700', letterSpacing: 1.4 },
   title: { color: Colors.textPrimary, fontSize: 26, fontWeight: '800' },
   email: { color: Colors.textSecondary, fontSize: Typography.size.sm, marginBottom: Spacing.md },
