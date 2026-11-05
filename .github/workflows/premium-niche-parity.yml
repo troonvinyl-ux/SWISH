@@ -1,0 +1,77 @@
+name: Premium niche parity and eBay sync regressions
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'components/**'
+      - 'hooks/**'
+      - 'services/**'
+      - 'shared/**'
+      - 'supabase/functions/**'
+      - 'supabase/migrations/**'
+      - 'supabase/tests/**'
+      - '.github/workflows/premium-niche-parity.yml'
+      - 'niche-modules.json'
+permissions:
+  contents: read
+jobs:
+  regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts --package-lock=false
+      - name: Record exact tested commit
+        run: mkdir -p verification-output && git rev-parse HEAD > verification-output/source-sha.txt
+      - name: Coin inventory scope, pagination and preservation regressions
+        id: coins
+        continue-on-error: true
+        run: npx jest --config jest.config.ci.js --runInBand services/__tests__/coinInventoryRecovery.test.ts services/__tests__/inventoryNicheProjection.test.ts services/__tests__/inventoryTabStatus.test.ts --json --outputFile=verification-output/coin-inventory-jest.json
+      - name: Run pure and mocked parity regressions
+        id: parity
+        continue-on-error: true
+        run: npx jest --config jest.config.ci.js --runInBand services/__tests__/premiumNicheParity.test.ts services/__tests__/ebaySellingRequest.test.ts services/__tests__/antiqueWorkflow.test.ts services/__tests__/inventoryPhotoPersistence.test.ts services/__tests__/nicheScannerRoutes.test.ts --json --outputFile=verification-output/parity-jest.json
+      - name: Backend pressure, concurrency and timeout recovery regressions
+        id: recovery
+        if: always()
+        continue-on-error: true
+        run: npx jest --config jest.config.ci.js --runInBand services/__tests__/backendPoolRecovery.test.ts --json --outputFile=verification-output/backend-recovery-jest.json
+      - name: Full regression suite
+        id: full
+        if: always()
+        continue-on-error: true
+        run: npx jest --config jest.config.ci.js --runInBand --json --outputFile=verification-output/full-jest.json
+      - name: TypeScript and canonical backend parity
+        id: types
+        if: always()
+        continue-on-error: true
+        run: |
+          set +e
+          npx tsc --noEmit > verification-output/typescript.txt 2>&1
+          TYPES=$?
+          node scripts/sync-backend-registry.mjs --check > verification-output/backend-parity.txt 2>&1
+          PARITY=$?
+          node scripts/validate-foundation.mjs > verification-output/foundation.txt 2>&1
+          FOUNDATION=$?
+          test "$TYPES" = 0 && test "$PARITY" = 0 && test "$FOUNDATION" = 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: premium-parity-${{ github.sha }}
+          path: verification-output/
+          retention-days: 30
+      - name: Fail closed on any unsuccessful check
+        if: always()
+        env:
+          COINS: ${{ steps.coins.outcome }}
+          PARITY: ${{ steps.parity.outcome }}
+          FULL: ${{ steps.full.outcome }}
+          TYPES: ${{ steps.types.outcome }}
+          RECOVERY: ${{ steps.recovery.outcome }}
+        run: test "$COINS" = success && test "$PARITY" = success && test "$RECOVERY" = success && test "$FULL" = success && test "$TYPES" = success

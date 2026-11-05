@@ -3,6 +3,7 @@ import { Stack, useRouter, usePathname } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AlertProvider, AuthProvider } from '@/template';
 import { AppProvider } from '@/contexts/AppContext';
+import { TunesProvider } from '@/contexts/TunesContext';
 import { ManifestOpportunityProvider } from '@/contexts/ManifestOpportunityContext';
 import { WatchedLotsProvider } from '@/contexts/WatchedLotsContext';
 import { Colors } from '@/constants/theme';
@@ -82,6 +83,7 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <AuthProvider>
           <AppProvider>
+            <TunesProvider>
             <ManifestOpportunityProvider>
             <WatchedLotsProvider>
             <TVBackHandlerProvider>
@@ -150,6 +152,9 @@ export default function RootLayout() {
                 <Stack.Screen name="entry/bicycles" />
                 <Stack.Screen name="entry/clothing" />
                 <Stack.Screen name="entry/collectibles" />
+                <Stack.Screen name="entry/tunes-flip" />
+                <Stack.Screen name="music-search" options={{ headerShown:true,title:'Tunes Flip · Catalogue',headerStyle:{backgroundColor:Colors.surface},headerTintColor:Colors.textPrimary }} />
+                <Stack.Screen name="music-collection" options={{ headerShown:true,title:'Tunes Flip · Collection',headerStyle:{backgroundColor:Colors.surface},headerTintColor:Colors.textPrimary }} />
                 <Stack.Screen name="buy-decision" />
                 <Stack.Screen name="research" />
                 <Stack.Screen name="deep-id-lab" />
@@ -158,6 +163,7 @@ export default function RootLayout() {
             </TVBackHandlerProvider>
             </WatchedLotsProvider>
             </ManifestOpportunityProvider>
+            </TunesProvider>
           </AppProvider>
         </AuthProvider>
       </SafeAreaProvider>

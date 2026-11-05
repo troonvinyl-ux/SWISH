@@ -11,5 +11,6 @@ for(const [id,module] of Object.entries(registry.products)) {
  if(module.specialists.includes('curiosities_collectibles')) throw Error('Generic catch-all cannot be an unrestricted niche');
 }
 for(const route of ['index','scan','inventory','listings','account']) if(!fs.existsSync(`app/(tabs)/${route}.tsx`)) throw Error('Missing shared specialist footer: '+route);
-if(Object.keys(registry.products).length!==11) throw Error('Current portfolio must contain the eleven canonical modules');
-console.log('Canonical eleven-module source contracts validated. Runtime and device behavior are separate tests.');
+const originalIds=['coins','motocross','bicycles','clothing','trading_cards','antiques','fossils','beauty','tech','surplus_flip','collectibles'];
+if(originalIds.some(id=>!registry.products[id])||!registry.products.tunes_flip) throw Error('An existing module or Tunes Flip is missing');
+console.log('Canonical '+Object.keys(registry.products).length+'-module source contracts validated. Runtime and device behavior are separate tests.');

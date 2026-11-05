@@ -704,12 +704,11 @@ async function runGeminiMarketResearch(imageUrls: string[], title: string, speci
   const baseUrl = Deno.env.get('ONSPACE_AI_BASE_URL');
   if (!apiKey || !baseUrl || (imageUrls.length === 0 && !inlineImageBase64)) return { ...noResult, error: 'Gemini not configured or no images' };
 
-  const nicheContext = specialistId === 'collectibles' ? 'a specific collectible such as an action figure, toy, comic, board game, diecast/model vehicle, figurine or pop-culture memorabilia sold on eBay UK. Identify the precise sub-type before comparing prices'
-    : specialistId === 'bicycles' ? 'bicycle or cycling component sold on eBay UK'
+  const nicheContext = specialistId === 'bicycles' ? 'bicycle or cycling component sold on eBay UK'
     : specialistId === 'motocross' ? 'motocross or off-road motorcycle sold on eBay UK'
     : (specialistId === 'clothing' || specialistId === 'trainers_sneakers') ? 'vintage/branded clothing or trainers sold on eBay UK or Depop'
     : (specialistId.includes('coin') || ['islamic_silver','ancient_artefacts','gold','silver'].includes(specialistId)) ? 'coin, medal, or precious metal collectible sold on eBay UK'
-    : 'collectible or resale item sold on eBay UK';
+    : specialistId === 'vinyl_records' ? 'music release; exact artist, title, pressing, format, catalogue number, country and media/sleeve condition on eBay UK' : 'collectible or resale item sold on eBay UK';
 
   const profile = profileForSpecialist(specialistId);
   const knownInfo = Object.entries(attributes)
@@ -781,7 +780,7 @@ function buildSearchQueries(title: string, attributes: Record<string, any>, spec
   const sanitised = sanitiseTitle(title);
   const profile = profileForSpecialist(specialistId);
   if (profile && profile.nicheId !== 'coins') {
-    const identityKeys = ['brand','manufacturer','model','model_number','part_number','card_name','set','card_number','parallel','edition','product_name','shade','size','taxonomic_group','maker','pattern'];
+    const identityKeys = ['artist','release_title','format','catalogue_number','label','country','brand','manufacturer','model','model_number','part_number','card_name','set','card_number','parallel','edition','product_name','shade','size','taxonomic_group','maker','pattern'];
     const identity = identityKeys.map(key => typeof attributes[key] === 'string' ? attributes[key].trim() : '').filter(value=>value && !/unknown|not established/i.test(value)).join(' ').slice(0,100);
     if (identity.length >= 3) queries.push(identity);
     if (sanitised.length >= 3 && !queries.includes(sanitised)) queries.push(sanitised.slice(0,100));
@@ -942,6 +941,13 @@ function scoreListing(title: string, price: number, targetTitle: string, targetA
   const isClothing = specialistId === 'clothing' || specialistId === 'trainers_sneakers';
   const isCoin = specialistId.includes('coin') || ['islamic_silver','ancient_artefacts','gold','silver'].includes(specialistId);
 
+  if(specialistId==='vinyl_records') {
+    const catalogue=String(targetAttrs.catalogue_number??'').toLowerCase().trim();
+    const format=String(targetAttrs.format??'').toLowerCase();
+    if(catalogue&&!compLower.includes(catalogue)) return {score:0,reason:'Exact catalogue reference absent; pressing unverified'};
+    if(format.includes('vinyl')&&/\b(cd|cassette)\b/.test(compLower)) return {score:0,reason:'Different media format'};
+    if(format.includes('cd')&&/\b(vinyl|cassette)\b/.test(compLower)) return {score:0,reason:'Different media format'};
+  }
   if (isBike) { const brand = String(targetAttrs?.manufacturer ?? targetAttrs?.brand ?? '').toLowerCase(); const model = String(targetAttrs?.model ?? '').toLowerCase(); if (brand && compLower.includes(brand)) score += 0.15; if (model && model.length > 2 && compLower.includes(model.split(' ')[0])) score += 0.10; }
   if (isMX) { const make = String(targetAttrs?.manufacturer ?? targetAttrs?.brand ?? '').toLowerCase(); const engine = String(targetAttrs?.engine_size ?? '').replace(/[^0-9]/g, ''); if (make && compLower.includes(make)) score += 0.18; if (engine && compLower.includes(engine)) score += 0.10; }
   if (isClothing) { const brand = String(targetAttrs?.brand ?? '').toLowerCase(); if (brand && compLower.includes(brand)) score += 0.20; }

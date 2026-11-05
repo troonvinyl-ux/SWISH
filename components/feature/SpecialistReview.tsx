@@ -4,15 +4,16 @@ import { MaterialIcons } from '@expo/vector-icons';
 import type { AIIdentificationResult } from '@/services/aiIdentificationService';
 import type { SpecialistProfile } from '@/shared/specialistIntelligence';
 import { Colors,Spacing,Typography,Radius } from '@/constants/theme';
-interface SpecialistReviewProps { result:AIIdentificationResult; profile:SpecialistProfile|null; answers:Record<string,string>; disabled:boolean; onAnswer:(key:string,value:string)=>void; onTitle:(value:string)=>void }
-export const SpecialistReview=memo(function SpecialistReview({ result,profile,answers,disabled,onAnswer,onTitle }:SpecialistReviewProps) {
+interface SpecialistReviewProps { catalogueConfirmed?:boolean; result:AIIdentificationResult; profile:SpecialistProfile|null; answers:Record<string,string>; disabled:boolean; onAnswer:(key:string,value:string)=>void; onTitle:(value:string)=>void }
+export const SpecialistReview=memo(function SpecialistReview({ result,profile,answers,disabled,catalogueConfirmed=false,onAnswer,onTitle }:SpecialistReviewProps) {
   const analysis=result.specialistAnalysis;
   return <View style={s.card}>
-    <View style={s.row}><MaterialIcons name="fact-check" size={24} color={Colors.primary}/><Text style={s.title}>Review the evidence</Text></View>
-    <Text style={s.body}>AI proposal, not a verified identification. Saving does not publish a listing.</Text>
+    <View style={s.row}><MaterialIcons name="fact-check" size={24} color={Colors.primary}/><Text style={s.title}>{catalogueConfirmed?'Review confirmed release':'Review the evidence'}</Text></View>
+    <Text style={s.body}>{catalogueConfirmed?'Release details populated from the individual Discogs release you confirmed. Physical condition, completeness and playback still need your review. Saving does not publish a listing.':'AI proposal, not a verified identification. Saving does not publish a listing.'}</Text>
+    {catalogueConfirmed&&typeof result.attributes.discogs_release_url==='string'?<Pressable accessibilityRole="link" onPress={()=>void Linking.openURL(result.attributes.discogs_release_url).catch(()=>{})} style={({pressed})=>[s.link,pressed?s.pressed:null]}><Text style={s.linkText}>Data provided by Discogs. · Release #{result.attributes.discogs_release_id}</Text><MaterialIcons name="open-in-new" size={18} color={Colors.info}/></Pressable>:null}
     <Text style={s.label}>Item title · edit before saving</Text>
     <TextInput accessibilityLabel="Review item title" value={result.canonicalTitle} onChangeText={onTitle} editable={!disabled} style={s.input} multiline maxLength={300}/>
-    <Text style={s.body}>{Math.round(result.confidence*100)}% identification confidence · {result.identificationState ?? 'provisional'}</Text>
+    <Text style={s.body}>{catalogueConfirmed?`Catalogue identity: confirmed by you. Photo assessment: ${result.confidence>0?Math.round(result.confidence*100)+'% model confidence':'not run'}.`:`${Math.round(result.confidence*100)}% identification confidence · ${result.identificationState??'provisional'}`}</Text>
     {result.confidenceReason ? <Text style={s.body}>{result.confidenceReason}</Text> : null}
     <Text style={s.body}>{result.condition || 'Condition has not been established.'}</Text>
     {analysis ? <>
@@ -23,8 +24,8 @@ export const SpecialistReview=memo(function SpecialistReview({ result,profile,an
         {analysis.quality.nextPhoto ? <Text style={s.body}>Next useful image: {analysis.quality.nextPhoto}</Text> : null}
       </View>
       {profile?.fields.map(f=><View key={f.key} style={s.field}>
-        <Text style={s.label}>{f.label} · {(analysis.fields[f.key]?.basis ?? 'not established').replace(/_/g,' ')}</Text>
-        <TextInput accessibilityLabel={`Correct ${f.label}`} style={s.input} value={answers[f.key] ?? analysis.fields[f.key]?.value ?? ''} onChangeText={value=>onAnswer(f.key,value)} editable={!disabled} maxLength={500}/>
+        <Text style={s.label}>{f.label} · {answers[f.key]?.trim()?'your review':catalogueConfirmed&&analysis.fields[f.key]?.reason.startsWith('Data provided by Discogs.')?'Discogs · confirmed by you':(analysis.fields[f.key]?.basis ?? 'not established').replace(/_/g,' ')}</Text>
+        <TextInput accessibilityLabel={`Correct ${f.label}`} style={s.input} value={answers[f.key] ?? analysis.fields[f.key]?.value ?? (typeof result.attributes[f.key]==='string'?result.attributes[f.key]:'')} onChangeText={value=>onAnswer(f.key,value)} editable={!disabled&&!(catalogueConfirmed&&f.key==='discogs_release_id')} maxLength={500}/>
         {analysis.fields[f.key]?.reason ? <Text style={s.body}>{analysis.fields[f.key].reason}</Text> : null}
       </View>)}
       {analysis.followUps.length ? <Text style={s.title}>What would improve this result?</Text> : null}
@@ -38,7 +39,7 @@ export const SpecialistReview=memo(function SpecialistReview({ result,profile,an
     <Text style={s.label}>Supporting observations</Text>
     {result.evidenceSupporting.slice(0,6).map((text,index)=><Text key={index} style={s.body}>{text}</Text>)}
     {[...result.evidenceContradictory,...result.missingInformation,...result.warnings,...(analysis?.risks ?? [])].slice(0,12).map((text,index)=><View key={index} style={s.row}><MaterialIcons name="info-outline" size={18} color={Colors.warning}/><Text style={[s.body,s.flex]}>{text}</Text></View>)}
-    {profile ? <><Text style={s.label}>Specialist verification destinations</Text><Text style={s.body}>These are reference links, not sources automatically consulted for this item.</Text>{profile.sources.map(source=><Pressable key={source.url} onPress={()=>{ void Linking.openURL(source.url); }} style={({ pressed })=>[s.link,pressed ? s.pressed : null]} accessibilityRole="link"><Text style={s.linkText}>{source.label}</Text><MaterialIcons name="open-in-new" size={18} color={Colors.info}/></Pressable>)}</> : null}
+    {profile ? <><Text style={s.label}>Specialist verification destinations</Text><Text style={s.body}>{catalogueConfirmed?'Discogs catalogue details above were retrieved and confirmed by you. Other links are manual verification destinations.':'These are reference links, not sources automatically consulted for this item.'}</Text>{profile.sources.map(source=><Pressable key={source.url} onPress={()=>{ void Linking.openURL(source.url); }} style={({ pressed })=>[s.link,pressed ? s.pressed : null]} accessibilityRole="link"><Text style={s.linkText}>{source.label}</Text><MaterialIcons name="open-in-new" size={18} color={Colors.info}/></Pressable>)}</> : null}
   </View>;
 });
 const s=StyleSheet.create({ card:{ padding:Spacing.base,borderRadius:Radius.lg,backgroundColor:Colors.surface,gap:Spacing.md,borderWidth:1,borderColor:Colors.surfaceBorder },title:{ color:Colors.textPrimary,fontSize:Typography.size.lg,fontWeight:Typography.weight.bold },body:{ color:Colors.textSecondary,fontSize:Typography.size.base,lineHeight:26,includeFontPadding:false },label:{ color:Colors.textPrimary,fontSize:Typography.size.base,fontWeight:Typography.weight.semibold },input:{ minHeight:48,borderWidth:1,borderColor:Colors.info,borderRadius:Radius.md,padding:Spacing.md,backgroundColor:Colors.surfaceHighlight,color:Colors.textPrimary,fontSize:Typography.size.base,includeFontPadding:false },row:{ flexDirection:'row',gap:Spacing.sm,alignItems:'flex-start' },flex:{ flex:1 },field:{ gap:Spacing.sm },quality:{ backgroundColor:Colors.infoDim,padding:Spacing.md,borderRadius:Radius.md,gap:Spacing.sm },link:{ minHeight:48,flexDirection:'row',justifyContent:'space-between',alignItems:'center',gap:Spacing.md },linkText:{ color:Colors.info,fontSize:Typography.size.base,flex:1 },pressed:{ opacity:0.7 } });

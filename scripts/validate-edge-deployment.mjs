@@ -23,6 +23,7 @@ export function validateEdgeDeployment(root = process.cwd()) {
   }
 
   const mirrors = [
+    ['shared/identificationPolicy.ts', 'supabase/functions/_shared/identificationPolicy.ts'],
     ['shared/musicRelease.ts', 'supabase/functions/_shared/musicRelease.ts'],
     ['niche-modules.json', 'supabase/functions/_shared/niche-modules.json'],
     ['shared/nicheAuthorization.ts', 'supabase/functions/_shared/nicheAuthorization.ts'],

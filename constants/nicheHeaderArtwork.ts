@@ -8,6 +8,8 @@ export const UPLOADED_HEADER_NICHES: readonly ProductionNicheId[] = ['tech', 'bi
 
 export function getNicheHeaderArtwork(nicheId: ProductionNicheId): ImageSource | null {
   switch (nicheId) {
+    // Generation unavailable: music-specific photographic fallback, not another niche's image.
+    case 'tunes_flip': return { uri: 'https://images.unsplash.com/photo-1461360228754-6e81c478b882?w=1920&h=1120&auto=format&fit=crop&q=85' };
     case 'tech': return require('@/assets/images/headers/tech.jpeg');
     case 'bicycles': return require('@/assets/images/headers/bicycles.jpeg');
     case 'motocross': return require('@/assets/images/headers/motocross.jpeg');

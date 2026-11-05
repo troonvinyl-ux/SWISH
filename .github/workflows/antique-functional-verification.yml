@@ -21,7 +21,7 @@ jobs:
       - name: Run Antique workflow, photos, category and availability mocked regressions
         id: antique
         continue-on-error: true
-        run: npx jest --config jest.config.ci.js --runInBand services/__tests__/antiqueWorkflow.test.ts services/__tests__/inventoryPhotoPersistence.test.ts services/__tests__/antiqueCategoryAvailability.test.ts --json --outputFile=verification-output/antique-jest.json
+        run: npx jest --config jest.config.ci.js --runInBand services/__tests__/antiqueWorkflow.test.ts services/__tests__/inventoryPhotoPersistence.test.ts services/__tests__/antiqueCategoryAvailability.test.ts services/__tests__/ebayRevisionReadback.test.ts --json --outputFile=verification-output/antique-jest.json
       - name: Run complete service regression suite
         id: full
         if: always()
