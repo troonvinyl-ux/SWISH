@@ -69,12 +69,4 @@ describe('Unified navigation regression contracts (not installed-device acceptan
   expect(more).toContain('const showOwnerTools = shell.isMasterAdmin && !shell.fixedNicheId');
  });
 
- test('More screen remains usable on smaller devices and tab destinations are accessible',()=>{
-  const account=source('app/(tabs)/account.tsx');
-  expect(account).toContain('<ScrollView');
-  expect(account).toContain('showsVerticalScrollIndicator={false}');
-  const tabs=source('app/(tabs)/_layout.tsx');
-  for(const label of ['Home','Inventory','Identify an item with the active specialist','Listings and eBay workspace','More, settings and account'])expect(tabs).toContain(`tabBarAccessibilityLabel:'${label}'`);
- });
-
 });

@@ -30,6 +30,7 @@ import { getPartialImageItems } from '@/services/ebayImageService';
 import { getSupabaseClient } from '@/template';
 import { NICHES, NICHE_LIST, NicheId } from '@/constants/niches';
 import { FunctionsHttpError } from '@supabase/supabase-js';
+import { reviseSavedListing } from '@/services/ebayRevisionService';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -1436,27 +1437,12 @@ function DataSyncCard({ tenantId, onSyncComplete }: { tenantId: string; onSyncCo
             (u: string) => typeof u === 'string' && u.startsWith('https://')
           );
 
-          const { data: result, error: fnErr } = await supabase.functions.invoke('swish-ebay-list', {
-            body: {
-              route: 'revise',
-              tenantId,
-              listingId: row.id,
-              externalListingId: row.external_listing_id,
-              title: (item.canonical_title ?? row.title ?? '').slice(0, 80),
-              description: item.description ?? '',
-              price: Number(row.price ?? 0),
-              condition: item.condition ?? '',
-              conditionDescription: item.condition_grade ?? '',
-              listingType: 'FixedPriceItem',
-              quantity: Math.max(1, Number(item.quantity ?? 1)),
-              itemSpecifics,
-              mediaUrls,
-            },
-          });
+          // Same saved listing source and verified GetItem readback as the editor.
+          const { data: result, error: fnErr } = await reviseSavedListing(tenantId, row.id);
 
           if (fnErr || !result?.success) {
             failed++;
-            setPushAll(prev => ({ ...prev, failed }));
+            setPushAll(prev => ({ ...prev, failed, errorMsg: fnErr ?? result?.error ?? 'Live eBay fields were not verified.' }));
           } else {
             updated++;
             setPushAll(prev => ({ ...prev, updated }));
@@ -2099,7 +2085,7 @@ function DataSyncCard({ tenantId, onSyncComplete }: { tenantId: string; onSyncCo
         <View style={syncStyles.flex}>
           <Text style={syncStyles.cardTitle}>Push All Updates to eBay</Text>
           <Text style={syncStyles.cardDesc}>
-            Finds active listings where the SWISH item was edited after publishing and pushes the latest data (title, description, photos, item specifics) to eBay
+            Pushes saved listing copy, seller prices and selected photos through the shared revision workflow. Only live-readback-confirmed updates count as pushed.
           </Text>
         </View>
       </View>
@@ -2153,6 +2139,7 @@ function DataSyncCard({ tenantId, onSyncComplete }: { tenantId: string; onSyncCo
               </View>
             ))}
           </View>
+          {pushAll.errorMsg ? <Text accessibilityRole="alert" style={syncStyles.errorText}>{pushAll.errorMsg}</Text> : null}
           {pushAll.updated === 0 && pushAll.skipped > 0 ? (
             <Text style={[syncStyles.cardDesc, { textAlign: 'center' }]}>
               All {pushAll.skipped} active listing{pushAll.skipped !== 1 ? 's' : ''} already up-to-date on eBay

@@ -45,6 +45,7 @@ import { recordAIFeedback, FeedbackVerdict } from '@/services/aiLearningService'
 import { recordPrediction } from '@/services/predictionService';
 import { CONFIDENCE_THRESHOLDS } from '@/constants/config';
 import { SPECIALISTS } from '@/constants/specialists';
+import { InventoryAccountScope } from '@/components/feature/InventoryAccountScope';
 
 // ── KeenOnCoins brand colours ─────────────────────────────────────────────────
 const KOC = {
@@ -85,7 +86,7 @@ function matchGrade(diff: number, threshold1: number, threshold2: number, thresh
 export default function KeenOnCoinsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, setScanMode } = useApp();
+  const { tenant, setScanMode, triggerInventoryReload } = useApp();
   const { showAlert } = useAlert();
 
   const [step, setStep] = useState<KOCStep>('home');
@@ -358,6 +359,7 @@ export default function KeenOnCoinsScreen() {
     }
 
     setSavedItemId(item.id);
+    triggerInventoryReload();
 
     // Apply valuation if already fetched
     if (valuationResult) {
@@ -383,6 +385,7 @@ export default function KeenOnCoinsScreen() {
         const { urls } = await uploadItemImages(item.id, capturedImages);
         if (urls.length > 0) {
           await updateItemMedia(tenant.id, item.id, urls);
+          triggerInventoryReload();
           setUploadProgress(`${urls.length} photo${urls.length === 1 ? '' : 's'} saved`);
         } else {
           setUploadProgress('Photos saved locally');
@@ -405,7 +408,7 @@ export default function KeenOnCoinsScreen() {
         `Coins specialist identification at ${Math.round(idResult.confidence * 100)}% confidence`,
       ).catch(() => {});
     }
-  }, [idResult, tenant, capturedImages, valuationResult, showAlert]);
+  }, [idResult, tenant, capturedImages, valuationResult, showAlert, triggerInventoryReload]);
 
   // ── Paywall screen ───────────────────────────────────────────────────────
   if (tenant && !isEntitled) {
@@ -551,6 +554,7 @@ export default function KeenOnCoinsScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 40 }]}
         >
+          <InventoryAccountScope/>
           {/* Hero */}
           <View style={s.heroCard}>
             <View style={s.heroReticle}>

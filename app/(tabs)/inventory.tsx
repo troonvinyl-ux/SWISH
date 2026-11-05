@@ -14,6 +14,7 @@ import { resolveProductionNiche } from '@/services/nicheRouting';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { publishGeneratedListings, submitListingsInBulk } from '@/services/listingService';
 import type { InventoryTab, InventoryViewItem } from '@/services/inventoryViewService';
+import { InventoryAccountScope } from '@/components/feature/InventoryAccountScope';
 import BulkReValueSheet from '@/components/feature/BulkReValueSheet';
 import BulkReIdentifyModal from '@/components/feature/BulkReIdentifyModal';
 
@@ -52,9 +53,9 @@ const InventoryCard = memo(function InventoryCard({ item, tab, config, onOpen, o
       {tab === 'live' && item.listing?.watchers ? <Text style={s.sub}>{item.listing.watchers} watchers</Text> : null}
       {tab === 'sold' && item.soldAt ? <Text style={s.sub}>{new Date(item.soldAt).toLocaleDateString('en-GB')}</Text> : null}
     </View>
-    {tab !== 'sold' ? <Pressable accessibilityLabel={tab === 'stock' ? 'Create listing' : tab === 'draft' ? 'Submit draft' : 'End listing'} onPress={event => { event.stopPropagation(); onAction(); }} style={({ pressed }) => [s.action, { opacity: pressed ? 0.7 : 1 }]}>
+    {tab !== 'sold' ? <Pressable accessibilityLabel={tab === 'stock' ? 'Create listing' : tab === 'draft' ? 'Edit and review draft' : 'End listing'} onPress={event => { event.stopPropagation(); onAction(); }} style={({ pressed }) => [s.action, { opacity: pressed ? 0.7 : 1 }]}>
       <MaterialIcons name={tab === 'stock' ? 'sell' : tab === 'draft' ? 'send' : 'stop'} size={16} color={color} />
-      <Text style={[s.actionText, { color }]}>{tab === 'stock' ? 'List' : tab === 'draft' ? 'Submit' : 'End'}</Text>
+      <Text style={[s.actionText, { color }]}>{tab === 'stock' ? 'List' : tab === 'draft' ? 'Edit' : 'End'}</Text>
     </Pressable> : null}
   </Pressable>;
 });
@@ -66,12 +67,23 @@ export default function MasterInventoryScreen() {
   const [showReValue, setShowReValue] = useState(false); const [showReIdentify, setShowReIdentify] = useState(false);
   const [progress, setProgress] = useState<any>(null);
   const id = resolveProductionNiche(state.nicheId); const config = id ? NICHES[id] : NICHES.general;
+  // Coins open on the complete canonical collection, not an empty Stock subset.
+  const [selection, setSelection] = useState<{ scope: string; tab: InventoryTab | 'all' }>({ scope: '', tab: 'all' });
+  const showAllCoins = id === 'coins' && (selection.scope !== state.scope || selection.tab === 'all');
+  const itemTabs = useMemo(() => {
+    const result = new Map<string, InventoryTab>();
+    for (const tab of ['stock', 'draft', 'live', 'sold'] as const) for (const item of state.views[tab]) result.set(item.id, tab);
+    return result;
+  }, [state.views]);
+  const [searchScope, setSearchScope] = useState('');
+  const effectiveSearch = searchScope === state.scope ? search : '';
+  const effectiveFilter = searchScope === state.scope ? filter : '';
   const filters = FILTERS[id ?? ''] ?? [[`All ${config.terms.items}`, '']]; const banner = BANNERS[id ?? ''];
   const counts = { stock: state.views.stock.length, draft: state.views.draft.length, live: state.views.live.length, sold: state.views.sold.length };
-  const data = useMemo(() => state.views[state.activeTab].filter(item => {
-    const haystack = `${item.canonical_title} ${item.catalogueNumber ?? ''} ${item.inventoryId ?? ''} ${JSON.stringify(item.attributes)}`.toLowerCase();
-    return (!search.trim() || haystack.includes(search.trim().toLowerCase())) && (state.activeTab !== 'stock' || !filter || haystack.includes(filter));
-  }), [state.views, state.activeTab, search, filter]);
+  const data = useMemo(() => (showAllCoins ? state.allItems : state.views[state.activeTab]).filter(item => {
+    const haystack = `${item.canonical_title} ${item.catalogueNumber ?? ''} ${item.inventoryId ?? ''} ${item.ruler ?? ''} ${item.denomination ?? ''} ${item.mint ?? ''} ${item.material ?? ''} ${JSON.stringify(item.attributes)}`.toLowerCase();
+    return (!effectiveSearch.trim() || haystack.includes(effectiveSearch.trim().toLowerCase())) && (showAllCoins || state.activeTab !== 'stock' || !effectiveFilter || haystack.includes(effectiveFilter));
+  }), [state.allItems, state.views, state.activeTab, showAllCoins, effectiveSearch, effectiveFilter]);
   const closeBulk = () => { setShowReIdentify(false); setShowReValue(false); setProgress(null); void state.reload(); };
   const runSingleListing = async (item: InventoryViewItem) => {
     if (!tenant?.id || bulkListing || singleListingId) return;
@@ -129,44 +141,48 @@ export default function MasterInventoryScreen() {
       <View style={s.header}>
         <View style={s.headerIcon}><MaterialIcons name={config.icon as any} size={22} color={config.color} /></View>
         <View style={s.flex}><Text style={[s.headerTitle, { color: config.color }]}>{config.shortName} Inventory</Text>
-          <Text style={s.sub}>{counts.stock} in stock · {counts.draft} draft · {counts.live} live · {counts.sold} sold</Text></View>
+          <Text style={s.sub}>{state.error || !state.ready || state.loading ? 'Inventory counts not yet verified' : `${state.allItems.length} total · ${counts.stock} stock · ${counts.draft} draft · ${counts.live} live · ${counts.sold} sold`}</Text></View>
         {state.activeTab === 'sold' ? <Pressable onPress={state.syncSold} disabled={state.syncing} style={s.hBtn} accessibilityLabel="Sync sold orders"><MaterialIcons name="sync" size={20} color={config.color} /></Pressable> : null}
         {state.activeTab === 'stock' && data.length ? <>
           <Pressable onPress={() => setShowReValue(true)} style={s.hBtn} accessibilityLabel="Bulk revalue"><MaterialIcons name="travel-explore" size={20} color={config.color} /></Pressable>
           <Pressable onPress={() => setShowReIdentify(true)} style={s.hBtn} accessibilityLabel="Bulk reidentify"><MaterialIcons name="auto-awesome" size={20} color={Colors.accent} /></Pressable>
         </> : null}
-        {(state.activeTab === 'stock' || state.activeTab === 'draft') && data.length > 1 ? <Pressable onPress={runBulkListing} disabled={bulkListing} style={[s.bulkButton, { backgroundColor: config.color, opacity: bulkListing ? 0.6 : 1 }]} accessibilityLabel={state.activeTab === 'stock' ? 'Bulk list all visible stock' : 'Bulk publish all visible drafts'}>
+        {!showAllCoins && (state.activeTab === 'stock' || state.activeTab === 'draft') && data.length > 1 ? <Pressable onPress={runBulkListing} disabled={bulkListing} style={[s.bulkButton, { backgroundColor: config.color, opacity: bulkListing ? 0.6 : 1 }]} accessibilityLabel={state.activeTab === 'stock' ? 'Bulk list all visible stock' : 'Bulk publish all visible drafts'}>
           {bulkListing ? <ActivityIndicator size="small" color={Colors.background} /> : <MaterialIcons name="playlist-add-check" size={17} color={Colors.background} />}
           <Text style={s.bulkButtonText}>{bulkListing ? 'Listing…' : `List all ${data.length}`}</Text>
         </Pressable> : null}
         <Pressable onPress={() => router.push('/(tabs)/scan' as any)} style={[s.hBtn, { backgroundColor: config.color }]} accessibilityLabel="Add inventory"><MaterialIcons name="add" size={22} color={Colors.background} /></Pressable>
       </View>
       <View style={s.rail}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.railContent}>
-        {TABS.map(tab => <Pressable key={tab.id} onPress={() => state.setActiveTab(tab.id)} style={({ pressed }) => [s.chip, { borderColor: state.activeTab === tab.id ? tab.color : Colors.surfaceBorder, opacity: pressed ? 0.7 : 1 }]}>
-          <MaterialIcons name={tab.icon as any} size={16} color={state.activeTab === tab.id ? tab.color : Colors.textTertiary} />
-          <Text style={[s.chipText, { color: state.activeTab === tab.id ? tab.color : Colors.textSecondary }]}>{tab.label} {counts[tab.id]}</Text>
+        {id === 'coins' ? <Pressable accessibilityRole="tab" accessibilityState={{ selected: showAllCoins }} onPress={() => setSelection({ scope: state.scope, tab: 'all' })} style={({ pressed }) => [s.chip, { borderColor: showAllCoins ? config.color : Colors.surfaceBorder, opacity: pressed ? 0.7 : 1 }]}><Text style={[s.chipText, { color: showAllCoins ? config.color : Colors.textSecondary }]}>All Coins {state.ready && !state.error && !state.loading ? state.allItems.length : '—'}</Text></Pressable> : null}
+        {TABS.map(tab => <Pressable key={tab.id} accessibilityRole="tab" accessibilityState={{ selected: !showAllCoins && state.activeTab === tab.id }} onPress={() => { setSelection({ scope: state.scope, tab: tab.id }); state.setActiveTab(tab.id); }} style={({ pressed }) => [s.chip, { borderColor: !showAllCoins && state.activeTab === tab.id ? tab.color : Colors.surfaceBorder, opacity: pressed ? 0.7 : 1 }]}>
+          <MaterialIcons name={tab.icon as any} size={16} color={!showAllCoins && state.activeTab === tab.id ? tab.color : Colors.textTertiary} />
+          <Text style={[s.chipText, { color: !showAllCoins && state.activeTab === tab.id ? tab.color : Colors.textSecondary }]}>{tab.label} {state.ready && !state.error && !state.loading ? counts[tab.id] : '—'}</Text>
         </Pressable>)}
       </ScrollView></View>
       <View style={s.searchWrap}><MaterialIcons name="search" size={20} color={Colors.textTertiary} />
-        <TextInput accessibilityLabel={`Search ${config.terms.items}`} value={search} onChangeText={setSearch} placeholder={`Search ${config.terms.items.toLowerCase()}...`} placeholderTextColor={Colors.textTertiary} style={s.input} />
-        {search ? <Pressable onPress={() => setSearch('')} style={s.hBtn} accessibilityLabel="Clear search"><MaterialIcons name="close" size={18} color={Colors.textSecondary} /></Pressable> : null}
+        <TextInput accessibilityLabel={`Search ${config.terms.items}`} value={effectiveSearch} onChangeText={value => { setSearchScope(state.scope); setSearch(value); }} placeholder={`Search ${config.terms.items.toLowerCase()}...`} placeholderTextColor={Colors.textTertiary} style={s.input} />
+        {effectiveSearch ? <Pressable onPress={() => setSearch('')} style={s.hBtn} accessibilityLabel="Clear search"><MaterialIcons name="close" size={18} color={Colors.textSecondary} /></Pressable> : null}
       </View>
       {state.activeTab === 'stock' && banner ? <Pressable onPress={() => router.push(banner.route as any)} style={({ pressed }) => [s.banner, { opacity: pressed ? 0.85 : 1 }]}>
         <MaterialIcons name={banner.icon as any} size={22} color={config.color} /><View style={s.flex}><Text style={[s.bannerTitle, { color: config.color }]}>{banner.title}</Text><Text style={s.sub}>{banner.sub}</Text></View><MaterialIcons name="arrow-forward" size={20} color={config.color} />
       </Pressable> : null}
-      {state.activeTab === 'stock' && filters.length > 1 ? <View style={s.rail}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.railContent}>
-        {filters.map(([label, value]) => <Pressable key={value} onPress={() => setFilter(value)} style={({ pressed }) => [s.chip, { borderColor: filter === value ? config.color : Colors.surfaceBorder, opacity: pressed ? 0.7 : 1 }]}><Text style={[s.chipText, { color: filter === value ? config.color : Colors.textSecondary }]}>{label}</Text></Pressable>)}
+      {!showAllCoins && state.activeTab === 'stock' && filters.length > 1 ? <View style={s.rail}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.railContent}>
+        {filters.map(([label, value]) => <Pressable key={value} onPress={() => { setSearchScope(state.scope); setFilter(value); }} style={({ pressed }) => [s.chip, { borderColor: effectiveFilter === value ? config.color : Colors.surfaceBorder, opacity: pressed ? 0.7 : 1 }]}><Text style={[s.chipText, { color: effectiveFilter === value ? config.color : Colors.textSecondary }]}>{label}</Text></Pressable>)}
       </ScrollView></View> : null}
       <Pressable accessibilityRole="button" accessibilityLabel="Analyse a pallet, job lot or collection manifest" onPress={() => router.push('/lot-opportunity' as any)} style={({ pressed }) => [s.banner, { opacity: pressed ? 0.7 : 1 }]}>
         <MaterialIcons name="account-tree" size={24} color={config.color} /><View style={s.flex}><Text style={[s.bannerTitle, { color: config.color }]}>Buy a lot · split & sell</Text><Text style={s.sub}>Manifest → max bid → unit / bundle economics → drafts</Text></View>
       </Pressable>
-      <Text style={s.info}>{state.activeTab === 'draft' ? 'Drafts are saved in SWISH — Submit publishes to eBay' : state.activeTab === 'live' ? 'Live excludes sold, ended and completed records in this niche. Sync checks current eBay availability.' : state.activeTab === 'sold' ? 'Sync pulls orders from your connected eBay account' : `${filters.find(entry => entry[1] === filter)?.[0] ?? 'In Stock'} · ${data.length} items`}</Text>
-      {state.error ? <Text style={s.error}>{state.error}</Text> : null}
-      <FlatList style={s.flex} data={data} keyExtractor={item => `${state.activeTab}-${item.id}-${item.listing?.id ?? ''}`} showsVerticalScrollIndicator={false} contentContainerStyle={s.list} refreshing={state.refreshing} onRefresh={state.refresh}
+      <Text style={s.info}>{showAllCoins ? `All Coins · ${data.length} shown · Original records from this account only` : state.activeTab === 'draft' ? 'Drafts are saved in SWISH — Submit publishes to eBay' : state.activeTab === 'live' ? 'Live excludes sold, ended and completed records in this niche. Sync checks current eBay availability.' : state.activeTab === 'sold' ? 'Sync pulls orders from your connected eBay account' : `${filters.find(entry => entry[1] === filter)?.[0] ?? 'In Stock'} · ${data.length} items`}</Text>
+      {state.error ? <View style={s.syncError}><Text accessibilityRole="alert" style={s.syncErrorText}>{state.error} Inventory is not confirmed empty.</Text><Pressable onPress={() => void state.refresh()} style={({ pressed }) => [s.hBtn, { opacity: pressed ? 0.7 : 1 }]}><Text style={s.chipText}>Retry</Text></Pressable></View> : null}
+      <FlatList style={s.flex} data={data} keyExtractor={item => showAllCoins ? item.id : `${state.activeTab}-${item.id}-${item.listing?.id ?? ''}`} ListHeaderComponent={id === 'coins' ? <View style={s.scopePanel}><InventoryAccountScope total={state.allItems.length} verified={state.ready && !state.loading} error={state.error}/></View> : null} showsVerticalScrollIndicator={false} contentContainerStyle={s.list} refreshing={state.refreshing} onRefresh={state.refresh}
         ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
-        renderItem={({ item }) => <InventoryCard item={item} tab={state.activeTab} config={config} onOpen={() => router.push(`/stock-listing/${item.id}` as any)} onAction={() => state.activeTab === 'stock' ? void runSingleListing(item) : state.activeTab === 'draft' ? void state.submit(item) : state.end(item)} />}
-        ListEmptyComponent={<View style={s.empty}><MaterialIcons name={config.icon as any} size={40} color={config.color} /><Text style={s.emptyTitle}>{state.loading ? 'Loading inventory...' : `No ${state.activeTab === 'stock' ? config.terms.items.toLowerCase() + ' in stock' : state.activeTab + ' items'}`}</Text>
-          <Text style={s.emptyText}>{search ? 'Try another search or filter.' : state.activeTab === 'stock' ? 'Capture an item to start preparing a listing.' : state.activeTab === 'draft' ? 'Tap List on an in-stock item to create a draft.' : state.activeTab === 'sold' ? 'Sold records appear after order synchronization.' : 'Submit a draft to publish it on eBay.'}</Text>
+        renderItem={({ item }) => {
+          const tab = showAllCoins ? itemTabs.get(item.id) ?? 'stock' : state.activeTab;
+          return <InventoryCard item={item} tab={tab} config={config} onOpen={() => router.push(`/stock-listing/${item.id}` as any)} onAction={() => tab === 'stock' ? router.push(`/create-listing?id=${item.id}` as any) : tab === 'draft' && item.listing?.id ? router.push(`/ebay-listing-editor?id=${item.listing.id}` as any) : state.end(item)} />;
+        }}
+        ListEmptyComponent={<View style={s.empty}><MaterialIcons name={config.icon as any} size={40} color={config.color} /><Text style={s.emptyTitle}>{state.error ? 'Inventory could not be verified' : state.loading ? 'Loading authorised inventory...' : showAllCoins ? 'No coins in this account and workspace' : `No ${state.activeTab === 'stock' ? config.terms.items.toLowerCase() + ' in stock' : state.activeTab + ' items'}`}</Text>
+          <Text style={s.emptyText}>{state.error ? 'Retry the read; no records have been deleted or recreated.' : effectiveSearch ? 'Try another search or filter.' : showAllCoins ? 'Check the signed-in email and workspace above. Existing collections stay with their original account.' : state.activeTab === 'stock' ? 'Capture an item to start preparing a listing.' : state.activeTab === 'draft' ? 'Tap List on an in-stock item to create a draft.' : state.activeTab === 'sold' ? 'Sold records appear after order synchronization.' : 'Submit a draft to publish it on eBay.'}</Text>
           {state.activeTab === 'stock' ? <Pressable onPress={() => router.push('/(tabs)/scan' as any)} style={[s.emptyButton, { backgroundColor: config.color }]}><Text style={s.buttonText}>Add {config.terms.item}</Text></Pressable> : state.activeTab === 'sold' ? <Pressable onPress={state.syncSold} style={[s.emptyButton, { backgroundColor: config.color }]}><Text style={s.buttonText}>{state.syncing ? 'Syncing...' : 'Sync from eBay'}</Text></Pressable> : null}
         </View>}
       />
@@ -177,7 +193,7 @@ export default function MasterInventoryScreen() {
   </SafeAreaView>;
 }
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background }, flex: { flex: 1 },
+  container: { flex: 1, backgroundColor: Colors.background }, flex: { flex: 1 }, scopePanel: { marginBottom: Spacing.base },
   header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, padding: Spacing.base, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder, flexWrap: 'wrap' }, bulkButton: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: Spacing.md, borderRadius: Radius.md }, bulkButtonText: { color: Colors.background, fontSize: Typography.size.xs, fontWeight: Typography.weight.bold }, headerIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.surface, borderRadius: Radius.md }, headerTitle: { fontSize: Typography.size.xl, fontWeight: Typography.weight.bold }, sub: { color: Colors.textTertiary, fontSize: Typography.size.xs, lineHeight: 18 }, hBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.md, backgroundColor: Colors.surface },
   rail: { minHeight: 52, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder }, railContent: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, paddingHorizontal: Spacing.base, paddingVertical: Spacing.sm }, chip: { height: 40, borderRadius: Radius.md, borderWidth: 1, backgroundColor: Colors.surface, paddingHorizontal: Spacing.md, gap: Spacing.xs, flexDirection: 'row', alignItems: 'center' }, chipText: { fontSize: Typography.size.xs, fontWeight: Typography.weight.semibold }, searchWrap: { height: 48, margin: Spacing.base, marginVertical: Spacing.sm, paddingLeft: Spacing.sm, flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surface, borderRadius: Radius.md }, input: { flex: 1, padding: Spacing.sm, color: Colors.textPrimary, fontSize: Typography.size.base, includeFontPadding: false },
   banner: { marginHorizontal: Spacing.base, padding: Spacing.md, borderRadius: Radius.lg, backgroundColor: Colors.surfaceHighlight, flexDirection: 'row', gap: Spacing.md, alignItems: 'center' }, bannerTitle: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold }, info: { fontSize: Typography.size.xs, lineHeight: 18, color: Colors.textTertiary, padding: Spacing.sm, paddingHorizontal: Spacing.base }, error: { color: Colors.danger, padding: Spacing.base, fontSize: Typography.size.base }, list: { paddingHorizontal: Spacing.base, paddingTop: Spacing.sm, paddingBottom: Spacing.xl },

@@ -162,6 +162,8 @@ export async function getMarketValue(params: {
   applyToItem?: boolean;
   /** Stored item image URLs to pass for Gemini vision + eBay visual search */
   imageUrls?: string[];
+  /** Original capture encoded for in-memory research; never stored in the database. */
+  imageBase64?: string;
 }): Promise<{ result: MarketValueResult | null; error: string | null }> {
   try {
     if (!params.tenantId?.trim() || !resolveProductionNiche(params.specialistId)) return { result: null, error: 'Select a registered specialist and business before researching value.' };

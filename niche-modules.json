@@ -47,7 +47,7 @@
         "silver-batch.tsx",
         "deep-id-lab.tsx"
       ],
-      "modulePath": "/coins", "scannerRoute": "/coin-flipper?tab=capture"
+      "modulePath": "/coins", "scannerRoute": "/capture"
     },
     "motocross": {
       "id": "motocross",
@@ -74,7 +74,7 @@
         "flipper-mx.tsx",
         "mx-acquisition.tsx"
       ],
-      "modulePath": "/mx", "scannerRoute": "/flipper-mx"
+      "modulePath": "/mx", "scannerRoute": "/capture"
     },
     "bicycles": {
       "id": "bicycles",
@@ -102,7 +102,7 @@
       "dedicatedRoutes": [
         "bike-flipper.tsx"
       ],
-      "modulePath": "/bikes", "scannerRoute": "/bike-flipper"
+      "modulePath": "/bikes", "scannerRoute": "/capture"
     },
     "clothing": {
       "id": "clothing",
@@ -135,7 +135,7 @@
       "dedicatedRoutes": [
         "threads-flip.tsx"
       ],
-      "modulePath": "/threads", "scannerRoute": "/threads-flip?tab=identify"
+      "modulePath": "/threads", "scannerRoute": "/capture"
     },
     "trading_cards": {
       "id": "trading_cards",
@@ -284,7 +284,7 @@
       "dedicatedRoutes": [
         "surplus-flip.tsx"
       ],
-      "modulePath": "/surplus", "scannerRoute": "/surplus-flip"
+      "modulePath": "/surplus", "scannerRoute": "/capture"
     },
     "collectibles": {
       "id": "collectibles", "name": "Collectibles Flipper", "slug": "swish-collectibles-flipper",
@@ -292,7 +292,7 @@
       "entry": "entry/collectibles.tsx", "home": null, "modulePath": "/entry/collectibles",
       "aliases": ["collectibles_flipper", "collectibles-flipper"],
       "specialists": ["collectibles"], "legacySpecialists": [], "defaultSpecialist": "collectibles", "dedicatedRoutes": [], "scannerRoute": "/capture",
-      "buildSharedRoutes": ["+not-found.tsx", "_layout.tsx", "index.tsx", "login.tsx", "onboarding.tsx", "capture.tsx", "create-listing.tsx", "ebay-account.tsx", "ebay-listing-editor.tsx", "listing-preflight.tsx", "photo-quality-check.tsx", "review-required.tsx", "settings.tsx", "subscription.tsx", "privacy-policy.tsx", "item/[id].tsx", "stock-listing/[id].tsx", "(tabs)/_layout.tsx", "(tabs)/account.tsx", "(tabs)/index.tsx", "(tabs)/inventory.tsx", "(tabs)/listings.tsx", "(tabs)/scan.tsx", "marketplaces.tsx", "research.tsx", "orders.tsx"]
+      "buildSharedRoutes": ["+not-found.tsx", "_layout.tsx", "index.tsx", "login.tsx", "onboarding.tsx", "capture.tsx", "create-listing.tsx", "ebay-account.tsx", "ebay-listing-editor.tsx", "listing-preflight.tsx", "photo-quality-check.tsx", "review-required.tsx", "settings.tsx", "subscription.tsx", "privacy-policy.tsx", "item/[id].tsx", "stock-listing/[id].tsx", "(tabs)/_layout.tsx", "(tabs)/account.tsx", "(tabs)/index.tsx", "(tabs)/inventory.tsx", "(tabs)/listings.tsx", "(tabs)/scan.tsx", "marketplaces.tsx", "research.tsx", "specialist-workspace.tsx", "ebay-hub.tsx", "app-updates.tsx"]
     }
   },
   "contractVersion": 1,
@@ -305,6 +305,7 @@
     "analytics"
   ],
   "sharedRoutes": [
+    "specialist-workspace.tsx",
     "+not-found.tsx",
     "_layout.tsx",
     "index.tsx",

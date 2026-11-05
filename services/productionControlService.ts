@@ -41,7 +41,8 @@ function isPull(value: unknown): value is ProductionPull {
   return isObject(value) && typeof value.number === 'number' && typeof value.title === 'string' && typeof value.html_url === 'string' && typeof value.draft === 'boolean' && isObject(value.head) && isProductionCommit(value.head.sha) && typeof value.head.ref === 'string' && isObject(value.base) && typeof value.base.ref === 'string';
 }
 const workflowDefinitions = [
-  { file: 'branded-web-builds.yml', label: 'Ten-niche web builds' },
+  { file: 'build-swish-unified.yml', label: 'Unified Android, iOS and Expo web builds' },
+  { file: 'branded-web-builds.yml', label: 'Registered niche web builds' },
   { file: 'niche-config-checks.yml', label: 'Regression, security and native bundle' },
   { file: 'production-readiness-register.yml', label: 'Production register validation' },
   { file: 's2-s3-foundation.yml', label: 'S2–S3 foundation acceptance' },
@@ -102,7 +103,7 @@ async function getWorkflow(file: string, label: string): Promise<ProductionWorkf
     // Fetch independently: artifact failures must never erase successful job evidence.
     const responses = await Promise.allSettled([
       getJson<{ jobs: ProductionJob[]; total_count: number }>(`${api}/actions/runs/${result.run.id}/jobs?per_page=100&filter=latest`),
-      ...(file === 'branded-web-builds.yml' ? [getJson<{ artifacts: ProductionArtifact[]; total_count: number }>(`${api}/actions/runs/${result.run.id}/artifacts?per_page=100`)] : []),
+      getJson<{ artifacts: ProductionArtifact[]; total_count: number }>(`${api}/actions/runs/${result.run.id}/artifacts?per_page=100`),
     ]);
     const jobs = responses[0];
     if (jobs.status === 'fulfilled') {
@@ -176,9 +177,10 @@ async function loadSnapshot(): Promise<ProductionSnapshot> {
   const modules = data<{ products: Record<string, ProductionNiche> }>(1, 'Niche registry');
   const products = modules?.products;
   const niches = products && typeof products === 'object' && !Array.isArray(products) ? Object.values(products) : [];
-  const validNiches = niches.length === 10 && Object.entries(products ?? {}).every(([id, niche]) => niche && niche.id === id && typeof niche.name === 'string' && niche.name.trim().length > 0 && typeof niche.entry === 'string' && niche.entry.trim().length > 0) && new Set(niches.map(niche => niche.id)).size === 10;
+  const expectedNiches = Object.keys(bundledModules.products).length;
+  const validNiches = niches.length === expectedNiches && Object.entries(products ?? {}).every(([id, niche]) => niche && niche.id === id && typeof niche.name === 'string' && niche.name.trim().length > 0 && typeof niche.entry === 'string' && niche.entry.trim().length > 0) && new Set(niches.map(niche => niche.id)).size === expectedNiches;
   const validation = validateProductionRegister(registerJson, validNiches ? niches.map(niche => niche.id) : []);
-  if (!validNiches) errors.push('Canonical registry must contain ten complete, unique niche registrations.');
+  if (!validNiches) errors.push('Canonical registry must contain all registered complete, unique niche identities.');
   errors.push(...validation);
   const pulls = data<ProductionPull[]>(2, 'Pull requests');
   const runs = data<{ workflow_runs: ProductionRun[] }>(3, 'Recent workflows');

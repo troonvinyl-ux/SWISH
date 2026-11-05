@@ -15,7 +15,7 @@ export function syncBackendRegistry(root = process.cwd(), check = false) {
 }
 // These byte-identical deployment assets are generated from shared/; never edit
 // them as independent rules. OnSpace deploys supabase/functions, not the repo root.
-export const BACKEND_SHARED_ASSETS = ['nicheAuthorization.ts', 'specialistIntelligence.ts', 'ebayMessagePagination.ts', 'ebayImportScope.ts', 'antiqueListingPolicy.ts', 'ebaySellingRequest.ts'];
+export const BACKEND_SHARED_ASSETS = ['nicheAuthorization.ts', 'specialistIntelligence.ts', 'ebayMessagePagination.ts', 'ebayImportScope.ts', 'antiqueListingPolicy.ts', 'ebaySellingRequest.ts', 'ebayRevisionContract.ts'];
 export function syncBackendSharedAssets(root = process.cwd(), check = false) {
   for (const name of BACKEND_SHARED_ASSETS) {
     const source = fs.readFileSync(path.join(root, 'shared', name), 'utf8');

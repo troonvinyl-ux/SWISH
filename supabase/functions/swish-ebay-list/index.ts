@@ -31,6 +31,8 @@
 //   get_category_suggestions— search only live/cached eBay leaf categories
 
 import { serveModule } from '../_shared/moduleScope.ts';
+import { descriptionXml, verifyRevisionContent } from '../_shared/ebayRevisionContract.ts';
+import { parseLiveContent } from '../_shared/ebayLiveContent.ts';
 import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
@@ -1196,7 +1198,7 @@ function buildBuyItNowXML(params: {
   <RequesterCredentials><eBayAuthToken>${params.token}</eBayAuthToken></RequesterCredentials>
   <Item>
     <Title>${xmlEscape(params.title.slice(0, 80))}</Title>
-    <Description><![CDATA[${params.description.replace(/\]\]>/g, ']]]]><![CDATA[>')}]]></Description>
+    ${descriptionXml(params.description)}
     <PrimaryCategory><CategoryID>${xmlEscape(params.categoryId)}</CategoryID></PrimaryCategory>
     <StartPrice currencyID="GBP">${params.price.toFixed(2)}</StartPrice>
     <Currency>GBP</Currency>
@@ -1236,7 +1238,7 @@ function buildAuctionXML(params: {
   <RequesterCredentials><eBayAuthToken>${params.token}</eBayAuthToken></RequesterCredentials>
   <Item>
     <Title>${xmlEscape(params.title.slice(0, 80))}</Title>
-    <Description><![CDATA[${params.description.replace(/\]\]>/g, ']]]]><![CDATA[>')}]]></Description>
+    ${descriptionXml(params.description)}
     <PrimaryCategory><CategoryID>${xmlEscape(params.categoryId)}</CategoryID></PrimaryCategory>
     <StartPrice currencyID="GBP">${params.startPrice.toFixed(2)}</StartPrice>
     ${reservePriceXml}
@@ -1278,7 +1280,7 @@ function buildReviseBuyItNowXML(params: {
     <ItemID>${xmlEscape(params.externalItemId)}</ItemID>
     ${skuXml}
     <Title>${xmlEscape(params.title.slice(0, 80))}</Title>
-    <Description><![CDATA[${params.description.replace(/\]\]>/g, ']]]]><![CDATA[>')}]]></Description>
+    ${descriptionXml(params.description)}
     ${categoryXml}
     <StartPrice currencyID="GBP">${params.price.toFixed(2)}</StartPrice>
     <Quantity>${Math.max(1, params.quantity)}</Quantity>
@@ -1294,7 +1296,7 @@ function buildReviseBuyItNowXML(params: {
 
 function buildReviseAuctionXML(params: {
   token: string; externalItemId: string; title: string; description: string;
-  categoryId: string; conditionId: string; reservePrice?: number;
+  categoryId: string; conditionId: string; startPrice: number; reservePrice?: number;
   itemSpecifics: Array<{ name: string; value: string }>;
   mediaUrls: string[]; sellerProfilesXml: string; sku?: string; conditionDescription?: string;
 }): string {
@@ -1313,8 +1315,9 @@ function buildReviseAuctionXML(params: {
     <ItemID>${xmlEscape(params.externalItemId)}</ItemID>
     ${skuXml}
     <Title>${xmlEscape(params.title.slice(0, 80))}</Title>
-    <Description><![CDATA[${params.description.replace(/\]\]>/g, ']]]]><![CDATA[>')}]]></Description>
+    ${descriptionXml(params.description)}
     ${categoryXml}
+    <StartPrice currencyID="GBP">${params.startPrice.toFixed(2)}</StartPrice>
     ${reservePriceXml}
     ${params.conditionId ? `<ConditionID>${xmlEscape(params.conditionId)}</ConditionID>` : ''}
     ${params.conditionDescription ? `<ConditionDescription>${xmlEscape(params.conditionDescription)}</ConditionDescription>` : ''}
@@ -1346,7 +1349,7 @@ async function handleRequest(req: Request): Promise<Response> {
   if (!auth.ok) return jsonResponse({ error: auth.error }, 401);
 
   // Apply the same stored-resource entitlement gate before EVERY marketplace write.
-  if (['publish', 'revise', 'end', 'revise_sku'].includes(route)) {
+  if (['publish', 'revise', 'end', 'revise_sku', 'inspect_live'].includes(route)) {
     if (!body.listingId || !auth.userId) return jsonResponse({ error: 'Authenticated saved listing required.' }, 400);
     const { data: resource, error: resourceError } = await supabase.from('listings')
       .select('item_id, items!inner(tenant_id,specialist_id,attributes)')
@@ -2027,102 +2030,45 @@ async function handleRequest(req: Request): Promise<Response> {
     return jsonResponse({ success: true, externalListingId: savedExternalListingId, inventoryStatusPreserved: preserveInventoryStatus });
   }
 
-  // ── Route: revise ─────────────────────────────────────────────────────────
-  if (route === 'revise') {
-    const {
-      listingId, externalListingId, title = '', description: bodyDescription, price = 0,
-      condition = '', conditionDescription = '', listingType = 'FixedPriceItem',
-      quantity = 1, itemSpecifics = [], mediaUrls: rawMediaUrls = [], categoryId: bodyCategoryId = '', sku = '',
-    } = body;
-    if (!listingId || !externalListingId) return jsonResponse({ error: 'Saved listingId and externalListingId required for revise' }, 400);
+  // Shared read-only live-content inspection and saved-content revision.
+  if (route === 'revise' || route === 'inspect_live') {
+    const { listingId } = body;
     const { data: ownedListing, error: ownershipError } = await supabase.from('listings')
-      .select('id, item_id, external_listing_id, items!inner(tenant_id,specialist_id,attributes,media,condition_notes)')
+      .select('id,item_id,external_listing_id,title,description,price,category_id,updated_at,items!inner(tenant_id,specialist_id,attributes,media,condition_notes,condition,quantity,sku)')
       .eq('id', listingId).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle();
-    if (ownershipError || !ownedListing || String(ownedListing.external_listing_id) !== String(externalListingId) ||
-        (ownedListing as any).items?.tenant_id !== tenantId) return jsonResponse({ error: 'Listing identity could not be authorized' }, 403);
-    if (typeof title !== 'string' || !title.trim() || !Number.isFinite(Number(price)) || Number(price) <= 0) return jsonResponse({ error: 'Valid title and price required' }, 400);
-
-    // Never let an omitted/empty client description silently erase the live listing.
-    // Use the saved listing description as the fallback; a non-empty editor value wins.
-    let description = typeof bodyDescription === 'string' ? bodyDescription : '';
-
-    // BUG A FIX: Read category from DB listings table if not supplied in body
-    // The client passes the UI-selected category, but if the client media is empty
-    // or the category was already saved to the DB, prefer the DB value.
-    let resolvedCategoryId = bodyCategoryId || '';
-    let resolvedItemSpecifics: Array<{ name: string; value: string }> = Array.isArray(itemSpecifics)
-      ? itemSpecifics.filter((s: any) => s && typeof s.name === 'string' && typeof s.value === 'string' && s.name.trim() && s.value.trim())
-          .map((s: any) => ({ name: s.name.trim().slice(0, 65), value: s.value.trim().slice(0, 65) }))
-      : [];
-    let resolvedMediaUrls: string[] = ((rawMediaUrls as string[]) || []).filter(
-      (u: string) => typeof u === 'string' && u.startsWith('https://')
-    );
-
-    if (listingId) {
-      try {
-        const { data: lRow } = await supabase
-          .from('listings')
-          .select('category_id, description, title, price, items(media, attributes, specialist_id)')
-          .eq('id', listingId)
-          .eq('tenant_id', tenantId)
-          .maybeSingle();
-
-        // BUG A FIX: Use DB category_id if body didn't supply one
-        if (!resolvedCategoryId && lRow?.category_id) {
-          resolvedCategoryId = lRow.category_id;
-          console.log(`[SWISH revise] Category resolved from DB: categoryId=${resolvedCategoryId}`);
-        }
-
-        // Merge saved item specifics as a fallback. Explicit values from this editor
-        // take precedence; saved values fill gaps if an older client omits them.
-        const dbAttrs: Record<string, any> = (lRow as any)?.items?.attributes ?? {};
-        const dbSpecifics = Array.isArray(dbAttrs.ebay_item_specifics) ? dbAttrs.ebay_item_specifics : [];
-        const specificNames = new Set(resolvedItemSpecifics.map(s => s.name.toLocaleLowerCase()));
-        for (const saved of dbSpecifics) {
-          const name = String(saved?.name ?? '').trim();
-          const value = String(saved?.value ?? '').trim();
-          if (!name || !value || specificNames.has(name.toLocaleLowerCase())) continue;
-          resolvedItemSpecifics.push({ name: name.slice(0, 65), value: value.slice(0, 65) });
-          specificNames.add(name.toLocaleLowerCase());
-        }
-
-        // Preserve the saved description when the client omitted it or sent an empty string.
-        if (!description.trim() && typeof lRow?.description === 'string' && lRow.description.trim()) {
-          description = lRow.description;
-          console.log(`[SWISH revise] Description recovered from saved listing ${listingId}`);
-        }
-
-        // BUG E FIX: If the client passed 0 media URLs, resolve from DB item
-        // An empty client media array NEVER means the listing has no images.
-        if (resolvedMediaUrls.length === 0) {
-          const dbMedia: string[] = ((lRow as any)?.items?.media ?? []);
-          resolvedMediaUrls = dbMedia.filter((u: string) => typeof u === 'string' && u.startsWith('https://'));
-          if (resolvedMediaUrls.length > 0) {
-            console.log(`[SWISH revise] Media resolved from DB: ${resolvedMediaUrls.length} URLs for listing ${listingId}`);
-          } else {
-            // Last resort: check attributes for _ebay_item_id and note it for the user
-            const attrs: Record<string, any> = (lRow as any)?.items?.attributes ?? {};
-            const ebayItemId = attrs['_ebay_item_id'];
-            if (ebayItemId) {
-              console.log(`[SWISH revise] No media in DB either — _ebay_item_id=${ebayItemId} exists but images not yet downloaded. Revision will proceed without images (existing eBay images preserved).`);
-            }
-          }
-        }
-      } catch (e: any) {
-        console.log(`[SWISH revise] DB lookup failed: ${e.message}`);
-      }
+    const ownedItem: any = (ownedListing as any)?.items;
+    const externalListingId = String(ownedListing?.external_listing_id ?? '').trim();
+    if (ownershipError || !ownedListing || ownedItem?.tenant_id !== tenantId || !/^\d+$/.test(externalListingId) ||
+      (body.externalListingId && String(body.externalListingId) !== externalListingId)) return jsonResponse({ success: false, error: 'Listing identity could not be authorized.' }, 403);
+    const creds = await getEbayCredentials(supabase, tenantId, route === 'revise');
+    if ('error' in creds) return jsonResponse({ success: false, error: creds.error }, 400);
+    const readLive = async () => {
+      const requestXml = `<?xml version="1.0" encoding="utf-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials><eBayAuthToken>${xmlEscape(creds.accessToken)}</eBayAuthToken></RequesterCredentials><ItemID>${externalListingId}</ItemID><DetailLevel>ReturnAll</DetailLevel></GetItemRequest>`;
+      const result = await callEbayTradingApi(requestXml, 'GetItem', creds.clientId);
+      if (!result.ok) throw new Error(friendlyError(parseErrors(result.xml), 'Live eBay content could not be retrieved.'));
+      return parseLiveContent(result.xml, externalListingId);
+    };
+    if (route === 'inspect_live') {
+      try { return jsonResponse({ success: true, live: await readLive() }); }
+      catch { return jsonResponse({ success: false, error: 'Live eBay description and seller price could not be checked. Saved edits were preserved.' }, 502); }
     }
-
-    // Log the revise parameters for diagnostics
-    console.log(
-      `[eBay Revise] externalListingId=${externalListingId}` +
-      ` categoryId=${resolvedCategoryId || '(preserve)'}` +
-      ` mediaCount=${resolvedMediaUrls.length}` +
-      ` mediaSource=${resolvedMediaUrls.length > 0 ? (rawMediaUrls.length > 0 ? 'client' : 'db') : 'none'}`
-    );
-
-    const creds = await getEbayCredentials(supabase, tenantId, true);
-    if ('error' in creds) return jsonResponse({ error: creds.error }, 400);
+    // All clients, including older APK push paths, use saved seller-facing copy.
+    // Never replace listing.description with the inventory/AI description.
+    const title = String(ownedListing.title ?? '');
+    const description = String(ownedListing.description ?? '');
+    const options = ownedItem.attributes?.ebay_listing_options ?? {};
+    const listingType = options.listingType ?? 'FixedPriceItem';
+    const price = Number(listingType === 'Chinese' ? options.startPrice ?? ownedListing.price : ownedListing.price);
+    const condition = String(ownedItem.condition ?? '');
+    const conditionDescription = String(ownedItem.condition_notes ?? '');
+    const quantity = Number(ownedItem.quantity ?? 1);
+    const sku = String(ownedItem.sku ?? '');
+    let resolvedCategoryId = String(ownedListing.category_id ?? ownedItem.attributes?.ebay_category_id ?? '');
+    let resolvedItemSpecifics: Array<{ name: string; value: string }> = Array.isArray(ownedItem.attributes?.ebay_item_specifics) ? ownedItem.attributes.ebay_item_specifics : [];
+    let resolvedMediaUrls: string[] = Array.isArray(ownedItem.attributes?.ebay_listing_media) ? ownedItem.attributes.ebay_listing_media : ownedItem.media ?? [];
+    if (!title.trim() || !description.trim() || !Number.isFinite(price) || price <= 0) return jsonResponse({ success: false, error: 'Save a valid listing title, non-empty description and seller price before revising.' }, 422);
+    if (body.expectedUpdatedAt && body.expectedUpdatedAt !== ownedListing.updated_at) return jsonResponse({ success: false, error: 'The saved listing changed. Reload before revising.' }, 409);
+    console.log(`[eBay Revise] saved listing=${listingId} descriptionLength=${description.length} sellerPrice=${price} type=${listingType}`);
 
     // Direct category passthrough for revisions: use the exact saved/selected
     // category ID. Do not run SWISH's leaf resolver here; it previously referenced
@@ -2159,7 +2105,7 @@ async function handleRequest(req: Request): Promise<Response> {
     }
     let reviseXml: string;
     if (listingType === 'Chinese') {
-      reviseXml = buildReviseAuctionXML({ token: creds.accessToken, externalItemId: externalListingId, title, description, categoryId: resolvedCategoryId || 'REVISE_PRESERVE', conditionId, itemSpecifics: resolvedItemSpecifics, mediaUrls: resolvedMediaUrls, sellerProfilesXml, sku: String(sku ?? ''), ...(isAntiqueRevision ? { conditionDescription: reviseItem.condition_notes ?? conditionDescription } : {}) });
+      reviseXml = buildReviseAuctionXML({ token: creds.accessToken, externalItemId: externalListingId, title, description, startPrice: price, reservePrice: options.reservePrice ? Number(options.reservePrice) : undefined, categoryId: resolvedCategoryId || 'REVISE_PRESERVE', conditionId, itemSpecifics: resolvedItemSpecifics, mediaUrls: resolvedMediaUrls, sellerProfilesXml, sku: String(sku ?? ''), ...(isAntiqueRevision ? { conditionDescription: reviseItem.condition_notes ?? conditionDescription } : {}) });
     } else {
       reviseXml = buildReviseBuyItNowXML({ token: creds.accessToken, externalItemId: externalListingId, title, description, categoryId: resolvedCategoryId || 'REVISE_PRESERVE', conditionId, price: Number(price), quantity: Number(quantity), itemSpecifics: resolvedItemSpecifics, mediaUrls: resolvedMediaUrls, sellerProfilesXml, bestOfferEnabled: reviseItem.attributes?.ebay_listing_options?.bestOfferEnabled === true, sku: String(sku ?? ''), ...(isAntiqueRevision ? { conditionDescription: reviseItem.condition_notes ?? conditionDescription } : {}) });
     }
@@ -2168,32 +2114,23 @@ async function handleRequest(req: Request): Promise<Response> {
       const errors = parseErrors(revResp);
       return jsonResponse({ success: false, error: friendlyError(errors, 'Failed to revise eBay listing'), errors });
     }
-    if (listingId) {
-      const updatePayload: Record<string, any> = {
-        title,
-        description,
-        price: Number(price),
-        updated_at: new Date().toISOString(),
-      };
-      // Persist resolved category to listings table so future revisions use it
-      if (resolvedCategoryId && resolvedCategoryId !== 'REVISE_PRESERVE') {
-        updatePayload.category_id = resolvedCategoryId;
-      }
-      const local = await supabase.from('listings').update(updatePayload).eq('id', listingId).eq('tenant_id', tenantId).select('id').maybeSingle();
-      if (isAntiqueRevision && (local.error || !local.data)) return jsonResponse({ success: true, externalListingId, warning: 'eBay accepted the revision, but SWISH persistence failed. Synchronise before any further revision.' });
-      if (String(sku ?? '').trim()) {
-        const cleanSku = String(sku).trim().slice(0, 50);
-        const { data: linkedListing } = await supabase.from('listings')
-          .select('item_id').eq('id', listingId).eq('tenant_id', tenantId).maybeSingle();
-        if (linkedListing?.item_id) {
-          const { error: itemSkuError } = await supabase.from('items')
-            .update({ sku: cleanSku, updated_at: new Date().toISOString() })
-            .eq('id', linkedListing.item_id).eq('tenant_id', tenantId);
-          if (itemSkuError) console.error('[SWISH revise] SKU local persistence failed:', itemSkuError.message);
-        }
-      }
+    // An Ack is not evidence that each changed field stuck. Verify the exact
+    // linked seller GetItem after every revision, including legacy/bulk callers.
+    // No automatic second write on timeout or mismatch.
+    const warnings = parseErrors(revResp);
+    let live;
+    try { live = await readLive(); }
+    catch {
+      return jsonResponse({ success: false, accepted: true, verified: false, externalListingId, warnings, code: 'REVISION_READBACK_REQUIRED', error: 'eBay acknowledged the revision, but live description and seller price could not be verified. Saved edits remain intact. Check live details before retrying.' });
     }
-    return jsonResponse({ success: true, externalListingId });
+    const failures = verifyRevisionContent(live, { externalListingId, title, description, price });
+    console.log(`[eBay Revise] readback listing=${listingId} descriptionMatches=${!failures.some(message => message.includes('description'))} sellerPrice=${live.sellerPrice} mismatches=${failures.length}`);
+    if (failures.length) return jsonResponse({ success: false, accepted: true, verified: false, externalListingId, live, warnings, code: 'REVISION_FIELD_MISMATCH', error: `${failures.join(' ')} Saved SWISH edits were retained. Check eBay restrictions and refresh live details; no automatic retry was sent.` });
+    const local = await supabase.from('listings').update({ updated_at: new Date().toISOString(), ...(listingType === 'Chinese' ? { price } : {}) })
+      .eq('id', listingId).eq('tenant_id', tenantId).eq('external_listing_id', externalListingId).eq('updated_at', ownedListing.updated_at)
+      .select('id,title,description,price').maybeSingle();
+    if (local.error || !local.data || local.data.title !== title || local.data.description !== description || Number(local.data.price) !== price) return jsonResponse({ success: false, accepted: true, verified: false, externalListingId, live, warnings, error: 'eBay fields matched, but the SWISH listing changed or persistence failed. Reload before revising again.' });
+    return jsonResponse({ success: true, accepted: true, verified: true, externalListingId, live, warnings, descriptionVerified: true, sellerPriceVerified: true });
   }
 
   // ── Route: publish (default) ──────────────────────────────────────────────
