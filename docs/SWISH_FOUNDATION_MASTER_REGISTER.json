@@ -30,6 +30,17 @@
     },
     "executionLimitations": ["No terminal, CI dispatch, Git write/merge or installed-device tool in this editor", "No current-source TypeScript/Jest/lint/native build pass claimed", "Existing safe Edge runner must be exercised with an actual owner JWT after deployment"]
   },
+  "tunesFlipExtension": {
+    "status": "IMPLEMENTED",
+    "verificationStatus": "BLOCKED",
+    "canonicalNicheId": "tunes_flip",
+    "existingSpecialistId": "vinyl_records",
+    "architecture": "Original eleven plus Tunes Flip in one unified SWISH binary; no separate music APK",
+    "report": "docs/TUNES_FLIP_IMPLEMENTATION.md",
+    "requirementsMappedTo": ["S2-02", "S3-01", "S3-02", "S3-03", "S4-01", "S4-02", "S4-03", "S4-04", "S5-01", "S5-02", "S5-03", "S5-04", "S6-03", "S7-01", "S7-02", "S7-03", "S7-04", "S7-05"],
+    "executedEvidence": "Read-only SQL confirmed vinyl_records and tunes_flip ownership, original coins_uk mapping, unclassified catch-all remains null, command includes music, anon command execute false and authenticated execute true; no music inventory existed or was created during verification.",
+    "blockers": ["Legacy known-product entitlement CHECK still excludes Tunes Flip and Collectibles", "Discogs paid/commercial-use permission not recorded; restricted pricing/artwork disabled", "Approved ordinary subscriber/owner JWT endpoint fixtures unavailable", "TypeScript/lint/regression/native/device acceptance not executed in editor", "Git PR/merge and current-main synchronization not verified"]
+  },
   "completionProgramme": {
     "directive": "SWISH Master Completion Directive",
     "status": "BLOCKED",
@@ -65,7 +76,8 @@
       "fossils": { "status": "BLOCKED", "artifact": null, "apkChecksum": null, "buildNumber": null },
       "beauty": { "status": "BLOCKED", "artifact": null, "apkChecksum": null, "buildNumber": null },
       "tech": { "status": "BLOCKED", "artifact": null, "apkChecksum": null, "buildNumber": null },
-      "collectibles": { "status": "BLOCKED", "artifact": null, "apkChecksum": null, "buildNumber": null }
+      "collectibles": { "status": "BLOCKED", "artifact": null, "apkChecksum": null, "buildNumber": null },
+      "tunes_flip": { "status": "BLOCKED", "artifact": null, "apkChecksum": null, "buildNumber": null }
     }
   },
   "rules": {
@@ -349,7 +361,7 @@
   ],
   "nicheCertification": {
     "source": "niche-modules.json",
-    "expectedNicheCount": 11,
+    "expectedNicheCount": 12,
     "records": {},
     "requiredAreas": [
       "brand-and-routes",
@@ -406,6 +418,7 @@
     "sourceSecurityRepairStatus": "MERGED; internal secret is additional to user JWT and tenant membership; deployment parity remains BLOCKED."
   },
   "knownReleaseRisks": [
+    "Tunes Flip extends the unified registry to twelve. Music source integration is implemented; billing constraint, Discogs commercial-use permission, live JWT/provider and native acceptance remain blocked. No original S1-S7 task promoted.",
     "CURRENT 2026-11-04: completionProgramme is the authoritative current execution snapshot; prior VERIFIED evidence applies only to its dated historical source, not this changed 11-product baseline.",
     "All eleven releases remain BLOCKED: no current native artifact, full automated pass, hosted parity, approved seller action or installed-device acceptance was executed by this editor.",
     "Collectibles backend known-product constraint and entitlement snapshot remain ten-niche; owner-controlled reviewed migration required. No historical collectible records were moved.",
@@ -427,6 +440,10 @@
     "PRs #142, #143, #144 and #145 remain on older branch bases and must be replayed/rebased against current main before merge; do not merge stale branches."
   ],
   "changeLog": [
+    {
+      "date": "2026-11-05",
+      "change": "Added Tunes Flip using existing vinyl_records specialist, canonical inventory, shared scanner/editor/eBay and unified shell. Discogs credentials are Edge-only; CC0 catalogue allowlist, owner-only setup, six-hour review freshness and usage-permission gates implemented. Additive SQL mapping/report postconditions confirmed, no inventory/seller test writes. New tests/CI authored but not executed; no release certification or fabricated PR. Original task IDs and historical evidence retained."
+    },
     {
       "date": "2026-11-05",
       "change": "Inspected current public main and existing architecture; mapped remaining five headers; added necessary read-only canonical reporting with explicit owner/tenant/entitlement boundaries; repaired portfolio login routing and owner retry; enhanced existing Master Admin with bounded inspectors and S1–S7 current-commit acceptance controls. SQL no-JWT denial, owner aggregate/count reconciliation and role-simulation boundary checks executed. No original task promoted; current-source CI, actual owner/subscriber JWT UI, Edge runtime, Git merge and installed-device/build acceptance remain unverified. Unified release scope supersedes historical separate APK programme without discarding evidence."

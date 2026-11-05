@@ -1,22 +1,35 @@
-import { useState,useEffect } from 'react';
+import { useState,useEffect,useRef } from 'react';
+import { isBackendUnavailable } from '@/services/backendAvailabilityService';
 import { AppState } from 'react-native';
 import { useApp } from './useApp';
+import { useAuth } from '@/template';
 import { getLiveListingCount } from '@/services/listingService';
 import { getProductionNicheSpecialistIds } from '@/services/nicheRouting';
-/** Badge shares the server's tab classification; stale account responses cannot leak into a new niche. */
+import { backendReadsBusy } from '@/services/backendRequestService';
+/** Shared server classification. Failed refreshes retain only the same authenticated scope. */
 export function useNicheListingCount() {
-  const {tenant,fixedNicheId,activeNicheId,inventoryReloadSignal,accessReady,moduleLoading}=useApp();
-  const niche=fixedNicheId??activeNicheId;const scope=`${tenant?.id??''}:${niche}`;
+  const {tenant,fixedNicheId,activeNicheId,inventoryReloadSignal,accessReady,moduleLoading,moduleEpoch}=useApp();
+  const {user}=useAuth();
+  const niche=fixedNicheId??activeNicheId;const scope=`${user?.id??''}:${tenant?.id??''}:${niche}:${moduleEpoch}`;
   const [snapshot,setSnapshot]=useState({scope:'',count:0});
+  const currentScope=useRef(scope);currentScope.current=scope;
   useEffect(()=>{
     let cancelled=false;let busy=false;
-    const refresh=async()=>{
-      if(!tenant?.id||!accessReady||moduleLoading||!getProductionNicheSpecialistIds(niche).length||busy||AppState.currentState==='background')return;busy=true;
-      try{const count=await getLiveListingCount(tenant.id,getProductionNicheSpecialistIds(niche));if(!cancelled)setSnapshot({scope,count});}
-      finally{busy=false;}
+    const refresh=async(background=false)=>{
+      if(!tenant?.id||!accessReady||moduleLoading||!getProductionNicheSpecialistIds(niche).length||busy||AppState.currentState==='background'||(background&&backendReadsBusy()))return;
+      busy=true;
+      try {
+        const count=await getLiveListingCount(tenant.id,getProductionNicheSpecialistIds(niche));
+        if(!cancelled&&currentScope.current===scope)setSnapshot({scope,count});
+      } catch(cause) {
+        const message=cause instanceof Error?cause.message:'Live inventory count unavailable';
+        if(!cancelled&&currentScope.current===scope&&!isBackendUnavailable(message))setSnapshot({scope,count:0});
+        // A transient refresh preserves the badge. Inventory exposes its actionable read error.
+      } finally{busy=false;}
     };
-    void refresh();const timer=setInterval(()=>{void refresh();},90_000);const sub=AppState.addEventListener('change',state=>{if(state==='active')void refresh();});
+    void refresh();const timer=setInterval(()=>{void refresh(true);},90_000);
+    const sub=AppState.addEventListener('change',state=>{if(state==='active')void refresh(true);});
     return()=>{cancelled=true;clearInterval(timer);sub.remove();};
   },[tenant?.id,niche,scope,inventoryReloadSignal,accessReady,moduleLoading]);
-  return snapshot.scope===scope?snapshot.count:0;
+  return accessReady&&!moduleLoading&&snapshot.scope===scope?snapshot.count:0;
 }

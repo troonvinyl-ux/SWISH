@@ -1,0 +1,64 @@
+name: Tunes Flip source and secret-boundary verification
+on:
+  pull_request:
+    paths: ['app/**', 'components/**', 'services/**', 'hooks/**', 'contexts/**', 'constants/**', 'shared/**', 'supabase/**', 'niche-modules.json', 'scripts/**', '.github/workflows/tunes-flip-verification.yml']
+  push:
+    branches: [main]
+    paths: ['app/**', 'components/**', 'services/**', 'hooks/**', 'contexts/**', 'constants/**', 'shared/**', 'supabase/**', 'niche-modules.json', 'scripts/**', '.github/workflows/tunes-flip-verification.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: bash scripts/install-dependencies.sh
+      - name: Discogs credential boundary
+        run: node scripts/check-discogs-secret-boundary.mjs
+      - name: TypeScript
+        if: ${{ !cancelled() }}
+        run: npx tsc --noEmit
+      - name: Lint
+        if: ${{ !cancelled() }}
+        run: npx expo lint
+      - name: All existing and music regressions
+        if: ${{ !cancelled() }}
+        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand --json --outputFile=tunes-flip-jest.json
+      - name: Registry and deployment mirrors
+        if: ${{ !cancelled() }}
+        run: |
+          node scripts/validate-unified-modules.mjs
+          node scripts/sync-backend-registry.mjs --check
+          node scripts/validate-edge-deployment.mjs
+      - name: Retain tested source identity
+        if: always()
+        run: printf '%s\n' "$GITHUB_SHA" > tunes-flip-source.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tunes-flip-source-evidence-${{ github.sha }}
+          path: |
+            tunes-flip-jest.json
+            tunes-flip-source.txt
+  edge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno check supabase/functions/swish-discogs/index.ts
+      - name: Resolve updated identify function deployment graph
+        if: ${{ !cancelled() }}
+        run: deno info supabase/functions/swish-identify/index.ts
+      - name: Music identification policy and payload fixtures
+        if: ${{ !cancelled() }}
+        run: deno test supabase/tests/identification_policy.test.ts
+# No secrets injected, real inventory writes, seller calls, native builds or deployments in this workflow.
