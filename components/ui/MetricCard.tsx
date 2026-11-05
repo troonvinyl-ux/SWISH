@@ -29,6 +29,7 @@ export const MetricCard = memo(({
   return (
     <Pressable
       onPress={onPress}
+      disabled={!onPress}
       style={({ pressed }) => [
         styles.card,
         compact && styles.cardCompact,
@@ -38,7 +39,7 @@ export const MetricCard = memo(({
       <View style={[styles.accentBar, { backgroundColor: accent }]} />
       <View style={styles.content}>
         <Text style={styles.label}>{label}</Text>
-        <Text style={[styles.value, compact && styles.valueCompact]}>{value}</Text>
+        <Text style={[styles.value, {color:accent}, compact && styles.valueCompact]}>{value}</Text>
         {(subValue || trendValue) ? (
           <View style={styles.bottom}>
             {subValue ? <Text style={styles.subValue}>{subValue}</Text> : null}
@@ -56,8 +57,8 @@ export const MetricCard = memo(({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: Radius.xl,
     borderWidth: 1,
     borderColor: Colors.surfaceBorder,
     overflow: 'hidden',
@@ -74,10 +75,10 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: Spacing.base,
     paddingLeft: Spacing.md,
-    gap: 2,
+    gap: Spacing.sm,
   },
   label: {
-    fontSize: Typography.size.xs,
+    fontSize: Typography.size.sm,
     fontWeight: Typography.weight.medium,
     color: Colors.textSecondary,
     textTransform: 'uppercase',
@@ -99,8 +100,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   subValue: {
-    fontSize: Typography.size.xs,
-    color: Colors.textTertiary,
+    fontSize: Typography.size.sm,
+    color: Colors.textSecondary,
   },
   trend: {
     fontSize: Typography.size.xs,

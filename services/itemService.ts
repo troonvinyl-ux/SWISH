@@ -6,6 +6,7 @@ import { getSupabaseClient } from '@/template';
 import { EvidenceSource, ConfidenceTier, ItemStatus, DispositionDecision } from '@/constants/config';
 import { SpecialistId } from '@/constants/specialists';
 import { resolveProductionNiche } from './nicheRouting';
+import { backendRead, shareBackendRequest } from './backendRequestService';
 
 export interface Item {
   id: string;
@@ -187,19 +188,23 @@ export async function listItems(
 ): Promise<{ items: Item[]; error: string | null }> {
   if (filter.specialistIds?.length === 0) return { items: [], error: null };
   if (!tenantId?.trim()) return { items: [], error: 'tenantId is required' };
+  return shareBackendRequest(`items:${tenantId}:${JSON.stringify(filter)}`, async () => {
+  try {
   const supabase = getSupabaseClient();
   // Surface entitlement denials as actionable errors rather than an apparently empty stock list.
   const requestedSpecialists=filter.specialistIds ?? (filter.specialistId ? [filter.specialistId] : []);
   const requestedNiches=[...new Set(requestedSpecialists.map(resolveProductionNiche))];
   for(const niche of requestedNiches) {
-    const { data:allowed,error:authorizationError }=await supabase.rpc('swish_can_access_niche',{ p_tenant_id:tenantId,p_niche_id:niche });
-    if(authorizationError || !allowed) return { items:[],error:authorizationError ? 'Inventory authorization unavailable. Retry shortly.' : 'Verified paid access is required for this inventory niche. Refresh your subscription after checkout.' };
+    if (!niche) return { items:[],error:'Registered inventory specialist required.' };
+    const { data:allowed,error:authorizationError }=await backendRead(`inventory-access:${tenantId}:${niche}`, signal => supabase.rpc('swish_can_access_niche',{ p_tenant_id:tenantId,p_niche_id:niche }).abortSignal(signal));
+    if(authorizationError || allowed !== true) return { items:[],error:authorizationError?.message ?? 'Verified paid access is required for this inventory niche. Refresh your subscription after checkout.' };
   }
   let query = supabase
     .from('items')
     .select('*')
     .eq('tenant_id', tenantId)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: true });
 
   // Lifecycle group filtering (takes precedence over individual status)
   if (filter.lifecycleGroup) {
@@ -236,9 +241,17 @@ export async function listItems(
     );
   }
 
-  const { data, error } = await query.limit(500);
-  if (error) return { items: [], error: error.message };
-  return { items: (data ?? []).map(mapItem), error: null };
+  // Fetch every authorised record. A response row cap is not an inventory cap.
+  const items: Item[] = [];
+  const pageSize = 200;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await backendRead(`items-page:${tenantId}:${JSON.stringify(filter)}:${offset}`, signal => query.range(offset, offset + pageSize - 1).abortSignal(signal));
+    if (error) return { items: [], error: `Inventory read failed: ${error.message}` };
+    items.push(...(data ?? []).map(mapItem));
+    if ((data?.length ?? 0) < pageSize) return { items, error: null };
+  }
+  } catch (cause) { return { items:[],error:cause instanceof Error ? cause.message : 'Inventory read failed' }; }
+  });
 }
 
 // Get item counts by status — optionally scoped to niche specialist IDs
@@ -247,32 +260,14 @@ export async function getItemStatusCounts(
   specialistIds?: string[]
 ): Promise<Record<string, number>> {
   if (!tenantId?.trim() || specialistIds?.length === 0) return {};
-  const supabase = getSupabaseClient();
-  let query = supabase
-    .from('items')
-    .select('status')
-    .eq('tenant_id', tenantId);
-
-  if (specialistIds && specialistIds.length > 0) {
-    query = query.in('specialist_id', specialistIds);
-  }
-
-  if (specialistIds?.length && specialistIds.every(id => resolveProductionNiche(id) === 'antiques')) {
-    const counts: Record<string, number> = {};
-    // PostgREST caps rows per response. Count every Antique status page instead of
-    // displaying a successful-looking truncated/failed count as zero.
-    for (let offset = 0; ; offset += 1000) {
-      const page = await supabase.from('items').select('id,status').eq('tenant_id', tenantId).in('specialist_id', specialistIds).order('id').range(offset, offset + 999);
-      if (page.error) throw new Error(`Inventory counts unavailable: ${page.error.message}`);
-      for (const row of page.data ?? []) counts[row.status] = (counts[row.status] ?? 0) + 1;
-      if ((page.data?.length ?? 0) < 1000) return counts;
-    }
-  }
-  const { data } = await query;
+  const { data } = await backendRead(`status-counts:${tenantId}:${JSON.stringify(specialistIds?.slice().sort())}`, signal => getSupabaseClient().rpc('swish_inventory_status_counts', { p_tenant_id:tenantId,p_specialist_ids:specialistIds ?? null }).abortSignal(signal));
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Inventory counts unavailable: invalid aggregate response');
   const counts: Record<string, number> = {};
-  (data ?? []).forEach((row) => {
-    counts[row.status] = (counts[row.status] ?? 0) + 1;
-  });
+  for (const [status, value] of Object.entries(data)) {
+    const count=Number(value);
+    if (!Number.isSafeInteger(count) || count<0) throw new Error('Inventory counts unavailable: invalid aggregate count');
+    counts[status]=count;
+  }
   return counts;
 }
 

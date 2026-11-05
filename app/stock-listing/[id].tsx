@@ -75,6 +75,7 @@ import { ManifestInspectionReview } from '@/components/feature/ManifestInspectio
 import { resolveProductionNiche } from '@/services/nicheRouting';
 import { NICHES } from '@/constants/niches';
 import { useItemMainImage } from '@/hooks/useItemMainImage';
+import { useItemSmartStudio } from '@/hooks/useItemSmartStudio';
 import { ItemPhotoGallery } from '@/components/feature/ItemPhotoGallery';
 import { StockListingToolbar, type StockListingAction } from '@/components/feature/StockListingToolbar';
 import { StockPricingSummary } from '@/components/feature/StockPricingSummary';
@@ -1884,6 +1885,7 @@ export default function StockListingScreen() {
   }, []);
   const photoRecovery = useInventoryPhotoRecovery(item, onPhotosRecovered);
   const mainImage = useItemMainImage(item, onPhotosRecovered);
+  const smartStudio = useItemSmartStudio(item, onPhotosRecovered);
   const niche = nicheId ? NICHES[nicheId] : NICHES.general;
   const nicheAccent = nicheId === 'antiques' ? Colors.specialistGold : niche.color;
   const selectedListing = listings.find(row => row.status === 'active' || row.status === 'live') ?? listings.find(row => row.status === 'draft' || row.status === 'pending');
@@ -2415,7 +2417,8 @@ export default function StockListingScreen() {
           media={item.media ?? []}
           accent={nicheAccent}
           tip={niche.captureInstructions[0] ?? 'Photograph the whole item clearly.'}
-          saving={mainImage.saving}
+          saving={mainImage.saving || smartStudio.busy}
+          studio={smartStudio}
           error={mainImage.error}
           onSelectMain={url => { void mainImage.selectMain(url); }}
           onReIdentify={() => setReIdVisible(true)}

@@ -1,87 +1,24 @@
-jest.mock('@/template', () => ({
-  getSupabaseClient: jest.fn(() => ({ functions: { invoke: mockInvoke } })),
-}));
-
-jest.mock('expo-image-manipulator', () => ({
-  manipulateAsync: jest.fn(),
-  SaveFormat: { JPEG: 'jpeg' },
-}));
-
-import * as ImageManipulator from 'expo-image-manipulator';
+// Mocked transport/Expo tests. No claim of live model or photographic acceptance.
+jest.mock('@/template',()=>({getSupabaseClient:()=>mockClient}));
+jest.mock('expo-image-manipulator',()=>({manipulateAsync:jest.fn(),SaveFormat:{JPEG:'jpeg'}}));
+jest.mock('@react-native-async-storage/async-storage',()=>({__esModule:true,default:{getItem:jest.fn().mockResolvedValue(null),setItem:jest.fn().mockResolvedValue(undefined)}}));
+jest.mock('expo-crypto',()=>({CryptoDigestAlgorithm:{SHA256:'SHA256'},digestStringAsync:jest.fn(async(_algorithm:string,input:string)=>input.length+'-'+input.slice(-160))}));
+import { manipulateAsync } from 'expo-image-manipulator';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { generateCoinImageReference } from '@/services/coinImageEnhancementService';
-
-const mockInvoke = jest.fn();
-const mockManipulate = ImageManipulator.manipulateAsync as jest.Mock;
-const referenceImage = 'data:image/png;base64,YWJj';
-
-describe('Coin image reference service', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockManipulate.mockResolvedValue({ uri: 'file://prepared.jpg', base64: 'YWJj' });
-    mockInvoke.mockResolvedValue({
-      data: { enhancedImage: referenceImage, warning: 'AI-rendered reference only.', generatedBy: 'Gemini image model' },
-      error: null,
-    });
-  });
-
-  test.each(['file://coin.jpg', 'blob:https://preview.example/coin', 'https://example.com/coin.jpg'])(
-    'prepares %s using the cross-platform Expo API', async (originalUri) => {
-      const result = await generateCoinImageReference(originalUri);
-      expect(mockManipulate).toHaveBeenCalledWith(
-        originalUri,
-        [{ resize: { width: 1024 } }],
-        expect.objectContaining({ base64: true, format: 'jpeg' }),
-      );
-      expect(mockInvoke).toHaveBeenCalledWith('swish-coin-image-enhance', {
-        body: { imageDataUrl: 'data:image/jpeg;base64,YWJj' },
-      });
-      expect(result.enhancedUri).toBe(referenceImage);
-      expect(result.enhancedUri).not.toBe(originalUri);
-      expect(result.warning).toBe('AI-rendered reference only.');
-    },
-  );
-
-  test('rejects empty input without an API call', async () => {
-    await expect(generateCoinImageReference('')).rejects.toThrow('Capture a coin photo');
-    expect(mockManipulate).not.toHaveBeenCalled();
-    expect(mockInvoke).not.toHaveBeenCalled();
-  });
-
-  test('does not silently substitute the original when image preparation fails', async () => {
-    mockManipulate.mockResolvedValue({ uri: 'file://prepared.jpg' });
-    await expect(generateCoinImageReference('file://coin.jpg')).rejects.toThrow('Could not prepare');
-    expect(mockInvoke).not.toHaveBeenCalled();
-  });
-
-  test('rejects oversized data before invoking the server', async () => {
-    mockManipulate.mockResolvedValue({ base64: 'A'.repeat(8_000_000) });
-    await expect(generateCoinImageReference('file://coin.jpg')).rejects.toThrow('too large');
-    expect(mockInvoke).not.toHaveBeenCalled();
-  });
-
-  test('surfaces the actual Edge Function error body', async () => {
-    mockInvoke.mockResolvedValue({
-      data: null,
-      error: new FunctionsHttpError(new Response(JSON.stringify({ error: 'Authentication required' }), { status: 401 })),
-    });
-    await expect(generateCoinImageReference('file://coin.jpg')).rejects.toThrow('[Code: 401] Authentication required');
-  });
-
-  test('propagates transport failure instead of claiming success', async () => {
-    mockInvoke.mockResolvedValue({ data: null, error: { message: 'Network request failed' } });
-    await expect(generateCoinImageReference('file://coin.jpg')).rejects.toThrow('Network request failed');
-  });
-
-  test('rejects missing image output', async () => {
-    mockInvoke.mockResolvedValue({ data: {}, error: null });
-    await expect(generateCoinImageReference('file://coin.jpg')).rejects.toThrow('no usable image reference');
-  });
-
-  test('accepts a server-returned HTTPS image and supplies a viewing-aid warning', async () => {
-    mockInvoke.mockResolvedValue({ data: { enhancedImage: 'https://example.com/reference.png' }, error: null });
-    const result = await generateCoinImageReference('file://coin.jpg');
-    expect(result.enhancedUri).toBe('https://example.com/reference.png');
-    expect(result.warning).toContain('Always use the original photo');
-  });
+import { prepareObjectImage,prepareCapturedImages } from '@/services/sharedImagePreparationService';
+import { SMART_STUDIO_VERSION } from '@/shared/smartStudio';
+const mockInvoke=jest.fn();const mockClient={auth:{getSession:jest.fn().mockResolvedValue({data:{session:{user:{id:'fixture-user'}}},error:null})},functions:{invoke:mockInvoke}};
+const good={version:SMART_STUDIO_VERSION,status:'ready',enhancedUri:'https://storage.test/studio/presentation.png',maskUri:'https://storage.test/studio/mask.png',confidence:0.96,warnings:[],quality:{sourcePixelsOnly:true}};
+beforeEach(()=>{jest.clearAllMocks();(manipulateAsync as jest.Mock).mockResolvedValue({uri:'file://copy.jpg',base64:'YWJj',width:1000,height:1000});mockInvoke.mockResolvedValue({data:good,error:null});});
+describe('Shared studio and legacy coin alias',()=>{
+ test.each(['file://coin.jpg','blob:https://preview.example/photo','https://example.com/photo.jpg'])('uses one protected engine for %s',async uri=>{const result=await generateCoinImageReference(uri,{tenantId:'tenant',nicheId:'coins',angle:'Obverse'});expect(result.enhancedUri).toBe(good.enhancedUri);expect(result.studio?.originalUri).toBe(uri);expect(mockInvoke).toHaveBeenCalledWith('swish-coin-image-enhance',expect.objectContaining({body:expect.objectContaining({tenantId:'tenant',nicheId:'coins'}),signal:expect.anything()}));});
+ test('empty input does not contact the server',async()=>{await expect(generateCoinImageReference('')).rejects.toThrow('Capture a coin photo');expect(mockInvoke).not.toHaveBeenCalled();});
+ test('preparation failure retains the source and produces explicit fallback',async()=>{(manipulateAsync as jest.Mock).mockRejectedValue(new Error('Codec unavailable'));const result=await prepareObjectImage({original:{uri:'file://original'}});expect(result.status).toBe('fallback');expect(result.originalUri).toBe('file://original');expect(mockInvoke).not.toHaveBeenCalled();});
+ test('oversized analysis copies fail before a provider call',async()=>{(manipulateAsync as jest.Mock).mockResolvedValue({base64:'A'.repeat(4_000_000)});await expect(generateCoinImageReference('file://large')).rejects.toThrow('too large');expect(mockInvoke).not.toHaveBeenCalled();});
+ test('actual HTTP failure is surfaced without substituting the original as enhanced',async()=>{mockInvoke.mockResolvedValue({data:null,error:new FunctionsHttpError(new Response(JSON.stringify({error:'Authentication required'}),{status:401}))});await expect(generateCoinImageReference('file://denied')).rejects.toThrow('[Code: 401] Authentication required');});
+ test('old generative output without source provenance is rejected',async()=>{mockInvoke.mockResolvedValue({data:{enhancedImage:'https://unsafe.test/generated.png'},error:null});const result=await prepareObjectImage({original:{uri:'file://unsafe'}});expect(result.status).toBe('fallback');expect(result.enhancedUri).toBeUndefined();});
+ test('batch preserves side order and never mutates source objects',async()=>{const images=[{uri:'file://front',slotId:'front',slotLabel:'Front'},{uri:'file://rear',slotId:'rear',slotLabel:'Rear'}];const before=JSON.stringify(images);const output=await prepareCapturedImages(images,{nicheId:'tunes_flip',tenantId:'tenant'});expect(output.map(x=>x.slotId)).toEqual(['front','rear']);expect(JSON.stringify(images)).toBe(before);expect(mockInvoke).toHaveBeenCalledTimes(2);});
+ test('existing processing provenance does not invoke a second AI operation',async()=>{const original={uri:'file://cached',slotId:'front',slotLabel:'Front',studio:{...good,originalUri:'file://cached'}} as any;expect(await prepareCapturedImages([original])).toEqual([original]);expect(mockInvoke).not.toHaveBeenCalled();});
+ test('cancelled request leaves the original untouched',async()=>{const controller=new AbortController();controller.abort();const result=await prepareObjectImage({original:{uri:'file://cancel'},signal:controller.signal});expect(result.status).toBe('fallback');expect(mockInvoke).not.toHaveBeenCalled();});
 });

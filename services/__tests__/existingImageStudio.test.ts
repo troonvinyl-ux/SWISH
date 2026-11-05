@@ -1,0 +1,37 @@
+// Mocked workflow regressions; no paid AI calls, seller writes or live-acceptance claims.
+jest.mock('@/template',()=>({getSupabaseClient:jest.fn()}));
+jest.mock('@/services/sharedImagePreparationService',()=>({prepareObjectImage:jest.fn()}));
+jest.mock('@/services/smartStudioStorageService',()=>({saveExistingStudioImage:jest.fn()}));
+jest.mock('expo-crypto',()=>({digestStringAsync:jest.fn(async()=> 'source-url-hash'),CryptoDigestAlgorithm:{SHA256:'SHA256'}}),{virtual:true});
+import fs from 'node:fs';
+import registry from '../../niche-modules.json';
+import { getSupabaseClient } from '@/template';
+import { prepareObjectImage } from '@/services/sharedImagePreparationService';
+import { saveExistingStudioImage } from '@/services/smartStudioStorageService';
+import { existingOriginalPhotos,existingStudioResult,processExistingItemPhoto } from '../existingImageStudioService';
+import { mapItem } from '../itemService';
+import { SMART_STUDIO_VERSION,type StudioResult } from '../../shared/smartStudio';
+const original='https://storage.test/item/originals/front.jpg';
+const row={id:'item',tenant_id:'tenant',specialist_id:'vinyl_records',canonical_title:'March of the Mods',media:[original,'https://storage.test/item/originals/rear.jpg'],attributes:{artist:'Various',ebay_listing_media:[original]},updated_at:'v1'};
+const studio:StudioResult={version:SMART_STUDIO_VERSION,status:'ready',originalUri:original,enhancedUri:'https://storage.test/tenant/studio/presentation.png',maskUri:'https://storage.test/tenant/studio/mask.png',confidence:0.91,warnings:[],quality:{sourcePixelsOnly:true,completeness:'complete',boundary:'checked',detailCheck:'source pixels',background:'neutral'}};
+function query(data:unknown,error:unknown=null){const q:any={};for(const method of ['select','eq','in','maybeSingle'])q[method]=jest.fn(()=>q);q.abortSignal=jest.fn(()=>Promise.resolve({data,error}));return q;}
+function setup(value:any=row){const q=query(value);const client={auth:{getSession:jest.fn().mockResolvedValue({data:{session:{user:{id:'user'}}},error:null})},from:jest.fn(()=>q)};(getSupabaseClient as jest.Mock).mockReturnValue(client);return {client,q};}
+const request={tenantId:'tenant',nicheId:'tunes_flip',itemId:'item',userId:'user',originalUri:original};
+beforeEach(()=>{jest.clearAllMocks();(prepareObjectImage as jest.Mock).mockResolvedValue(studio);(saveExistingStudioImage as jest.Mock).mockResolvedValue({item:mapItem({...row,attributes:{...row.attributes,_smart_studio_images:{'existing_source-url-hash':studio}}}),error:null});});
+test.each(Object.entries(registry.products))('%s uses the same shared engine for saved photos',async(niche,config)=>{
+ const value={...row,specialist_id:config.specialists[0]};const {q}=setup(value);
+ const result=await processExistingItemPhoto({...request,nicheId:niche});expect(result.error).toBeNull();
+ expect(prepareObjectImage).toHaveBeenCalledTimes(1);expect(prepareObjectImage).toHaveBeenCalledWith(expect.objectContaining({original:{uri:original},nicheId:niche,tenantId:'tenant',angle:'unspecified'}));
+ expect(q.eq).toHaveBeenCalledWith('tenant_id','tenant');expect(q.in).toHaveBeenCalledWith('specialist_id',expect.arrayContaining([config.specialists[0]]));
+});
+test('valid saved presentation is reused without AI or metadata writes',async()=>{setup({...row,attributes:{_smart_studio_images:{front:studio}}});const result=await processExistingItemPhoto(request);expect(result.reused).toBe(true);expect(prepareObjectImage).not.toHaveBeenCalled();expect(saveExistingStudioImage).not.toHaveBeenCalled();});
+test('review results remain review results and are not regenerated on a bulk retry',async()=>{setup({...row,attributes:{_smart_studio_images:{front:{...studio,status:'review'}}}});const result=await processExistingItemPhoto(request);expect(result.studio?.status).toBe('review');expect(result.reused).toBe(true);expect(prepareObjectImage).not.toHaveBeenCalled();});
+test('derivatives, masks and legacy references never become originals',()=>{const reference='https://storage.test/reference.png';const item=mapItem({...row,media:[original,original,studio.enhancedUri,studio.maskUri,reference,'file://unsaved.jpg'],attributes:{_smart_studio_images:{front:studio},_coin_reference_images:{front:reference}}});expect(existingOriginalPhotos(item)).toEqual([original]);});
+test('photo association is stable across changes in original ordering',()=>{const item=mapItem({...row,media:[row.media[1],original],attributes:{_smart_studio_images:{front:studio}}});expect(existingStudioResult(item,original)?.enhancedUri).toBe(studio.enhancedUri);expect(existingStudioResult(item,row.media[1])).toBeNull();});
+test('missing original prevents processing',async()=>{setup({...row,media:[]});expect((await processExistingItemPhoto(request)).error).toContain('original photo');expect(prepareObjectImage).not.toHaveBeenCalled();});
+test('unavailable enhancement never overwrites an original or saves a fallback as ready',async()=>{setup();(prepareObjectImage as jest.Mock).mockResolvedValue({...studio,status:'fallback',enhancedUri:undefined,warnings:['Boundary uncertain']});expect((await processExistingItemPhoto(request)).error).toContain('Boundary uncertain');expect(saveExistingStudioImage).not.toHaveBeenCalled();});
+test('tenant or specialist mismatch fails before AI',async()=>{setup({...row,tenant_id:'other'});expect((await processExistingItemPhoto(request)).error).toContain('workspace');expect(prepareObjectImage).not.toHaveBeenCalled();});
+test('account change during preparation blocks the association write',async()=>{const {client}=setup();client.auth.getSession.mockResolvedValueOnce({data:{session:{user:{id:'user'}}},error:null}).mockResolvedValueOnce({data:{session:{user:{id:'other'}}},error:null});expect((await processExistingItemPhoto(request)).error).toContain('Account changed');expect(saveExistingStudioImage).not.toHaveBeenCalled();});
+test('already cancelled requests do no work',async()=>{setup();const controller=new AbortController();controller.abort();expect((await processExistingItemPhoto({...request,signal:controller.signal})).error).toContain('cancelled');expect(prepareObjectImage).not.toHaveBeenCalled();});
+test('whole-operation timeout also bounds a stalled authentication read',async()=>{jest.useFakeTimers();try{const {client}=setup();client.auth.getSession.mockReturnValue(new Promise(()=>{}));const pending=processExistingItemPhoto(request);jest.advanceTimersByTime(90000);expect((await pending).error).toContain('timed out');expect(saveExistingStudioImage).not.toHaveBeenCalled();}finally{jest.useRealTimers();}});
+test('UI wiring has selected/all processing, cancellation and original comparison',()=>{const read=(path:string)=>fs.readFileSync(path,'utf8');expect(read('app/stock-listing/[id].tsx')).toContain('useItemSmartStudio(item, onPhotosRecovered)');expect(read('components/feature/ItemPhotoGallery.tsx')).toContain('originalUri={gallery.activeUrl}');const controls=read('components/feature/ExistingPhotoStudioControls.tsx');for(const label of ['Process selected photo','Process all photos','Original evidence','Review required','studio.cancel'])expect(controls).toContain(label);const hook=read('hooks/useItemSmartStudio.ts');expect(hook).toContain('current.current===scope');expect(hook).toContain('triggerInventoryReload()');expect(read('services/existingImageStudioService.ts')).not.toContain('identifyItemWithAI(');});

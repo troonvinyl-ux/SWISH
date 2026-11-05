@@ -39,10 +39,10 @@ export function useStockPhotoGallery(media: string[]) {
     setSelectedUrl(media[next] ?? '');
   }, [mediaKey, width]);
   const height = useMemo(() => Math.min(420, Math.max(240, width * 0.9)), [width]);
-  const exportPhoto = useCallback(async (action: 'save' | 'share') => {
-    if (exporting || !activeUrl) return;
+  const exportPhoto = useCallback(async (action: 'save' | 'share', imageUri = activeUrl) => {
+    if (exporting || !imageUri) return;
     setExporting(true); setExportError(null);
-    try { if (action === 'save') await saveItemPhoto(activeUrl); else await shareItemPhoto(activeUrl); }
+    try { if (action === 'save') await saveItemPhoto(imageUri); else await shareItemPhoto(imageUri); }
     catch (cause) { if (mounted.current) setExportError(cause instanceof Error ? cause.message : 'The photo could not be exported.'); }
     finally { if (mounted.current) setExporting(false); }
   }, [exporting, activeUrl]);

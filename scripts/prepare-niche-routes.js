@@ -43,10 +43,9 @@ function prepareNicheRoutes(niche, root = path.resolve(__dirname, '..')) {
   }
   walk(source);
   for (const route of allowed) if (!kept.has(route)) throw new Error('Declared route missing: ' + route);
-  const homeImport = product.home
-    ? "import ProductHome from '../" + product.home.replace(/\.tsx$/, '') + "';"
-    : "import { NicheOverview as ProductHome } from '@/components/feature/NicheOverview';";
-  save('(tabs)/index.tsx', homeImport + '\nexport default function NicheHomeScreen() { return <ProductHome' + (product.home ? ' isHomeTab' : '') + ' />; }\n');
+  // All isolated APKs use the same home template. Bespoke pages remain in allowed routes.
+  const homeImport = "import { SharedNicheDashboard } from '@/components/feature/SharedNicheDashboard';";
+  save('(tabs)/index.tsx', homeImport + '\nexport default function NicheHomeScreen() { return <SharedNicheDashboard nicheId="' + niche + '" />; }\n');
   // TypeScript parses JSX; avoid regex accidentally consuming nested JSX options.
   const ts = require('typescript');
   for (const relative of [...kept].filter(file => file.endsWith('_layout.tsx'))) {

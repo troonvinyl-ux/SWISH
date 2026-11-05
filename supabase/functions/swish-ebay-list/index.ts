@@ -30,6 +30,8 @@
 //   get_category_children   — browse cached/live EBAY_GB category branches
 //   get_category_suggestions— search only live/cached eBay leaf categories
 
+import { availableListingPhotos, preferredListingPhotos, studioImageIsUsable, type StudioResult } from '../_shared/smartStudio.ts';
+import { readStudioMetadata } from '../_shared/smartStudioEngine.ts';
 import { serveModule } from '../_shared/moduleScope.ts';
 import { descriptionXml, verifyRevisionContent } from '../_shared/ebayRevisionContract.ts';
 import { parseLiveContent } from '../_shared/ebayLiveContent.ts';
@@ -112,6 +114,24 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
+// A client metadata flag alone never authorizes an AI-generated marketplace photo.
+async function verifyPresentationPhotos(media:string[], originals:string[], attributes:Record<string,any>, tenantId:string, nicheId:string):Promise<boolean> {
+ const allowed=availableListingPhotos(originals,attributes);
+ for(const uri of media){
+  if(!allowed.includes(uri))return false;if(originals.includes(uri))continue;
+  const entry=Object.values(attributes._smart_studio_images??{}).find((value:any)=>value?.enhancedUri===uri&&originals.includes(value.originalUri)&&value.status==='ready'&&studioImageIsUsable(value)) as StudioResult|undefined;
+  if(!entry?.cacheKey||!entry.sourceHash)return false;
+  const root=Deno.env.get('SUPABASE_URL')??'';
+  const prefix=`${root}/storage/v1/object/public/item-images/`;
+  if(!uri.startsWith(prefix))return false;
+  const path=decodeURIComponent(uri.slice(prefix.length));
+  if(!path.startsWith(`${tenantId}/studio/`)||!path.endsWith(`/${nicheId}/${entry.cacheKey}/presentation.png`))return false;
+  const saved=await adminClient().storage.from('item-images').download(path);if(saved.error||!saved.data)return false;
+  const metadata=readStudioMetadata(new Uint8Array(await saved.data.arrayBuffer()));
+  if(!metadata||metadata.status!=='ready'||metadata.cacheKey!==entry.cacheKey||metadata.sourceHash!==entry.sourceHash||!studioImageIsUsable({...metadata,originalUri:entry.originalUri,enhancedUri:uri,maskUri:entry.maskUri}))return false;
+ }
+ return true;
+}
 function xmlEscape(s: string): string {
   return (s ?? '')
     .replace(/&/g, '&amp;')
@@ -2065,7 +2085,7 @@ async function handleRequest(req: Request): Promise<Response> {
     const sku = String(ownedItem.sku ?? '');
     let resolvedCategoryId = String(ownedListing.category_id ?? ownedItem.attributes?.ebay_category_id ?? '');
     let resolvedItemSpecifics: Array<{ name: string; value: string }> = Array.isArray(ownedItem.attributes?.ebay_item_specifics) ? ownedItem.attributes.ebay_item_specifics : [];
-    let resolvedMediaUrls: string[] = Array.isArray(ownedItem.attributes?.ebay_listing_media) ? ownedItem.attributes.ebay_listing_media : ownedItem.media ?? [];
+    let resolvedMediaUrls: string[] = Array.isArray(ownedItem.attributes?.ebay_listing_media) ? ownedItem.attributes.ebay_listing_media : preferredListingPhotos(ownedItem.media ?? [],ownedItem.attributes ?? {});
     if (!title.trim() || !description.trim() || !Number.isFinite(price) || price <= 0) return jsonResponse({ success: false, error: 'Save a valid listing title, non-empty description and seller price before revising.' }, 422);
     if (body.expectedUpdatedAt && body.expectedUpdatedAt !== ownedListing.updated_at) return jsonResponse({ success: false, error: 'The saved listing changed. Reload before revising.' }, 409);
     console.log(`[eBay Revise] saved listing=${listingId} descriptionLength=${description.length} sellerPrice=${price} type=${listingType}`);
@@ -2098,8 +2118,8 @@ async function handleRequest(req: Request): Promise<Response> {
       if (selected.error) return jsonResponse({ success: false, error: selected.error }, 422);
       conditionId = selected.id;
       const originals: string[] = reviseItem.media ?? [];
-      resolvedMediaUrls = Array.isArray(reviseItem.attributes?.ebay_listing_media) ? reviseItem.attributes.ebay_listing_media : originals;
-      if (resolvedMediaUrls.some(url => !originals.includes(url))) return jsonResponse({ success: false, error: 'Selected photographs do not belong to this inventory item.' }, 422);
+      resolvedMediaUrls = Array.isArray(reviseItem.attributes?.ebay_listing_media) ? reviseItem.attributes.ebay_listing_media : preferredListingPhotos(originals,reviseItem.attributes ?? {});
+      if (!await verifyPresentationPhotos(resolvedMediaUrls,originals,reviseItem.attributes ?? {},tenantId,specialistNiche(reviseItem.specialist_id) ?? '')) return jsonResponse({ success: false, error: 'Selected original or clean photos could not be verified for this inventory item.' }, 422);
       const invalid = validateAntiqueListingBasics({ title, description, price: Number(price), quantity: Number(quantity), media: resolvedMediaUrls });
       if (invalid) return jsonResponse({ success: false, error: invalid }, 422);
     }
@@ -2332,7 +2352,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
   let conditionId = mapConditionId(item?.condition ?? '', item?.condition_grade ?? '');
   const originalMedia: string[] = ((item?.media ?? []) as string[]).filter((u: string) => typeof u === 'string' && u.startsWith('https://'));
-  const mediaUrls: string[] = isAntique && Array.isArray(attrs.ebay_listing_media) ? attrs.ebay_listing_media : originalMedia;
+  const mediaUrls: string[] = isAntique && Array.isArray(attrs.ebay_listing_media) ? attrs.ebay_listing_media : preferredListingPhotos(originalMedia,attrs);
   const sellerProfilesXml = buildSellerProfiles(fulfillmentId, returnId, paymentId, isAntique ? Number(antiqueOptions.dispatchDays ?? 3) : 3);
   const quantity = isAntique ? Number(item?.quantity ?? 1) : Number(item?.quantity ?? 1) || 1;
   let conditionRequired = true;
@@ -2348,7 +2368,7 @@ async function handleRequest(req: Request): Promise<Response> {
     if (selected.error) return jsonResponse({ error: selected.error }, 422);
     conditionId = selected.id;
     conditionRequired = policy.itemConditionRequired;
-    if (mediaUrls.some(url => !originalMedia.includes(url))) return jsonResponse({ error: 'Use original photographs attached to this inventory item.' }, 422);
+    if (!await verifyPresentationPhotos(mediaUrls,originalMedia,attrs,tenantId,specialistNiche(specialistId) ?? '')) return jsonResponse({ error: 'Select verified original or accepted clean photographs attached to this inventory item.' }, 422);
     const issue = validateAntiqueListingBasics({ title, description, price, quantity, media: mediaUrls });
     if (issue) return jsonResponse({ error: issue }, 422);
     if (String(item?.condition_notes ?? '').length > 1000) return jsonResponse({ error: 'Condition notes exceed the eBay 1,000-character limit.' }, 422);

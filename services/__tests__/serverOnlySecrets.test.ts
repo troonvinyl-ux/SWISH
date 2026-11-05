@@ -528,7 +528,9 @@ describe('SWISH coin image enhancement provider error safety', () => {
   );
 
   test('does not log raw AI provider response bodies', () => {
-    expect(imageEnhance).toContain("console.error('[swish-coin-image-enhance] model request failed', response.status)");
+    const engine=fs.readFileSync(path.join(projectRoot,'supabase/functions/_shared/smartStudioEngine.ts'),'utf8');
+    expect(engine).toContain("console.error('[swish-coin-image-enhance] model request failed', response.status)");
+    expect(engine).not.toContain('console.log(imageDataUrl)');
     expect(imageEnhance).not.toContain("response.text()).slice(0, 500)");
     expect(imageEnhance).not.toContain("response.status, detail");
   });
