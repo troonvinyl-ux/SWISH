@@ -69,6 +69,14 @@ serve(async (req) => {
     // Checkout metadata must use a recognised production niche so the same
     // entitlement can be read consistently by swish-check-subscription.
     if (nicheId === "surplus_trader") nicheId = "surplus_flip";
+    // Tunes Flip remains free while the owner seeks a Discogs agreement.
+    // No automatic expiry or agreement-flag change can enable checkout; any
+    // future monetisation requires a separate, explicit rollout change.
+    if (["tunes_flip", "tunes-flip", "music", "vinyl_records"].includes(nicheId)) {
+      return new Response(JSON.stringify({ error: "Tunes Flip is currently free and will remain free until a Discogs agreement is obtained and the owner explicitly enables subscriptions. No payment was started." }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 503,
+      });
+    }
     const allowedNiches = new Set(["coins", "motocross", "bicycles", "clothing", "surplus_flip", "trading_cards", "antiques", "fossils", "beauty", "tech", "collectibles"]);
     if (!allowedNiches.has(nicheId)) {
       return new Response(JSON.stringify({ error: "Unknown SWISH subscription niche." }), {

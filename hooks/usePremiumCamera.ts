@@ -26,7 +26,7 @@ export function usePremiumCamera(capture: ReturnType<typeof useGenericCapture>) 
       if (!permission?.granted) { await requestPermission(); return; }
       if (!ready || !focused) return;
       flight.current=true;setTaking(true);setError('');
-      const photo=await cameraRef.current?.takePictureAsync({quality:0.9});
+      const photo=await cameraRef.current?.takePictureAsync({quality:1});
       if (!photo?.uri) throw new Error('No photograph returned. Retake this angle.');
       await capture.addCapturedPhoto(slot.id,{uri:photo.uri,width:photo.width,height:photo.height});
     } catch(cause) {if(mounted.current)setError(cause instanceof Error?cause.message:'Camera unavailable. Use the gallery.');}

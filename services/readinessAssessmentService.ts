@@ -1,3 +1,4 @@
+import { PRODUCTION_NICHE_IDS } from '@/constants/niches';
 import { isProductionCommit, getNicheCertification, hasProductionEvidence, type ProductionRegister, type ProductionTask } from './productionControlEvidence';
 import type { ProductionSnapshot } from './productionControlService';
 export type ReadinessState = 'VERIFIED' | 'FAILED' | 'BLOCKED' | 'AWAITING VERIFICATION' | 'NOT ASSESSED';
@@ -8,7 +9,7 @@ const plans: Record<string, TaskPlan> = {
  S2: { components: ['shared/moduleContracts.ts','services/unifiedModuleRegistry.ts','scripts/validate-unified-modules.mjs'], method: 'Full current-commit registry/module-boundary tests and dependency graph validation.', correction: 'Correct the smallest shared contract mismatch and rerun all affected niche tests.' },
  S3: { components: ['contexts/AppContext.tsx','supabase/functions/','supabase/migrations/'], method: 'Separate subscriber JWTs; caller-RLS and approved sandbox auth/storage/AI/eBay/lifecycle acceptance.', correction: 'Trace the failed authorized request and fix its owning service without replacing auth, inventory or eBay.' },
  S4: { components: ['hooks/useGenericCapture.ts','services/listingEditorService.ts','services/ebayRevisionService.ts'], method: 'Approved isolated scan → save/reopen → draft/category/specifics → seller sandbox → sale/fee reconciliation.', correction: 'Repair the failed workflow transition; require persisted/provider readback, not only a success response.' },
- S5: { components: ['constants/niches.ts','shared/specialistIntelligence.ts','services/inventoryTabQueryService.ts'], method: 'All 11 representative niche fixtures plus two-user tenant/niche denial tests and saved field readback.', correction: 'Correct the canonical specialist mapping or failing niche field only; do not reclassify historical inventory.' },
+ S5: { components: ['constants/niches.ts','shared/specialistIntelligence.ts','services/inventoryTabQueryService.ts'], method: 'All registered representative niche fixtures plus two-user tenant/niche denial tests and saved field readback.', correction: 'Correct the canonical specialist mapping or failing niche field only; do not reclassify historical inventory.' },
  S6: { components: ['services/specialistWorkspaceService.ts','services/cardGradingService.ts','services/manifestParser.ts'], method: 'Selected optional engine tests plus cross-niche contamination tests; deferred external providers stay blocked.', correction: 'Keep optional integrations isolated and explicitly defer unsupported/licensing-dependent capabilities.' },
  S7: { components: ['.github/workflows/build-swish-unified.yml','scripts/verify-unified-apk.sh','scripts/verify-s3-live.mjs'], method: 'Current-commit Jest, TypeScript, lint, server authorization, unified artifact/signing, hosted/device and approved integration evidence.', correction: 'Rerun failing checks on the exact source commit; no build/release until mandatory acceptance is complete.' },
 };
@@ -35,7 +36,7 @@ export function assessReadiness(snapshot: ProductionSnapshot) {
   ...(!tasks.length ? ['Canonical S1–S7 requirements unavailable.'] : []),
   ...(critical.length ? [`${critical.length} mandatory critical tasks are not currently verified.`] : []),
   ...(failed ? [`${failed} current acceptance failures.`] : []),
-  ...(certified !== snapshot.niches.length || snapshot.niches.length !== 11 ? [`${certified}/11 niches have complete current-commit acceptance.`] : []),
+  ...(certified !== snapshot.niches.length || snapshot.niches.length !== PRODUCTION_NICHE_IDS.length ? [`${certified}/${PRODUCTION_NICHE_IDS.length} niches have complete current-commit acceptance.`] : []),
   ...(snapshot.errors.length ? ['One or more source/evidence queries failed.'] : []),
   ...(register?.knownReleaseRisks.length ? ['Recorded release risks remain open; no historical risk was silently dismissed.'] : []),
  ];

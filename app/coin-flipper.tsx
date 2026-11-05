@@ -56,6 +56,7 @@ import { getMarketValue, MarketValueResult } from '@/services/marketValueService
 import { startCheckout } from '@/services/subscriptionService';
 import { processCoinImage, CoinImageTool } from '@/services/coinImageProcessing';
 import { generateCoinImageReference } from '@/services/coinImageEnhancementService';
+import { retainCaptureImage } from '@/services/captureDraftService';
 import { BrandArtwork } from '@/components/feature/BrandArtwork';
 import { InventoryAccountScope } from '@/components/feature/InventoryAccountScope';
 import { useInventory } from '@/hooks/useInventory';
@@ -1760,8 +1761,9 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
   // Keep originals untouched while the user captures both faces. Processing starts
   // only after obverse + reverse are present, then runs on both sides in parallel.
   const prepareCapturedPhoto = useCallback(async (image: CapturedImage): Promise<CapturedImage> => {
-    originalImageUris.current[image.slotId] = image.uri;
-    return { ...image, enhancedUri: undefined, enhancementStatus: undefined, enhancementWarning: undefined };
+    const retained = await retainCaptureImage(image);
+    originalImageUris.current[image.slotId] = retained.uri;
+    return { ...retained, enhancedUri: undefined, enhancementStatus: undefined, enhancementWarning: undefined };
   }, []);
 
   useEffect(() => {
@@ -1779,10 +1781,10 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
         : current
     ));
     for (const image of pending) {
-      void generateCoinImageReference(image.uri).then(reference => {
+      void generateCoinImageReference(image.uri,{tenantId:tenant?.id,nicheId:'coins',angle:image.slotLabel}).then(reference => {
         setCapturedImages(prev => prev.map(current =>
           current.slotId === image.slotId && current.uri === image.uri
-            ? { ...current, enhancedUri: reference.enhancedUri, enhancementStatus: 'ready', enhancementWarning: reference.warning }
+            ? { ...current, enhancedUri: reference.enhancedUri, enhancementStatus: 'ready', enhancementWarning: reference.warning, studio: reference.studio }
             : current
         ));
       }).catch(error => {
@@ -1794,7 +1796,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
         ));
       });
     }
-  }, [capturedImages]);
+  }, [capturedImages,tenant?.id]);
 
   // ── Capture handler ─────────────────────────────────────────────────────────
   const handleCapture = useCallback(async (slotId: string, slotLabel: string) => {
@@ -1848,9 +1850,9 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
     if (mode === 'enhance') {
       setCapturedImages(prev => prev.map(image => image.slotId === slotId ? { ...image, enhancementStatus: 'processing' } : image));
       try {
-        const reference = await generateCoinImageReference(current.uri);
+        const reference = await generateCoinImageReference(current.uri,{tenantId:tenant?.id,nicheId:'coins',angle:current.slotLabel});
         setCapturedImages(prev => prev.map(image => image.slotId === slotId
-          ? { ...image, enhancedUri: reference.enhancedUri, enhancementStatus: 'ready', enhancementWarning: reference.warning }
+          ? { ...image, enhancedUri: reference.enhancedUri, enhancementStatus: 'ready', enhancementWarning: reference.warning, studio: reference.studio }
           : image));
       } catch (error) {
         setCapturedImages(prev => prev.map(image => image.slotId === slotId ? { ...image, enhancementStatus: 'failed' } : image));
@@ -1860,7 +1862,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
     }
     // Auto detect is non-destructive until reliable boundary detection is available.
     await processCoinImage(current.uri, 'detect');
-  }, [capturedImages]);
+  }, [capturedImages,tenant?.id]);
 
   const handleRestoreImage = useCallback((slotId: string) => {
     const originalUri = originalImageUris.current[slotId];
@@ -1869,7 +1871,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
       return;
     }
     setCapturedImages(prev => prev.map(image => image.slotId === slotId
-      ? { ...image, uri: originalUri, base64: undefined }
+      ? { ...image, uri: originalUri, base64: undefined, enhancedUri:undefined, studio:undefined, enhancementStatus:'failed', enhancementWarning:'Original evidence view selected.' }
       : image));
   }, []);
 
@@ -2025,17 +2027,8 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
 
     // Give the model the original and (when available) AI-rendered reference
     // as explicitly labelled evidence. Original photos remain canonical for saving/listing.
-    const identificationImages: CapturedImage[] = capturedImages.flatMap((image) => [
-      { ...image, base64: undefined },
-      ...(image.enhancedUri ? [{
-        ...image,
-        uri: image.enhancedUri,
-        slotId: `${image.slotId}_ai_reference`,
-        slotLabel: `${image.slotLabel} — AI-rendered reference (not documentary evidence)`,
-        base64: undefined,
-        enhancedUri: undefined,
-      }] : []),
-    ]);
+    const identificationImages: CapturedImage[] = capturedImages.map(image=>({...image,base64:undefined}));
+    // Do not double the evidence set or substitute presentation pixels for originals.
     const { result, error, quotaExceeded } = await identifyItemWithAI(
       identificationImages,
       selectedSpecialist.specialistId,
