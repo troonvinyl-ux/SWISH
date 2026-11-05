@@ -1344,6 +1344,7 @@ function getNicheEvidenceLabel(specialistId: string | undefined): string {
   if (id === 'motocross') return 'Motocross / off-road eBay sold comps';
   if (id === 'bicycles' || id === 'cycling') return 'MTB & road bike eBay sold comps';
   if (id === 'clothing' || id === 'trainers_sneakers') return 'Vintage & streetwear eBay sold comps';
+  if (id === 'collectibles') return 'Collectibles eBay Product Research & exact-match sold comps';
   return isCoinNiche(specialistId) ? 'eBay sold + Numista catalogue (when available)' : 'Comparable marketplace evidence (when available)';
 }
 
