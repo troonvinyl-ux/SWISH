@@ -158,13 +158,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAccessError(null); setModuleError(null); setModuleLoading(false); setSubscriptionLoading(false); clearModule(); void loadTenant();
     return () => { generation.current++; accessRequest.current++; scopeRequest.current++; };
   }, [loadTenant, clearModule]);
-  // Never leave startup verification spinning forever if a backend request stalls.
-  // Invalidate the in-flight generations so a retry can start a fresh request.
+  // Bound startup verification, but never revoke an already verified access
+  // snapshot because a periodic background refresh is temporarily slow.
   useEffect(() => {
+    const hasVerifiedAccess = Boolean(loadedUserId && accessRef.current);
     const pending = tenantLoading || subscriptionLoading || moduleLoading ||
       (Boolean(user?.id) && !loadedUserId && !tenantError && !accessError);
     if (!pending) return;
     const timer = setTimeout(() => {
+      const message = 'Specialist access verification timed out. The backend did not finish responding. Your membership has not been changed. Tap retry to start a fresh check.';
+      if (hasVerifiedAccess) {
+        // A background membership refresh must not invalidate the current
+        // authenticated workspace or force the user back to the access spinner.
+        if (subscriptionLoading) {
+          accessRequest.current++;
+          accessFlight.current = null;
+          setSubscriptionLoading(false);
+        }
+        if (moduleLoading) {
+          scopeRequest.current++;
+          moduleLock.current = false;
+          setModuleLoading(false);
+          setModuleError('Workspace activation timed out. Your existing verified membership is unchanged. Retry the workspace if needed.');
+        }
+        return;
+      }
+
+      // No verified snapshot exists yet: this is genuine startup verification.
       generation.current++;
       accessRequest.current++;
       scopeRequest.current++;
@@ -174,7 +194,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setTenantLoading(false);
       setSubscriptionLoading(false);
       setModuleLoading(false);
-      const message = 'Specialist access verification timed out. The backend did not finish responding. Your membership has not been changed. Tap retry to start a fresh check.';
       if (!loadedUserId || tenantLoading) setTenantError(message);
       else setAccessError(message);
     }, 25000);
