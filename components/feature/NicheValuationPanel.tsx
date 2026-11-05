@@ -92,7 +92,8 @@ const NICHE_CONFIGS: Record<string, NicheValuationConfig> = {
   banknotes: { specialistId: 'banknotes', accent: '#4CAF50', accentDim: '#0A1A0A', evidenceLabel: 'Banknote eBay sold comps', evidenceIcon: 'payments', showNumista: false },
   ancient_artefacts: { specialistId: 'ancient_artefacts', accent: '#B8860B', accentDim: '#1A1200', evidenceLabel: 'Ancient artefacts eBay sold comps', evidenceIcon: 'history', showNumista: false },
   islamic_silver: { specialistId: 'islamic_silver', accent: '#B8860B', accentDim: '#1A1200', evidenceLabel: 'Islamic silver coin eBay sold comps', evidenceIcon: 'toll', showNumista: false },
-  curiosities_collectibles: { specialistId: 'curiosities_collectibles', accent: Colors.primary, accentDim: Colors.primaryDim, evidenceLabel: 'Collectibles eBay sold comps', evidenceIcon: 'bar-chart', showNumista: false },
+  collectibles: { specialistId: 'collectibles', accent: '#FFE600', accentDim: '#242000', evidenceLabel: 'Collectibles eBay Product Research & sold comparables', evidenceIcon: 'category', showNumista: false, searchHint: 'Match exact maker, character/franchise, series, edition, issue/printing, completeness and condition; separate sold prices from active asking prices.' },
+  curiosities_collectibles: { specialistId: 'curiosities_collectibles', accent: Colors.primary, accentDim: Colors.primaryDim, evidenceLabel: 'Legacy general collectibles eBay sold comps', evidenceIcon: 'bar-chart', showNumista: false },
 };
 
 function getNicheConfig(specialistId: string): NicheValuationConfig {
