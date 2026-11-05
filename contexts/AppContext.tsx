@@ -185,6 +185,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (hasVerifiedAccess) {
         // A background membership refresh must not invalidate the current
         // authenticated workspace or force the user back to the access spinner.
+        if (tenantLoading) {
+          generation.current++;
+          tenantFlight.current = null;
+          setTenantLoading(false);
+        }
         if (subscriptionLoading) {
           accessRequest.current++;
           accessFlight.current = null;
