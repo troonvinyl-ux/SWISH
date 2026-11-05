@@ -10,6 +10,7 @@ import { loadModuleAccess, activateModuleScope, type ModuleAccessSnapshot } from
 import type { SubscriptionStatus } from '@/services/subscriptionService';
 import { restoredModule } from '@/services/moduleNavigationService';
 import { recordNavigationFailure } from '@/services/verificationCentreService';
+import { isBackendUnavailable } from '@/services/backendAvailabilityService';
 
 export const SWISH_MASTER_ADMIN_EMAIL = 'troonvinyl@gmail.com';
 /** Legacy presentation helper only. AppProvider and backend grants NEVER derive roles from this. */
@@ -94,7 +95,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const result = await loadModuleAccess(account.id);
       if (uid !== userRef.current || version !== accessRequest.current) return;
       if (result.error || !result.snapshot) {
-        accessRef.current = null; setAccess(null); setAccessError(result.error); clearModule(); return;
+        const failure = result.error ?? 'Membership verification returned no access snapshot.';
+        // A pool/network outage is not an entitlement decision. Keep the last
+        // server-verified snapshot and active workspace, then retry on the next
+        // scheduled/foreground refresh. Real authorization failures still fail closed.
+        if (accessRef.current && isBackendUnavailable(failure)) {
+          setAccessError(null);
+          return;
+        }
+        accessRef.current = null; setAccess(null); setAccessError(failure); clearModule(); return;
       }
       const first = accessRef.current === null;
       const next = result.snapshot; accessRef.current = next; setAccess(next); setAccessError(null);
@@ -109,8 +118,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setReloadSignal(v => v + 1);
     } catch (cause) {
       if (uid === userRef.current && version === accessRequest.current) {
-        accessRef.current = null; setAccess(null); clearModule();
-        setAccessError(cause instanceof Error ? cause.message : 'Membership verification could not be reached. Retry.');
+        const failure = cause instanceof Error ? cause.message : 'Membership verification could not be reached. Retry.';
+        // Preserve previously verified access only for transient infrastructure
+        // failures; do not preserve it for explicit authorization/entitlement errors.
+        if (accessRef.current && isBackendUnavailable(failure)) {
+          setAccessError(null);
+        } else {
+          accessRef.current = null; setAccess(null); clearModule(); setAccessError(failure);
+        }
       }
     } finally {
       if (accessFlight.current?.version === version) accessFlight.current = null;
@@ -158,13 +173,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAccessError(null); setModuleError(null); setModuleLoading(false); setSubscriptionLoading(false); clearModule(); void loadTenant();
     return () => { generation.current++; accessRequest.current++; scopeRequest.current++; };
   }, [loadTenant, clearModule]);
-  // Never leave startup verification spinning forever if a backend request stalls.
-  // Invalidate the in-flight generations so a retry can start a fresh request.
+  // Bound startup verification, but never revoke an already verified access
+  // snapshot because a periodic background refresh is temporarily slow.
   useEffect(() => {
+    const hasVerifiedAccess = Boolean(loadedUserId && accessRef.current);
     const pending = tenantLoading || subscriptionLoading || moduleLoading ||
       (Boolean(user?.id) && !loadedUserId && !tenantError && !accessError);
     if (!pending) return;
     const timer = setTimeout(() => {
+      const message = 'Specialist access verification timed out. The backend did not finish responding. Your membership has not been changed. Tap retry to start a fresh check.';
+      if (hasVerifiedAccess) {
+        // A background membership refresh must not invalidate the current
+        // authenticated workspace or force the user back to the access spinner.
+        if (tenantLoading) {
+          generation.current++;
+          tenantFlight.current = null;
+          setTenantLoading(false);
+        }
+        if (subscriptionLoading) {
+          accessRequest.current++;
+          accessFlight.current = null;
+          setSubscriptionLoading(false);
+        }
+        if (moduleLoading) {
+          scopeRequest.current++;
+          moduleLock.current = false;
+          setModuleLoading(false);
+          setModuleError('Workspace activation timed out. Your existing verified membership is unchanged. Retry the workspace if needed.');
+        }
+        return;
+      }
+
+      // No verified snapshot exists yet: this is genuine startup verification.
       generation.current++;
       accessRequest.current++;
       scopeRequest.current++;
@@ -174,7 +214,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setTenantLoading(false);
       setSubscriptionLoading(false);
       setModuleLoading(false);
-      const message = 'Specialist access verification timed out. The backend did not finish responding. Your membership has not been changed. Tap retry to start a fresh check.';
       if (!loadedUserId || tenantLoading) setTenantError(message);
       else setAccessError(message);
     }, 25000);

@@ -9,6 +9,27 @@ export interface InventoryStats {
   soldCount: number; archivedCount: number; grandTotal: number;
 }
 interface Snapshot { scope: string; items: any[]; counts: Record<string, number>; error: string | null; loading: boolean }
+interface InventoryRead { items: any[]; counts: Record<string, number> }
+
+// Multiple dashboard/widgets can mount useInventory for the same account and niche.
+// Share the actual database read across hook instances to avoid multiplying pool load.
+const inventoryReadFlights = new Map<string, Promise<InventoryRead>>();
+
+async function readInventoryOnce(tenantId: string, scope: string, filter: ItemFilter): Promise<InventoryRead> {
+  const existing = inventoryReadFlights.get(scope);
+  if (existing) return existing;
+  const request = (async () => {
+    const [result, counts] = await Promise.all([
+      listItems(tenantId, filter),
+      getItemStatusCounts(tenantId, filter.specialistIds),
+    ]);
+    if (result.error) throw new Error(result.error);
+    return { items: result.items, counts };
+  })();
+  inventoryReadFlights.set(scope, request);
+  try { return await request; }
+  finally { if (inventoryReadFlights.get(scope) === request) inventoryReadFlights.delete(scope); }
+}
 
 /** Polling is the supported OnSpace Cloud mechanism; no Realtime dependency. */
 export function useInventory(filter: ItemFilter = {}) {
@@ -31,17 +52,18 @@ export function useInventory(filter: ItemFilter = {}) {
     const effectiveFilter: ItemFilter = { ...filter, specialistId: undefined,
       specialistIds: requested.filter(id => allowList.includes(id)) };
     if (!effectiveFilter.lifecycleGroup && !effectiveFilter.statuses && !effectiveFilter.status && !effectiveFilter.reviewRequired) effectiveFilter.lifecycleGroup = 'active';
-    setSnapshot(prev => prev.scope === scope ? { ...prev, loading: true } : { scope, items: [], counts: {}, error: null, loading: true });
+    setSnapshot(prev => prev.scope === scope ? { ...prev, loading: true, error: null } : { scope, items: [], counts: {}, error: null, loading: true });
     try {
-      const [result, counts] = await Promise.all([
-        listItems(tenant.id, effectiveFilter), getItemStatusCounts(tenant.id, effectiveFilter.specialistIds),
-      ]);
+      const result = await readInventoryOnce(tenant.id, scope, effectiveFilter);
       if (scopeRef.current !== scope || requestId.current !== version) return;
-      if (result.error) throw new Error(result.error);
-      setSnapshot({ scope, items: result.items, counts, error: null, loading: false });
+      setSnapshot({ scope, items: result.items, counts: result.counts, error: null, loading: false });
     } catch (error: any) {
       if (scopeRef.current === scope && requestId.current === version) {
-        setSnapshot({ scope, items:[], counts:{}, loading:false, error:error?.message ?? 'Inventory refresh failed' });
+        // A transient read failure must never turn a previously loaded inventory
+        // into an empty inventory. Keep the last good snapshot and report the error.
+        setSnapshot(previous => previous.scope === scope
+          ? { ...previous, loading: false, error: error?.message ?? 'Inventory refresh failed' }
+          : { scope, items: [], counts: {}, loading: false, error: error?.message ?? 'Inventory refresh failed' });
       }
     } finally {
       if (inFlight.current === scope) inFlight.current = null;
@@ -50,7 +72,9 @@ export function useInventory(filter: ItemFilter = {}) {
 
   useEffect(() => {
     void load();
-    const timer = setInterval(() => { void load(); }, 30_000);
+    // A 90-second cadence avoids every dashboard widget repeatedly querying
+    // the same inventory every 30 seconds. Concurrent same-scope reads are shared.
+    const timer = setInterval(() => { if (AppState.currentState === 'active') void load(); }, 90_000);
     const foreground = AppState.addEventListener('change', state => { if (state === 'active') void load(); });
     return () => { clearInterval(timer); foreground.remove(); requestId.current++; };
   }, [load]);

@@ -268,7 +268,8 @@ export async function getItemStatusCounts(
       if ((page.data?.length ?? 0) < 1000) return counts;
     }
   }
-  const { data } = await query;
+  const { data, error } = await query;
+  if (error) throw new Error(`Inventory counts unavailable: ${error.message}`);
   const counts: Record<string, number> = {};
   (data ?? []).forEach((row) => {
     counts[row.status] = (counts[row.status] ?? 0) + 1;
