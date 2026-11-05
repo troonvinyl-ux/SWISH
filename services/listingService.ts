@@ -775,6 +775,9 @@ export async function publishGeneratedListing(
       success: false,
       error: published.error ?? 'eBay did not confirm publication. The saved draft is available to retry.',
       warnings: published.warnings ?? [],
+      // Preserve the provider-confirmed ID when local reconciliation needs attention.
+      // The UI can identify a possibly-live listing and prevent blind retries.
+      externalListingId: published.externalListingId,
     };
   }
 
