@@ -29,7 +29,7 @@ export function useCollectiblesDashboard() {
         router.push('/ebay-hub' as any);
         break;
       case 'opportunities':
-        router.push('/opportunities' as any);
+        router.push('/research' as any);
         break;
       default:
         break;
