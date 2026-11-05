@@ -12,9 +12,17 @@ export function membershipDestination(ids: readonly string[], owner: boolean, ac
 export async function loadModuleAccess(tenantId: string): Promise<{ snapshot: ModuleAccessSnapshot | null; error: string | null }> {
   const client = getSupabaseClient();
   try {
-    const [role, billing] = await Promise.all([client.rpc('swish_is_platform_owner'), checkSubscription(tenantId)]);
-    if (role.error) return { snapshot: null, error: role.error.message || 'Owner and membership authorization could not be verified. Retry.' };
-    const owner = role.data === true;
+    // Read the protected owner row under its own-user RLS policy instead of
+    // calling a zero-argument RPC. This avoids a stale PostgREST function-cache
+    // entry turning an ordinary membership check into a misleading account error.
+    const { data: { user }, error: userError } = await client.auth.getUser();
+    if (userError || !user) return { snapshot: null, error: 'Your SWISH sign-in session could not be verified. Sign in again and retry.' };
+    const [ownerRow, billing] = await Promise.all([
+      client.from('swish_platform_owners').select('user_id').eq('user_id', user.id).maybeSingle(),
+      checkSubscription(tenantId),
+    ]);
+    if (ownerRow.error) return { snapshot: null, error: 'SWISH owner-verification records are unavailable. The backend migration may need applying or its schema cache refreshing. Your access has not been changed.' };
+    const owner = Boolean(ownerRow.data);
     if (!owner && (billing.error || !billing.status)) return { snapshot: null, error: billing.error ?? 'Membership verification unavailable.' };
     const nicheIds = owner ? [...PRODUCTION_NICHE_IDS] : [...new Set((billing.status?.nicheEntitlements ?? []).filter(isProductionNiche))];
     return { snapshot: { owner, nicheIds, tenantId, billingStatus: billing.status, verifiedAt: Date.now() }, error: null };
