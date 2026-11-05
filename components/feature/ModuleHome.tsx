@@ -4,14 +4,8 @@ import type { ProductionNicheId } from '@/constants/niches';
 import { Colors, Spacing, Typography } from '@/constants/theme';
 import { useModuleTelemetry, useModuleFailure } from '@/hooks/useModuleTelemetry';
 import { useUnifiedShell } from '@/hooks/useUnifiedShell';
-const Coins=lazy(()=>import('@/app/coin-flipper'));
-const MX=lazy(()=>import('@/app/flipper-mx'));
-const Bikes=lazy(()=>import('@/app/bike-flipper'));
-const Threads=lazy(()=>import('@/app/threads-flip'));
-const Surplus=lazy(()=>import('@/app/surplus-flip'));
-const Antiques=lazy(()=>import('@/app/antique-flipper'));
 const Collectibles=lazy(()=>import('./CollectiblesDashboard').then(module=>({default:module.CollectiblesDashboard})));
-const Overview=lazy(()=>import('./NicheOverview').then(module=>({default:module.NicheOverview})));
+const Dashboard=lazy(()=>import('./SharedNicheDashboard').then(module=>({default:module.SharedNicheDashboard})));
 interface ModuleHomeProps { nicheId:ProductionNicheId }
 function ModuleCommit({nicheId}:ModuleHomeProps){useModuleTelemetry(nicheId);return null;}
 interface LoadBoundaryProps {children:ReactNode;onRetry:()=>void;onReturn:()=>void;canReturn:boolean;onFailure:()=>void}
@@ -27,7 +21,7 @@ export const ModuleHome=memo(function ModuleHome({nicheId}:ModuleHomeProps){
   <Suspense fallback={<View style={s.loading}><ActivityIndicator color={Colors.primary}/><Text style={s.body}>Loading specialist dashboard…</Text></View>}>
    <ModuleCommit nicheId={nicheId}/>
    <View style={s.container} testID={`module-home-${nicheId}`} accessibilityLabel={`${nicheId} specialist dashboard`}>
-    {nicheId==='collectibles'?<Collectibles/>:nicheId==='coins'?<Coins isHomeTab/>:nicheId==='motocross'?<MX isHomeTab/>:nicheId==='bicycles'?<Bikes isHomeTab/>:nicheId==='clothing'?<Threads isHomeTab/>:nicheId==='surplus_flip'?<Surplus isHomeTab/>:nicheId==='antiques'?<Antiques/>:<Overview/>}
+    {nicheId==='collectibles'?<Collectibles/>:<Dashboard nicheId={nicheId}/>}
    </View>
   </Suspense>
  </ModuleLoadBoundary>;

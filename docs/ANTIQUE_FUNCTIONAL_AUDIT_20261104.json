@@ -1,0 +1,41 @@
+{
+  "date": "2026-11-04",
+  "sourceBaseline": "213f306e48f564e8408a77e43eafe25bf1ae5d6a",
+  "productionReady": false,
+  "completeWorkflowVerified": false,
+  "newCodeTestExecution": "NOT TESTED",
+  "livePublication": "NOT TESTED",
+  "businessRecordsModifiedByAuditTools": false,
+  "sqlEvidence": [
+    {"id":"A1","type":"privileged read-only aggregate","result":"PASS","evidence":{"items":1,"tenants":1,"withPhotos":0,"withIdentification":1,"withValue":0,"badNicheMetadata":0}},
+    {"id":"A2","type":"privileged read-only aggregate","result":"PASS","evidence":{"antiqueListings":0,"externalIds":0,"tenantMismatches":0}},
+    {"id":"A3","type":"connector metadata only","result":"PASS","evidence":{"connected":true,"canPublish":true,"canList":true,"shippingSelected":true,"returnsSelected":true,"paymentSelected":true,"tokenNotExpired":true,"lastSync":null}},
+    {"id":"A4","type":"installed function inspection before repair","result":"FAIL","evidence":{"savedSpecifics":true,"savedConditionNotes":false,"securityInvoker":true}},
+    {"id":"A5","type":"privileged read-only aggregate","result":"PASS","evidence":{"duplicateDraftGroups":0,"duplicateExternalIdGroups":0,"storedOriginalFiles":3},"limitation":"No existing Antique listings; duplicate absence does not prove duplicate prevention."},
+    {"id":"A6","type":"privilege and mapping queries","result":"PASS","evidence":{"itemsRls":true,"listingsRls":true,"anonymousEditorExecute":false,"anonymousDraftExecute":false,"clientCanGrantOwner":false,"antiquesMapping":"antiques","booksMapping":"antiques"}},
+    {"id":"A7","type":"existing item SELECT","result":"PASS","evidence":{"itemId":"cb030fae-7d90-4443-8054-0e942a230145","specialist":"antiques","status":"review_required","confidence":0.45,"imageUrls":0,"valuationMid":0}},
+    {"id":"A8","type":"installed definition and privilege postconditions","result":"PASS","evidence":{"editorSavesConditionNotes":true,"editorSavesMediaSelection":true,"editorSecurityInvoker":true,"anonymousEditorDenied":true,"inventoryCount":1,"antiqueListings":0},"limitation":"Definition installed; successful business-record mutation was not executed."},
+    {"id":"A9","type":"authorization postconditions","result":"PASS","evidence":{"sessionScopeRequired":true,"ownerInsertDenied":true,"scopeUpdateDenied":true,"restrictiveItemSelectPolicy":true},"limitation":"Not a multi-account RLS penetration test."}
+  ],
+  "areas": [
+    {"area":"Inventory creation and persistence","result":"NOT TESTED","evidence":"A1/A7 confirm one pre-existing record, not a new write."},
+    {"area":"Inventory editing","result":"NOT TESTED","evidence":"Condition/edit readback repairs implemented; authorized mutation not executed."},
+    {"area":"Image upload and persistence","result":"FAIL","evidence":"A1/A5/A7: three original files exist but the sole Antique item has no linked photos. Retry paths repaired; existing row untouched."},
+    {"area":"AI identification","result":"BLOCKED","evidence":"No executable authenticated image request from editor; current item has no linked images."},
+    {"area":"AI confidence and uncertainty","result":"NOT TESTED","evidence":"Prompt/schema reviewed and repaired; no new representative model responses retrieved."},
+    {"area":"AI valuation","result":"BLOCKED","evidence":"A1/A7 show no stored valuation; actual provider calls unavailable."},
+    {"area":"eBay category selection","result":"BLOCKED","evidence":"No authenticated live Taxonomy invocation executed."},
+    {"area":"Category-specific item specifics retrieval","result":"BLOCKED","evidence":"Full metadata preservation implemented; actual retrieval not executed."},
+    {"area":"Item specifics persistence","result":"NOT TESTED","evidence":"Existing RPC extended and A8 confirms installed definition; seller-edit/save/reload not run."},
+    {"area":"Listing generation","result":"BLOCKED","evidence":"No authenticated generation invocation executed."},
+    {"area":"Draft creation","result":"NOT TESTED","evidence":"A2/A8 show no Antique drafts; no approved test draft created."},
+    {"area":"eBay live submission","result":"NOT TESTED","evidence":"No approved item/account/price/fees authorization; nothing published."},
+    {"area":"Listing ID reconciliation","result":"BLOCKED","evidence":"No real Antique listing ID available; persisted-ID checks implemented."},
+    {"area":"Listing management","result":"NOT TESTED","evidence":"Revision guard repaired; live revision/ending not authorized or executed."},
+    {"area":"Mobile/web synchronisation","result":"BLOCKED","evidence":"No device/browser automation or verified current native artifacts available."},
+    {"area":"Tenant and niche isolation","result":"NOT TESTED","evidence":"A6/A9 narrow role/schema checks pass; separate authenticated users and writes remain required."}
+  ],
+  "existingCi": {"runId":41914881811,"headSha":"213f306e48f564e8408a77e43eafe25bf1ae5d6a","result":"FAIL","failedStep":"Report project-wide TypeScript diagnostics and gate core coin files","regressionStep":"SKIPPED","newRepairsIncluded":false},
+  "blockers": ["No command/test execution tool in this editor", "No authenticated external request execution or device control", "Representative original photos and review required", "Approved test item, account, price, fee authorization and cleanup plan required before real publication", "Changed Edge Function deployment version not independently confirmed", "Installed Android/iOS and web verification required", "Restricted sold-data provider access is not established"],
+  "remainingSourceLimitations": ["Existing fixed-price ending route must be checked for auction support before using auctions as the reference", "SWISH editor currently supports 25 populated specifics, 65 characters per name/value, 12 listing photos and one scalar value per aspect; variation/multivalue listing creation is not verified", "Valuation estimate and inferred-claim accuracy need representative real-item testing", "Existing orphan photo links require authorized recovery, not automatic mutation"]
+}

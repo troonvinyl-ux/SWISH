@@ -73,6 +73,12 @@ import { CommercialIntelligenceCard } from '@/components/feature/CommercialIntel
 import { SpecialistItemFields } from '@/components/feature/SpecialistItemFields';
 import { ManifestInspectionReview } from '@/components/feature/ManifestInspectionReview';
 import { resolveProductionNiche } from '@/services/nicheRouting';
+import { NICHES } from '@/constants/niches';
+import { useItemMainImage } from '@/hooks/useItemMainImage';
+import { ItemPhotoGallery } from '@/components/feature/ItemPhotoGallery';
+import { StockListingToolbar, type StockListingAction } from '@/components/feature/StockListingToolbar';
+import { StockPricingSummary } from '@/components/feature/StockPricingSummary';
+import { EbayListingLiveCheck } from '@/components/feature/EbayListingLiveCheck';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const GALLERY_HEIGHT = 320;
@@ -1344,7 +1350,6 @@ function getNicheEvidenceLabel(specialistId: string | undefined): string {
   if (id === 'motocross') return 'Motocross / off-road eBay sold comps';
   if (id === 'bicycles' || id === 'cycling') return 'MTB & road bike eBay sold comps';
   if (id === 'clothing' || id === 'trainers_sneakers') return 'Vintage & streetwear eBay sold comps';
-  if (id === 'collectibles') return 'Collectibles eBay Product Research & exact-match sold comps';
   return isCoinNiche(specialistId) ? 'eBay sold + Numista catalogue (when available)' : 'Comparable marketplace evidence (when available)';
 }
 
@@ -1746,8 +1751,8 @@ function SectionHeader({ icon, label, color = Colors.primary, action, actionLabe
 
 const sh = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
-  iconWrap: { width: 24, height: 24, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
-  label: { flex: 1, fontSize: 10, fontWeight: Typography.weight.bold, textTransform: 'uppercase', letterSpacing: 0.6 },
+  iconWrap: { width: 32, height: 32, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
+  label: { flex: 1, fontSize: Typography.size.base, fontWeight: Typography.weight.semibold, letterSpacing: 0.3 },
   actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: Radius.pill, backgroundColor: Colors.surfaceHighlight, borderWidth: 1, borderColor: Colors.surfaceBorder },
   actionBtnText: { fontSize: 10, fontWeight: Typography.weight.semibold },
 });
@@ -1774,10 +1779,10 @@ function DataRow({ label, value, accent, missing }: { label: string; value?: str
 }
 
 const dr = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: Spacing.xs + 2, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder + '80' },
-  label: { width: 110, fontSize: Typography.size.xs, color: Colors.textTertiary, paddingTop: 1, flexShrink: 0 },
-  value: { flex: 1, fontSize: Typography.size.xs, color: Colors.textPrimary, lineHeight: 17 },
-  missing: { flex: 1, fontSize: Typography.size.xs, color: Colors.textTertiary, fontStyle: 'italic' },
+  row: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: Spacing.sm, gap: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder },
+  label: { width: '34%', fontSize: Typography.size.sm, color: Colors.textSecondary, flexShrink: 0 },
+  value: { flex: 1, fontSize: Typography.size.base, color: Colors.textPrimary, lineHeight: 26, includeFontPadding: false },
+  missing: { flex: 1, fontSize: Typography.size.sm, color: Colors.textSecondary, fontStyle: 'italic' },
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1789,6 +1794,7 @@ function FieldRow({ label, value, onEdit, editValue, onChangeText, onSave, onCan
   onChangeText?: (v: string) => void; onSave?: () => void; onCancel?: () => void;
   editing?: boolean; numeric?: boolean; multiline?: boolean; placeholder?: string; accent?: string;
 }) {
+  const canEdit = Boolean(onEdit && onChangeText);
   return (
     <View style={fr.row}>
       <Text style={fr.label}>{label}</Text>
@@ -1803,7 +1809,8 @@ function FieldRow({ label, value, onEdit, editValue, onChangeText, onSave, onCan
             numberOfLines={multiline ? 3 : 1}
             autoFocus
             placeholder={placeholder}
-            placeholderTextColor={Colors.textTertiary}
+            placeholderTextColor={Colors.textSecondary}
+            accessibilityLabel={label}
           />
           <View style={fr.editActions}>
             <Pressable onPress={onSave} style={fr.saveBtn} hitSlop={6}><MaterialIcons name="check" size={13} color={Colors.background} /></Pressable>
@@ -1811,9 +1818,9 @@ function FieldRow({ label, value, onEdit, editValue, onChangeText, onSave, onCan
           </View>
         </View>
       ) : (
-        <Pressable onPress={onEdit} style={fr.valueWrap} hitSlop={4}>
-          <Text style={[fr.value, accent && { color: accent }]} numberOfLines={multiline ? 5 : 2}>{value || '—'}</Text>
-          {onEdit ? <MaterialIcons name="edit" size={11} color={Colors.textTertiary} /> : null}
+        <Pressable disabled={!canEdit} accessibilityLabel={canEdit ? `Edit ${label}` : label} onPress={canEdit ? onEdit : undefined} style={({ pressed }) => [fr.valueWrap, pressed ? { opacity: 0.65 } : null]} hitSlop={4}>
+          <Text style={[fr.value, accent ? { color: accent } : null]} numberOfLines={multiline ? 5 : 2}>{value || 'Not recorded'}</Text>
+          {canEdit ? <MaterialIcons name="edit" size={18} color={Colors.textSecondary} /> : null}
         </Pressable>
       )}
     </View>
@@ -1822,15 +1829,15 @@ function FieldRow({ label, value, onEdit, editValue, onChangeText, onSave, onCan
 
 const fr = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder },
-  label: { width: 120, fontSize: Typography.size.xs, color: Colors.textTertiary, paddingTop: 2, flexShrink: 0 },
-  valueWrap: { flex: 1, flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
-  value: { flex: 1, fontSize: Typography.size.sm, color: Colors.textPrimary, lineHeight: 18 },
+  label: { width: '34%', fontSize: Typography.size.sm, color: Colors.textSecondary, paddingTop: Spacing.xs, flexShrink: 0 },
+  valueWrap: { flex: 1, minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  value: { flex: 1, fontSize: Typography.size.base, color: Colors.textPrimary, lineHeight: 26, includeFontPadding: false },
   editWrap: { flex: 1, gap: 6 },
   input: { backgroundColor: Colors.surfaceHighlight, borderRadius: Radius.sm, borderWidth: 1, borderColor: Colors.primary + '60', paddingHorizontal: Spacing.sm, paddingVertical: 5, fontSize: Typography.size.sm, color: Colors.textPrimary, includeFontPadding: false },
   inputMulti: { minHeight: 64, textAlignVertical: 'top' },
   editActions: { flexDirection: 'row', gap: Spacing.xs },
-  saveBtn: { width: 26, height: 26, borderRadius: Radius.sm, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
-  cancelBtn: { width: 26, height: 26, borderRadius: Radius.sm, backgroundColor: Colors.surfaceHighlight, alignItems: 'center', justifyContent: 'center' },
+  saveBtn: { width: 48, height: 48, borderRadius: Radius.sm, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
+  cancelBtn: { width: 48, height: 48, borderRadius: Radius.sm, backgroundColor: Colors.surfaceHighlight, alignItems: 'center', justifyContent: 'center' },
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1876,6 +1883,10 @@ export default function StockListingScreen() {
     setItem(previous => previous?.id === recovered.id && previous.tenantId === recovered.tenantId ? recovered : previous);
   }, []);
   const photoRecovery = useInventoryPhotoRecovery(item, onPhotosRecovered);
+  const mainImage = useItemMainImage(item, onPhotosRecovered);
+  const niche = nicheId ? NICHES[nicheId] : NICHES.general;
+  const nicheAccent = nicheId === 'antiques' ? Colors.specialistGold : niche.color;
+  const selectedListing = listings.find(row => row.status === 'active' || row.status === 'live') ?? listings.find(row => row.status === 'draft' || row.status === 'pending');
 
   // SWISH Intelligence expandable state
   const [intelligenceExpanded, setIntelligenceExpanded] = useState(false);
@@ -2014,43 +2025,11 @@ export default function StockListingScreen() {
 
   const handlePushToEbay = useCallback(async () => {
     if (!tenant || !item) return;
-    if (['antiques', 'books'].includes(item.specialistId)) {
-      const live = listings.find(row => row.externalListingId && row.status === 'active');
-      if (live) router.push(`/ebay-listing-editor?id=${live.id}` as any);
-      else showAlert('No live listing', 'This Antique item has no active eBay listing.');
-      return;
-    }
-    const activeListing = listings.find(l => l.status === 'active' && l.externalListingId);
-    if (!activeListing) { showAlert('No Live Listing', 'This item has no active eBay listing.'); return; }
-    const imageCount = (item.media ?? []).filter(u => u.startsWith('https://')).length;
-    showAlert('Push to eBay?', `Revise eBay listing #${activeListing.externalListingId} with current SWISH data?\n\nTitle: ${item.canonicalTitle?.slice(0, 50)}\nPrice: £${activeListing.price.toFixed(2)}\nPhotos: ${imageCount}`,
-      [{ text: 'Cancel', style: 'cancel' }, {
-        text: 'Push Now', onPress: async () => {
-          setPushingToEbay(true);
-          try {
-            const supabase = getSupabaseClient();
-            const attrs = item.attributes ?? {};
-            const itemSpecifics: Array<{ name: string; value: string }> = [];
-            for (const [key, val] of Object.entries(attrs)) {
-              if (key.startsWith('_') || typeof val === 'object' || key === 'ebay_item_specifics') continue;
-              if (val !== null && val !== undefined && String(val).trim()) {
-                itemSpecifics.push({ name: String(key).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).slice(0, 65), value: String(val).slice(0, 65) });
-              }
-            }
-            const mediaUrls = (item.media ?? []).filter(u => typeof u === 'string' && u.startsWith('https://'));
-            const { data: listingCatRow } = await supabase.from('listings').select('category_id').eq('id', activeListing.id).maybeSingle();
-            const storedCategoryId = listingCatRow?.category_id ?? '';
-            const { data: result, error } = await supabase.functions.invoke('swish-ebay-list', {
-              body: { route: 'revise', tenantId: tenant.id, listingId: activeListing.id, externalListingId: activeListing.externalListingId, categoryId: storedCategoryId, title: (item.canonicalTitle ?? '').slice(0, 80), description: item.description ?? '', price: activeListing.price, condition: item.condition ?? '', conditionDescription: item.conditionNotes ?? '', listingType: 'FixedPriceItem', quantity: item.quantity ?? 1, itemSpecifics, mediaUrls },
-            });
-            if (error) { let msg = error.message; if (error instanceof FunctionsHttpError) { try { const txt = await error.context?.text(); const p = txt ? JSON.parse(txt) : null; msg = p?.error ?? txt ?? msg; } catch {} } showAlert('Push Failed', msg); return; }
-            if (result?.success) showAlert('Pushed to eBay', `eBay listing #${activeListing.externalListingId} updated.`);
-            else showAlert('Push Failed', result?.error ?? 'Unknown error');
-          } catch (e: any) { showAlert('Push Failed', e?.message ?? 'Unknown error'); }
-          finally { setPushingToEbay(false); }
-        },
-      }]
-    );
+    // Every niche reviews the seller-facing saved listing before revision.
+    // Inventory/AI descriptions must never overwrite edited listing copy.
+    const live = listings.find(row => row.externalListingId && ['active','live'].includes(row.status));
+    if (live) router.push(`/ebay-listing-editor?id=${live.id}` as any);
+    else showAlert('No live listing', 'This item has no active eBay listing.');
   }, [tenant, item, listings, showAlert]);
 
   const startEdit = useCallback((field: string, current: string) => { setEditing(field); setEditValue(current); }, []);
@@ -2087,7 +2066,7 @@ export default function StockListingScreen() {
       }
       const readback = await getItem(item.id);
       if (readback.error || !readback.item || readback.item.tenantId !== tenant.id || Object.entries(updates).some(([key, expected]) => String(readback.item?.[key as keyof Item] ?? '') !== String(expected ?? ''))) {
-        showAlert('Save not verified', readback.error ?? 'The changed fields did not match the persisted coin record. Reload before retrying.');
+        showAlert('Save not verified', readback.error ?? 'The changed fields did not match the saved item. Reload before retrying.');
         return;
       }
       if (currentScope.current !== scope) return;
@@ -2135,18 +2114,6 @@ export default function StockListingScreen() {
       if (result.success && result.listing) {
         setItem(prev => prev ? { ...prev, status: 'listed' } : prev);
         showAlert('Listed on eBay', `\u2713 ${result.listing.title} is live${result.externalListingId ? ` · #${result.externalListingId}` : ''}.${result.warnings.length ? `\\n\\nNotes: ${result.warnings.join(' · ')}` : ''}`);
-        return;
-      }
-      if (result.externalListingId) {
-        showAlert(
-          'eBay accepted — SWISH sync pending',
-          `eBay returned item #${result.externalListingId}, but SWISH has not confirmed the local save and inventory update. The listing may already be live. Do not submit or retry this draft again until its status is reconciled.`,
-          [
-            { text: 'View on eBay', onPress: () => { void Linking.openURL(`https://www.ebay.co.uk/itm/${encodeURIComponent(result.externalListingId!)}`); } },
-            ...(result.listing ? [{ text: 'Open SWISH draft', onPress: () => router.push(`/ebay-listing-editor?id=${result.listing!.id}` as any) }] : []),
-            { text: 'OK', style: 'cancel' },
-          ],
-        );
         return;
       }
       showAlert(
@@ -2325,7 +2292,7 @@ export default function StockListingScreen() {
     ]);
   }, [item, tenant?.id, showAlert]);
 
-  const activeListings = useMemo(() => listings.filter(l => l.status === 'active'), [listings]);
+  const activeListings = useMemo(() => listings.filter(l => l.status === 'active' || l.status === 'live'), [listings]);
 
   // ── Facebook Marketplace export ─────────────────────────────────────────────
 
@@ -2333,7 +2300,8 @@ export default function StockListingScreen() {
     if (!item) return;
     const price = activeListings[0]?.price ?? item.expectedSellingPrice ?? 0;
     const specialist = item.specialistId ?? '';
-    const niche = specialist === 'motocross' ? 'MX' : specialist === 'bicycles' ? 'Bikes' : specialist === 'clothing' || specialist === 'trainers_sneakers' ? 'Fashion' : 'Coins';
+    const exportNiche = resolveProductionNiche(specialist);
+    const niche = exportNiche ? NICHES[exportNiche].shortName.replace(/\s/g, '') : 'Items';
     const condition = [item.condition, item.conditionGrade].filter(Boolean).join(' ');
     const attrs = item.attributes ?? {};
     const keyAttrs: string[] = [];
@@ -2380,7 +2348,7 @@ export default function StockListingScreen() {
     return (
       <View style={[s.container, s.center]}>
         <MaterialIcons name="error-outline" size={48} color={Colors.textTertiary} />
-        <Text accessibilityRole="alert" style={s.emptyTitle}>{loadError ?? (!ready ? 'Waiting for verified account and coin workspace' : 'Item not found in this account and niche')}</Text>
+        <Text accessibilityRole="alert" style={s.emptyTitle}>{loadError ?? (!ready ? 'Waiting for verified account and specialist workspace' : 'Item not found in this account and niche')}</Text>
         <Pressable onPress={() => void load()} disabled={!ready} style={({ pressed }) => [s.backLink, { opacity: pressed ? 0.7 : 1 }]}><Text style={s.backLinkText}>Retry detail read</Text></Pressable>
         <Pressable onPress={() => router.back()} style={s.backLink}><Text style={s.backLinkText}>Go back</Text></Pressable>
       </View>
@@ -2399,6 +2367,25 @@ export default function StockListingScreen() {
   const hasListingPrice = listingPrice > 0;
   const hasMarketValue = item.valuationMid > 0;
   const hasAcquiredCost = (item.acquiredCost ?? 0) > 0;
+  const hasLiveLink = activeListings.some(row => Boolean(row.externalListingId));
+  const primaryAction: StockListingAction | null = isSold ? null : draftListings.length > 0
+    ? { id: 'review', label: 'Review & submit listing', detail: '', icon: 'fact-check', onPress: () => router.push(`/listing-preflight?listingId=${draftListings[0].id}&itemId=${item.id}` as any), disabled: submittingId !== null }
+    : activeListings.length > 0
+      ? { id: 'edit', label: 'Edit listing', detail: '', icon: 'edit', onPress: () => router.push(`/ebay-listing-editor?id=${activeListings[0].id}` as any) }
+      : { id: 'create', label: 'Create listing', detail: '', icon: 'sell', onPress: () => router.push(`/create-listing?id=${item.id}` as any) };
+  const itemActions: StockListingAction[] = [
+    { id: 'identify', label: 'Re-identify with AI', detail: `Use your ${niche.shortName.toLowerCase()} specialist and existing photos.`, icon: 'auto-awesome', onPress: () => setReIdVisible(true) },
+    { id: 'research', label: 'Research item', detail: 'Review relevant references and marketplace evidence.', icon: 'manage-search', onPress: () => router.push(`/research?q=${encodeURIComponent(item.canonicalTitle)}` as any) },
+    { id: 'photos', label: 'Fetch eBay photos', detail: 'Retrieve photos from the linked marketplace listing.', icon: 'cloud-download', onPress: handleFetchImage, busy: fetchingImage },
+    ...(hasLiveLink ? [
+      { id: 'sync', label: 'Sync from eBay', detail: 'Import listing details into this inventory record.', icon: 'sync' as const, onPress: handleSyncFromEbay, busy: syncingEbay },
+      { id: 'push', label: 'Revise on eBay', detail: 'Review or confirm changes, including the new main photo.', icon: 'cloud-upload' as const, onPress: handlePushToEbay, busy: pushingToEbay },
+      { id: 'end', label: 'End live listing', detail: 'Confirmation required; the inventory item is retained.', icon: 'stop-circle' as const, onPress: () => { void handleEndListing(activeListings[0]); }, disabled: endingId !== null, destructive: true },
+    ] : []),
+    { id: 'share', label: 'Share for Facebook Marketplace', detail: 'Export item details using the share sheet.', icon: 'share', onPress: () => { void handleExportFacebook(); } },
+    ...(!isSold && !activeListings.length && !draftListings.length ? [{ id: 'sold', label: 'Mark as sold', detail: 'Record a sale and retain the inventory history.', icon: 'sell' as const, onPress: handleMarkSold }] : []),
+    ...(selectedListing ? [{ id: 'delete', label: 'Delete listing', detail: 'Confirmation required. This does not delete the inventory item.', icon: 'delete-outline' as const, onPress: () => handleDeleteListing(selectedListing), disabled: endingId !== null, destructive: true }] : []),
+  ];
 
   return (
     <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -2406,38 +2393,43 @@ export default function StockListingScreen() {
 
       {/* ── HEADER ── */}
       <View style={[s.header, { paddingTop: insets.top + Spacing.sm }]}>
-        <Pressable onPress={() => router.back()} style={s.headerBtn} hitSlop={8}>
+        <Pressable accessibilityLabel="Back to inventory" onPress={() => router.back()} style={({ pressed }) => [s.headerBtn, pressed ? { opacity: 0.65 } : null]} hitSlop={8}>
           <MaterialIcons name="arrow-back" size={20} color={Colors.textSecondary} />
         </Pressable>
         <View style={s.flex}>
           {item.inventoryId ? <View style={s.kcBadge}><MaterialIcons name="qr-code" size={10} color={Colors.primary} /><Text style={s.kcBadgeText}>{item.inventoryId}</Text></View> : null}
+          <Text style={[s.workspaceLabel, { color: nicheAccent }]}>{niche.shortName} · Item overview</Text>
           <Text style={s.headerTitle} numberOfLines={1}>{item.canonicalTitle}</Text>
         </View>
         <View style={[s.statusDot, { backgroundColor: statusColor }]} />
         <Text style={[s.statusLabel, { color: statusColor }]}>{item.status.replace(/_/g, ' ')}</Text>
       </View>
 
-      <ScrollView contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
+      <ScrollView style={s.scroll} contentContainerStyle={s.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
         {/* ── PHOTOS ── */}
         {photoRecovery.busy ? <View style={s.reviewBanner}><ActivityIndicator color={Colors.gold} /><Text style={s.reviewBannerSub}>Restoring original captured photos from this item’s storage…</Text></View> : null}
         {photoRecovery.error ? <View style={s.reviewBanner}><MaterialIcons name="error-outline" size={20} color={Colors.warning} /><View style={s.flex}><Text accessibilityRole="alert" style={s.reviewBannerSub}>{photoRecovery.error}</Text><Pressable accessibilityLabel="Retry recovery of this item's captured photos" onPress={() => void photoRecovery.retry()} disabled={photoRecovery.busy} style={({ pressed }) => [s.listingEditBtn, pressed ? { opacity: 0.7 } : null]}><Text style={s.listingEditBtnText}>Retry captured photos</Text></Pressable></View></View> : null}
-        <View style={{ marginHorizontal: -Spacing.base }}>
-          <ImageGallery
-            media={item.media ?? []}
-            onReIdentify={() => setReIdVisible(true)}
-            onFetchImage={handleFetchImage}
-            fetchingImage={fetchingImage}
-            fetchImageResult={fetchImageResult}
-            onReconnect={() => router.push('/marketplaces' as any)}
-          />
-        </View>
+        <ItemPhotoGallery
+          key={scope}
+          media={item.media ?? []}
+          accent={nicheAccent}
+          tip={niche.captureInstructions[0] ?? 'Photograph the whole item clearly.'}
+          saving={mainImage.saving}
+          error={mainImage.error}
+          onSelectMain={url => { void mainImage.selectMain(url); }}
+          onReIdentify={() => setReIdVisible(true)}
+          onFetch={handleFetchImage}
+          fetching={fetchingImage}
+          fetchResult={fetchImageResult}
+          onReconnect={() => router.push('/marketplaces' as any)}
+        />
 
         {/* ── STATUS BANNERS ── */}
         {activeListings.length > 0 ? (
           <View style={s.liveBanner}>
             <MaterialIcons name="wifi-tethering" size={14} color={Colors.success} />
-            <Text style={s.liveBannerText}>Live on eBay · £{activeListings[0].price.toFixed(2)}{activeListings[0].externalListingId ? ` · #${activeListings[0].externalListingId}` : ''}</Text>
+            <View style={s.liveCopy}><Text style={s.liveBannerText}>SWISH saved seller price · £{activeListings[0].price.toFixed(2)}</Text>{activeListings[0].externalListingId ? <Text selectable style={s.liveReference}>Listing #{activeListings[0].externalListingId}</Text> : null}</View>
             {(activeListings[0] as any).watchers > 0 ? <View style={s.watcherChip}><MaterialIcons name="star" size={10} color={Colors.gold} /><Text style={s.watcherText}>{(activeListings[0] as any).watchers}</Text></View> : null}
             {activeListings[0].externalListingId ? (
               <Pressable
@@ -2459,6 +2451,7 @@ export default function StockListingScreen() {
             </Pressable>
           </View>
         ) : null}
+        {activeListings[0]?.externalListingId ? <EbayListingLiveCheck key={`${scope}:${activeListings[0].id}`} tenantId={tenant.id} listingId={activeListings[0].id} externalListingId={activeListings[0].externalListingId} title={activeListings[0].title} description={activeListings[0].description} price={activeListings[0].price}/> : null}
         {isSold ? (
           <View style={s.soldBanner}>
             <MaterialIcons name="check-circle" size={14} color={Colors.success} />
@@ -2479,23 +2472,23 @@ export default function StockListingScreen() {
 
         {/* ── MARKETPLACE LISTING SECTION ── */}
         <View style={s.listingCard}>
-          <SectionHeader icon="storefront" label="Marketplace Listing" color={Colors.primary} action={() => {}} actionLabel="" />
+          <SectionHeader icon="storefront" label={selectedListing ? 'Marketplace listing' : 'Listing preparation'} color={nicheAccent} />
 
           {/* Title */}
           <View style={s.titleRow}>
             <View style={s.flex}>
-              <Text style={s.listingTitle}>{item.canonicalTitle}</Text>
-              {item.description ? <Text style={s.listingDescPreview} numberOfLines={2}>{item.description}</Text> : null}
+              <Text style={s.listingTitle}>{selectedListing?.title ?? item.canonicalTitle}</Text>
+              {(selectedListing?.description ?? item.description) ? <Text style={s.listingDescPreview} numberOfLines={3}>{selectedListing?.description ?? item.description}</Text> : null}
             </View>
           </View>
 
           {/* Category */}
-          {activeListings.length > 0 ? (
+          {selectedListing ? (
             <View style={s.listingMetaRow}>
               <MaterialIcons name="category" size={11} color={Colors.info} />
               <Text style={s.listingMetaLabel}>Category</Text>
               <Text style={s.listingMetaValue}>
-                {(activeListings[0] as any).categoryName ?? ((activeListings[0] as any).categoryId ? `ID ${(activeListings[0] as any).categoryId}` : 'Not set')}
+                {item.attributes?.ebay_category_name ?? (selectedListing.categoryId ? `eBay category ${selectedListing.categoryId}` : 'Select a category in the listing editor')}
               </Text>
             </View>
           ) : null}
@@ -2504,67 +2497,20 @@ export default function StockListingScreen() {
           {item.condition ? (
             <View style={s.listingMetaRow}>
               <MaterialIcons name="grade" size={11} color={Colors.textTertiary} />
-              <Text style={s.listingMetaLabel}>Condition</Text>
-              <Text style={s.listingMetaValue}>{[item.condition, item.conditionGrade].filter(Boolean).join(' · ')}</Text>
+              <Text style={s.listingMetaLabel}>{niche.terms.condition}</Text>
+              <Text style={s.listingMetaValue}>{[...new Set([item.condition, item.conditionGrade].filter(Boolean))].join(' · ')}</Text>
             </View>
           ) : null}
 
           {/* Edit / Listing buttons */}
-          <View style={s.listingActions}>
-            {draftListings.length > 0 ? (
-              <Pressable onPress={() => router.push(`/ebay-listing-editor?id=${draftListings[0].id}` as any)} style={s.listingEditBtn}>
-                <MaterialIcons name="edit" size={13} color={Colors.primary} />
-                <Text style={s.listingEditBtnText}>Edit Listing</Text>
-              </Pressable>
-            ) : null}
-            {activeListings.length > 0 ? (
-              <Pressable onPress={() => router.push(`/ebay-listing-editor?id=${activeListings[0].id}` as any)} style={s.listingEditBtn}>
-                <MaterialIcons name="edit" size={13} color={Colors.primary} />
-                <Text style={s.listingEditBtnText}>Edit Listing</Text>
-              </Pressable>
-            ) : null}
-          </View>
+          {selectedListing ? <Text style={s.listingDescPreview}>Use the action below to edit or review this listing. Inventory details and listing copy remain separate.</Text> : <Text style={s.listingDescPreview}>Create a listing when the item details, condition and photos are ready.</Text>}
         </View>
 
         {/* ── PRICING SECTION (three distinct concepts) ── */}
         <View style={s.pricingCard}>
           <SectionHeader icon="price-change" label="Pricing" color={Colors.gold} />
 
-          {/* Listing Price */}
-          <View style={s.pricingRow}>
-            <View style={s.pricingItem}>
-              <Text style={s.pricingItemLabel}>LISTING PRICE</Text>
-              {hasListingPrice ? (
-                <Text style={s.pricingItemValue}>£{listingPrice.toFixed(2)}</Text>
-              ) : (
-                <Pressable onPress={() => startEdit('expectedSellingPrice', String(item.expectedSellingPrice))} style={s.pricingSetBtn}>
-                  <MaterialIcons name="add" size={12} color={Colors.primary} />
-                  <Text style={s.pricingSetBtnText}>Set price</Text>
-                </Pressable>
-              )}
-            </View>
-            <View style={s.pricingDivider} />
-            <View style={s.pricingItem}>
-              <Text style={s.pricingItemLabel}>MARKET VALUE</Text>
-              {hasMarketValue ? (
-                <Text style={[s.pricingItemValue, { color: Colors.gold }]}>£{item.valuationLow.toFixed(0)}–£{item.valuationHigh.toFixed(0)}</Text>
-              ) : (
-                <Text style={[s.pricingItemValue, { color: Colors.textTertiary }]}>Not valued yet</Text>
-              )}
-            </View>
-            <View style={s.pricingDivider} />
-            <View style={s.pricingItem}>
-              <Text style={s.pricingItemLabel}>ACQUIRED COST</Text>
-              {hasAcquiredCost ? (
-                <Text style={s.pricingItemValue}>£{(item.acquiredCost ?? 0).toFixed(2)}</Text>
-              ) : (
-                <Pressable onPress={() => startEdit('acquiredCost', String(item.acquiredCost ?? 0))} style={s.pricingSetBtn}>
-                  <MaterialIcons name="add" size={12} color={Colors.textTertiary} />
-                  <Text style={[s.pricingSetBtnText, { color: Colors.textTertiary }]}>Record cost</Text>
-                </Pressable>
-              )}
-            </View>
-          </View>
+          <StockPricingSummary listingPrice={listingPrice} suggestedPrice={item.expectedSellingPrice} low={item.valuationLow} high={item.valuationHigh} hasValuation={hasMarketValue} cost={item.acquiredCost ?? 0} onSetPrice={() => startEdit('expectedSellingPrice', String(item.expectedSellingPrice || ''))} onSetCost={() => startEdit('acquiredCost', String(item.acquiredCost || ''))} />
 
           {/* Profit row — only show when all three values exist */}
           {hasListingPrice && hasAcquiredCost ? (
@@ -2581,7 +2527,7 @@ export default function StockListingScreen() {
           {/* Inline edit for listing price */}
           {editing === 'expectedSellingPrice' ? (
             <View style={s.inlineEditRow}>
-              <Text style={s.inlineEditLabel}>Listing Price</Text>
+              <Text style={s.inlineEditLabel}>Suggested price</Text>
               <Text style={s.inlineEditCurrency}>£</Text>
               <TextInput style={s.inlineEditInput} value={editValue} onChangeText={setEditValue} keyboardType="decimal-pad" autoFocus placeholder="0.00" placeholderTextColor={Colors.textTertiary} />
               <Pressable onPress={() => saveField('expectedSellingPrice')} style={s.inlineEditSave} hitSlop={6}><MaterialIcons name="check" size={14} color={Colors.background} /></Pressable>
@@ -2914,9 +2860,11 @@ export default function StockListingScreen() {
         <View style={s.inventoryCard}>
           <SectionHeader icon="inventory" label="Inventory" color={Colors.info} />
           <View style={s.card}>
-            <FieldRow label="SKU / Ref" value={item.sku || ''} onEdit={() => startEdit('sku', item.sku || '')} editValue={editing === 'sku' ? editValue : undefined} onChangeText={setEditValue} onSave={() => saveField('sku')} onCancel={cancelEdit} editing={editing === 'sku'} placeholder="e.g. KC-VIC-001" />
+            <FieldRow label="SKU / Ref" value={item.sku || ''} onEdit={() => startEdit('sku', item.sku || '')} editValue={editing === 'sku' ? editValue : undefined} onChangeText={setEditValue} onSave={() => saveField('sku')} onCancel={cancelEdit} editing={editing === 'sku'} placeholder="Your stock reference" />
+            {nicheId === 'coins' || nicheId === 'trading_cards' ? <>
             <FieldRow label="Folder No." value={item.folderNumber || ''} onEdit={() => startEdit('folderNumber', item.folderNumber || '')} editValue={editing === 'folderNumber' ? editValue : undefined} onChangeText={setEditValue} onSave={() => saveField('folderNumber')} onCancel={cancelEdit} editing={editing === 'folderNumber'} placeholder="e.g. 12" />
             <FieldRow label="Pocket" value={item.pocketPosition || ''} onEdit={() => startEdit('pocketPosition', item.pocketPosition || '')} editValue={editing === 'pocketPosition' ? editValue : undefined} onChangeText={setEditValue} onSave={() => saveField('pocketPosition')} onCancel={cancelEdit} editing={editing === 'pocketPosition'} placeholder="e.g. 37" />
+            </> : null}
             <FieldRow label="Storage" value={item.storageLocation || ''} onEdit={() => startEdit('storageLocation', item.storageLocation || '')} editValue={editing === 'storageLocation' ? editValue : undefined} onChangeText={setEditValue} onSave={() => saveField('storageLocation')} onCancel={cancelEdit} editing={editing === 'storageLocation'} placeholder="e.g. Box A, Shelf 3" />
             <FieldRow label="Quantity" value={item.quantity ? String(item.quantity) : '1'} onEdit={() => startEdit('quantity', item.quantity ? String(item.quantity) : '1')} editValue={editing === 'quantity' ? editValue : undefined} onChangeText={setEditValue} onSave={() => saveField('quantity')} onCancel={cancelEdit} editing={editing === 'quantity'} numeric placeholder="1" />
           </View>
@@ -2938,11 +2886,11 @@ export default function StockListingScreen() {
           const isClothing = specialist === 'clothing' || specialist === 'trainers_sneakers';
           const isCoin = isCoinNiche(specialist);
           const attrs = item.attributes ?? {};
-          const accentColor = isBike ? '#6ED020' : isMXSpec ? '#FF5500' : isClothing ? '#E91E8C' : Colors.gold;
-          const detailIcon = isBike ? 'pedal-bike' : isMXSpec ? 'two-wheeler' : isClothing ? 'checkroom' : 'toll';
+          const accentColor = nicheAccent;
+          const detailIcon = niche.icon;
           return (
             <View style={[s.coinCard, { borderColor: accentColor + '30' }]}>
-              <SectionHeader icon={detailIcon} label="Item Details" color={accentColor} />
+              <SectionHeader icon={detailIcon} label={`${niche.terms.item} details`} color={accentColor} />
               <View style={s.card}>
                 <FieldRow label="Title" value={item.canonicalTitle} onEdit={() => startEdit('canonicalTitle', item.canonicalTitle)} editValue={editing === 'canonicalTitle' ? editValue : undefined} onChangeText={setEditValue} onSave={() => saveField('canonicalTitle')} onCancel={cancelEdit} editing={editing === 'canonicalTitle'} placeholder="Item title" />
                 <FieldRow label="Description" value={item.description || ''} onEdit={() => startEdit('description', item.description || '')} editValue={editing === 'description' ? editValue : undefined} onChangeText={setEditValue} onSave={() => saveField('description')} onCancel={cancelEdit} editing={editing === 'description'} multiline placeholder="Detailed description for listing..." />
@@ -2998,7 +2946,7 @@ export default function StockListingScreen() {
         {/* ── META ── */}
         <View style={s.metaCard}>
           {[
-            item.inventoryId ? { label: 'KC ID', value: item.inventoryId } : null,
+            item.inventoryId ? { label: 'Inventory ID', value: item.inventoryId } : null,
             { label: 'Item ID', value: item.id.slice(0, 18) + '...' },
             { label: 'Created', value: new Date(item.createdAt).toLocaleDateString('en-GB') },
             { label: 'Photos', value: `${item.media?.length ?? 0} image${(item.media?.length ?? 0) === 1 ? '' : 's'}` },
@@ -3011,75 +2959,7 @@ export default function StockListingScreen() {
         </View>
       </ScrollView>
 
-      {/* ── ACTION BAR ── */}
-      <View style={[s.actionBar, { paddingBottom: insets.bottom + Spacing.sm }]}>
-        <Pressable onPress={() => setReIdVisible(true)} style={[s.actionBtn, s.actionBtnReId]}>
-          <MaterialIcons name="auto-awesome" size={15} color={Colors.accent} />
-          <Text style={s.actionBtnReIdText}>Re-ID</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => router.push(`/research?q=${encodeURIComponent(item.canonicalTitle ?? '')}` as any)}
-          style={[s.actionBtn, { flex: 0, paddingHorizontal: Spacing.md, backgroundColor: Colors.accentDim, borderWidth: 1, borderColor: Colors.accent + '40' }]}
-          hitSlop={4}
-          accessibilityLabel={`Research ${item.canonicalTitle} on eBay, Terapeak and Numista`}
-          accessibilityRole="button"
-        >
-          <MaterialIcons name="manage-search" size={15} color={Colors.accent} />
-        </Pressable>
-        {listings.some(l => l.status === 'active' && l.externalListingId) ? (
-          <Pressable onPress={handleSyncFromEbay} disabled={syncingEbay} style={[s.actionBtn, { backgroundColor: Colors.infoDim, borderWidth: 1, borderColor: Colors.info + '40', flex: 0, paddingHorizontal: Spacing.md }]}>
-            {syncingEbay ? <ActivityIndicator size="small" color={Colors.info} style={{ width: 15, height: 15 }} /> : <MaterialIcons name="sync" size={15} color={Colors.info} />}
-            <Text style={[s.actionBtnReIdText, { color: Colors.info }]}>{syncingEbay ? '...' : 'Sync'}</Text>
-          </Pressable>
-        ) : null}
-        {listings.some(l => l.status === 'active' && l.externalListingId) ? (
-          <Pressable onPress={handlePushToEbay} disabled={pushingToEbay} style={[s.actionBtn, { backgroundColor: Colors.successDim, borderWidth: 1, borderColor: Colors.success + '40', flex: 0, paddingHorizontal: Spacing.md }]}>
-            {pushingToEbay ? <ActivityIndicator size="small" color={Colors.success} style={{ width: 15, height: 15 }} /> : <MaterialIcons name="cloud-upload" size={15} color={Colors.success} />}
-            <Text style={[s.actionBtnReIdText, { color: Colors.success }]}>{pushingToEbay ? '...' : 'Push'}</Text>
-          </Pressable>
-        ) : null}
-        {!isSold && !isListed ? (
-          <Pressable
-            onPress={() => router.push(`/create-listing?id=${item.id}` as any)}
-            style={[s.actionBtn, s.actionBtnPrimary]}
-          >
-            <MaterialIcons name="sell" size={15} color={Colors.background} />
-            <Text style={s.actionBtnText}>Create Listing</Text>
-          </Pressable>
-        ) : null}
-        {draftListings.length > 0 ? (
-          <Pressable
-            onPress={() => router.push(`/listing-preflight?listingId=${draftListings[0].id}&itemId=${item.id}` as any)}
-            disabled={submittingId !== null}
-            style={[s.actionBtn, s.actionBtnPrimary]}
-          >
-            <MaterialIcons name="fact-check" size={15} color={Colors.background} />
-            <Text style={s.actionBtnText}>Submit to eBay</Text>
-          </Pressable>
-        ) : null}
-        {(draftListings.length > 0 || activeListings.length > 0) ? (
-          <Pressable
-            onPress={() => handleDeleteListing(draftListings[0] ?? activeListings[0])}
-            disabled={endingId !== null}
-            style={[s.actionBtn, { flex: 0, paddingHorizontal: Spacing.md, backgroundColor: Colors.dangerDim, borderWidth: 1, borderColor: Colors.danger + '40' }]}
-            hitSlop={4}
-            accessibilityLabel={draftListings.length > 0 ? 'Delete draft listing' : 'Delete listing'}
-            accessibilityRole="button"
-          >
-            {endingId ? <ActivityIndicator size="small" color={Colors.danger} style={{ width: 15, height: 15 }} /> : <MaterialIcons name="delete-outline" size={15} color={Colors.danger} />}
-          </Pressable>
-        ) : null}
-        {!isSold && activeListings.length === 0 && draftListings.length === 0 ? (
-          <Pressable onPress={handleMarkSold} style={[s.actionBtn, s.actionBtnSecondary]}>
-            <MaterialIcons name="sell" size={15} color={Colors.textSecondary} />
-            <Text style={s.actionBtnSecondaryText}>Mark Sold</Text>
-          </Pressable>
-        ) : null}
-        <Pressable onPress={handleExportFacebook} style={[s.actionBtn, { flex: 0, paddingHorizontal: Spacing.md, backgroundColor: '#1877F2' }]}>
-          <MaterialIcons name="share" size={15} color="#fff" />
-          <Text style={[s.actionBtnText, { color: '#fff', fontSize: 10 }]}>FB</Text>
-        </Pressable>
-      </View>
+      <StockListingToolbar accent={nicheAccent} primary={primaryAction} actions={itemActions} />
 
       {saving ? (
         <View style={s.savingIndicator}><ActivityIndicator size="small" color={Colors.primary} /><Text style={s.savingText}>Saving...</Text></View>
@@ -3110,24 +2990,28 @@ const s = StyleSheet.create({
   flex: { flex: 1 },
 
   header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.base, paddingBottom: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder },
-  headerBtn: { width: 36, height: 36, borderRadius: Radius.md, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder },
-  headerTitle: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: Colors.textPrimary },
+  headerBtn: { width: 48, height: 48, borderRadius: Radius.md, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder },
+  workspaceLabel: { fontSize: Typography.size.sm, fontWeight: Typography.weight.medium, marginBottom: Spacing.xs },
+  headerTitle: { fontSize: Typography.size.base, fontWeight: Typography.weight.semibold, color: Colors.textPrimary },
   kcBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: Colors.primaryDim, borderRadius: Radius.sm, paddingHorizontal: 5, paddingVertical: 2, alignSelf: 'flex-start', borderWidth: 1, borderColor: Colors.primary + '40' },
   kcBadgeText: { fontSize: 9, fontWeight: Typography.weight.bold, color: Colors.primary, letterSpacing: 0.4 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   statusLabel: { fontSize: Typography.size.xs, fontWeight: Typography.weight.medium, textTransform: 'capitalize' },
 
-  content: { padding: Spacing.base, gap: Spacing.lg },
+  scroll: { flex: 1 },
+  content: { padding: Spacing.base, paddingBottom: Spacing.xl, gap: Spacing.base, width: '100%', maxWidth: 960, alignSelf: 'center' },
 
   // Status banners
-  liveBanner: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.successDim, borderRadius: Radius.lg, padding: Spacing.md, borderWidth: 1, borderColor: Colors.success + '40' },
-  liveBannerText: { flex: 1, fontSize: Typography.size.xs, color: Colors.success, fontWeight: Typography.weight.medium },
+  liveBanner: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.successDim, borderRadius: Radius.lg, padding: Spacing.base, borderWidth: 1, borderColor: Colors.success + '40' },
+  liveCopy: { flexGrow: 1, flexBasis: '80%', gap: Spacing.xs },
+  liveBannerText: { fontSize: Typography.size.base, color: Colors.success, fontWeight: Typography.weight.semibold },
+  liveReference: { fontSize: Typography.size.sm, color: Colors.textSecondary },
   watcherChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: Colors.goldDim, borderRadius: Radius.pill, paddingHorizontal: 6, paddingVertical: 3 },
   watcherText: { fontSize: 10, color: Colors.gold, fontWeight: Typography.weight.bold },
-  endBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: Colors.dangerDim, borderRadius: Radius.sm, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: Colors.danger + '30' },
-  endBtnText: { fontSize: 10, color: Colors.danger, fontWeight: Typography.weight.semibold },
-  viewEbayBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: Colors.infoDim, borderRadius: Radius.sm, paddingHorizontal: 7, paddingVertical: 4, borderWidth: 1, borderColor: Colors.info + '30' },
-  viewEbayBtnText: { fontSize: 10, color: Colors.info, fontWeight: Typography.weight.semibold },
+  endBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, minHeight: 48, backgroundColor: Colors.dangerDim, borderRadius: Radius.md, paddingHorizontal: Spacing.base, borderWidth: 1, borderColor: Colors.danger + '30' },
+  endBtnText: { fontSize: Typography.size.base, color: Colors.danger, fontWeight: Typography.weight.semibold },
+  viewEbayBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, minHeight: 48, backgroundColor: Colors.infoDim, borderRadius: Radius.md, paddingHorizontal: Spacing.base, borderWidth: 1, borderColor: Colors.info + '30' },
+  viewEbayBtnText: { fontSize: Typography.size.base, color: Colors.info, fontWeight: Typography.weight.semibold },
   soldBanner: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.successDim, borderRadius: Radius.lg, padding: Spacing.md, borderWidth: 1, borderColor: Colors.success + '40' },
   soldBannerText: { flex: 1, fontSize: Typography.size.xs, color: Colors.success, fontWeight: Typography.weight.medium },
   reviewBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: Colors.warningDim, borderRadius: Radius.lg, padding: Spacing.md, borderWidth: 1, borderColor: Colors.warning + '40' },
@@ -3137,11 +3021,11 @@ const s = StyleSheet.create({
   // Listing card
   listingCard: { backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.md, gap: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceBorder, ...Shadow.sm },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm },
-  listingTitle: { fontSize: Typography.size.base, fontWeight: Typography.weight.bold, color: Colors.textPrimary, lineHeight: 22 },
-  listingDescPreview: { fontSize: Typography.size.xs, color: Colors.textTertiary, lineHeight: 16, marginTop: 3 },
-  listingMetaRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
-  listingMetaLabel: { fontSize: Typography.size.xs, color: Colors.textTertiary, minWidth: 70 },
-  listingMetaValue: { flex: 1, fontSize: Typography.size.xs, color: Colors.textSecondary, fontWeight: Typography.weight.medium },
+  listingTitle: { fontSize: Typography.size.xl, fontWeight: Typography.weight.bold, color: Colors.textPrimary, lineHeight: 32, includeFontPadding: false },
+  listingDescPreview: { fontSize: Typography.size.base, color: Colors.textSecondary, lineHeight: 26, marginTop: Spacing.sm, includeFontPadding: false },
+  listingMetaRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm },
+  listingMetaLabel: { fontSize: Typography.size.sm, color: Colors.textSecondary, minWidth: 80 },
+  listingMetaValue: { flex: 1, fontSize: Typography.size.base, lineHeight: 26, color: Colors.textPrimary, fontWeight: Typography.weight.medium },
   listingActions: { flexDirection: 'row', gap: Spacing.sm, marginTop: 4 },
   listingEditBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.primaryDim, borderRadius: Radius.pill, paddingHorizontal: Spacing.md, paddingVertical: 6, borderWidth: 1, borderColor: Colors.primary + '40' },
   listingEditBtnText: { fontSize: Typography.size.xs, fontWeight: Typography.weight.semibold, color: Colors.primary },
@@ -3157,13 +3041,13 @@ const s = StyleSheet.create({
   pricingSetBtnText: { fontSize: 10, color: Colors.primary, fontWeight: Typography.weight.semibold },
   profitRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, backgroundColor: Colors.surfaceHighlight, borderRadius: Radius.md, padding: Spacing.sm },
   profitText: { flex: 1, fontSize: Typography.size.xs, fontWeight: Typography.weight.medium, lineHeight: 15 },
-  profitMissingNote: { fontSize: Typography.size.xs, color: Colors.textTertiary, textAlign: 'center', fontStyle: 'italic' },
-  inlineEditRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, backgroundColor: Colors.surfaceHighlight, borderRadius: Radius.md, padding: Spacing.sm, borderWidth: 1, borderColor: Colors.primary + '40' },
-  inlineEditLabel: { fontSize: 10, color: Colors.textTertiary, minWidth: 90 },
+  profitMissingNote: { fontSize: Typography.size.sm, lineHeight: 21, color: Colors.textSecondary },
+  inlineEditRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.surfaceHighlight, borderRadius: Radius.md, padding: Spacing.sm, borderWidth: 1, borderColor: Colors.primary + '40' },
+  inlineEditLabel: { fontSize: Typography.size.base, color: Colors.textSecondary, width: '100%' },
   inlineEditCurrency: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: Colors.textSecondary },
   inlineEditInput: { flex: 1, fontSize: Typography.size.sm, color: Colors.textPrimary, includeFontPadding: false, paddingVertical: 0 },
-  inlineEditSave: { width: 26, height: 26, borderRadius: Radius.sm, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
-  inlineEditCancel: { width: 26, height: 26, borderRadius: Radius.sm, backgroundColor: Colors.surfaceBorder, alignItems: 'center', justifyContent: 'center' },
+  inlineEditSave: { width: 48, height: 48, borderRadius: Radius.sm, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
+  inlineEditCancel: { width: 48, height: 48, borderRadius: Radius.sm, backgroundColor: Colors.surfaceBorder, alignItems: 'center', justifyContent: 'center' },
 
   // Delivery card
   deliveryCard: { backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.md, gap: Spacing.sm, borderWidth: 1, borderColor: Colors.info + '30', ...Shadow.sm },

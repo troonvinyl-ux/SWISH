@@ -12,7 +12,7 @@ export function inferImportNiche(categoryName: unknown, title: unknown): string 
  ['beauty',/\b(beauty|cosmetic|cosmetics|skincare|makeup|perfume|fragrance|lipstick|serum)\b/i],
  ['tech',/\b(electronics|laptop|computer|smartphone|tablet|console|graphics card)\b/i],
  ['surplus_flip',/\b(pallet|job lot|surplus|manifest|liquidation|wholesale lot)\b/i],
- ['collectibles',/\b(giftware|memorabilia|jasperware|wedgwood|royal doulton|collectible bear|silver-plated|action figures?|figurines?|comic books?|comics|board games?|pop culture|diecast|model cars?|model trains?|toy soldiers?|vintage toys?|souvenirs?|lego sets?|star wars figures?|transformers figures?|funko pops?|hot wheels|matchbox cars?|movie memorabilia|music memorabilia|sports memorabilia|collectables)\b/i],
+ ['collectibles',/\b(giftware|memorabilia|jasperware|wedgwood|royal doulton|collectible bear|silver-plated)\b/i],
  ];
  const categoryMatches=rules.filter(([,test])=>test.test(category)).map(([id])=>id);
  const titleMatches=rules.filter(([,test])=>test.test(text)).map(([id])=>id);

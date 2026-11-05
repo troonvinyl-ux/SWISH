@@ -1,4 +1,4 @@
--- Realtime, owner-only Edge Function execution telemetry.
+-- Polling-compatible, owner-only Edge Function execution telemetry.
 -- Stores metadata only: never request/response bodies, headers, tokens or secrets.
 begin;
 
@@ -27,24 +27,13 @@ revoke all on public.edge_function_logs from public, anon, authenticated;
 grant select on public.edge_function_logs to authenticated;
 grant insert on public.edge_function_logs to service_role;
 
-drop policy if exists edge_function_logs_owner_read on public.edge_function_logs;
-create policy edge_function_logs_owner_read on public.edge_function_logs
-  for select to authenticated
-  using (lower(coalesce(auth.jwt() ->> 'email','')) = 'troonvinyl@gmail.com');
-
--- Enable INSERT events for Supabase Realtime without disturbing other publication members.
-do $$
-begin
-  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
-     and not exists (
-       select 1 from pg_publication_tables
-       where pubname = 'supabase_realtime'
-         and schemaname = 'public'
-         and tablename = 'edge_function_logs'
-     ) then
-    alter publication supabase_realtime add table public.edge_function_logs;
+do $$ begin
+  if not exists(select 1 from pg_policies where schemaname='public' and tablename='edge_function_logs' and policyname='authenticated_select_owner_edge_logs') then
+    create policy authenticated_select_owner_edge_logs on public.edge_function_logs for select to authenticated using(lower(coalesce(auth.jwt()->>'email',''))='troonvinyl@gmail.com');
   end if;
 end $$;
+
+-- OnSpace Cloud does not support Realtime subscriptions. Read telemetry by polling; do not alter publications.
 
 comment on table public.edge_function_logs is
   'Metadata-only execution telemetry for SWISH Edge Functions. Owner-readable; service-role writable.';
