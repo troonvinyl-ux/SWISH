@@ -1,8 +1,6 @@
-import { Redirect } from 'expo-router';
-import { useNicheEntry } from '@/hooks/useNicheEntry';
+import { ModuleEntry } from '@/components/layout/ModuleEntry';
 
-/** Canonical Collectibles entry: establish the verified niche scope before opening tabs. */
+/** Activate and verify the Collectibles server-side module scope before entering the app. */
 export default function CollectiblesEntryRoute() {
-  useNicheEntry('collectibles');
-  return <Redirect href="/(tabs)" />;
+  return <ModuleEntry nicheId="collectibles" />;
 }
