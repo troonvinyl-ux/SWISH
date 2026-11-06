@@ -40,6 +40,7 @@ import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
+import { preferredListingPhotos } from '@/shared/smartStudio';
 import { useApp } from '@/hooks/useApp';
 import { useAntiqueCategory, useAntiqueCategorySuggestions } from '@/hooks/useAntiqueCategory';
 import { AntiqueCategorySuggestions } from '@/components/feature/AntiqueCategorySuggestions';
@@ -1336,8 +1337,8 @@ export default function CreateListingScreen() {
           </View>
           {primaryImage ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.photoStrip}>
-              {(item.media ?? []).slice(0, 6).map((uri, i) => (
-                <Image key={i} source={{ uri }} style={s.photo} contentFit="cover" transition={100} />
+              {preferredListingPhotos(item.media ?? [],item.attributes).slice(0, 6).map((uri, i) => (
+                <Image key={i} source={{ uri }} style={s.photo} contentFit="contain" transition={100} />
               ))}
             </ScrollView>
           ) : (

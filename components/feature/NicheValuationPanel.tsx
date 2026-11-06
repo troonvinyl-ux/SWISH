@@ -167,7 +167,7 @@ function ComparableRow({ title, price, listingType, date, url }: { title: string
 const cr = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder + '50' },
   info: { flex: 1, gap: 2 },
-  title: { fontSize: Typography.size.xs, color: Colors.textPrimary, lineHeight: 16 },
+  title: { fontSize: Typography.size.base, color: Colors.textPrimary, lineHeight: 24 },
   date: { fontSize: 9, color: Colors.textTertiary },
   price: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: Colors.textPrimary, minWidth: 52, textAlign: 'right' },
 });
@@ -851,22 +851,22 @@ export default function NicheValuationPanel({
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  card: { backgroundColor: Colors.surface, borderRadius: Radius.xl, borderWidth: 1, padding: Spacing.base, gap: Spacing.sm, ...Shadow.sm },
+  card: { backgroundColor: Colors.surfaceElevated, borderRadius: Radius.xl, borderWidth: 1, padding: Spacing.base, gap: Spacing.md, ...Shadow.sm },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   headerIcon: { width: 36, height: 36, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  headerTitle: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold },
-  headerSub: { fontSize: Typography.size.xs, color: Colors.textTertiary, marginTop: 1 },
+  headerTitle: { fontSize: Typography.size.md, fontWeight: Typography.weight.semibold },
+  headerSub: { fontSize: Typography.size.sm, color: Colors.textSecondary, marginTop: Spacing.xs, lineHeight:20 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   appliedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: Colors.successDim, borderRadius: Radius.pill, paddingHorizontal: 6, paddingVertical: 2 },
   appliedText: { fontSize: 9, color: Colors.success, fontWeight: Typography.weight.semibold },
-  refreshBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, width: 28, height: 28, borderRadius: Radius.sm, backgroundColor: Colors.surfaceHighlight },
+  refreshBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, width: 48, height: 48, borderRadius: Radius.md, backgroundColor: Colors.surfaceHighlight },
   refreshBtnText: { fontSize: 10, color: Colors.textTertiary },
 
   hintRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
   hintText: { flex: 1, fontSize: 10, color: Colors.textTertiary, lineHeight: 14, fontStyle: 'italic' },
 
-  fetchBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, borderRadius: Radius.md, paddingVertical: Spacing.md },
-  fetchBtnText: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: '#000' },
+  fetchBtn: { minHeight:48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, borderRadius: Radius.md, paddingVertical: Spacing.md },
+  fetchBtnText: { fontSize: Typography.size.base, fontWeight: Typography.weight.semibold, color: Colors.textInverse },
 
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.xs },
   loadingText: { fontSize: Typography.size.xs, fontWeight: Typography.weight.medium },

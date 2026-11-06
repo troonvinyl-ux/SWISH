@@ -36,6 +36,9 @@ import Animated, {
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { useInventoryPhotoRecovery } from '@/hooks/useInventoryPhotoRecovery';
+import { useReidentificationPhotoReview } from '@/hooks/useReidentificationPhotoReview';
+import { ReidentificationPhotoReview } from '@/components/feature/ReidentificationPhotoReview';
+import { NumistaImageSearchCard } from '@/components/feature/NumistaImageSearchCard';
 import { getSupabaseClient } from '@/template';
 import { useAlert } from '@/template';
 import { Item, getItem, updateItem, markItemSold } from '@/services/itemService';
@@ -792,6 +795,13 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
   }, [specialist]);
 
   const storedUrls = useMemo(() => (item.media ?? []).filter(u => u.startsWith('https://')), [item.media]);
+  const reviewSources = useMemo(() => [
+    ...capturedImages,
+    ...(useExistingImages ? storedUrls : []).map((uri, index) => ({ uri, slotLabel: `Stored photo ${index + 1}` })),
+  ], [capturedImages, useExistingImages, storedUrls]);
+  const photoReview = useReidentificationPhotoReview(`${tenantId}:${item.id}`, visible, reviewSources);
+  const identificationLock = useRef(false);
+  useEffect(() => { setError(null); }, [photoReview.evidenceKey]);
 
   const heroImages = useMemo(() => {
     if (!useExistingImages && capturedImages.length > 0) return capturedImages.slice(0, 2).map(img => img.uri);
@@ -823,29 +833,37 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
   const handleRemove = useCallback((slotId: string) => { setCapturedImages(prev => prev.filter(i => i.slotId !== slotId)); }, []);
 
   const handleIdentify = useCallback(async () => {
+    if (identificationLock.current || !photoReview.isCurrent()) return;
     const hasNew = capturedImages.length > 0;
     const hasExisting = storedUrls.length > 0 && useExistingImages;
     if (!hasNew && !hasExisting) { setError('No images available.'); return; }
+    identificationLock.current = true;
     setStep('processing'); setError(null);
-    const knownAttributes = {
-      existingTitle: item.canonicalTitle, condition: item.condition, conditionGrade: item.conditionGrade,
-      yearMade: item.yearMade, countryOfOrigin: item.countryOfOrigin, material: item.material,
-      manufacturer: item.manufacturer, diameter: item.diameterMm, weight: item.weightGrams,
-      existingAttributes: item.attributes, customNotes: item.customNotes,
-      ruler: item.ruler, denomination: item.denomination, period: item.period, mint: item.mint, catalogueNumber: item.catalogueNumber,
-    };
-    const processingSteps = useExistingImages && !hasNew
-      ? ['Re-analysing existing photos...', 'Checking learning database...', 'Cross-referencing records...', 'Generating updated valuation...']
-      : ['Compressing images...', 'Uploading to AI vision...', 'Cross-referencing database...', 'Generating updated valuation...'];
-    for (const s of processingSteps) { setProcessingMsg(s); await new Promise(r => setTimeout(r, 350)); }
-    const { result: aiResult, error: aiErr } = await identifyItemWithAI(
-      capturedImages, (item.specialistId as any) ?? 'curiosities_collectibles', undefined, knownAttributes,
-      { tenantId, existingImageUrls: useExistingImages ? storedUrls : undefined },
-    );
-    if (aiErr || !aiResult) { setError(aiErr ?? 'AI identification failed'); setStep('capture'); return; }
-    setResult(aiResult); setStep('confirm');
-    setFeedbackVerdict(null); setFeedbackNotes(''); setFeedbackCategory(null);
-  }, [capturedImages, item, tenantId, useExistingImages, storedUrls]);
+    try {
+      const knownAttributes = {
+        existingTitle: item.canonicalTitle, condition: item.condition, conditionGrade: item.conditionGrade,
+        yearMade: item.yearMade, countryOfOrigin: item.countryOfOrigin, material: item.material,
+        manufacturer: item.manufacturer, diameter: item.diameterMm, weight: item.weightGrams,
+        existingAttributes: item.attributes, customNotes: item.customNotes,
+        ruler: item.ruler, denomination: item.denomination, period: item.period, mint: item.mint, catalogueNumber: item.catalogueNumber,
+      };
+      setProcessingMsg(hasExisting ? 'Reviewing stored original photos…' : 'Reviewing captured original photos…');
+      const response = await identifyItemWithAI(
+        capturedImages, (item.specialistId as any) ?? 'curiosities_collectibles', undefined, knownAttributes,
+        { tenantId, existingImageUrls: useExistingImages ? storedUrls : undefined, allowPhotoWarnings: photoReview.allowWarnings() },
+      );
+      if (!photoReview.isCurrent()) return;
+      if (response.error || !response.result) {
+        const needsPhotoReview = photoReview.recordReview(response.photoReview, 'identify');
+        setError(needsPhotoReview ? null : response.error ?? 'AI identification failed');
+        setStep('capture'); return;
+      }
+      setResult(response.result); setStep('confirm');
+      setFeedbackVerdict(null); setFeedbackNotes(''); setFeedbackCategory(null);
+    } catch (cause) {
+      if (photoReview.isCurrent()) { setError(cause instanceof Error ? cause.message : 'Re-identification failed. Original photos are unchanged.'); setStep('capture'); }
+    } finally { identificationLock.current = false; }
+  }, [capturedImages, item, tenantId, useExistingImages, storedUrls, photoReview.isCurrent, photoReview.allowWarnings, photoReview.recordReview]);
 
   const handleApply = useCallback(async (applyResult?: any) => {
     const r = applyResult ?? result;
@@ -984,15 +1002,17 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
   }, [result, item, tenantId, feedbackVerdict, feedbackNotes, feedbackCategory, storedUrls, onComplete]);
 
   const handleRefineIdentification = useCallback(async () => {
-    if (!result) return;
-    setRefineLoading(true);
+    if (!result || identificationLock.current || !photoReview.isCurrent()) return;
+    identificationLock.current = true;
+    setRefineLoading(true); setError(null);
+    try {
     const suppliedSpecs = refineKeywords.trim();
     const extraNotes = [
       refineWeight ? `Weight: ${refineWeight}g` : '',
       refineDiameter ? `Diameter: ${refineDiameter}mm` : '',
       suppliedSpecs ? `User-supplied specifications (cross-check; not automatically verified):\\n${suppliedSpecs}` : '',
     ].filter(Boolean).join('\\n');
-    const { result: refined, error: refineErr } = await identifyItemWithAI(
+    const response = await identifyItemWithAI(
       capturedImages, (item.specialistId as any) ?? 'curiosities_collectibles', undefined,
       {
         existingTitle: result.canonicalTitle, condition: result.condition, conditionGrade: result.conditionGrade,
@@ -1003,12 +1023,18 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
         catalogueNumber: item.catalogueNumber, existingAttributes: { ...item.attributes, ...result.attributes },
         customNotes: extraNotes,
       },
-      { tenantId, existingImageUrls: useExistingImages ? storedUrls : undefined },
+      { tenantId, existingImageUrls: useExistingImages ? storedUrls : undefined, allowPhotoWarnings: photoReview.allowWarnings() },
     );
-    setRefineLoading(false);
-    if (refineErr || !refined) { setError(refineErr ?? 'Refinement failed'); return; }
-    setRefinedResult(refined);
-  }, [result, capturedImages, item, tenantId, useExistingImages, storedUrls, refineWeight, refineDiameter, refineKeywords]);
+    if (!photoReview.isCurrent()) return;
+    if (response.error || !response.result) {
+      const needsPhotoReview = photoReview.recordReview(response.photoReview, 'refine');
+      setError(needsPhotoReview ? null : response.error ?? 'Refinement failed'); return;
+    }
+    setRefinedResult(response.result);
+    } catch (cause) {
+      if (photoReview.isCurrent()) setError(cause instanceof Error ? cause.message : 'Refinement failed. Original photos are unchanged.');
+    } finally { identificationLock.current = false; if (photoReview.isCurrent()) setRefineLoading(false); }
+  }, [result, capturedImages, item, tenantId, useExistingImages, storedUrls, refineWeight, refineDiameter, refineKeywords, photoReview.isCurrent, photoReview.allowWarnings, photoReview.recordReview]);
 
   const handleAcceptRefined = useCallback(async () => {
     if (!refinedResult) return;
@@ -1016,12 +1042,13 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
   }, [refinedResult, handleApply]);
 
   const handleClose = useCallback(() => {
+    photoReview.reset();
     setCapturedImages([]); setStep('capture'); setResult(null); setError(null);
     setUploading(false); setUploadMsg(''); setFeedbackVerdict(null); setFeedbackNotes(''); setFeedbackCategory(null);
     setUseExistingImages(true); setShowRefinement(false); setRefinedResult(null);
     setEvidenceOpen(false); setDetailsOpen(false); setRefineWeight(''); setRefineDiameter(''); setRefineKeywords('');
     onClose();
-  }, [onClose]);
+  }, [onClose, photoReview.reset]);
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
@@ -1038,6 +1065,19 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
             <Text style={reid.contextTitle} numberOfLines={2}>{item.canonicalTitle}</Text>
             <Text style={reid.contextSub}>{useExistingImages && storedUrls.length > 0 ? `Using ${storedUrls.length} stored photo${storedUrls.length === 1 ? '' : 's'} + full listing data.` : 'Capture new photos. All known attributes passed as context.'}</Text>
           </View>
+          {step === 'capture' || step === 'confirm' ? <ReidentificationPhotoReview
+            key={photoReview.evidenceKey}
+            photos={reviewSources}
+            warnings={photoReview.review?.photos ?? []}
+            acknowledged={photoReview.acknowledged}
+            disabled={refineLoading || saving || savingFeedback}
+            onContinue={() => {
+              if (!photoReview.acknowledge()) return;
+              setError(null);
+              if (photoReview.review?.action === 'refine') void handleRefineIdentification();
+              else void handleIdentify();
+            }}
+          /> : null}
           {step === 'capture' ? (
             <>
               {error ? <View style={reid.errorBanner}><MaterialIcons name="error-outline" size={14} color={Colors.danger} /><Text style={reid.errorText}>{error}</Text></View> : null}
@@ -1047,6 +1087,7 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
                   <Text style={[reid.toggleText, useExistingImages && { color: Colors.primary }]}>{useExistingImages ? `Use ${storedUrls.length} stored photo${storedUrls.length === 1 ? '' : 's'} (recommended)` : 'New photos only'}</Text>
                 </Pressable>
               ) : null}
+              {resolveProductionNiche(item.specialistId)==='coins'?<Text style={reid.contextSub}>Re-ID and refinement include a paid Numista image search of up to two original faces. Numista API usage is billed to your configured account.</Text>:null}
               <Text style={reid.sectionLabel}>{useExistingImages && storedUrls.length > 0 ? 'ADD NEW PHOTOS (OPTIONAL)' : `CAPTURE UP TO ${MAX_REID_PHOTOS} PHOTOS`}</Text>
               <View style={reid.photoGrid}>
                 {photoSlots.map((slot, idx) => {
@@ -1080,10 +1121,11 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
               <ActivityIndicator size="large" color={Colors.accent} />
               <Text style={reid.processingTitle}>AI Analysing...</Text>
               <Text style={reid.processingMsg}>{processingMsg}</Text>
-              <View style={reid.aiBadge}><MaterialIcons name="auto-awesome" size={11} color={Colors.accent} /><Text style={reid.aiBadgeText}>OnSpace AI · Gemini 2.5 Flash Vision</Text></View>
+              <View style={reid.aiBadge}><MaterialIcons name="auto-awesome" size={11} color={Colors.accent} /><Text style={reid.aiBadgeText}>OnSpace AI · original photo evidence</Text></View>
             </View>
           ) : step === 'confirm' && result ? (
             <>
+              <NumistaImageSearchCard result={refinedResult?.numistaImageSearch ?? result.numistaImageSearch}/>
               {heroImages.length > 0 ? (
                 <View style={reid.heroWrap}>
                   <View style={reid.heroImgsRow}>
@@ -2969,7 +3011,7 @@ export default function StockListingScreen() {
       ) : null}
 
       {tenant ? (
-        <ReIdentifyModal visible={reIdVisible} item={item} tenantId={tenant.id} onClose={() => setReIdVisible(false)} onComplete={handleReIdComplete} />
+        <ReIdentifyModal key={`${scope}:${reIdVisible}`} visible={reIdVisible} item={item} tenantId={tenant.id} onClose={() => setReIdVisible(false)} onComplete={handleReIdComplete} />
       ) : null}
 
       {/* Submit Progress Modal */}

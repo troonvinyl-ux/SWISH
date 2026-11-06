@@ -91,16 +91,19 @@ export function useGenericCapture(){
   const missing=slots.filter(slot=>slot.required&&!visible.images.some(image=>image.slotId===slot.id));if(missing.length){setError(`Add the required photographs: ${missing.map(slot=>slot.label).join(', ')}.`);return;}
   lock.current=true;setBusy(true);setMarket(null);setPhase('Analysing specialist evidence');setError(null);
   try{
-   setPhase('Cleaning and centring photos · preserving defects and lettering');
-   const prepared=await prepareCapturedImages(visible.images,{tenantId:tenant.id,nicheId:activeNiche.id});
-   if(!isCurrentSession())return;
-   setPhase('Analysing original specialist evidence');setDraft(previous=>({...previous,images:prepared}));
+   setPhase('Reviewing photos · BackgroundErase cutouts · identifying originals');
+   // The service reviews advisory quality BEFORE spending provider credits.
+   // Cleanup runs once with Identify; retries/saves reuse the same scoped attempt.
+   const prepared=visible.images.map(image=>({...image}));
    const notes=Object.entries(visible.answers).filter(([,value])=>value.trim()).map(([key,value])=>`${key}: ${value} (user-supplied; cross-check)`).join('\n');
    const catalogue=tunes.state.release??musicRelease;
    const catalogueDetails=music&&isFreshMusicRelease(catalogue)?{artist:catalogue.artist,release_title:catalogue.releaseTitle,format:catalogue.format.join(', '),label:catalogue.labels.join(', '),catalogue_number:catalogue.catalogueNumbers.join(', '),year:catalogue.year,country:catalogue.country,expected_disc_count:catalogue.discCount,catalogue_context:'User-selected Discogs catalogue release; check readable identifiers. Catalogue disc count does not prove all discs are present.'}:{};
    const existingAttributes=music?Object.fromEntries(Object.entries({...visible.result?.attributes,...catalogueDetails,...visible.answers}).filter(([key,value])=>profile?.fields.some(field=>field.key===key)&&['string','number'].includes(typeof value))):visible.result?.attributes;
    const response=await identifyItemWithAI(prepared,specialistId,undefined,{customNotes:notes,existingAttributes},{tenantId:tenant.id,captureMode:visible.mode,allowPhotoWarnings});
-   if(!isCurrentSession())return;if(response.error||!response.result){setError(response.error??'No identification returned.');return;}setDraft(previous=>({...previous,result:response.result}));
+   if(!isCurrentSession())return;
+   setDraft(previous=>({...previous,images:prepared}));
+   if(response.error||!response.result){setError(response.error??'No identification returned.');return;}
+   setDraft(previous=>({...previous,result:response.result}));
   }catch(cause:unknown){if(isCurrentSession())setError(cause instanceof Error?cause.message:'Identification failed.');}
   finally{if(isCurrentSession()){lock.current=false;setBusy(false);setPhase('');}}
  },[tenant?.id,ready,visible,specialistId,allowPhotoWarnings,slots,activeNiche.id,music,profile,musicRelease,tunes.state.release,isCurrentSession]);
@@ -158,8 +161,8 @@ export function useGenericCapture(){
   }catch(cause:unknown){if(isCurrentSession())setError(cause instanceof Error?cause.message:'Save failed.');}finally{if(isCurrentSession()){lock.current=false;setBusy(false);setPhase('');}}
  },[tenant?.id,ready,visible,scope,current,storageScope,reviewedResult,triggerInventoryReload,activeNiche,market,music,slots,isCurrentSession]);
  const retryStudio=useCallback(async()=>{
-  if(!isCurrentSession()||busy||!ready||lock.current||!tenant)return;lock.current=true;setBusy(true);setError(null);setPhase('Preparing studio views; original evidence retained');
-  try{const images=await prepareCapturedImages(visible.images.map(image=>({...image,studio:undefined})),{tenantId:tenant.id,nicheId:activeNiche.id});if(isCurrentSession())setDraft(previous=>({...previous,images}));}
+  if(!isCurrentSession()||busy||!ready||lock.current||!tenant)return;lock.current=true;setBusy(true);setError(null);setPhase('Removing backgrounds with BackgroundErase; originals retained');
+  try{const images=await prepareCapturedImages(visible.images.map(image=>({...image,studio:undefined,enhancedUri:undefined,enhancementStatus:undefined,enhancementWarning:undefined})),{tenantId:tenant.id,nicheId:activeNiche.id});if(isCurrentSession())setDraft(previous=>({...previous,images}));}
   catch(cause:unknown){if(isCurrentSession())setError(cause instanceof Error?cause.message:'Studio preparation failed. Original photographs are unchanged.');}
   finally{if(isCurrentSession()){lock.current=false;setBusy(false);setPhase('');}}
  },[busy,ready,tenant?.id,visible.images,activeNiche.id,isCurrentSession]);

@@ -13,7 +13,7 @@ function normalized(value:unknown):unknown {
 }
 function sameJson(left:unknown,right:unknown):boolean{return JSON.stringify(normalized(left))===JSON.stringify(normalized(right));}
 export async function linkStudioImages(tenantId:string,itemId:string,images:readonly CapturedImage[]):Promise<string|null> {
- const entries=images.filter(image=>image.studio?.version===SMART_STUDIO_VERSION&&image.studio.enhancedUri&&image.originalStorageUri);
+ const entries=images.filter(image=>studioImageIsUsable(image.studio)&&image.originalStorageUri);
  if(!entries.length)return null;
  const client=getSupabaseClient();const read=await client.from('items').select('attributes,media,updated_at').eq('id',itemId).eq('tenant_id',tenantId).maybeSingle();
  if(read.error||!read.data?.updated_at)return 'Studio image ownership/version could not be verified.';
