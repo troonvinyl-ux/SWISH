@@ -71,12 +71,12 @@ begin
     from scoped_items group by niche
   ), active_listing_rows as (
     -- One row per actual external marketplace listing, not per imported/local copy.
-    select distinct on (l.tenant_id,l.marketplace_id,l.external_listing_id)
+    select distinct on (l.tenant_id,l.external_listing_id)
       i.niche,l.item_id,l.external_listing_id,l.price,greatest(coalesce(i.quantity,1),0) as quantity
     from public.listings l join scoped_items i on i.id=l.item_id and i.tenant_id=l.tenant_id
     where l.marketplace_id in ('ebay','EBAY_GB') and l.status in ('active','live')
       and l.ended_at is null and nullif(l.external_listing_id,'') is not null
-    order by l.tenant_id,l.marketplace_id,l.external_listing_id,l.updated_at desc nulls last,l.id desc
+    order by l.tenant_id,l.external_listing_id,l.updated_at desc nulls last,l.id desc
   ), draft_listing_rows as (
     -- A physical item contributes at most one draft count to the portfolio.
     select distinct on (l.tenant_id,l.item_id) i.niche,l.item_id
