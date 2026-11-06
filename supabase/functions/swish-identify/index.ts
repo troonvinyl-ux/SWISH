@@ -221,11 +221,14 @@ ADDITIONAL: TRAINERS & SNEAKERS SPECIALIST
 - Authentication: sole shape, stitching, material quality, font accuracy, serial tag
 - HIGH risk brands: Supreme, Off-White Nike, Travis Scott colabs — state "professional authentication recommended"`,
   curiosities_collectibles: `You are an expert generalist collectibles appraiser. Identify from VISIBLE evidence only.
-CRITICAL: First classify the object type (coin, medal, token, jewellery, motorcycle, garment, plush/toy, memorabilia, book, record, card, or other collectible).
+CRITICAL: First classify the object type (coin, medal, token, jewellery, motorcycle, garment, plush_toy, memorabilia, book, record, card, or other collectible).
+For plush toys and teddy bears, use objectType="plush_toy" (not unknown, garment, or generic accessory).
 For branded, dated or commemorative collectibles, inspect every visible sewn label, hang tag, foot/paw stamp, maker mark, copyright line, serial/code and packaging panel. Transcribe exact wording verbatim and distinguish directly readable text from inferred context.
 When a tag explicitly names the product/model/year, treat that as strong direct evidence for the labelled product identity, while keeping authenticity, completeness and condition as separate unverified questions. Cross-check the tag against any matching embroidery, printed date, distinctive clothing/design and manufacturer branding. Do not downgrade a clearly readable product label merely because there is no external catalogue match.
 Populate evidenceSupporting as separate, specific observations (one fact per entry): exact tag wording; exact embroidered/printed wording; matching visible design or manufacturer details. Do not pad the list with paraphrases or duplicate facts. Record obscured, absent or contradictory details in missingInformation/evidenceContradictory.
 For a teddy bear/plush toy, check maker/retailer, named collection, year, anniversary/season, tag text, foot-pad embroidery, clothing/scarf and approximate size if supplied. Never infer authenticity from appearance alone.
+TITLE RULE: Include a named character/model (for example "Giles") only when that exact name is readable on a tag, label or manufacturer source visible in the supplied evidence. Otherwise omit it; do not turn a guess into the canonical title.
+EVIDENCE RULE: If a product tag explicitly reads a product name/year and a separate foot/paw embroidery independently repeats the retailer/year, record these as two separate supporting observations. Do not call these contradictory or ambiguous unless an actual visible feature conflicts with the tag. Keep authenticity and condition separate from identification.
 Be conservative about anything the images do not establish. Never invent attributions.`,
 };
 
@@ -270,7 +273,7 @@ VALUATION POLICY: ALL price fields MUST be 0. Valuation handled by swish-market-
 // ── JSON output schema ─────────────────────────────────────────────────────────
 const OUTPUT_SCHEMA = `Return ONLY valid JSON (no markdown, no prose outside JSON):
 {
-  "objectType": "coin|medal|token|jeton|commemorative_piece|banknote|jewellery|motorcycle|motorcycle_part|garment|footwear|accessory|replica_reproduction|unknown",
+  "objectType": "coin|medal|token|jeton|commemorative_piece|banknote|jewellery|motorcycle|motorcycle_part|garment|plush_toy|footwear|accessory|replica_reproduction|unknown",
   "identificationState": "observation_only|candidate|verified",
   "canonicalTitle": "Accurate title.",
   "specialistId": "specialist_id_used",
