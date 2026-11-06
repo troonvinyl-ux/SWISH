@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { availableListingPhotos, preferredListingPhotos } from '@/shared/smartStudio';
 import { moveMainImageFirst } from '@/services/itemPhotoService';
+import { recoverCapturedItemPhotos } from '@/services/capturedPhotoRecoveryService';
 import { reviseSavedListing, inspectLiveListing } from '@/services/ebayRevisionService';
 import type { LiveListingContent } from '@/shared/ebayRevisionContract';
 import { useApp } from './useApp';
@@ -62,9 +63,22 @@ export function useListingEditor(listingId: string) {
     if (!tenant || !listingId) return;
     setLoading(true); setError(null); setLoadedScope(''); setLive(null);
     try {
-      const result = await loadListingEditor(tenant.id, listingId, nicheId);
+      let result = await loadListingEditor(tenant.id, listingId, nicheId);
       if (currentScope.current !== scope) return;
       if (result.error || !result.data) { setError(result.error); return; }
+      const initialItem = (result.data as any).items;
+      let recoveredPhotos = false;
+      if (initialItem?.id && !(initialItem.media ?? []).length) {
+        const recovered = await recoverCapturedItemPhotos(tenant.id, initialItem.id, nicheId);
+        if (currentScope.current !== scope) return;
+        if (recovered.error || !recovered.item) setError(recovered.error ?? 'Captured photos could not be recovered. Open the saved inventory item to retry.');
+        else {
+          recoveredPhotos = true; triggerInventoryReload();
+          result = await loadListingEditor(tenant.id, listingId, nicheId);
+          if (currentScope.current !== scope) return;
+          if (result.error || !result.data) { setError(result.error ?? 'Reload the draft to view its recovered photos.'); return; }
+        }
+      }
       const row: any = result.data; const item = row.items ?? {}; const attrs = item.attributes ?? {};
       const isCoin = ['coins','islamic_silver','banknotes','gold','silver','coins_uk','coins_world','coins_currency'].includes(item.specialist_id);
       const specifics: Array<{ name: string; value: string }> = Array.isArray(attrs.ebay_item_specifics) ? attrs.ebay_item_specifics.filter((specific: any) => typeof specific?.name === 'string' && typeof specific?.value === 'string').map((specific: any) => ({ name: specific.name, value: specific.value })) : [];
@@ -78,13 +92,16 @@ export function useListingEditor(listingId: string) {
       const options = antique ? attrs.ebay_listing_options ?? {} : {};
       const originals: string[] = item.media ?? [];
       const availableMedia = availableListingPhotos(originals, attrs);
-      const media = antique && Array.isArray(attrs.ebay_listing_media) ? attrs.ebay_listing_media.filter((url: string) => availableMedia.includes(url)) : preferredListingPhotos(originals, attrs);
+      // Seed recovered photos only when the draft had no original photos to select.
+      // An intentionally empty selection on an otherwise populated item is preserved.
+      const seedRecovered = recoveredPhotos && Array.isArray(attrs.ebay_listing_media) && !attrs.ebay_listing_media.length && !row.external_listing_id;
+      const media = antique && Array.isArray(attrs.ebay_listing_media) && !seedRecovered ? attrs.ebay_listing_media.filter((url: string) => availableMedia.includes(url)) : preferredListingPhotos(originals, attrs);
       setState({ tenantId: tenant.id, listingId: row.id, nicheId, itemAttributes: attrs, itemId: item.id, externalListingId: row.external_listing_id ?? '', status: row.status, title: row.title ?? '', description: row.description ?? '', price: String(row.price ?? 0), shippingCost: String(row.shipping_cost ?? 0), floorPrice: String(row.floor_price ?? 0), ceilingPrice: String(row.ceiling_price ?? 0), categoryId, categoryName: String(attrs.ebay_category_name ?? categoryId), condition: item.condition ?? '', conditionDescription: antique ? item.condition_notes || item.condition_grade || '' : item.condition_grade ?? '', conditionId: String(attrs.ebay_condition_id ?? ''), quantity: String(item.quantity ?? 1), sku: item.sku ?? '', itemSpecifics: specifics, media, availableMedia, specialistId: item.specialist_id ?? '', inventoryId: item.inventory_id ?? '', valuationMid: Number(item.valuation_mid ?? 0), itemTitle: item.canonical_title ?? '', subtitle: '', listingType: options.listingType ?? 'FixedPriceItem', auctionDays: Number(options.auctionDays ?? 7), startPrice: String(options.startPrice ?? row.price ?? 0), reservePrice: String(options.reservePrice ?? ''), bestOfferEnabled: options.bestOfferEnabled === true, dispatchDays: Number(options.dispatchDays ?? 3) });
-      setLoadedScope(scope); setDirty(false); setAspects([]);
+      setLoadedScope(scope); setDirty(seedRecovered); setAspects([]);
       if (categoryId) await requirements(categoryId);
     } catch { if (currentScope.current === scope) setError('Listing could not load. Reload before making changes.'); }
     finally { if (currentScope.current === scope) setLoading(false); }
-  }, [tenant?.id, listingId, nicheId, scope, antique, requirements]);
+  }, [tenant?.id, listingId, nicheId, scope, antique, requirements, triggerInventoryReload]);
   useEffect(() => { void load(); return () => { categoryRequest.current++; }; }, [load]);
   const update = <K extends keyof ListingEditorState>(key: K, value: ListingEditorState[K]) => { setState(previous => previous ? { ...previous, [key]: value } : null); setDirty(true); };
   const setMainPhoto = useCallback((uri: string) => {

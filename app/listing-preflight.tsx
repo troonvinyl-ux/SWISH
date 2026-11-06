@@ -17,8 +17,13 @@ import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { isProductionNiche } from '@/constants/niches';
 import { useAntiquePreflight } from '@/hooks/useAntiquePreflight';
+import { PreflightConditionCard } from '@/components/feature/PreflightConditionCard';
+import { ListingPublicationCard } from '@/components/feature/ListingPublicationCard';
+import { usePublicationRecovery } from '@/hooks/usePublicationRecovery';
+import { mapListingPublication } from '@/services/listingPublicationService';
+import type { SpecialistPreflightResult } from '@/services/listingEditorService';
 import { useAlert } from '@/template';
-import { submitListingToMarketplace, SubmitStep, SubmitResult } from '@/services/listingService';
+import { submitListingToMarketplace, publicationSubmitResult, SubmitStep, SubmitResult } from '@/services/listingService';
 
 interface PreflightCheck {
   id: string;
@@ -31,12 +36,14 @@ interface PreflightCheck {
 export default function ListingPreflightScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, activeNicheId, fixedNicheId, triggerInventoryReload } = useApp();
+  const { tenant, activeNiche, activeNicheId, fixedNicheId, triggerInventoryReload } = useApp();
   const nicheId = fixedNicheId ?? activeNicheId;
   const isAntique = isProductionNiche(nicheId);
   const checkAntique = useAntiquePreflight();
   const [antiqueReady, setAntiqueReady] = useState(false);
   const [antiqueError, setAntiqueError] = useState<string | null>(null);
+  const [specialistResult, setSpecialistResult] = useState<SpecialistPreflightResult | null>(null);
+  const scanGeneration = useRef(0);
   const { showAlert } = useAlert();
   const { listingId, itemId } = useLocalSearchParams<{ listingId: string; itemId: string }>();
 
@@ -44,7 +51,7 @@ export default function ListingPreflightScreen() {
     { id: 'title',       label: 'Title',            sublabel: 'Max 80 characters, meaningful content', status: 'pending' },
     { id: 'price',       label: 'Price',             sublabel: 'Greater than £0.00', status: 'pending' },
     { id: 'category',    label: 'eBay Category',     sublabel: 'Valid EBAY_GB leaf category', status: 'pending' },
-    { id: 'condition',   label: 'Condition',         sublabel: 'Condition ID must be set', status: 'pending' },
+    { id: 'condition',   label: 'Condition',         sublabel: 'Choose a condition supported by this category', status: 'pending' },
     { id: 'images',      label: 'Photos',            sublabel: 'At least 1 permanent HTTPS image', status: 'pending' },
     { id: 'policies',    label: 'Business Policies', sublabel: 'Fulfillment + Return policies selected', status: 'pending' },
     { id: 'description', label: 'Description',       sublabel: 'Some description text present', status: 'pending' },
@@ -56,6 +63,9 @@ export default function ListingPreflightScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [submitStep, setSubmitStep] = useState<SubmitStep | null>(null);
   const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
+  const submissionGuard = useRef(false);
+  const recovery = usePublicationRecovery(tenant?.id ?? '', listingId ?? '', nicheId ?? '');
+  useEffect(() => { setSubmitResult(null); setSubmitStep(null); submissionGuard.current = false; }, [tenant?.id, listingId, nicheId]);
 
   // ── Category picker modal ─────────────────────────────────────────────────
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
@@ -73,10 +83,13 @@ export default function ListingPreflightScreen() {
   }, []);
 
   const runPreflight = useCallback(async () => {
-    if (!listingId || !tenant) return;
+    if (!listingId || !tenant) { setScanning(false); setScanError('Open a saved listing in your workspace.'); return; }
+    const generation = ++scanGeneration.current;
+    const isCurrent = () => generation === scanGeneration.current;
+    const updateCheck = (id: string, update: Partial<PreflightCheck>) => { if (isCurrent()) setChecks(previous => previous.map(check => check.id === id ? { ...check, ...update } : check)); };
     setScanning(true);
     setScanError(null);
-    setAntiqueReady(false); setAntiqueError(null);
+    setAntiqueReady(false); setAntiqueError(null); setSpecialistResult(null);
 
     const supabase = getSupabaseClient();
     let allPass = true;
@@ -84,11 +97,12 @@ export default function ListingPreflightScreen() {
     try {
       const { data: row, error: rowErr } = await supabase
         .from('listings')
-        .select('*, items(id, canonical_title, condition, condition_grade, media, attributes, specialist_id, quantity)')
+        .select('*, items(id, tenant_id, canonical_title, condition, condition_grade, media, attributes, specialist_id, quantity, status, sold_at)')
         .eq('id', listingId)
         .eq('tenant_id', tenant.id)
         .maybeSingle();
 
+      if (!isCurrent()) return;
       if (rowErr || !row) {
         setScanError(rowErr?.message ?? 'Listing not found');
         setScanning(false);
@@ -98,6 +112,15 @@ export default function ListingPreflightScreen() {
       setListingData(row);
       const item = row.items as any;
       const attrs: Record<string, any> = item?.attributes ?? {};
+      // Reopening an accepted or claimed listing is inspection, never another submission.
+      if (row.external_listing_id || row.publish_claim_id || ['active', 'live'].includes(row.status)) {
+        const publication = mapListingPublication(row);
+        setSubmitResult(publication.recorded ? publicationSubmitResult(publication) : {
+          success: false, step: 'failed', publicationUnconfirmed: true,
+          error: 'An existing submission needs checking. Do not republish this item.',
+        });
+        return;
+      }
 
       // ── Title ─────────────────────────────────────────────────────────────
       const title = row.title ?? '';
@@ -236,6 +259,7 @@ export default function ListingPreflightScreen() {
         .eq('marketplace_id', 'ebay')
         .maybeSingle();
 
+      if (!isCurrent()) return;
       if (!conn || conn.status !== 'connected') {
         updateCheck('policies', { status: 'fail', detail: 'eBay is not connected. Re-authorise in Marketplaces.' });
         allPass = false;
@@ -259,13 +283,21 @@ export default function ListingPreflightScreen() {
 
       if (isAntique) {
         const antique = await checkAntique(listingId);
-        setAntiqueReady(antique.ready); setAntiqueError(antique.error);
-        updateCheck('condition', { status: antique.ready ? 'pass' : 'warn', detail: antique.ready ? 'Supported category condition policy and saved condition notes checked live.' : 'Category-specific conditions are not confirmed. Complete the specialist checks below.' });
+        if (!isCurrent()) return;
+        setAntiqueReady(antique.ready); setAntiqueError(antique.error); setSpecialistResult(antique);
+        if (antique.issue === 'condition') {
+          updateCheck('condition', { status: 'fail', detail: 'Choose and save the eBay condition above. Your item grades and defect notes are preserved.' });
+        } else if (antique.conditionPolicy) {
+          const label = antique.conditionPolicy.itemConditions.find(option => String(option.conditionId) === antique.conditionId)?.conditionDescription;
+          updateCheck('condition', { status: 'pass', detail: label ? `${label} · saved and checked` : 'This category does not require an eBay condition.' });
+        } else {
+          updateCheck('condition', { status: 'warn', detail: 'Condition requirements could not be checked. Recheck the draft before submitting.' });
+        }
       }
     } catch (e: any) {
-      setScanError(e?.message ?? 'Preflight scan failed');
+      if (isCurrent()) setScanError(e?.message ?? 'Preflight scan failed');
     } finally {
-      setScanning(false);
+      if (isCurrent()) setScanning(false);
     }
   }, [listingId, tenant, updateCheck, isAntique, checkAntique]);
 
@@ -280,11 +312,12 @@ export default function ListingPreflightScreen() {
       {
         // One scan per focus; avoid duplicate mount/effect requests
         setChecks(prev => prev.map(c => ({ ...c, status: 'pending' as const })));
-        setSubmitResult(null);
+        setSubmitResult(previous => previous?.success || previous?.accepted || previous?.publicationUnconfirmed ? previous : null);
         setSubmitStep(null);
         runPreflight();
       }
       hasRun.current = true;
+      return () => { scanGeneration.current++; };
     }, [runPreflight]),
   );
 
@@ -477,13 +510,33 @@ export default function ListingPreflightScreen() {
   const failCount = checks.filter(c => c.status === 'fail').length;
   const warnCount = checks.filter(c => c.status === 'warn').length;
   const passCount = checks.filter(c => c.status === 'pass').length;
-  const canSubmit = !scanning && !scanError && Boolean(listingData) && checks.every(check=>check.status!=='pending'&&check.status!=='running') && failCount === 0 && !submitting && !submitResult?.success && (!isAntique || antiqueReady);
+  const publicationLocked = Boolean(listingData?.external_listing_id || listingData?.publish_claim_id || ['active', 'live'].includes(listingData?.status) || submitResult?.success || submitResult?.accepted || submitResult?.publicationUnconfirmed);
+  const publicationAccepted = Boolean(submitResult?.accepted || /^\d+$/.test(String(listingData?.external_listing_id ?? '')));
+  const publicationLive = Boolean(submitResult?.success || (publicationAccepted && ['active', 'live'].includes(listingData?.status)));
+  const canSubmit = !publicationLocked && !recovery.busy && !scanning && !scanError && Boolean(listingData) && checks.every(check=>check.status!=='pending'&&check.status!=='running') && failCount === 0 && !submitting && (!isAntique || antiqueReady);
+  const viewSavedListing = useCallback(() => {
+    const savedItemId = listingData?.item_id ?? itemId;
+    if (savedItemId) router.replace(`/stock-listing/${savedItemId}` as any);
+    else router.back();
+  }, [listingData?.item_id, itemId, router]);
+  const synchroniseExisting = useCallback(async () => {
+    const result = await recovery.synchronise();
+    if (!result) return;
+    if (result.error) { showAlert('Synchronisation pending', result.error); return; }
+    if (result.publication) {
+      setSubmitResult(publicationSubmitResult(result.publication));
+      triggerInventoryReload();
+      void runPreflight();
+    }
+  }, [recovery.synchronise, showAlert, triggerInventoryReload, runPreflight]);
 
   const handleSubmit = useCallback(async () => {
-    if (!listingId || !tenant || !canSubmit) return;
+    if (!listingId || !tenant || !canSubmit || submissionGuard.current) return;
+    submissionGuard.current = true;
 
     const proceed = async () => {
     setSubmitting(true);
+    try {
 
     const result = await submitListingToMarketplace(
       tenant.id,
@@ -492,13 +545,14 @@ export default function ListingPreflightScreen() {
     );
 
     setSubmitResult(result);
-    setSubmitting(false);
 
     if (result.success) {
       triggerInventoryReload();
       showAlert(
-        'Listed on eBay!',
-        `Your listing is now live on eBay UK.${result.externalListingId ? `\n\nListing ID: ${result.externalListingId}` : ''}`,
+        'Published on eBay',
+        result.reconciliationPending
+          ? `eBay accepted your listing${result.externalListingId ? ` (${result.externalListingId})` : ''}. SWISH stock synchronisation is pending. Do not submit again; use Synchronise existing listing.`
+          : `Your listing is live on eBay UK.${result.externalListingId ? `\n\nListing ID: ${result.externalListingId}` : ''}`, 
         [{
           text: 'View Listing',
           onPress: () => {
@@ -507,6 +561,11 @@ export default function ListingPreflightScreen() {
           },
         }],
       );
+    } else if (result.accepted || result.publicationUnconfirmed) {
+      showAlert('Publication needs checking', result.error ?? 'Check the existing listing before any further action.', [
+        { text: 'View saved listing', onPress: viewSavedListing },
+        { text: 'Synchronise existing listing', onPress: () => { void synchroniseExisting(); } },
+      ]);
     } else {
       showAlert(
         'Submission Failed',
@@ -517,10 +576,11 @@ export default function ListingPreflightScreen() {
         ],
       );
     }
+    } finally { setSubmitting(false); submissionGuard.current = false; }
     };
-    if (isAntique) showAlert(nicheId === 'antiques' ? 'Publish this Antique item to eBay?' : 'Publish this reviewed item to eBay?', `This is a real public listing on your connected eBay UK account and may incur fees. Approve only if you own the item and have reviewed the saved category, condition, price, shipping policy, specifics and photographs.\n\n${listingData?.title ?? ''}\nSWISH draft: ${listingId}`, [{text:'Cancel',style:'cancel'},{text:'Publish reviewed item',onPress:()=>{void proceed();}}]);
+    if (isAntique) showAlert(nicheId === 'antiques' ? 'Publish this Antique item to eBay?' : 'Publish this reviewed item to eBay?', `This is a real public listing on your connected eBay UK account and may incur fees. Approve only if you own the item and have reviewed the saved category, condition, price, shipping policy, specifics and photographs.\n\n${listingData?.title ?? ''}\nSWISH draft: ${listingId}`, [{text:'Cancel',style:'cancel',onPress:()=>{submissionGuard.current=false;}},{text:'Publish reviewed item',onPress:()=>{void proceed();}}]);
     else await proceed();
-  }, [listingId, tenant, canSubmit, showAlert, router, itemId, isAntique, listingData?.title, triggerInventoryReload]);
+  }, [listingId, tenant, canSubmit, showAlert, router, itemId, isAntique, nicheId, listingData?.title, triggerInventoryReload, viewSavedListing, synchroniseExisting]);
 
   const SUBMIT_STEPS = [
     { id: 'verifying',          label: 'Verifying listing', icon: 'fact-check' },
@@ -546,10 +606,12 @@ export default function ListingPreflightScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
+      <ScrollView style={s.flex} contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
 
         {/* Scan status */}
-        {scanning ? (
+        {publicationLocked ? (
+          <ListingPublicationCard accepted={publicationAccepted} live={publicationLive} pending={Boolean(submitResult?.reconciliationPending || submitResult?.publicationUnconfirmed)} externalListingId={submitResult?.externalListingId || listingData?.external_listing_id} error={recovery.error} onViewItem={viewSavedListing} onLinkError={()=>showAlert('Could not open eBay','Open the saved item ID in eBay Seller Hub.')}/>
+        ) : scanning ? (
           <View style={s.scanningCard}>
             <ActivityIndicator size="small" color={Colors.primary} />
             <Text style={s.scanningText}>Running preflight checks...</Text>
@@ -582,21 +644,22 @@ export default function ListingPreflightScreen() {
               ) : null}
             </View>
             {failCount === 0 ? (
-              <Text style={[s.summaryStatus, { color: Colors.success }]}>
+              <Text style={[s.summaryStatus, { color: isAntique && !antiqueReady ? Colors.warning : Colors.success }]}>
                 {isAntique && !antiqueReady ? 'Specialist checks incomplete — submission blocked' : warnCount > 0 ? 'Ready to submit — review warnings below' : 'All checks passed — ready to submit'}
               </Text>
             ) : (
               <Text style={[s.summaryStatus, { color: Colors.danger }]}>
-                {failCount} check{failCount === 1 ? '' : 's'} must be fixed before submitting
+                {specialistResult?.issue === 'condition' ? 'Choose an eBay condition to continue' : `${failCount} check${failCount === 1 ? '' : 's'} must be fixed before submitting`}
               </Text>
             )}
           </View>
         )}
 
-        {isAntique ? <View style={s.checkCard}><View style={s.flex}><Text style={s.checkLabel}>Specialist category, specifics & persistence</Text><Text style={s.checkDetail}>{antiqueReady ? 'Current eBay leaf category, full item-specific requirements, supported condition, original photos and saved fields validated. This is API preflight, not a published listing.' : antiqueError ?? 'NOT TESTED: waiting for category-specific validation.'}</Text><Pressable onPress={()=>router.push(`/ebay-listing-editor?id=${listingId}` as any)} style={s.pickCatBtn}><Text style={s.pickCatBtnText}>Review saved draft and requirements</Text></Pressable></View></View> : null}
+        {!publicationLocked && !scanning && specialistResult?.issue === 'condition' && specialistResult.conditionPolicy && specialistResult.categoryId ? <PreflightConditionCard key={`${tenant?.id}:${nicheId}:${listingId}:${specialistResult.categoryId}`} listingId={listingId} categoryId={specialistResult.categoryId} policy={specialistResult.conditionPolicy} savedId={specialistResult.conditionId ?? ''} accent={activeNiche.color} onSaved={() => { void runPreflight(); }}/> : null}
+        {!publicationLocked && isAntique && specialistResult?.issue !== 'condition' ? <View style={s.checkCard}><View style={s.flex}><Text style={s.checkLabel}>{antiqueReady ? 'Saved draft verified' : 'Draft needs review'}</Text><Text style={s.checkDetail}>{antiqueReady ? 'Category, item specifics, condition and selected photos checked. Nothing has been published.' : antiqueError ?? 'Checking current category requirements…'}</Text><Pressable onPress={()=>router.push(`/ebay-listing-editor?id=${listingId}` as any)} style={({pressed})=>[s.pickCatBtn,pressed?{opacity:0.6}:null]}><Text style={s.pickCatBtnText}>Review draft</Text></Pressable>{!antiqueReady && !scanning ? <Pressable onPress={()=>void runPreflight()} style={({pressed})=>[s.pickCatBtn,pressed?{opacity:0.6}:null]}><Text style={s.pickCatBtnText}>Recheck requirements</Text></Pressable> : null}</View></View> : null}
 
         {/* Checks */}
-        {checks.map(check => (
+        {(publicationLocked ? [] : checks).map(check => (
           <View key={check.id} style={[
             s.checkCard,
             check.status === 'pass' && s.checkCardPass,
@@ -675,7 +738,7 @@ export default function ListingPreflightScreen() {
         ) : null}
 
         {/* Success state */}
-        {submitResult?.success ? (
+        {!publicationLocked && submitResult?.success ? (
           <View style={s.successCard}>
             <MaterialIcons name="check-circle" size={32} color={Colors.success} />
             <Text style={s.successTitle}>Listed on eBay!</Text>
@@ -686,7 +749,7 @@ export default function ListingPreflightScreen() {
         ) : null}
 
         {/* Fix instructions for failures */}
-        {failCount > 0 && !scanning ? (
+        {!publicationLocked && failCount > 0 && !scanning ? (
           <View style={s.fixCard}>
             <MaterialIcons name="build" size={14} color={Colors.info} />
             <View style={s.flex}>
@@ -855,20 +918,26 @@ export default function ListingPreflightScreen() {
           <Text style={s.cancelBtnText}>Back</Text>
         </Pressable>
         <Pressable
-          onPress={handleSubmit}
-          disabled={!canSubmit}
-          style={[s.submitBtn, !canSubmit && s.submitBtnDisabled]}
+          onPress={publicationLocked ? () => { void synchroniseExisting(); } : handleSubmit}
+          disabled={publicationLocked ? recovery.busy || submitting : !canSubmit}
+          style={({pressed})=>[s.submitBtn, (publicationLocked ? recovery.busy || submitting : !canSubmit) ? s.submitBtnDisabled : null, pressed ? {opacity:0.65} : null]}
         >
-          {submitting ? (
+          {submitting || recovery.busy ? (
             <ActivityIndicator size="small" color={Colors.background} style={{ width: 16, height: 16 }} />
+          ) : publicationLocked ? (
+            <MaterialIcons name="sync" size={20} color={Colors.background}/>
           ) : submitResult?.success ? (
             <MaterialIcons name="check-circle" size={16} color={Colors.background} />
           ) : (
             <MaterialIcons name="send" size={16} color={canSubmit ? Colors.background : Colors.textTertiary} />
           )}
-          <Text style={[s.submitBtnText, !canSubmit && s.submitBtnTextDisabled]}>
+          <Text style={[s.submitBtnText, !publicationLocked && !canSubmit ? s.submitBtnTextDisabled : null]}>
             {submitting ? 'Submitting...'
+              : recovery.busy ? 'Synchronising…'
+              : publicationLocked ? 'Synchronise existing listing'
               : submitResult?.success ? 'Listed!'
+              : scanning ? 'Checking draft…'
+              : specialistResult?.issue === 'condition' ? 'Choose condition above'
               : failCount > 0 ? `Fix ${failCount} issue${failCount === 1 ? '' : 's'} first`
               : 'Submit to eBay'}
           </Text>
@@ -882,12 +951,13 @@ const s = StyleSheet.create({
   // ── Category picker styles ─────────────────────────────────────────────────
   checkLabelRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flexWrap: 'wrap' },
   pickCatBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
+    minHeight: Spacing.section, marginTop: Spacing.sm,
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.xs,
     backgroundColor: Colors.primaryDim, borderRadius: Radius.pill,
     paddingHorizontal: Spacing.sm, paddingVertical: 3,
     borderWidth: 1, borderColor: Colors.primary + '50',
   },
-  pickCatBtnText: { fontSize: 10, fontWeight: Typography.weight.bold, color: Colors.primary },
+  pickCatBtnText: { fontSize: Typography.size.base, fontWeight: Typography.weight.semibold, color: Colors.primary },
   modalContainer: { flex: 1, backgroundColor: Colors.background },
   modalHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -954,15 +1024,15 @@ const s = StyleSheet.create({
   summaryRow: { flexDirection: 'row', gap: Spacing.sm, flexWrap: 'wrap' },
   summaryChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: Radius.pill, paddingHorizontal: Spacing.sm, paddingVertical: 4, borderWidth: 1 },
   summaryChipText: { fontSize: Typography.size.xs, fontWeight: Typography.weight.bold },
-  summaryStatus: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold },
+  summaryStatus: { fontSize: Typography.size.base, lineHeight: 24, fontWeight: Typography.weight.semibold },
   checkCard: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceBorder },
   checkCardPass: { borderColor: Colors.success + '40', backgroundColor: Colors.successDim },
   checkCardFail: { borderColor: Colors.danger + '40', backgroundColor: Colors.dangerDim },
   checkCardWarn: { borderColor: Colors.warning + '40', backgroundColor: Colors.warningDim },
   checkIcon: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 },
-  checkLabel: { fontSize: Typography.size.sm, fontWeight: Typography.weight.semibold, color: Colors.textPrimary },
+  checkLabel: { fontSize: Typography.size.base, fontWeight: Typography.weight.semibold, color: Colors.textPrimary },
   checkSublabel: { fontSize: Typography.size.xs, color: Colors.textTertiary, marginTop: 2 },
-  checkDetail: { fontSize: Typography.size.xs, color: Colors.textSecondary, marginTop: 3, lineHeight: 16 },
+  checkDetail: { fontSize: Typography.size.base, color: Colors.textSecondary, marginTop: Spacing.xs, lineHeight: 26 },
   submitProgressCard: { backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.base, gap: Spacing.sm, borderWidth: 1, borderColor: Colors.primary + '40' },
   submitProgressTitle: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: Colors.primary },
   submitStep: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },

@@ -2,7 +2,7 @@
 import * as ImageManipulator from 'expo-image-manipulator';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { getSupabaseClient } from '@/template';
-import { SMART_STUDIO_VERSION, type StudioResult } from '@/shared/smartStudio';
+import { SMART_STUDIO_VERSION, studioImageIsUsable, type StudioResult } from '@/shared/smartStudio';
 import type { CapturedImage } from './aiIdentificationService';
 export interface StudioRequest {
  original:{uri:string;width?:number;height?:number};nicheId?:string;tenantId?:string;
@@ -11,7 +11,7 @@ export interface StudioRequest {
 }
 export interface PreparedObjectImageReference {enhancedUri:string;warning:string;generatedBy?:string;studio?:StudioResult}
 const flights=new Map<string,Promise<StudioResult>>();
-const warning='Smart Studio presentation only. Always use the original photo for eBay listings and final attribution.';
+const warning='AI-cleaned presentation. Originals retained for condition evidence; pixel-exact fidelity is not guaranteed.';
 function fallback(uri:string,message:string):StudioResult{return {version:SMART_STUDIO_VERSION,status:'fallback',originalUri:uri,confidence:0,warnings:[message],quality:{sourcePixelsOnly:true,completeness:'not_assessed',boundary:'not_assessed',detailCheck:'Original unchanged',background:'original'}};}
 function checkSignal(signal:AbortSignal){if(signal.aborted)throw new Error('Studio processing cancelled or timed out; original retained.');}
 async function copy(uri:string,maxEdge:number,signal:AbortSignal,width?:number,height?:number):Promise<string>{
@@ -42,7 +42,7 @@ async function process(request:StudioRequest,signal:AbortSignal):Promise<StudioR
   if(error){let message=error.message||'Studio unavailable.';if(error instanceof FunctionsHttpError){try{const text=await error.context.text(),body=JSON.parse(text);message=`[Code: ${error.context.status}] ${typeof body.error==='string'?body.error:'Studio request failed.'}`;}catch{message=`[Code: ${error.context?.status??500}] Studio unavailable.`;}}throw new Error(message);}
   checkSignal(signal);
   if(data?.version!==SMART_STUDIO_VERSION||!['ready','review','fallback'].includes(data?.status))throw new Error('Smart Studio returned no usable image reference or provenance.');
-  if(data.status!=='fallback'&&(!data.enhancedUri?.startsWith('https://')||!data.maskUri?.startsWith('https://')||data.quality?.sourcePixelsOnly!==true))throw new Error('Smart Studio source-pixel protection was not confirmed.');
+  if(data.status!=='fallback'&&!studioImageIsUsable(data))throw new Error('Cleanup did not confirm detail-preservation checks; original retained.');
   const result:StudioResult={...data,originalUri:uri,warnings:[...(Array.isArray(data.warnings)?data.warnings:[]),warning]};
   if(result.enhancedUri)await AsyncStorage.setItem(key,JSON.stringify({...result,cachedAt:Date.now()})).catch(()=>{});
   return result;
@@ -51,7 +51,7 @@ async function process(request:StudioRequest,signal:AbortSignal):Promise<StudioR
 /** Whole-operation timeout includes auth, codecs, cache and network, not only AI. */
 export function prepareObjectImage(request:StudioRequest):Promise<StudioResult>{
  const uri=request.original.uri;if(!uri?.trim())return Promise.resolve(fallback(uri??'','Capture a coin photo or object photo before creating a studio image.'));
- const controller=new AbortController();const timeout=Math.max(1,Math.min(34_000,request.timeoutMs??34_000));
+ const controller=new AbortController();const timeout=Math.max(1,Math.min(70_000,request.timeoutMs??70_000));
  return new Promise(resolve=>{
   let settled=false;let timer:ReturnType<typeof setTimeout>|null=null;
   const finish=(result:StudioResult)=>{if(settled)return;settled=true;if(timer)clearTimeout(timer);request.signal?.removeEventListener('abort',cancel);resolve(result);};
@@ -61,14 +61,14 @@ export function prepareObjectImage(request:StudioRequest):Promise<StudioResult>{
   void process(request,controller.signal).then(finish,cause=>finish(fallback(uri,cause instanceof Error?cause.message:'Smart Studio unavailable; original retained.')));
  });
 }
-// Backward-compatible Coin Flipper alias; same source-protected engine.
+// Backward-compatible Coin Flipper alias; same direct cleanup engine.
 export async function generateSharedObjectImageReference(uri:string,options:Omit<StudioRequest,'original'>={}):Promise<PreparedObjectImageReference>{
  const studio=await prepareObjectImage({...options,original:{uri}});if(!studio.enhancedUri)throw new Error(studio.warnings.join(' '));
- return {enhancedUri:studio.enhancedUri,warning:studio.warnings.join(' '),generatedBy:'Source-pixel Smart Studio',studio};
+ return {enhancedUri:studio.enhancedUri,warning:studio.warnings.join(' '),generatedBy:'AI photo cleanup',studio};
 }
 /** Serial, hard-budgeted batch. Neither this service nor the server calls identification. */
 export async function prepareCapturedImages(images:readonly CapturedImage[],options:{tenantId?:string;nicheId?:string;deadlineMs?:number}={}):Promise<CapturedImage[]>{
- const output:CapturedImage[]=[];const deadline=Date.now()+(options.deadlineMs??40_000);
+ const output:CapturedImage[]=[];const deadline=Date.now()+(options.deadlineMs??150_000);
  for(const image of images){
   if(image.studio?.version===SMART_STUDIO_VERSION&&image.studio.originalUri===image.uri){output.push(image);continue;}
   const remaining=deadline-Date.now();
