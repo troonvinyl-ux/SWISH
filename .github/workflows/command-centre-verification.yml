@@ -23,7 +23,10 @@ jobs:
         with:
           node-version: 22
       - run: bash scripts/install-dependencies.sh
+      - name: Credential-free command JWT runner safety tests
+        run: node --test scripts/verify-command-jwt.test.mjs
       - name: TypeScript
+        if: ${{ !cancelled() }}
         run: npx tsc --noEmit
       - name: Lint
         if: ${{ !cancelled() }}

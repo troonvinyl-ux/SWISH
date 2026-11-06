@@ -1,3 +1,4 @@
+import { availableListingPhotos, preferredListingPhotos } from '@/shared/smartStudio';
 import { getSupabaseClient } from '@/template';
 import { mapItem, type Item } from './itemService';
 import { getProductionNicheSpecialistIds } from './nicheRouting';
@@ -23,11 +24,13 @@ export async function selectMainItemImage(tenantId: string, nicheId: string, ite
     if (!row || row.tenant_id !== tenantId || !specialists.includes(row.specialist_id)) throw new Error('This item is not available in the current workspace.');
     if (!mediaOrderMatches(row.media ?? [], expectedMedia)) throw new Error('Photos changed since this page loaded. Reload the item before choosing its main image.');
     const media = moveMainImageFirst(row.media ?? [], selectedUrl);
+    const allowed = availableListingPhotos(media,row.attributes??{});
     const listingSelection = Array.isArray(row.attributes?.ebay_listing_media)
-      ? row.attributes.ebay_listing_media.filter((url: unknown): url is string => typeof url === 'string' && media.includes(url)) as string[]
+      ? row.attributes.ebay_listing_media.filter((url: unknown): url is string => typeof url === 'string' && allowed.includes(url)) as string[]
       : null;
-    // Respect the seller's other selected listing photos; include the newly chosen cover first.
-    const listingMedia = listingSelection ? moveMainImageFirst(listingSelection.includes(selectedUrl) ? listingSelection : [...listingSelection, selectedUrl], selectedUrl) : null;
+    // Keep accepted clean photos rather than silently dropping them on a cover change.
+    const listingCover = listingSelection?.includes(selectedUrl) ? selectedUrl : preferredListingPhotos([selectedUrl],row.attributes??{})[0];
+    const listingMedia = listingSelection ? moveMainImageFirst(listingSelection.includes(listingCover) ? listingSelection : [...listingSelection, listingCover], listingCover) : null;
     if (listingMedia && listingMedia.length > 12) throw new Error('The listing already has 12 selected photos. Deselect one in the listing editor before adding a different main photo.');
     const listingChanged = listingMedia !== null && !mediaOrderMatches(listingMedia, row.attributes.ebay_listing_media);
     if (mediaOrderMatches(media, row.media ?? []) && !listingChanged) return { item: mapItem(row), error: null };
