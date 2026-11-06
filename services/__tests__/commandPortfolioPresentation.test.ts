@@ -20,7 +20,7 @@ describe('Master Minority Report presentation and count contract',()=>{
  });
  test('portfolio aggregates unique external listing identities and one draft per physical item',()=>{
   const migration=read('supabase/migrations/20261106_140000_command_report_distinct_listings.sql');
-  expect(migration).toContain('distinct on (l.tenant_id,l.marketplace_id,l.external_listing_id)');
+  expect(migration).toContain('distinct on (l.tenant_id,l.external_listing_id)');
   expect(migration).toContain('distinct on (l.tenant_id,l.item_id)');
   expect(migration).toContain('left join draft_stats d on d.niche=n.id');
   expect(migration).toContain('coalesce(d.drafts,0) as drafts');
