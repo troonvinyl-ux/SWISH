@@ -1,122 +1,31 @@
-// SWISH — eBay Tab
-// This tab now serves as the eBay Hub entry point.
-// All inventory + listing management is in the Stock tab (inventory.tsx).
-
-import React from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+// Shared selling workspace. Tools keep the active module's existing route permissions.
+import { View,Text,StyleSheet,Pressable,FlatList } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
+import { Colors,Typography,Spacing,Radius } from '@/constants/theme';
+import { PremiumStyles } from '@/constants/styles';
 import { useApp } from '@/hooks/useApp';
+import { useArtworkLayout } from '@/hooks/useArtworkLayout';
 import { isRouteAllowedForBuild } from '@/services/nicheRouting';
-import { NICHE_MODULES } from '@/constants/niches';
-
-const EBAY_ROUTES = [
-  { icon: 'storefront', label: 'eBay Hub', sub: 'Orders, messages, offers', route: '/ebay-hub', color: '#E53238' },
-  { icon: 'receipt-long', label: 'Orders', sub: 'Manage & fulfil orders', route: '/orders', color: Colors.success },
-  { icon: 'message', label: 'Messages', sub: 'Buyer conversations', route: '/ebay-messages', color: Colors.info },
-  { icon: 'local-offer', label: 'Offers', sub: 'Best Offer responses', route: '/ebay-offers', color: Colors.primary },
-  { icon: 'analytics', label: 'Analytics', sub: 'Views, watchers, sales', route: '/ebay-analytics', color: Colors.accent },
-  { icon: 'payments', label: 'Finances', sub: 'Payouts & fees', route: '/ebay-finances', color: Colors.gold },
-  { icon: 'assignment-return', label: 'Returns', sub: 'Handle buyer returns', route: '/ebay-returns', color: Colors.warning },
-  { icon: 'gavel', label: 'Cases', sub: 'eBay dispute cases', route: '/ebay-cases', color: Colors.danger },
-  { icon: 'price-change', label: 'Repricing', sub: 'Auto-reprice rules', route: '/repricing', color: Colors.primary },
-  { icon: 'sync', label: 'CSV Import', sub: 'Bulk eBay import', route: '/ebay-csv', color: Colors.textSecondary },
-  { icon: 'account-circle', label: 'eBay Account', sub: 'Connection & policies', route: '/ebay-account', color: Colors.info },
-  { icon: 'receipt', label: 'API Log', sub: 'Debug & audit trail', route: '/ebay-log', color: Colors.textTertiary },
+const tools=[
+ {icon:'storefront',label:'eBay hub',detail:'Your selling overview',route:'/ebay-hub'},
+ {icon:'receipt-long',label:'Orders',detail:'Pack and dispatch',route:'/orders'},
+ {icon:'chat-bubble-outline',label:'Messages',detail:'Buyer conversations',route:'/ebay-messages'},
+ {icon:'local-offer',label:'Offers',detail:'Review buyer offers',route:'/ebay-offers'},
+ {icon:'analytics',label:'Analytics',detail:'Views, watchers and sales',route:'/ebay-analytics'},
+ {icon:'payments',label:'Finances',detail:'Payouts and fees',route:'/ebay-finances'},
+ {icon:'travel-explore',label:'Research',detail:'Niche-specific comparables',route:'/research'},
+ {icon:'assignment-return',label:'Returns',detail:'Resolve buyer returns',route:'/ebay-returns'},
+ {icon:'gavel',label:'Cases',detail:'Handle open disputes',route:'/ebay-cases'},
+ {icon:'price-change',label:'Repricing',detail:'Review your pricing rules',route:'/repricing'},
+ {icon:'upload-file',label:'CSV import',detail:'Import marketplace records',route:'/ebay-csv'},
+ {icon:'account-circle',label:'eBay account',detail:'Connection and policies',route:'/ebay-account'},
 ];
-
-export default function ListingsTabScreen() {
-  const insets = useSafeAreaInsets();
-  const router = useRouter();
-  const { tenant, activeNicheId, fixedNicheId, activeNiche } = useApp();
-
-  const nicheId = (fixedNicheId ?? activeNicheId ?? '').toLowerCase();
-  const accentColor = activeNiche.color;
-  const visibleRoutes = EBAY_ROUTES.filter(route => isRouteAllowedForBuild(route.route, nicheId));
-  const hubAvailable = visibleRoutes.some(route => route.route === '/ebay-hub');
-
-  return (
-    <View style={s.container}>
-      <StatusBar style="light" />
-
-      {/* Header */}
-      <View style={[s.header, { paddingTop: insets.top + Spacing.base }]}>
-        <View style={[s.headerIcon, { backgroundColor: '#E53238' + '20' }]}>
-          <MaterialIcons name="storefront" size={18} color="#E53238" />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={[s.headerTitle, { color: accentColor }]}>Listings</Text>
-          <Text style={s.headerSub}>{NICHE_MODULES[activeNiche.id as keyof typeof NICHE_MODULES]?.name ?? activeNiche.name} · eBay workspace</Text>
-        </View>
-        {hubAvailable ? <Pressable
-          onPress={() => router.push('/ebay-hub' as any)}
-          style={({ pressed }) => [s.hubBtn, pressed && { opacity: 0.85 }]}
-        >
-          <MaterialIcons name="dashboard" size={14} color="#000" />
-          <Text style={s.hubBtnText}>Hub</Text>
-        </Pressable> : null}
-      </View>
-
-      {/* Info banner — direct users to Stock tab for listings */}
-      <View style={s.infoBanner}>
-        <MaterialIcons name="info-outline" size={13} color={accentColor} />
-        <View style={{ flex: 1 }}>
-          <Text style={[s.infoBannerTitle, { color: accentColor }]}>Manage stock, drafts and live listings</Text>
-          <Text style={s.infoBannerSub}>In Stock → Draft → Live → Sold, all in one place.</Text>
-        </View>
-        <Pressable
-          onPress={() => router.replace('/(tabs)/inventory' as any)}
-          style={[s.goStockBtn, { backgroundColor: accentColor }]}
-        >
-          <Text style={s.goStockBtnText}>Inventory</Text>
-        </Pressable>
-      </View>
-
-      <ScrollView
-        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 100 }]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Quick-access grid */}
-        <View style={s.grid}>
-          {visibleRoutes.map(route => (
-            <Pressable
-              key={route.route}
-              onPress={() => router.push(route.route as any)}
-              style={({ pressed }) => [s.card, pressed && { opacity: 0.85 }]}
-            >
-              <View style={[s.cardIcon, { backgroundColor: route.color + '18' }]}>
-                <MaterialIcons name={route.icon as any} size={22} color={route.color} />
-              </View>
-              <Text style={s.cardLabel}>{route.label}</Text>
-              <Text style={s.cardSub} numberOfLines={1}>{route.sub}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </ScrollView>
-    </View>
-  );
+export default function ListingsTabScreen(){
+ const router=useRouter();const {activeNiche,activeNicheId,fixedNicheId}=useApp();const {columns}=useArtworkLayout();const accent=activeNiche.color;const visible=tools.filter(tool=>isRouteAllowedForBuild(tool.route,fixedNicheId??activeNicheId));
+ return <SafeAreaView edges={['top']} style={s.screen}><StatusBar style="light"/><View style={s.header}><View style={[s.brand,{backgroundColor:accent+'18'}]}><MaterialIcons name="storefront" size={24} color={accent}/></View><View><Text style={s.title}>Listings</Text><Text style={s.caption}>{activeNiche.shortName} · selling workspace</Text></View></View>
+ <FlatList key={columns} numColumns={columns} data={visible} keyExtractor={tool=>tool.route} showsVerticalScrollIndicator={false} contentContainerStyle={PremiumStyles.content} columnWrapperStyle={columns>1?s.columns:undefined} ListHeaderComponent={<View style={s.intro}><View style={[s.hero,{borderColor:accent+'40'}]}><Text style={[s.eyebrow,{color:accent}]}>STOCK → DRAFT → LIVE → SOLD</Text><Text style={s.heroTitle}>A clear path from item to sale.</Text><Text style={s.body}>Prepare your drafts, review clean photos and keep your live listings in order.</Text><Pressable onPress={()=>router.replace('/(tabs)/inventory' as any)} style={({pressed})=>[s.primary,{backgroundColor:accent},pressed?PremiumStyles.pressed:null]}><MaterialIcons name="inventory-2" size={20} color={Colors.textInverse}/><Text style={s.primaryText}>Manage inventory & listings</Text></Pressable></View><Text style={s.section}>Selling tools</Text></View>} renderItem={({item})=><Pressable onPress={()=>router.push(item.route as any)} style={({pressed})=>[PremiumStyles.card,s.tool,columns>1?s.gridTool:null,pressed?PremiumStyles.pressed:null]}><View style={[s.icon,{backgroundColor:accent+'18'}]}><MaterialIcons name={item.icon as any} size={24} color={accent}/></View><View style={s.flex}><Text style={s.toolTitle}>{item.label}</Text><Text style={s.caption}>{item.detail}</Text></View><MaterialIcons name="chevron-right" size={22} color={accent}/></Pressable>}/></SafeAreaView>;
 }
-
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.base, paddingBottom: Spacing.md, borderBottomWidth: 1, borderBottomColor: '#E53238' + '30' },
-  headerIcon: { width: 40, height: 40, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: Typography.size.xl, fontWeight: Typography.weight.bold },
-  headerSub: { fontSize: Typography.size.xs, color: Colors.textTertiary, marginTop: 2 },
-  hubBtn: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E53238', borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: 8 },
-  hubBtnText: { fontSize: Typography.size.xs, fontWeight: Typography.weight.bold, color: '#000' },
-  infoBanner: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, margin: Spacing.base, backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceBorder, ...Shadow.sm },
-  infoBannerTitle: { fontSize: Typography.size.xs, fontWeight: Typography.weight.bold },
-  infoBannerSub: { fontSize: Typography.size.base, color: Colors.textSecondary, lineHeight: 24, marginTop: 2 },
-  goStockBtn: { minHeight: 48, justifyContent: 'center', borderRadius: Radius.md, paddingHorizontal: Spacing.sm, paddingVertical: 6 },
-  goStockBtnText: { fontSize: 10, fontWeight: Typography.weight.bold, color: '#000' },
-  content: { padding: Spacing.base, gap: Spacing.md },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.md },
-  card: { width: '47%', minHeight: 120, backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.md, gap: Spacing.sm, borderWidth: 1, borderColor: Colors.surfaceBorder, ...Shadow.sm },
-  cardIcon: { width: 44, height: 44, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
-  cardLabel: { fontSize: Typography.size.sm, fontWeight: Typography.weight.bold, color: Colors.textPrimary },
-  cardSub: { fontSize: Typography.size.base, color: Colors.textSecondary, lineHeight: 24 },
-});
+const s=StyleSheet.create({screen:{flex:1,backgroundColor:Colors.background},header:{padding:Spacing.base,flexDirection:'row',gap:Spacing.md,alignItems:'center'},brand:{width:48,height:48,borderRadius:Radius.md,alignItems:'center',justifyContent:'center'},title:{fontSize:Typography.size.lg,fontWeight:Typography.weight.bold,color:Colors.textPrimary},caption:{fontSize:Typography.size.sm,color:Colors.textSecondary,lineHeight:21},intro:{gap:Spacing.xl,marginBottom:Spacing.base},hero:{padding:Spacing.xl,gap:Spacing.md,borderRadius:Radius.xxl,borderWidth:1,backgroundColor:Colors.primaryDim},eyebrow:{fontSize:Typography.size.xs,fontWeight:Typography.weight.bold,letterSpacing:1},heroTitle:{fontSize:Typography.size.xl,fontWeight:Typography.weight.bold,color:Colors.textPrimary,lineHeight:31},body:{fontSize:Typography.size.base,color:Colors.textSecondary,lineHeight:26},primary:{minHeight:52,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:Spacing.sm,padding:Spacing.md,borderRadius:Radius.lg},primaryText:{fontSize:Typography.size.base,fontWeight:Typography.weight.semibold,color:Colors.textInverse},section:{fontSize:Typography.size.md,fontWeight:Typography.weight.semibold,color:Colors.textPrimary},tool:{flexDirection:'row',alignItems:'center',minHeight:96,marginBottom:Spacing.md},gridTool:{flex:1},columns:{gap:Spacing.md},icon:{width:48,height:48,borderRadius:Radius.md,alignItems:'center',justifyContent:'center'},toolTitle:{fontSize:Typography.size.base,fontWeight:Typography.weight.semibold,color:Colors.textPrimary},flex:{flex:1}});

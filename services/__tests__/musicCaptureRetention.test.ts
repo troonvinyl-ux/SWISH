@@ -19,7 +19,7 @@ const retained=():CaptureDraft=>({
  musicRelease:normalizeMusicRelease({id:42,title:'Fixture compilation',artists:[{name:'Various'}],year:2012,country:'UK',formats:[{name:'CD',qty:'3',descriptions:['Compilation']}],labels:[{name:'Fixture Label',catno:'TEST-CD3'}],identifiers:[],tracklist:[]}),
 });
 describe('Music capture retention (mocked local storage)',()=>{
- test('navigation/reload restores confirmed catalogue fields, mode, originals and manual reviews',async()=>{
+ test('explicit storage reads retain confirmed catalogue fields for recovery, not automatic scanner hydration',async()=>{
   const initial=retained();await persistCaptureDraft('user:tenant:tunes_flip',initial);
   const restored=await readCaptureDraft('user:tenant:tunes_flip');expect(restored).toEqual(initial);
   const result=musicCaptureResult(restored!.result,restored!.musicRelease,restored!.answers)!;
@@ -30,7 +30,7 @@ describe('Music capture retention (mocked local storage)',()=>{
   await persistCaptureDraft('user-a:tenant-a:tunes_flip',retained());
   for(const scope of ['user-b:tenant-a:tunes_flip','user-a:tenant-b:tunes_flip','user-a:tenant-a:coins'])expect(await readCaptureDraft(scope)).toBeNull();
  });
- test('ordered autosaves retain the existing saved item ID and latest manual count for retry',async()=>{
+ test('ordered same-visit autosaves retain the existing saved item ID and latest manual count for retry',async()=>{
   const initial=retained();const saved={...initial,savedId:'fixture-existing-item',answers:{...initial.answers,observed_disc_count:'2'}};
   await Promise.all([persistCaptureDraft('user:tenant:tunes_flip',initial),persistCaptureDraft('user:tenant:tunes_flip',saved)]);
   const restored=await readCaptureDraft('user:tenant:tunes_flip');expect(restored?.savedId).toBe('fixture-existing-item');expect(restored?.answers.observed_disc_count).toBe('2');

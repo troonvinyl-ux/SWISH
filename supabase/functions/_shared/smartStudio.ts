@@ -1,6 +1,6 @@
 // Dependency-free Smart Studio geometry and pixel protection contract.
 // Mirrored byte-for-byte into the deployable Edge directory; no React or secrets.
-export const SMART_STUDIO_VERSION = 'smart-studio-1.0.0';
+export const SMART_STUDIO_VERSION = 'smart-studio-2.0.0';
 export type StudioPoint = [number, number];
 export interface StudioDetection {
  kind: 'rectangle' | 'circle' | 'contour'; outline: StudioPoint[]; holes: StudioPoint[][];
@@ -19,7 +19,8 @@ export interface StudioResult {
  enhancedUri?: string; maskUri?: string; sourceHash?: string; cacheKey?: string;
  detection?: StudioDetection; transform?: StudioTransform; confidence: number;
  warnings: string[]; quality: { sourcePixelsOnly: boolean; completeness: string;
-  boundary: string; detailCheck: string; background: string; sharpness?: number; exposureGain?: number };
+  boundary: string; detailCheck: string; background: string; sharpness?: number; exposureGain?: number;
+  method?: 'ai_cutout'; fidelityPassed?: boolean; checks?: Record<string, boolean>; };
 }
 export interface StudioRaster { width: number; height: number; data: Uint8Array }
 export function studioProfile(niche: string): string {
@@ -174,9 +175,23 @@ export function renderStudio(source:StudioRaster,d:StudioDetection,t:StudioTrans
  if(pixels<w*h*0.01||invalid>0)throw new Error('Product mapping is incomplete; original must be retained.');
  return {image:{width:w,height:h,data},mask:{width:w,height:h,data:mask},quality:{sampledProductPixels:pixels,invalidMappings:invalid,sharpness:sharpness/pixels,meanLuma:luma/pixels,exposureGain:gain}};
 }
+// AI comparison is a conservative model assessment, not pixel-exact proof.
+export function studioImageIsUsable(entry: StudioResult | null | undefined): boolean {
+ if (!entry || entry.version !== SMART_STUDIO_VERSION || !['ready','review'].includes(entry.status) || !entry.enhancedUri?.startsWith('https://')) return false;
+ if (entry.quality?.sourcePixelsOnly === true) return Boolean(entry.maskUri?.startsWith('https://'));
+ const keys = ['sameProduct','defectsPreserved','textUnchanged','nothingInvented','complete','centred','backgroundRemoved'];
+ return entry.quality?.method === 'ai_cutout' && entry.quality.fidelityPassed === true && keys.every(key => entry.quality.checks?.[key] === true);
+}
+export function studioForOriginal(original: string, attributes: Record<string,any>): StudioResult | undefined {
+ const entries = attributes?._smart_studio_images;
+ return entries && typeof entries === 'object' ? Object.values(entries).find((entry:any) => entry?.originalUri === original && entry.status === 'ready' && studioImageIsUsable(entry)) as StudioResult | undefined : undefined;
+}
 export function preferredStudioImage(media:readonly string[],attributes:Record<string,any>):string|undefined {
- const original=media[0];if(!original)return undefined;
- const entries=attributes?._smart_studio_images;
- const entry=entries&&typeof entries==='object'?Object.values(entries).find((v:any)=>v?.originalUri===original&&v?.version===SMART_STUDIO_VERSION&&v?.status==='ready'&&v?.quality?.sourcePixelsOnly===true) as StudioResult|undefined:undefined;
- return entry?.enhancedUri?.startsWith('https://')?entry.enhancedUri:original;
+ const original=media[0];return original ? studioForOriginal(original,attributes)?.enhancedUri ?? original : undefined;
+}
+export function preferredListingPhotos(media: readonly string[], attributes: Record<string,any>): string[] {
+ return [...new Set(media.map(uri => studioForOriginal(uri,attributes)?.enhancedUri ?? uri))];
+}
+export function availableListingPhotos(media: readonly string[], attributes: Record<string,any>): string[] {
+ return [...new Set([...preferredListingPhotos(media,attributes),...media])];
 }
