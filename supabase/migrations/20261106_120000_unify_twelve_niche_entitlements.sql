@@ -71,7 +71,11 @@ begin
   v_definition := pg_get_functiondef(
     'public.swish_cache_verified_niches(uuid,timestamptz,jsonb)'::regprocedure
   );
-  v_updated := replace(v_definition,'jsonb_array_length(p_grants)>11',
+  v_updated := replace(v_definition,'jsonb_array_length(p_grants)>10',
+                                   'jsonb_array_length(p_grants)>12');
+  v_updated := replace(v_updated,'jsonb_array_length(p_grants) > 10',
+                                   'jsonb_array_length(p_grants) > 12');
+  v_updated := replace(v_updated,'jsonb_array_length(p_grants)>11',
                                    'jsonb_array_length(p_grants)>12');
   v_updated := replace(v_updated,'jsonb_array_length(p_grants) > 11',
                                    'jsonb_array_length(p_grants) > 12');
