@@ -11,10 +11,20 @@ import { Platform } from 'react-native';
 import { inspectPhotoQuality, preflightPhotos, type PhotoQuality } from './photoQualityService';
 import { getSupabaseClient } from '@/template';
 import { FunctionsFetchError, FunctionsHttpError } from '@supabase/supabase-js';
+import { IDENTIFICATION_LIMITS, identificationResize, validateIdentificationPayload } from '@/shared/identificationPolicy';
+import { invokeWithIdentificationDeadline } from './identificationTransportService';
+import { prepareNumistaImages } from './numistaImagePreparationService';
+import type { NumistaImage, NumistaImageSearchResult } from '@/shared/numistaImageSearch';
+import { buildPhotoWarningReview, type PhotoWarningReview } from './reidentificationPhotoReviewService';
 import { SpecialistId } from '@/constants/specialists';
 import { EvidenceSource, ConfidenceTier, DispositionDecision } from '@/constants/config';
 import { createItem, getItem, Item } from '@/services/itemService';
 import { decode } from 'base64-arraybuffer';
+import { prepareCapturedImages } from './sharedImagePreparationService';
+import { uploadUntouchedOriginal } from './originalImageService';
+import { linkStudioImages } from './smartStudioStorageService';
+import type { StudioResult } from '@/shared/smartStudio';
+const pendingStudioLinks = new Map<string, CapturedImage[]>();
 import { resolveProductionNiche, getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 import { getSpecialistProfile, normalizeSpecialistAnalysis, recordValue, textList, type SpecialistAnalysis } from '@/shared/specialistIntelligence';
 
@@ -26,7 +36,10 @@ export interface CapturedImage {
   base64?: string;
   slotId: string;
   slotLabel: string;
-  // Optional, separate AI viewing aid. uri remains the original listing photo.
+  // Distinct presentation role; uri always remains the untouched original.
+  studio?: StudioResult;
+  originalStorageUri?: string;
+  originalByteHash?: string;
   enhancedUri?: string;
   enhancementStatus?: 'processing' | 'ready' | 'failed';
   enhancementWarning?: string;
@@ -81,6 +94,7 @@ export interface QuotaExceededError {
 }
 
 export interface AIIdentificationResult {
+  numistaImageSearch?: NumistaImageSearchResult | null; // Live search results only; never persisted as catalogue cache.
   specialistAnalysis?: SpecialistAnalysis;
   canonicalTitle: string;
   specialistId: SpecialistId;
@@ -193,7 +207,7 @@ export async function captureFromCamera(): Promise<CapturedImage | null> {
   }
   const result = await ImagePicker.launchCameraAsync({
     mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    quality: 0.85,
+    quality: 1,
     base64: false,   // We compress separately, no need to load huge base64 here
     allowsEditing: false,
     exif: false,
@@ -219,7 +233,7 @@ export async function pickFromLibrary(slotId: string, slotLabel: string): Promis
   }
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    quality: 0.85,
+    quality: 1,
     base64: false,
     allowsEditing: false,
     exif: false,
@@ -240,7 +254,8 @@ export async function pickFromLibrary(slotId: string, slotLabel: string): Promis
 // ── Compress image for AI payload ─────────────────────────────────────────────
 // Resizes to max 1024px and reduces quality to keep payload small.
 export async function prepareImageForAI(uri: string): Promise<string> {
-  if (/^(https?:|data:)/i.test(uri)) return uri;
+  if (/^https:/i.test(uri)) return uri;
+  if (/^data:image\//i.test(uri)) return compressForAI(uri);
   // ImagePicker returns local file/blob URIs; compress these before sending to an Edge Function.
   if (/^(file:|content:|blob:)/i.test(uri) || uri.startsWith('/')) return compressForAI(uri);
   // Accept a raw base64 image if a caller already prepared one.
@@ -248,45 +263,35 @@ export async function prepareImageForAI(uri: string): Promise<string> {
   return uri;
 }
 
-async function compressForAI(uri: string): Promise<string> {
-  // AI-rendered references may already be data URLs; pass them through unchanged.
-  if (/^data:image\/(?:jpeg|jpg|png|webp);base64,/i.test(uri)) return uri;
+async function compressForAI(uri: string, width?: number, height?: number): Promise<string> {
+  // Existing stored originals can be sent as URLs without loading base64 into JS memory.
+  if (/^https:\/\/\S+$/i.test(uri)) return uri;
   try {
-    const result = await ImageManipulator.manipulateAsync(
-      uri,
-      [{ resize: { width: AI_COMPRESS.maxWidth } }],
-      {
-        compress: AI_COMPRESS.quality,
-        format: ImageManipulator.SaveFormat.JPEG,
-        base64: true,
-      }
-    );
-    const b64 = result.base64 ?? '';
-    return b64.startsWith('data:') ? b64 : `data:image/jpeg;base64,${b64}`;
-  } catch {
-    // Fallback: read as-is
-    return ensureBase64Raw(uri);
-  }
-}
-
-// ── Raw base64 fallback (no compression) ─────────────────────────────────────
-async function ensureBase64Raw(uri: string): Promise<string> {
-  const dataUrl = uri.match(/^data:image\/(?:jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=]+)$/i);
-  if (dataUrl) return uri;
-  if (Platform.OS === 'web') {
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
+    const resize = identificationResize(width, height, AI_COMPRESS.maxWidth);
+    let prepared = await ImageManipulator.manipulateAsync(uri, resize ? [{ resize }] : [], {
+      compress: AI_COMPRESS.quality, format: ImageManipulator.SaveFormat.JPEG, base64: true,
     });
+    // Unknown dimensions may initially be width-bounded. Always bound the long edge too.
+    if (Math.max(prepared.width ?? 0, prepared.height ?? 0) > AI_COMPRESS.maxHeight) {
+      const bounded = identificationResize(prepared.width, prepared.height, AI_COMPRESS.maxHeight);
+      prepared = await ImageManipulator.manipulateAsync(prepared.uri, bounded ? [{ resize: bounded }] : [], {
+        compress: AI_COMPRESS.quality, format: ImageManipulator.SaveFormat.JPEG, base64: true,
+      });
+    }
+    let data = prepared.base64 ? `data:image/jpeg;base64,${prepared.base64.replace(/^data:image\/[^;]+;base64,/i, '')}` : '';
+    if (data.length > IDENTIFICATION_LIMITS.imageCharacters) {
+      const smaller = identificationResize(prepared.width, prepared.height, 768);
+      prepared = await ImageManipulator.manipulateAsync(prepared.uri, smaller ? [{ resize: smaller }] : [], {
+        compress: 0.5, format: ImageManipulator.SaveFormat.JPEG, base64: true,
+      });
+      data = prepared.base64 ? `data:image/jpeg;base64,${prepared.base64.replace(/^data:image\/[^;]+;base64,/i, '')}` : '';
+    }
+    if (!data || data.length > IDENTIFICATION_LIMITS.imageCharacters) throw new Error('Analysis copy is empty or oversized.');
+    return data;
+  } catch {
+    // Never fall back to an uncompressed HEIC/raw file: that can exceed the gateway limit.
+    throw new Error('A photo could not be prepared safely for identification. Reselect or retake it; your originals are unchanged.');
   }
-  const base64 = await FileSystem.readAsStringAsync(uri, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
-  return `data:image/jpeg;base64,${base64}`;
 }
 
 // ── Known attributes passed to Re-ID ─────────────────────────────────────────
@@ -326,33 +331,57 @@ export async function identifyItemWithAI(
     captureMode?: string;
     allowPhotoWarnings?: boolean; // Explicit user override of advisory checks; never a certification.
   }
-): Promise<{ result: AIIdentificationResult | null; error: string | null; quotaExceeded?: QuotaExceededError }> {
+): Promise<{ result: AIIdentificationResult | null; error: string | null; quotaExceeded?: QuotaExceededError; photoReview?: PhotoWarningReview[] }> {
   try {
+    if (images.length + (options?.existingImageUrls?.length ?? 0) > IDENTIFICATION_LIMITS.images) return { result: null, error: 'Use at most eight photos per identification; your originals are retained.' };
     const preflight = await preflightPhotos([
       ...images,
       ...(options?.existingImageUrls ?? []).map((uri,index) => ({ uri,slotLabel:`Stored photo ${index + 1}` })),
     ],options?.allowPhotoWarnings ?? false);
-    if (preflight.error) return { result:null,error:preflight.error };
+    if (preflight.error) return {
+      result: null, error: preflight.error,
+      // Structured advisory warnings let each caller offer an explicit review action
+      // without parsing errors or treating a network/provider failure as overridable.
+      photoReview: buildPhotoWarningReview([
+        ...images,
+        ...(options?.existingImageUrls ?? []).map((uri, index) => ({ uri, slotLabel: `Stored photo ${index + 1}` })),
+      ], preflight.checks),
+    };
+    // One shared studio engine for legacy capture callers as well as the premium
+    // scanner. A studio failure never triggers/replays identification or changes originals.
+    if (images.length && options?.tenantId && !images.every(image => image.studio)) {
+      const prepared = await prepareCapturedImages(images, { tenantId: options.tenantId, nicheId: resolveProductionNiche(specialistId) ?? undefined });
+      prepared.forEach((image,index) => Object.assign(images[index],image));
+    }
     // Compress any new captures; skip if using existing URLs only
-    const base64Images = images.length > 0
-      ? await Promise.all(images.map(img => compressForAI(resolveProductionNiche(specialistId) === 'coins' ? img.enhancedUri ?? img.uri : img.uri)))
-      : [];
-
+    const base64Images: string[] = [];
+    for (const image of images) {
+      // Prepare one copy at a time: eight simultaneous full-size decodes can exhaust mobile memory.
+      // Original evidence always wins, including for coins. Studio images are
+      // presentation, never substitutes or independent identifying evidence.
+      base64Images.push(await compressForAI(image.uri, image.width, image.height));
+    }
+    let numistaImages: NumistaImage[] | undefined;
+    let numistaImagePreparationFailed = false;
+    if (resolveProductionNiche(specialistId) === 'coins' && specialistId !== 'banknotes') {
+      try { numistaImages = await prepareNumistaImages([...images, ...(options?.existingImageUrls ?? []).map(uri => ({ uri }))]); }
+      catch { numistaImagePreparationFailed = true; } // Numista failure never discards a usable AI identification.
+    }
+    const requestId = `identify-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    const requestBody = {
+      images: base64Images.length > 0 ? base64Images : undefined,
+      imageLabels: base64Images.length > 0 ? images.map(img => (img.slotLabel || img.slotId).slice(0, 120)) : undefined,
+      existingImageUrls: options?.existingImageUrls,
+      specialistId, acquisitionContext, knownAttributes, tenantId: options?.tenantId, captureMode: options?.captureMode, requestId,
+      numistaImages, numistaImagePreparationFailed,
+    };
+    const payloadError = validateIdentificationPayload(requestBody);
+    if (payloadError) return { result: null, error: payloadError };
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase.functions.invoke('swish-identify', {
-      body: {
-        images: base64Images.length > 0 ? base64Images : undefined,
-        // Keep the face/slot labels aligned with image order so the model can
-        // distinguish obverse, reverse, edge and detail rather than guessing.
-        imageLabels: base64Images.length > 0 ? images.map(img => img.slotLabel || img.slotId) : undefined,
-        existingImageUrls: options?.existingImageUrls,
-        specialistId,
-        acquisitionContext,
-        knownAttributes,
-        tenantId: options?.tenantId,
-        captureMode: options?.captureMode,
-      },
-    });
+    const { data, error } = await invokeWithIdentificationDeadline(
+      signal => supabase.functions.invoke('swish-identify', { body: requestBody, signal }),
+      resolveProductionNiche(specialistId) === 'tunes_flip' ? IDENTIFICATION_LIMITS.musicClientMs : IDENTIFICATION_LIMITS.otherClientMs,
+    );
 
     if (error) {
       let errorMessage = error.message;
@@ -361,11 +390,8 @@ export async function identifyItemWithAI(
         // A fetch error means the client never received an HTTP response. Preserve the
         // underlying transport detail so connection/CORS/deployment failures aren't
         // mistaken for an AI identification rejection.
-        const transportDetail = error.context instanceof Error ? error.context.message : String(error.context ?? '');
-        console.error('[SWISH swish-identify transport failure]', transportDetail || error.message);
-        errorMessage = transportDetail
-          ? `Could not reach the swish-identify Edge Function: ${transportDetail}. Check the connection and function availability, then retry.`
-          : 'Could not reach the swish-identify Edge Function. Check the connection and function availability, then retry.';
+        console.warn('[SWISH swish-identify transport failure]', requestId);
+        errorMessage = `Photo identification received no server response. Your photos and barcode results are retained. Retry Identify; if it fails again, report reference ${requestId}. No inventory save was requested.`;
       } else if (error instanceof FunctionsHttpError) {
         try {
           const statusCode = error.context?.status ?? 500;
@@ -388,7 +414,16 @@ export async function identifyItemWithAI(
               }
             } catch { /* not JSON */ }
           }
-          errorMessage = `[Code: ${statusCode}] ${rawBody || error.message || 'Unknown error'}`;
+          let detail = rawBody || error.message || 'Unknown error';
+          let reference = requestId;
+          if (rawBody) {
+            try {
+              const response = JSON.parse(rawBody);
+              detail = typeof response.message === 'string' ? response.message : typeof response.error === 'string' ? response.error : detail;
+              if (typeof response.requestId === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(response.requestId)) reference = response.requestId;
+            } catch { /* Preserve the actual non-JSON HTTP error, bounded for display. */ }
+          }
+          errorMessage = `[Code: ${statusCode}] ${detail.slice(0, 500)} · Reference ${reference}`;
         } catch {
           errorMessage = error.message || 'Failed to read response';
         }
@@ -401,7 +436,7 @@ export async function identifyItemWithAI(
     }
 
     const id = recordValue(data.identification);
-    const numistaV = data.numistaVerification ?? null;
+    const numistaV = data.numistaVerification ?? id.numistaVerification ?? null;
 
     // ── Niche-context guard ────────────────────────────────────────────────
     // Prevent the AI edge function from silently overriding a caller-specified
@@ -438,6 +473,7 @@ export async function identifyItemWithAI(
     const profile = requestedNiche ? getSpecialistProfile(requestedNiche) : null;
     const specialistAnalysis = profile ? normalizeSpecialistAnalysis(id.specialistAnalysis, profile, Number(id.confidence)) : undefined;
     const result: AIIdentificationResult = {
+      numistaImageSearch: data.numistaImageSearch ?? id.numistaImageSearch ?? null,
       specialistAnalysis,
       canonicalTitle: id.canonicalTitle.trim(),
       specialistId: resolvedSpecialistId,
@@ -500,13 +536,29 @@ export async function uploadItemImages(
   images: CapturedImage[],
   normalizeOriginals = true,
 ): Promise<{ urls: string[]; errors: string[] }> {
+  // Legacy normalizeOriginals flag retained for compatibility. It no longer
+  // re-encodes documentary originals; callers must opt into conversion separately.
+  void normalizeOriginals;
   const supabase = getSupabaseClient();
   const urls: string[] = [];
   const errors: string[] = [];
-
-  for (let i = 0; i < images.length; i++) {
-    const img = images[i];
+  const read = await supabase.from('items').select('tenant_id,specialist_id').eq('id',itemId).maybeSingle();
+  if(read.error || !read.data) return {urls,errors:['Inventory ownership could not be verified for image upload.']};
+  const prepared = await prepareCapturedImages(images,{tenantId:read.data.tenant_id,nicheId:resolveProductionNiche(read.data.specialist_id)??undefined});
+  const linked:CapturedImage[]=[];
+  for (let i = 0; i < prepared.length; i++) {
+    const img = prepared[i];
     try {
+      const uploaded = await uploadUntouchedOriginal(itemId,img.slotId,img.uri);
+      urls.push(uploaded.url);
+      linked.push({...img,originalStorageUri:uploaded.url,originalByteHash:uploaded.hash});
+    } catch(cause) { errors.push(`Slot ${img.slotLabel}: ${cause instanceof Error ? cause.message : 'Original upload failed.'}`); }
+  }
+  if(linked.length){pendingStudioLinks.set(itemId,linked);if(pendingStudioLinks.size>64)pendingStudioLinks.delete(pendingStudioLinks.keys().next().value!);}
+  return {urls,errors};
+}
+
+/* Pre-studio upload implementation removed: it re-encoded and upserted originals.
       // Skip if already a remote URL
       if (img.uri.startsWith('https://') || img.uri.startsWith('http://')) {
         urls.push(img.uri);
@@ -570,6 +622,7 @@ export async function uploadItemImages(
 
   return { urls, errors };
 }
+*/
 
 // ── Update item media after upload ────────────────────────────────────────────
 export async function updateItemMedia(
@@ -596,6 +649,8 @@ export async function updateItemMedia(
   if (readback.error || !readback.data || JSON.stringify(readback.data.media) !== JSON.stringify(media)) {
     throw new Error('Photo links could not be confirmed after saving. Reload the item before retrying.');
   }
+  const presentations=pendingStudioLinks.get(itemId);
+  if(presentations){const warning=await linkStudioImages(tenantId,itemId,presentations.filter(image=>media.includes(image.originalStorageUri??'')));if(warning)console.warn('[SWISH] Originals linked; optional studio association requires retry.');else pendingStudioLinks.delete(itemId);}
 }
 
 /** Recover already-uploaded original captures for one authorized Antique item.
@@ -654,7 +709,11 @@ export async function saveCoinReferenceImages(
   const supabase = getSupabaseClient();
   const urls: Record<string, string> = {};
   const errors: string[] = [];
-  const referenceImages = images.filter(image => Boolean(image.enhancedUri));
+  const studioImages=pendingStudioLinks.get(itemId)??images.filter(image=>image.studio&&image.originalStorageUri);
+  if(studioImages.length){const error=await linkStudioImages(tenantId,itemId,studioImages);if(error)return {urls,errors:[error]};for(const image of studioImages)if(image.studio?.enhancedUri)urls[image.slotId]=image.studio.enhancedUri;pendingStudioLinks.delete(itemId);return {urls,errors};}
+  // Legacy rendered aids are retained for backward compatibility, but never
+  // promoted into the new source-protected inventory thumbnail role.
+  const referenceImages = images.filter(image => Boolean(image.enhancedUri)&&!image.studio);
   if (referenceImages.length === 0) return { urls, errors };
 
   // Verify tenant ownership before uploading anything to storage.
@@ -797,14 +856,14 @@ export async function saveIdentifiedItem(
     specialistId: canonicalSpecialistId as SpecialistId,
     // Catalogue values are proposed metadata; measured fields only use values
     // explicitly supplied/measured by the user, never Numista standard specs.
-    catalogueNumber: usableText(catalogue.reference ?? result.numistaN ?? result.coinFields?.catalogueHint),
+    catalogueNumber: usableText(attrs.catalogue_number ?? catalogue.reference ?? result.numistaN ?? result.coinFields?.catalogueHint),
     ruler: usableText(catalogue.issuer ?? result.coinFields?.issuer),
     denomination: usableText(catalogue.denomination ?? result.coinFields?.denomination),
     period: usableText(catalogue.period ?? result.coinFields?.period ?? attrs.period),
     mint: usableText(catalogue.mint ?? result.coinFields?.mint),
     material: usableText(catalogue.material ?? result.coinFields?.composition ?? attrs.material ?? attrs.composition),
     manufacturer: usableText(attrs.manufacturer ?? attrs.brand ?? attrs.maker),
-    countryOfOrigin: usableText(catalogue.country ?? result.coinFields?.country ?? attrs.country_manufacture ?? attrs.country_of_origin),
+    countryOfOrigin: usableText(catalogue.country ?? result.coinFields?.country ?? attrs.country_manufacture ?? attrs.country_of_origin ?? attrs.country),
     yearMade: usableText(result.attributes?.user_supplied_year ?? yearRange ?? result.coinFields?.period ?? attrs.year ?? attrs.year_range ?? attrs.age),
     weightGrams: Number.isFinite(measuredWeight) && measuredWeight > 0 ? measuredWeight : undefined,
     diameterMm: Number.isFinite(measuredDiameter) && measuredDiameter > 0 ? measuredDiameter : undefined,

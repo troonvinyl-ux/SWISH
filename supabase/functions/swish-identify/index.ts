@@ -19,6 +19,8 @@ import { canonicalSpecialist, specialistNiche, profileForSpecialist } from '../_
 import { normalizeSpecialistAnalysis, specialistOutputInstructions, recordValue, textList } from '../_shared/specialistIntelligence.ts';
 import { IDENTIFICATION_LIMITS, MUSIC_IDENTIFICATION_RULES, validateIdentificationPayload, parseIdentificationJson, guardMusicIdentification, utf8Bytes } from '../_shared/identificationPolicy.ts';
 
+import { searchNumistaImages, imageCatalogueReview } from '../_shared/numistaImageSearchService.ts';
+import { validateNumistaImages, numistaSearchTrail, numistaPhysicalContradictions, type NumistaImageSearchResult } from '../_shared/numistaImageSearch.ts';
 const NUMISTA_API = 'https://api.numista.com/api/v3';
 
 type ObjectType = 'coin' | 'medal' | 'token' | 'jeton' | 'commemorative_piece' |
@@ -511,7 +513,7 @@ function scoreNumistaCandidate(
   if (denomination && denomination.length > 1 && denomination !== 'Not established') {
     const denomLower = denomination.toLowerCase().trim();
     const candDenom = (src.min_unit?.name ?? src.denomination_name ?? '').toLowerCase();
-    if (candTitle.includes(denomLower) || candDenom.includes(denomLower) || denomLower.includes(candDenom)) {
+    if (candTitle.includes(denomLower) || Boolean(candDenom && (candDenom.includes(denomLower) || denomLower.includes(candDenom)))) {
       score += 30; factors.push(`Denomination match: ${denomination}`);
     } else { score -= 25; contradictions.push(`Denomination mismatch: target="${denomination}" candidate="${src.min_unit?.name ?? 'unknown'}"`); }
   }
@@ -556,12 +558,12 @@ function scoreNumistaCandidate(
     // Numista responses can encode material/composition as an object or a
     // string depending on the endpoint/type. Normalise before string methods.
     const candComp = catalogueText(src.composition?.material ?? src.material ?? candidate.composition).toLowerCase();
-    if (candComp.includes(matLower) || matLower.includes(candComp.slice(0, 4))) { score += 5; factors.push(`Composition match: ${suppliedMaterial}`); }
+    if (candComp && (candComp.includes(matLower) || matLower.includes(candComp.slice(0, 4)))) { score += 5; factors.push(`Composition match: ${suppliedMaterial}`); }
   }
   if (mint && mint.length > 1 && mint !== 'Not established') {
     const mintLower = mint.toLowerCase();
     const candMint = (src.mint?.name ?? src.mint ?? '').toLowerCase();
-    if (candMint.includes(mintLower) || mintLower.includes(candMint.slice(0, 4))) { score += 5; factors.push(`Mint match: ${mint}`); }
+    if (candMint && (candMint.includes(mintLower) || mintLower.includes(candMint.slice(0, 4)))) { score += 5; factors.push(`Mint match: ${mint}`); }
   }
   return { score: Math.max(-50, score), factors, contradictions };
 }
@@ -592,7 +594,7 @@ async function fetchNumistaTypeDetail(typeId: number, apiKey: string): Promise<a
   } catch { return null; }
 }
 
-async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<string, any>, isAncient: boolean): Promise<NumistaVerificationResult> {
+async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<string, any>, isAncient: boolean, imageCatalogue: Record<string, any>[] = []): Promise<NumistaVerificationResult> {
   const noApiKey: NumistaVerificationResult = { status: 'unavailable', matchScore: 0, matchTier: 'rejected', matchFactors: ['Numista API key not configured'], contradictions: [], physicalMatchGood: false, references: [] };
   const apiKey = Deno.env.get('NUMISTA_API_KEY') ?? '';
   if (!apiKey) {
@@ -887,12 +889,13 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
 
   // More than the former six searches: prioritize evidence-derived queries and
   // reserve some capacity for alternatives rather than overfitting to one title.
-  const queriesToTry = [...querySet].slice(0, 14);
-  if (queriesToTry.length === 0) {
+  // Visual discovery is independent of a potentially incorrect AI title. Avoid fourteen charged text searches when the image endpoint has candidates.
+  const queriesToTry = imageCatalogue.length ? [] : [...querySet].slice(0, 4);
+  if (queriesToTry.length === 0 && !imageCatalogue.length) {
     return { status: 'no_match', matchScore: 0, matchTier: 'rejected', matchFactors: ['Insufficient visible or confirmed evidence for Numista search'], contradictions: [], physicalMatchGood: false, references: [] };
   }
 
-  const candidateMap = new Map<number, any>();
+  const candidateMap = new Map<number, any>(imageCatalogue.map(candidate => [Number(candidate.id), candidate]));
   for (const q of queriesToTry) {
     try {
       const resp = await fetch(`${NUMISTA_API}/types?q=${encodeURIComponent(q)}&lang=en&count=20`, { headers: { 'Numista-API-Key': apiKey }, signal: AbortSignal.timeout(8000) });
@@ -916,7 +919,7 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
   // candidates, then apply the stricter deterministic comparisons below.
   // This avoids excluding worn coins while still letting measurements find
   // candidates the text query missed entirely.
-  if (suppliedWeight !== null && suppliedWeight > 0 || suppliedDiameter !== null && suppliedDiameter > 0) {
+  if (!imageCatalogue.length && (suppliedWeight !== null && suppliedWeight > 0 || suppliedDiameter !== null && suppliedDiameter > 0)) {
     const params = new URLSearchParams({ lang: 'en', count: '50', order: 'relevance' });
     if (suppliedDiameter !== null && suppliedDiameter > 0) {
       params.set('size', `${Math.max(1, suppliedDiameter - 1.5).toFixed(1)}-${(suppliedDiameter + 1.5).toFixed(1)}`);
@@ -968,9 +971,10 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
     })
     .sort((a, b) => b.score - a.score);
 
-  const detailed = await Promise.all(prelim.slice(0, 20).map(async item => ({
+  const detailed = await Promise.all(prelim.slice(0, imageCatalogue.length ? 8 : 15).map(async item => ({
     ...item,
-    detail: await fetchNumistaTypeDetail(Number(item.candidate.id), apiKey),
+    // Image-search finalists were already retrieved once in this invocation.
+    detail: item.candidate._numistaImageRank ? item.candidate : await fetchNumistaTypeDetail(Number(item.candidate.id), apiKey),
   })));
 
   let bestScore = -100, bestCandidate: any = null, bestFactors: string[] = [], bestContradictions: string[] = [], typeDetail: any = null;
@@ -1027,7 +1031,9 @@ async function verifyWithNumista(aiIdentification: any, knownAttributes: Record<
       scored.score -= 12;
       scored.contradictions.push('Visible legend evidence is not reflected in the catalogue candidate description');
     }
-    const contradictions = [...scored.contradictions];
+    const physicalContradictions = numistaPhysicalContradictions(detail ?? item.candidate, suppliedWeight, suppliedDiameter);
+    const contradictions = [...new Set([...scored.contradictions, ...physicalContradictions])];
+    if (item.candidate._numistaImageRank) scored.factors.push(`Discovered by Numista image search at visual rank ${item.candidate._numistaImageRank}; rank is not identity confidence.`);
     let score = scored.score;
     // Major physical contradictions cap the candidate below strong-match territory.
     if (contradictions.some(c => /MAJOR CONTRADICTION|DIAMETER CONTRADICTION/i.test(c))) score = Math.min(score, 49);
@@ -1564,7 +1570,7 @@ async function runCoinResearch(id: any, known: Record<string, any>, numista: Num
     sources[source] = { status: !applicable ? 'not_applicable' : count ? 'results' : 'no_results', count };
   }
   return { status: candidates.length ? 'results_found' : 'no_results', searched: queries, candidates, sources,
-    note: 'Catalogue results are discovery leads, not verified identifications. This build uses text/legend search, not image-embedding search; verify against design and supplied measurements.' };
+    note: 'These cross-catalogue results are text/legend discovery leads. Numista image-search results are reported separately; neither is a certificate of identity or authenticity.' };
 }
 
 // ── Main handler ───────────────────────────────────────────────────────────────
@@ -1605,6 +1611,9 @@ serveModule(async (req: Request) => {
     if (!newImages.length && !storedImages.length) return invalidInput('At least one image is required.');
     const payloadError = validateIdentificationPayload(body);
     if (payloadError) return invalidInput(payloadError);
+    const imageSearchError = validateNumistaImages(body.numistaImages);
+    if (imageSearchError) return invalidInput(imageSearchError);
+    if (body.numistaImages?.length && profile?.nicheId !== 'coins') return invalidInput('Numista coin image search is only available in the coin workspace.');
     if (acquisitionContext != null && (typeof acquisitionContext !== 'string' || acquisitionContext.length > 2000)) return invalidInput('Acquisition context is invalid or too long.');
     console.log(JSON.stringify({ event: 'identify_received', requestId, niche: profile?.nicheId ?? 'unregistered', imageCount: newImages.length + storedImages.length, requestBytes: utf8Bytes(JSON.stringify(body)) }));
     if (typeof bodyTenantId !== 'string' || !bodyTenantId.trim() || bodyTenantId.length > 200) {
@@ -1888,9 +1897,15 @@ The caller will use only the requested output (title or description). Do not inv
     let constrained = enforceEvidenceConstraints(identification, vehicleMode, clothingMode);
 
     let numistaVerification: NumistaVerificationResult | null = null;
+    let numistaImageSearch: NumistaImageSearchResult | null = null;
+    let visualCatalogue: Record<string, any>[] = [];
     if (coinMode && !vehicleMode && !clothingMode && shouldRunNumista(objectType)) {
+      const visual = await searchNumistaImages(body.numistaImages);
+      numistaImageSearch = visual.result;
+      visualCatalogue = visual.catalogue;
+      if (body.numistaImagePreparationFailed === true) numistaImageSearch = { ...visual.result, status: 'unavailable', message: 'The two original faces could not be prepared for Numista. Visual AI and text/legend identification continued; originals are unchanged.' };
       const ancient = isAncientCoin(constrained, knownAttributes ?? {});
-      numistaVerification = await verifyWithNumista(constrained, knownAttributes ?? {}, ancient);
+      numistaVerification = await verifyWithNumista(constrained, knownAttributes ?? {}, ancient, visualCatalogue);
       constrained = applyNumistaToIdentification(constrained, numistaVerification);
       const coinResearch = await runCoinResearch(constrained, knownAttributes ?? {}, numistaVerification);
       constrained.coinResearch = coinResearch;
@@ -1932,6 +1947,10 @@ The caller will use only the requested output (title or description). Do not inv
               JSON.stringify(numistaVerification ?? { status: 'unavailable', matchFactors: ['No catalogue verification result'] }),
               'CRITICAL REFERENCE-LINK RULE: Never guess what a URL refers to from memory or from its digits. A Numista URL must be checked against the actual retrieved catalogue title, issuer, denomination, and visible legend. If the supplied URL and retrieved API metadata disagree, report a catalogue/API discrepancy and leave the reference unverified; do NOT invent a different coin title, claim a verified page mismatch without evidence, or invent another Numista number. A user note mentioning an edge inscription is not proof that a URL is an edge-inscription reference.',
               'For the Fukien Province Guangxu 20 Fen four-character small-dragon type, the public Numista page https://en.numista.com/274604 identifies N#274604, dated 1903–1908, weight 5.40 g, and records the reverse legend “FOO-KIEN PROVINCE / 1 MACE AND 4.4 CANDAREENS”. Do not misdescribe that public page as a British East Africa George V pattern. If the current server-returned catalogue metadata conflicts with this known public page, explicitly flag the metadata conflict instead of overriding the page evidence.',
+              'NUMISTA SEARCH-BY-IMAGE FINALISTS (independent of the first-pass title):',
+              JSON.stringify(imageCatalogueReview(visualCatalogue, knownAttributes?.weight, knownAttributes?.diameter)),
+              'Compare ALL visual finalists with both original faces, the legible inscriptions and measured specifications. Image-search rank is a discovery order, NOT a confidence percentage. Do not assume the first result is correct. Catalogue lettering is reference text, not a transcription of unreadable characters in the owned coin.',
+              'Return numistaTypeId as a number ONLY when a retrieved visual finalist matches both faces without a major physical contradiction. Otherwise return null. Never invent a new ID or declare authenticity.',
               'FIRST-PASS CANDIDATE (must be critically checked against the actual images):',
               JSON.stringify(constrained),
               'Tasks: (1) transcribe only characters genuinely visible; (2) compare both faces and diagnostic layout; (3) compare supplied weight/diameter against catalogue specifications; (4) distinguish issuer/dynasty/period variants only when supported; (5) reject catalogue matches that contradict the image or measurements; (6) keep alternatives when ambiguity remains; (7) return the best defensible identification, not the most specific-sounding one.',
@@ -1966,7 +1985,14 @@ The caller will use only the requested output (title or description). Do not inv
           try {
             const cleanedReview = reviewText.replace(/```json\\s*/gi, '').replace(/```\\s*/g, '').trim();
             const reviewed = JSON.parse(cleanedReview);
-            if (reviewed && typeof reviewed === 'object' && typeof reviewed.canonicalTitle === 'string') {
+            if (reviewed && typeof reviewed === 'object' && typeof reviewed.canonicalTitle === 'string' && reviewed.canonicalTitle.trim() && Number.isFinite(reviewed.confidence)) {
+              if (visualCatalogue.length) {
+                const selected = visualCatalogue.find(candidate => candidate.id === Number(reviewed.numistaTypeId));
+                // Score the actually reviewed attribution against its selected, retrieved record, not the obsolete first-pass winner.
+                numistaVerification = selected && reviewed.objectType === 'coin'
+                  ? await verifyWithNumista(reviewed, knownAttributes ?? {}, isAncientCoin(reviewed, knownAttributes ?? {}), [selected])
+                  : { status: 'no_match', matchScore: 0, matchTier: 'rejected', matchFactors: ['No retrieved visual finalist was supported by both faces.'], contradictions: [], physicalMatchGood: false, references: [] };
+              }
               // Keep the second-pass attribution, but retain the authoritative
               // catalogue verification object and rerun deterministic guardrails.
               constrained = {
@@ -1991,7 +2017,7 @@ The caller will use only the requested output (title or description). Do not inv
                   /Exact user-supplied catalogue reference N#\d+ retrieved directly from Numista API/i.test(factor)
                 )
               );
-              if (directReferenceWasResolved && numistaVerification?.title) {
+              if (directReferenceWasResolved && numistaVerification?.title && ['verified', 'strong_match'].includes(numistaVerification.status) && numistaVerification.physicalMatchGood) {
                 constrained.canonicalTitle = numistaVerification.title;
                 constrained.numistaN = numistaVerification.numistaN;
                 constrained.numistaTypeId = numistaVerification.typeId;
@@ -2045,6 +2071,12 @@ The caller will use only the requested output (title or description). Do not inv
       }
     }
 
+    if (numistaImageSearch) {
+      constrained.numistaImageSearch = numistaImageSearch;
+      constrained.attributes._numista_image_search = numistaSearchTrail(numistaImageSearch);
+      if (numistaImageSearch.status === 'unavailable') constrained.warnings.push(numistaImageSearch.message);
+    }
+
     // Re-read usage for accurate quota response
     const usedAfter = (!isPremium && tenantId)
       ? await getUsage(adminClient, tenantId, user.id, monthKey)
@@ -2063,6 +2095,7 @@ The caller will use only the requested output (title or description). Do not inv
         identification: constrained,
         diagnostics: { requestId, durationMs: Date.now() - startedAt, imageCount: totalImageCount, catalogueVerification: musicMode ? 'User confirmation via Discogs workflow required' : 'Existing specialist pipeline' },
         numistaVerification,
+        numistaImageSearch,
         coinResearch: constrained.coinResearch ?? null,
         quota: {
           isPremium,

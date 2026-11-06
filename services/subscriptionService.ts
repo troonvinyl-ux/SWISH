@@ -3,6 +3,7 @@
 // All Stripe calls are server-side — this module is pure client orchestration.
 
 import { getSupabaseClient } from '@/template';
+import { backendRead } from './backendRequestService';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { Linking } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
@@ -16,6 +17,8 @@ export const STRIPE_PRICE_ID   = 'price_1UPAIlI5Y99su2PXUrM192qL';
 
 export interface SubscriptionStatus {
   subscribed: boolean;
+  /** Trusted role supplied by the existing server-side owner helper. Never user metadata. */
+  platformOwner?: boolean;
   productId: string | null;
   priceId: string | null;
   subscriptionEnd: string | null;
@@ -30,7 +33,14 @@ async function invokeEdgeFunction<T = any>(
   body: Record<string, any> = {},
 ): Promise<{ data: T | null; error: string | null }> {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.functions.invoke(name, { body });
+  // Only the read-only verification call is governed here. Checkout/portal are never replayed.
+  let response;
+  try {
+    response = name === 'swish-check-subscription'
+      ? await backendRead(`subscription:${JSON.stringify(body)}`, signal => supabase.functions.invoke(name, { body, signal }), 'access', 20000)
+      : await supabase.functions.invoke(name, { body });
+  } catch (cause) { return { data: null, error: cause instanceof Error ? cause.message : 'Subscription verification unavailable' }; }
+  const { data, error } = response;
 
   if (error) {
     let msg = error.message;
@@ -60,6 +70,7 @@ export async function checkSubscription(tenantId?: string): Promise<{
     price_id: string | null;
     subscription_end: string | null;
     niche_entitlements?: unknown;
+    is_platform_owner?: boolean;
   }>('swish-check-subscription', tenantId ? { tenantId } : {});
 
   if (error || !data) {
@@ -69,6 +80,7 @@ export async function checkSubscription(tenantId?: string): Promise<{
   return {
     status: {
       subscribed: data.subscribed,
+      platformOwner: typeof data.is_platform_owner === 'boolean' ? data.is_platform_owner : undefined,
       productId: data.product_id,
       priceId: data.price_id,
       subscriptionEnd: data.subscription_end,

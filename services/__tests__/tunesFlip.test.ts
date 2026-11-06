@@ -37,7 +37,7 @@ describe('Tunes Flip source and pure contracts — not live acceptance',()=>{
  });
  test('backend expertise, classifier and music contract are mirrored exactly',()=>{for(const file of ['musicRelease.ts','specialistIntelligence.ts','ebayImportScope.ts'])expect(source('supabase/functions/_shared/'+file)).toBe(source('shared/'+file));});
  test('scanner confirmation goes through existing inventory and media services',()=>{
-  const hook=source('hooks/useGenericCapture.ts');expect(hook).toContain('confirmedMusicAttributes');expect(hook).toContain('separate media/sleeve grades before saving');expect(hook).toContain('saveIdentifiedItem');expect(hook).toContain('uploadItemImages');
+  const hook=source('hooks/useGenericCapture.ts');expect(hook).toContain('musicCaptureResult');expect(source('services/musicCaptureService.ts')).toContain('confirmedMusicAttributes');expect(hook).toContain('separate media/sleeve grades before saving');expect(hook).toContain('saveIdentifiedItem');expect(hook).toContain('uploadItemImages');
   expect(source('services/tunesService.ts')).toContain(".eq('specialist_id','vinyl_records')");expect(source('app/_layout.tsx')).toContain('<TunesProvider>');
  });
 });

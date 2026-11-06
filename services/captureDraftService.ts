@@ -13,7 +13,9 @@ export async function readCaptureDraft(scope: string): Promise<CaptureDraft | nu
 export function persistCaptureDraft(scope: string, draft: CaptureDraft): Promise<void> {
   // Serialise writes for one draft so an older autosave cannot replace a newer save.
   const previous = queue.get(scope) ?? Promise.resolve();
-  const pending = previous.catch(()=>{}).then(()=>AsyncStorage.setItem(keyFor(scope),JSON.stringify(draft)));
+  // Numista visual shortlist is transient licensed catalogue data, not an offline cache.
+  const retained = { ...draft, result: draft.result ? { ...draft.result, numistaImageSearch: undefined } : null };
+  const pending = previous.catch(()=>{}).then(()=>AsyncStorage.setItem(keyFor(scope),JSON.stringify(retained)));
   queue.set(scope,pending);
   void pending.finally(()=>{ if (queue.get(scope)===pending) queue.delete(scope); }).catch(()=>{});
   return pending;
