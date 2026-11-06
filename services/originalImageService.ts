@@ -18,7 +18,7 @@ export async function readOriginalBytes(uri:string):Promise<OriginalBytes> {
  if(uri.startsWith('data:')){const match=uri.match(/^data:image\/[^;]+;base64,([A-Za-z0-9+/=]+)$/i);if(!match)throw new Error('Unsupported original data.');bytes=decode(match[1]);}
  else if(Platform.OS==='web'||/^https:\/\//.test(uri)){const response=await fetch(uri);if(!response.ok)throw new Error('Original photograph could not be read.');bytes=typeof response.arrayBuffer==='function'?await response.arrayBuffer():await readBinaryBlob(await response.blob());}
  else{bytes=decode(await FileSystem.readAsStringAsync(uri,{encoding:FileSystem.EncodingType.Base64}));}
- if(!bytes.byteLength||bytes.byteLength>5*1024*1024)throw new Error('Original exceeds the existing 5 MB bucket limit. It is retained unchanged; no automatic downsampling was performed.');
+ if(!bytes.byteLength||bytes.byteLength>20*1024*1024)throw new Error('Original exceeds the 20 MB original-photo limit. It is retained unchanged; no automatic downsampling was performed.');
  const mime=originalMime(new Uint8Array(bytes));
  // Content-addressed SHA-256 of canonical base64 bytes (labelled, not a raw-file SHA).
  const {digestStringAsync,CryptoDigestAlgorithm}=await import('expo-crypto');
@@ -30,7 +30,7 @@ export async function verifyStoredOriginal(path:string,expectedHash:string):Prom
  const read=await getSupabaseClient().storage.from('item-images').download(path);
  if(read.error||!read.data)throw new Error('Stored original could not be downloaded for verification. Retry the saved item.');
  const bytes=await readBinaryBlob(read.data);
- if(!bytes.byteLength||bytes.byteLength>5*1024*1024)throw new Error('Stored original is empty or exceeds the 5 MB limit.');
+ if(!bytes.byteLength||bytes.byteLength>20*1024*1024)throw new Error('Stored original is empty or exceeds the 20 MB limit.');
  originalMime(new Uint8Array(bytes));
  const {digestStringAsync,CryptoDigestAlgorithm}=await import('expo-crypto');
  const hash=await digestStringAsync(CryptoDigestAlgorithm.SHA256,encode(bytes));
