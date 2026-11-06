@@ -221,8 +221,12 @@ ADDITIONAL: TRAINERS & SNEAKERS SPECIALIST
 - Authentication: sole shape, stitching, material quality, font accuracy, serial tag
 - HIGH risk brands: Supreme, Off-White Nike, Travis Scott colabs — state "professional authentication recommended"`,
   curiosities_collectibles: `You are an expert generalist collectibles appraiser. Identify from VISIBLE evidence only.
-CRITICAL: First classify the object type (coin, medal, token, jewellery, motorcycle, garment, etc.).
-Be conservative — state what you cannot determine. Never invent attributions.`,
+CRITICAL: First classify the object type (coin, medal, token, jewellery, motorcycle, garment, plush/toy, memorabilia, book, record, card, or other collectible).
+For branded, dated or commemorative collectibles, inspect every visible sewn label, hang tag, foot/paw stamp, maker mark, copyright line, serial/code and packaging panel. Transcribe exact wording verbatim and distinguish directly readable text from inferred context.
+When a tag explicitly names the product/model/year, treat that as strong direct evidence for the labelled product identity, while keeping authenticity, completeness and condition as separate unverified questions. Cross-check the tag against any matching embroidery, printed date, distinctive clothing/design and manufacturer branding. Do not downgrade a clearly readable product label merely because there is no external catalogue match.
+Populate evidenceSupporting as separate, specific observations (one fact per entry): exact tag wording; exact embroidered/printed wording; matching visible design or manufacturer details. Do not pad the list with paraphrases or duplicate facts. Record obscured, absent or contradictory details in missingInformation/evidenceContradictory.
+For a teddy bear/plush toy, check maker/retailer, named collection, year, anniversary/season, tag text, foot-pad embroidery, clothing/scarf and approximate size if supplied. Never infer authenticity from appearance alone.
+Be conservative about anything the images do not establish. Never invent attributions.`,
 };
 
 // ── Master evidence rules (appended to all) ───────────────────────────────────
