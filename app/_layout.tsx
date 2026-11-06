@@ -6,6 +6,9 @@ import { AppProvider } from '@/contexts/AppContext';
 import { TunesProvider } from '@/contexts/TunesContext';
 import { ManifestOpportunityProvider } from '@/contexts/ManifestOpportunityContext';
 import { WatchedLotsProvider } from '@/contexts/WatchedLotsContext';
+import { QuickListProvider } from '@/contexts/QuickListContext';
+import { markQuickListAppOpened } from '@/services/quickListTelemetryService';
+import { AppState } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { NicheRouteBoundary } from '@/components/layout/NicheRouteBoundary';
 import * as SplashScreen from 'expo-splash-screen';
@@ -73,9 +76,11 @@ export default function RootLayout() {
   // render while icon fonts finish loading; missing glyphs are preferable to a
   // failed/blank app launch.
   useEffect(() => {
+    const foreground=AppState.addEventListener('change',state=>{if(state==='active')markQuickListAppOpened();});
     SplashScreen.hideAsync().catch(() => {
       // The splash screen may already have been hidden by the host runtime.
     });
+    return()=>foreground.remove();
   }, []);
 
   return (
@@ -86,6 +91,7 @@ export default function RootLayout() {
             <TunesProvider>
             <ManifestOpportunityProvider>
             <WatchedLotsProvider>
+            <QuickListProvider>
             <TVBackHandlerProvider>
               <NicheRouteBoundary>
               <Stack screenOptions={{ headerShown: false }}>
@@ -161,6 +167,7 @@ export default function RootLayout() {
               </Stack>
               </NicheRouteBoundary>
             </TVBackHandlerProvider>
+            </QuickListProvider>
             </WatchedLotsProvider>
             </ManifestOpportunityProvider>
             </TunesProvider>

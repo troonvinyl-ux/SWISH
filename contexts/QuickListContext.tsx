@@ -1,0 +1,8 @@
+import { createContext, useState, type Dispatch, type SetStateAction, type ReactNode } from 'react';
+import type { CapturedImage, AIIdentificationResult } from '@/services/aiIdentificationService';
+import type { QuickDraft } from '@/services/quickListService';
+import type { ProductLead, QuickTiming } from '@/shared/quickList';
+export interface QuickListState {scope:string;sessionId:string;images:CapturedImage[];leads:ProductLead[];lead:ProductLead|null;barcodeBusy:boolean;visual:boolean;processing:boolean;result:AIIdentificationResult|null;draft:QuickDraft|null;itemId:string;error:string;connectionError:string;unconfirmed:boolean;liveId:string;autoPublish:boolean;reviewed:boolean;timing:QuickTiming|null;measurements:Record<string,string>;categoryId:string;categoryName:string;title:string;description:string;price:string;conditionId:string;conditionNotes:string;specifics:Array<{name:string;value:string}>;showDetails:boolean}
+export function emptyQuickList():QuickListState{return {scope:'',sessionId:'',images:[],leads:[],lead:null,barcodeBusy:false,visual:false,processing:false,result:null,draft:null,itemId:'',error:'',connectionError:'',unconfirmed:false,liveId:'',autoPublish:false,reviewed:false,timing:null,measurements:{},categoryId:'',categoryName:'',title:'',description:'',price:'',conditionId:'',conditionNotes:'',specifics:[],showDetails:false};}
+export const QuickListContext=createContext<{state:QuickListState;setState:Dispatch<SetStateAction<QuickListState>>}|undefined>(undefined);
+export function QuickListProvider({children}:{children:ReactNode}){const [state,setState]=useState<QuickListState>(emptyQuickList);return <QuickListContext.Provider value={{state,setState}}>{children}</QuickListContext.Provider>;}

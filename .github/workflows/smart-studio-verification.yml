@@ -26,6 +26,9 @@ jobs:
       - name: Lint
         if: ${{ !cancelled() }}
         run: npx expo lint > verification-output/lint.txt 2>&1
+      - name: BackgroundErase credential boundaries and shared gateway
+        if: ${{ !cancelled() }}
+        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/backgroundEraseBoundary.test.ts services/__tests__/coinImageEnhancementService.test.ts services/__tests__/smartStudioIntegration.test.ts --json --outputFile=verification-output/backgrounderase-jest.json
       - name: Existing-photo studio safety and persistence regressions
         if: ${{ !cancelled() }}
         run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/existingImageStudio.test.ts services/__tests__/existingStudioStorage.test.ts --json --outputFile=verification-output/existing-photos-jest.json
@@ -51,6 +54,8 @@ jobs:
       - uses: denoland/setup-deno@v2
         with: { deno-version: v2.x }
       - run: deno check supabase/functions/swish-coin-image-enhance/index.ts
+      - name: Mocked BackgroundErase provider contract (no credentials or credits)
+        run: deno test supabase/tests/backgrounderase.test.ts
       - name: Real photograph codec, source preservation and offline geometry
         if: ${{ !cancelled() }}
         shell: bash

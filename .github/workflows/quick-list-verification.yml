@@ -1,0 +1,41 @@
+name: Quick List and numismatic regression verification
+on:
+  pull_request:
+    paths: ['app/**','components/**','contexts/**','hooks/**','services/**','shared/**','supabase/**','.github/workflows/quick-list-verification.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  client:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9.15.9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: bash scripts/install-dependencies.sh
+      - run: mkdir -p verification-output && git rev-parse HEAD > verification-output/source-sha.txt
+      - name: TypeScript
+        run: npx tsc --noEmit > verification-output/typescript.txt 2>&1
+      - name: Relevant and existing regressions (no seller writes)
+        if: ${{ !cancelled() }}
+        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand --json --outputFile=verification-output/all-jest.json
+      - name: Web bundle
+        if: ${{ !cancelled() }}
+        run: npx expo export --platform web --output-dir verification-output/web > verification-output/web-build.txt 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: quick-list-client-evidence, path: verification-output/ }
+  edge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with: { deno-version: v2.x }
+      - run: deno check supabase/functions/swish-identify/index.ts supabase/functions/swish-ebay-browse/index.ts supabase/functions/swish-ebay-list/index.ts supabase/functions/swish-market-value/index.ts
+      - run: deno test supabase/tests/quick_list_barcode.test.ts supabase/tests/numismatic_evidence.test.ts
+# No live publication or paid Numista/AI request is automatically run in CI.
+# Android APK, browser/PWA camera and approved live-seller acceptance remain explicit release gates.
