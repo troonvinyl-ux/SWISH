@@ -51,6 +51,7 @@ import { decryptCredentials, encryptCredentials } from '../_shared/credentialCry
 import { specialistNiche, profileForSpecialist } from '../_shared/specialistRegistry.ts';
 import { requirePaidNiche, nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
 import { fetchManifestSoldComparisons } from '../_shared/manifestSoldComparisons.ts';
+import { fetchNumistaSaleEvidence } from '../_shared/numistaSaleEvidence.ts';
 
 const EBAY_TOKEN_URL      = 'https://api.ebay.com/identity/v1/oauth2/token';
 const EBAY_BROWSE_BASE    = 'https://api.ebay.com/buy/browse/v1';
@@ -628,7 +629,7 @@ async function searchEbaySoldListings(appToken: string | null, query: string, ma
         imageUrl: String(item.image?.imageUrl ?? item.imageUrl ?? item.thumbnailImages?.[0]?.imageUrl ?? ''),
         itemId: String(item.itemId ?? item.legacyItemId ?? ''),
       };
-    }).filter((item: any) => item.title && item.price > 0);
+    }).filter((item: any) => item.title && item.price > 0 && Number.isFinite(Date.parse(item.soldDate)));
     return { available: true, items, totalFound: Number(data.total ?? data.totalItems ?? items.length) };
   } catch {
     return { ...empty, error: 'Marketplace Insights sold-data lookup is unavailable.' };
@@ -1146,7 +1147,7 @@ serveModule(async (req: Request) => {
     specialistId = 'curiosities_collectibles', attributes = {}, condition = '',
     identificationConfidence = 0.5, identificationTier = 'medium',
     numistaTypeId, numistaMatchScore = 0, numistaMatchTier = 'no_match',
-    applyToItem = false, imageUrls: callerImageUrls, imageBase64: callerImageBase64,
+    applyToItem = false, quickList = false, imageUrls: callerImageUrls, imageBase64: callerImageBase64,
   } = body;
 
   if (!tenantId) return jsonResponse({ error: 'tenantId is required' }, 400);
@@ -1235,9 +1236,13 @@ serveModule(async (req: Request) => {
   console.log(`[SWISH Market v8] Images: ${imageUrls.length + (inlineImageBase64 ? 1 : 0)}`);
 
   // ── Phase 1: Gemini + App token (parallel, non-blocking) ──────────────────
+  const appTokenPromise=getEbayAppToken(creds.clientId,creds.clientSecret);
+  const earlyQuery=buildSearchQueries(cleanTitle,attributes,specialistId,[])[0];
+  const earlyMarket=quickList?appTokenPromise.then(token=>Promise.all([searchEbayBrowse(creds.accessToken,earlyQuery,50,false,token),searchEbaySoldListings(token,earlyQuery,50)])):null;
+  const numistaSalesPromise=requestedNiche==='coins'&&Number.isSafeInteger(Number(numistaTypeId))&&Number(numistaTypeId)>0?fetchNumistaSaleEvidence(Number(numistaTypeId)):Promise.resolve(null);
   const [gemini, appToken] = await Promise.all([
     runGeminiMarketResearch(imageUrls, cleanTitle, specialistId, attributes, condition, inlineImageBase64),
-    getEbayAppToken(creds.clientId, creds.clientSecret),
+    appTokenPromise,
   ]);
   console.log(`[SWISH Market v7] Gemini: available=${gemini.available} mid=£${gemini.estimatedMid} conf=${gemini.confidence}`);
 
@@ -1258,9 +1263,9 @@ serveModule(async (req: Request) => {
 
   const [teapeakResult, firstBrowseResult, visualSearch, firstSoldSearch] = await Promise.all([
     unavailableProductResearch(primaryQuery),
-    searchEbayBrowse(creds.accessToken, primaryQuery, 50, false, appToken),
+    earlyMarket?earlyMarket.then(results=>results[0]):searchEbayBrowse(creds.accessToken, primaryQuery, 50, false, appToken),
     (appToken && (inlineImageBase64 || imageUrls.length > 0)) ? runEbayVisualSearch(inlineImageBase64 || imageUrls[0], appToken) : Promise.resolve<VisualSearchResult>({ available: false, items: [], totalFound: 0 }),
-    searchEbaySoldListings(appToken, primaryQuery, 50),
+    earlyMarket?earlyMarket.then(results=>results[1]):searchEbaySoldListings(appToken, primaryQuery, 50),
   ]);
 
   // Mark credential as having analytics scope if Terapeak succeeded
@@ -1283,7 +1288,10 @@ serveModule(async (req: Request) => {
   //      to include international listings.
   const browseResults: BrowseSearchResult[] = [firstBrowseResult];
   const needsMoreBrowse = firstBrowseResult.items.length < 8 && searchQueries.length > 1;
-  if (needsMoreBrowse) {
+  if (needsMoreBrowse && quickList) {
+    const extra=await Promise.all(searchQueries.slice(1,3).map(query=>searchEbayBrowse(creds.accessToken,query,40,false,appToken)));browseResults.push(...extra);
+  }
+  if (needsMoreBrowse && !quickList) {
     for (const query of searchQueries.slice(1)) {
       await sleep(500);
       const result = await searchEbayBrowse(creds.accessToken, query, 40, false, appToken);
@@ -1540,6 +1548,7 @@ serveModule(async (req: Request) => {
     canoaReference: await canoaPromise,
 
     numistaSales: null,
+    numistaSaleEvidence: await numistaSalesPromise,
 
     combinedEvidence: {
       numistaRelevant: 0,

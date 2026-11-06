@@ -1,0 +1,9 @@
+import { assertEquals } from 'jsr:@std/assert';
+import { constrainNumismaticEvidence, type FaceObservation } from '../functions/_shared/numismaticEvidence.ts';
+const faces:FaceObservation[]=['Obverse','Reverse'].map(label=>({label,legends:['VISIBLE'],features:['diagnostic feature'],countermarks:[],limitations:[],available:true}));
+const reviewed=()=>({confidence:0.98,warnings:[],attributes:{},numismaticReview:{obverseMatched:true,reverseMatched:true,hostContradictions:[],diagnosticMatches:['legend','portrait','reverse_device','measurement'].map(kind=>({kind,observation:'literal evidence',referenceEvidence:'retrieved reference'})),countermarks:[{location:'reverse',uncertainty:'worn punch; later authority unresolved'}]}});
+const catalogue={typeId:1,status:'verified',physicalMatchGood:true,matchScore:98,alternatives:[{typeId:2,score:50}]};
+Deno.test('an uncertain countermark alone does not lower a supported host; it remains disclosed',()=>{const result=constrainNumismaticEvidence(reviewed(),faces,catalogue);assertEquals(result.confidence,0.98);assertEquals(result.warnings.some((value:string)=>value.includes('worn punch')),true);});
+Deno.test('competing candidates and physical contradictions cap confidence rather than averaging scores',()=>{assertEquals(constrainNumismaticEvidence(reviewed(),faces,{...catalogue,alternatives:[{typeId:2,score:95}]}).confidence,0.69);assertEquals(constrainNumismaticEvidence(reviewed(),faces,{...catalogue,physicalMatchGood:false}).confidence,0.49);});
+Deno.test('missing face cannot receive high confidence',()=>{assertEquals(constrainNumismaticEvidence(reviewed(),faces.slice(0,1),catalogue).confidence,0.69);});
+Deno.test('AI agreement cannot boost an initially weak score',()=>{assertEquals(constrainNumismaticEvidence({...reviewed(),confidence:0.4},faces,catalogue).confidence,0.4);});

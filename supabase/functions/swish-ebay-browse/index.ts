@@ -5,6 +5,7 @@
 
 import { serveModule } from '../_shared/moduleScope.ts';
 import { inferImportNiche } from '../_shared/ebayImportScope.ts';
+import { lookupBarcodeProducts } from '../_shared/quickListBarcode.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
@@ -69,7 +70,9 @@ async function refreshUserToken(
 
 // ── Get eBay Application Token ─────────────────────────────────────────────────
 
+const applicationTokens = new Map<string,{token:string;expiresAt:number}>();
 async function getApplicationToken(clientId: string, clientSecret: string): Promise<string | null> {
+  const cached=applicationTokens.get(clientId);if(cached&&cached.expiresAt>Date.now()+60000)return cached.token;
   const basicAuth = btoa(`${clientId}:${clientSecret}`);
   const body = new URLSearchParams({
     grant_type: 'client_credentials',
@@ -84,7 +87,9 @@ async function getApplicationToken(clientId: string, clientSecret: string): Prom
       },
       body: body.toString(),
     });
+    if(!res.ok)return null;
     const data = await res.json();
+    if(data.access_token){applicationTokens.set(clientId,{token:data.access_token,expiresAt:Date.now()+Math.min(Number(data.expires_in??3600),7200)*1000});if(applicationTokens.size>64)applicationTokens.delete(applicationTokens.keys().next().value!);}
     return data.access_token ?? null;
   } catch (err: any) {
     console.error('App token fetch error:', err.message);
@@ -425,6 +430,15 @@ serveModule(async (req: Request) => {
         }, 401);
       }
     }
+  }
+
+  if(route==='barcode_lookup'){
+    if(body.nicheId!=='collectibles')return json({error:'Barcode Quick List is only available in Collectibles.'},403);
+    const gtin=String(body.gtin??'');
+    if(!/^(?:\d{8}|\d{12}|\d{13}|\d{14})$/.test(gtin))return json({error:'Valid product GTIN required.'},400);
+    const token=await getApplicationToken(credentials.clientId,credentials.clientSecret);
+    if(!token)return json({products:[],status:'unavailable',message:'eBay catalogue authorization unavailable. Use photo identification.'});
+    return json(await lookupBarcodeProducts(token,gtin));
   }
 
   // ── Route: get_item_full — fetch complete listing details via GetItem ──────
