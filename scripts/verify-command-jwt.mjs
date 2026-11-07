@@ -57,7 +57,9 @@ export function loadJwtFixtureConfig(env = process.env, now = Date.now()) {
   catch { return { config: null, reason: 'CANONICAL_REGISTRY_UNAVAILABLE' }; }
   const nicheIds = Object.keys(registry.products ?? {});
   const subscriberNiches = env.SWISH_SUBSCRIBER_NICHES.split(',').map(value => value.trim());
-  if (nicheIds.length !== 11 || !subscriberNiches.length || !unique(subscriberNiches) ||
+  // Current unified acceptance scope is all twelve registered products. Keep the
+  // denied-niche fixture requirement; adding Tunes Flip must not disable the runner.
+  if (nicheIds.length !== 12 || !nicheIds.includes('collectibles') || !nicheIds.includes('tunes_flip') || !subscriberNiches.length || !unique(subscriberNiches) ||
     subscriberNiches.some(id => !nicheIds.includes(id)) || subscriberNiches.length >= nicheIds.length) {
     return { config: null, reason: 'FIXTURE_REQUIRES_CANONICAL_ENTITLEMENTS_AND_ONE_DENIED_NICHE' };
   }
@@ -213,7 +215,7 @@ export async function runCommandJwtVerification(env = process.env, fetchRequest 
     Array.isArray(data.activity) && (platform || data.activity.every(row => row.tenant_id === tenantId && ids.includes(row.niche_id))) &&
     (platform || (data.registeredUsers === null && data.activeSubscribers === null && data.subscriptionRevenue === null));
   const ownerPortfolio = await rpc('owner', { p_platform: true });
-  assert('owner-PLATFORM-11-NICHES', ownerPortfolio, ownerPortfolio.status === 200 &&
+  assert('owner-PLATFORM-12-NICHES', ownerPortfolio, ownerPortfolio.status === 200 &&
     safeSnapshot(ownerPortfolio.data, true, null, config.nicheIds, true), 'OWNER_PLATFORM_CONTRACT_ALL_CANONICAL_NICHES');
   const ownerTenant = await rpc('owner', { p_platform: false, p_tenant_id: config.owner.tenantId });
   assert('owner-TENANT-SCOPE', ownerTenant, ownerTenant.status === 200 &&

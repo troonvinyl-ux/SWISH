@@ -108,6 +108,16 @@ export const Spacing = {
   hero: 64,
 };
 
+// Terminal/report surfaces are flat: thin dividers, stable touch rows, restrained accents.
+export const CommandTheme = {
+  rowHeight: 48,
+  tableHeaderHeight: 36,
+  dataRowHeight: 32,
+  numericFontSize: Typography.size.sm,
+  numericLineHeight: 20,
+  maxWidth: 960,
+};
+
 export const Radius = {
   xs: 4,
   sm: 8,

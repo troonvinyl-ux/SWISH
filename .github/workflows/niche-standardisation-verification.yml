@@ -1,0 +1,36 @@
+name: Shared niche standardisation and isolation
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['app/**', 'contexts/**', 'hooks/**', 'services/**', 'constants/**', 'shared/**', 'niches/**', 'niche-modules.json', 'supabase/**', 'scripts/**', '.github/workflows/niche-standardisation-verification.yml']
+  push:
+    branches: [main]
+    paths: ['app/**', 'contexts/**', 'hooks/**', 'services/**', 'constants/**', 'shared/**', 'niches/**', 'niche-modules.json', 'supabase/**', 'scripts/**']
+permissions:
+  contents: read
+jobs:
+  shared-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: {version: 9.15.9}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - run: bash scripts/install-dependencies.sh
+      - run: mkdir -p verification-output && git rev-parse HEAD > verification-output/source-sha.txt
+      - name: Registry, descriptor and deployable policy parity
+        run: node scripts/verify-niche-standardisation.mjs > verification-output/registry.json
+      - name: TypeScript
+        if: ${{ !cancelled() }}
+        run: npx tsc --noEmit > verification-output/typescript.txt 2>&1
+      - name: Twelve-niche roles, photos, imports, inbox and publication regressions (pure/mocked)
+        if: ${{ !cancelled() }}
+        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/nicheStandardisation.test.ts services/__tests__/nicheAcceptanceRegister.test.ts services/__tests__/sharedInboxService.test.ts services/__tests__/registeredNicheAudit.test.ts services/__tests__/universalQuickList.test.ts services/__tests__/quickListSpecialistScope.test.ts services/__tests__/photoCarryForwardIntegration.test.ts services/__tests__/inventoryPhotoPersistence.test.ts services/__tests__/photoPipelineBoundary.test.ts services/__tests__/scannerSession.test.ts --json --outputFile=verification-output/niche-standardisation.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: niche-standardisation-${{ github.sha }}
+          path: verification-output/
+# No inventory writes, paid AI requests or marketplace sends. Not device/live certification.

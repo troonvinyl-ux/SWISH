@@ -1,7 +1,7 @@
 name: SWISH backend performance regressions
 on:
   pull_request:
-    paths: ['services/**','hooks/**','app/_layout.tsx','supabase/**','.github/workflows/backend-performance-verification.yml']
+    paths: ['services/**','hooks/**','components/feature/PerformanceExportPanel.tsx','app/_layout.tsx','app/master-admin.tsx','docs/SWISH_BACKEND_PERFORMANCE_EVIDENCE.json','supabase/**','.github/workflows/backend-performance-verification.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -26,7 +26,7 @@ jobs:
         run: npx tsc --noEmit > verification-output/typescript.txt 2>&1
       - name: Executable performance and preservation regressions
         if: ${{ !cancelled() }}
-        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/backendPerformance.test.ts services/__tests__/backendPoolRecovery.test.ts services/__tests__/photoCarryForwardIntegration.test.ts services/__tests__/canonicalInventoryCounting.test.ts services/__tests__/identificationReliability.test.ts services/__tests__/listingPublication.test.ts --json --outputFile=verification-output/jest.json
+        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/backendPerformance.test.ts services/__tests__/performanceExport.test.ts services/__tests__/performanceExportFile.test.ts services/__tests__/backendPoolRecovery.test.ts services/__tests__/photoCarryForwardIntegration.test.ts services/__tests__/canonicalInventoryCounting.test.ts services/__tests__/identificationReliability.test.ts services/__tests__/listingPublication.test.ts --json --outputFile=verification-output/jest.json
       - name: All Edge typechecks and deployment boundaries
         if: ${{ !cancelled() }}
         shell: bash

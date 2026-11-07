@@ -21,6 +21,15 @@ export function resolveProductionNiche(value: string | null | undefined): Produc
   return null;
 }
 
+/** Canonicalise new writes only; never rewrite historical inventory or change its niche. */
+export function canonicalProductionSpecialist(value: string): string | null {
+  for (const product of Object.values(NICHE_MODULES)) {
+    if (product.specialists.includes(value)) return value;
+    if (product.legacySpecialists.includes(value)) return product.defaultSpecialist;
+  }
+  return null;
+}
+
 /** Read-only legacy compatibility never changes stored specialist identities. */
 export function getProductionNicheSpecialistIds(value: string | null | undefined): string[] {
   const niche = resolveProductionNiche(value);
