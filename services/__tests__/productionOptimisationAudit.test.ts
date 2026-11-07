@@ -13,11 +13,11 @@ test('AppContext keeps its invalidation action and published value stable',()=>{
 });
 test('Minority Report does not fetch GitHub acceptance detail on portfolio mount',()=>{
  const source=read('components/feature/CommandPortfolio.tsx');
- expect(source).toContain('useProductionControl(showDetails && state.platform');
- expect(source).toContain('readiness has not been assessed by this view');
- expect(source).toContain('rowsById.get(id)');
+ expect(source).not.toContain('useProductionControl');
+ expect(source).toContain('Evidence & scope');
+ expect(source).toContain('modules.get(id)');
  expect(source).not.toContain('state.modules.find');
- expect(source).toContain('Recent intelligence signals');
+ expect(source).toContain('state.snapshot?.activity');
  expect(source).toContain('formatCommandMoney');
 });
 test('Quick List hides stale scoped state and fences post-review auto publication',()=>{
@@ -25,12 +25,12 @@ test('Quick List hides stale scoped state and fences post-review auto publicatio
  expect(source).toContain('scope&&state.scope===scope?state:emptyState');
  expect(source).toContain('state:visibleState');
  const review=source.split('const confirm=useCallback')[1].split('const checkLive=')[0];
- expect(review).toContain('scopeRef.current===scope');
- expect(review).toContain('if(!valid())return;if(before.autoPublish)');
- expect(review).toContain('if(valid()){operation.current=false;patch({processing:false});}');
+ expect(source).toContain('scopeRef.current===scope');
+ expect(review).toContain('if(!validFor(version))return;if(publishAfterReview)');
+ expect(review).toContain('if(validFor(version)){operation.current=false;patch({processing:false,phase:\'\'});}');
  const recovery=source.split('const checkLive=useCallback')[1].split('const toggleAuto=')[0];
- expect(recovery).toContain('if(!valid())return;const id=');
- expect(recovery).toContain('catch{if(valid())');
+ expect(recovery).toContain('if(!validFor(version))return;const id=');
+ expect(recovery).toContain('if(validFor(version))');
  expect(source).toContain('state.scope!==scope');
 });
 test('valuation reads item media once and starts independent discovery before AI waits',()=>{

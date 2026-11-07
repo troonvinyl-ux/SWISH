@@ -16,6 +16,7 @@ import { getSupabaseClient } from '@/template';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { isProductionNiche } from '@/constants/niches';
+import { selectedListingPhotos, processedListingPhotoIssue } from '@/shared/smartStudio';
 import { useAntiquePreflight } from '@/hooks/useAntiquePreflight';
 import { PreflightConditionCard } from '@/components/feature/PreflightConditionCard';
 import { ListingPublicationCard } from '@/components/feature/ListingPublicationCard';
@@ -238,10 +239,15 @@ export default function ListingPreflightScreen() {
       }
 
       // ── Images ────────────────────────────────────────────────────────────
-      const media: string[] = Array.isArray(item?.media) ? item.media : [];
+      const originals: string[] = Array.isArray(item?.media) ? item.media : [];
+      const media = selectedListingPhotos(originals,attrs);
+      const processedIssue = processedListingPhotoIssue(originals,attrs,media);
       const permanentMedia = media.filter((u: string) => u?.startsWith('https://') && (u.includes('supabase') || u.includes('onspace')));
       const allHttpsMedia = media.filter((u: string) => u?.startsWith('https://'));
-      if (permanentMedia.length > 0) {
+      if (processedIssue) {
+        updateCheck('images', { status: 'fail', detail: processedIssue });
+        allPass = false;
+      } else if (permanentMedia.length > 0) {
         updateCheck('images', { status: 'pass', detail: `${permanentMedia.length} permanent image${permanentMedia.length === 1 ? '' : 's'} ready for eBay` });
       } else if (allHttpsMedia.length > 0) {
         updateCheck('images', { status: 'warn', detail: `${allHttpsMedia.length} HTTPS image${allHttpsMedia.length === 1 ? '' : 's'} found (not in permanent storage — eBay CDN URLs may expire)` });

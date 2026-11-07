@@ -1373,7 +1373,7 @@ async function handleRequest(req: Request): Promise<Response> {
   if (!auth.ok) return jsonResponse({ error: auth.error }, 401);
 
   // Apply the same stored-resource entitlement gate before EVERY marketplace write.
-  if (['publish', 'revise', 'end', 'revise_sku', 'inspect_live'].includes(route)) {
+  if (['publish', 'revise', 'end', 'revise_sku', 'inspect_live', 'revise_price'].includes(route)) {
     if (!body.listingId || !auth.userId) return jsonResponse({ error: 'Authenticated saved listing required.' }, 400);
     const { data: resource, error: resourceError } = await supabase.from('listings')
       .select('item_id, items!inner(tenant_id,specialist_id,attributes,media)')
@@ -1874,6 +1874,45 @@ async function handleRequest(req: Request): Promise<Response> {
       return jsonResponse({ success: false, isLeaf: null, aspects: [], error });
     }
     return jsonResponse({ success: true, isLeaf: true, aspects });
+  }
+
+  // Price-only user action: never resend title, description, quantity, photos or policies.
+  if (route === 'revise_price') {
+    const newPrice = Number(body.newPrice), expectedPrice = Number(body.expectedPrice);
+    if (!Number.isFinite(newPrice) || newPrice <= 0 || !Number.isFinite(expectedPrice) || expectedPrice <= 0) return jsonResponse({ success: false, error: 'A positive new price and current saved price are required.' }, 422);
+    const price = Math.round(newPrice * 100) / 100;
+    const loaded = await supabase.from('listings')
+      .select('id,item_id,external_listing_id,price,status,floor_price,ceiling_price,updated_at,items!inner(tenant_id,specialist_id,attributes)')
+      .eq('id', body.listingId).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle();
+    const row = loaded.data as any;
+    if (loaded.error || !row || row.items?.tenant_id !== tenantId || !['active','live','published'].includes(row.status) || !/^\d+$/.test(String(row.external_listing_id ?? ''))) return jsonResponse({ success: false, error: 'Open a live eBay listing in this workspace before repricing.' }, 409);
+    if (Math.round(Number(row.price) * 100) !== Math.round(expectedPrice * 100)) return jsonResponse({ success: false, error: 'The saved price changed. Refresh inventory before applying this recommendation.' }, 409);
+    if (row.items?.attributes?.ebay_listing_options?.listingType === 'Chinese') return jsonResponse({ success: false, error: 'Auction prices require the listing editor; one-click repricing is for Buy it now listings.' }, 422);
+    if (price < Number(row.floor_price ?? 0) || (Number(row.ceiling_price) > 0 && price > Number(row.ceiling_price))) return jsonResponse({ success: false, error: 'The recommended price is outside this listing’s saved price limits.' }, 422);
+    const creds = await getEbayCredentials(supabase, tenantId, true);
+    if ('error' in creds) return jsonResponse({ success: false, error: creds.error }, 400);
+    const externalListingId = String(row.external_listing_id);
+    const readPrice = async () => {
+      const result = await callEbayTradingApi(`<?xml version="1.0" encoding="utf-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials><eBayAuthToken>${xmlEscape(creds.accessToken)}</eBayAuthToken></RequesterCredentials><ItemID>${externalListingId}</ItemID><DetailLevel>ReturnAll</DetailLevel></GetItemRequest>`, 'GetItem', creds.clientId);
+      if (!result.ok) throw new Error('Live seller price could not be checked.');
+      return parseLiveContent(result.xml, externalListingId);
+    };
+    let before;
+    try { before = await readPrice(); } catch { return jsonResponse({ success: false, error: 'Live eBay price unavailable. No price change was sent.' }, 503); }
+    if (!['FixedPriceItem','StoresFixedPrice'].includes(before.listingType) || before.listingStatus !== 'Active' || before.availableQuantity <= 0 || before.currency !== 'GBP' || Math.round(before.sellerPrice * 100) !== Math.round(expectedPrice * 100)) return jsonResponse({ success: false, error: 'eBay status or price differs from inventory. Sync this listing before repricing; nothing was changed.' }, 409);
+    const requestXml = `<?xml version="1.0" encoding="utf-8"?><ReviseInventoryStatusRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials><eBayAuthToken>${xmlEscape(creds.accessToken)}</eBayAuthToken></RequesterCredentials><InventoryStatus><ItemID>${externalListingId}</ItemID><StartPrice currencyID="GBP">${price.toFixed(2)}</StartPrice></InventoryStatus></ReviseInventoryStatusRequest>`;
+    let result;
+    try { result = await callEbayTradingApi(requestXml, 'ReviseInventoryStatus', creds.clientId); }
+    catch { return jsonResponse({ success: false, unconfirmed: true, error: 'Price change outcome is unconfirmed. Check the live listing before retrying.' }, 503); }
+    if (!result.ok) return jsonResponse({ success: false, error: friendlyError(parseErrors(result.xml), 'eBay rejected the price change.') }, 422);
+    let live;
+    try { live = await readPrice(); } catch { return jsonResponse({ success: false, accepted: true, unconfirmed: true, error: 'eBay accepted the change but live-price readback is pending. Check status; do not apply again.' }, 503); }
+    if (live.currency !== 'GBP' || Math.round(live.sellerPrice * 100) !== Math.round(price * 100)) return jsonResponse({ success: false, accepted: true, unconfirmed: true, live, error: 'The live price does not match the recommendation. Check the listing before retrying.' }, 409);
+    const saved = await supabase.from('listings').update({ price })
+      .eq('id', row.id).eq('tenant_id', tenantId).eq('external_listing_id', externalListingId).eq('updated_at', row.updated_at)
+      .select('id,price').maybeSingle();
+    if (saved.error || !saved.data || Number(saved.data.price) !== price) return jsonResponse({ success: false, accepted: true, unconfirmed: true, live, error: 'eBay price matched, but SWISH persistence is pending. Refresh inventory before any further revision.' }, 503);
+    return jsonResponse({ success: true, accepted: true, verified: true, price, live, externalListingId, warnings: parseErrors(result.xml) });
   }
 
   // ── Route: revise_sku — update only eBay's custom label (SKU) ─────────────

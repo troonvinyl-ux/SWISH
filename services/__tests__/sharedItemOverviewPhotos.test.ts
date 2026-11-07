@@ -29,7 +29,7 @@ describe('Shared item overview photo and layout contracts', () => {
     const editor = source('app/ebay-listing-editor.tsx');
     expect(editor).toContain('<ListingPhotoPicker');
     expect(editor).toContain('onMain={editor.setMainPhoto}');
-    expect(source('hooks/useListingEditor.ts')).toContain('media: moveMainImageFirst(photos, uri)');
+    expect(source('hooks/useListingEditor.ts')).toMatch(/media:\s*moveMainImageFirst\(photos,\s*uri\)/);
   });
   test('saving a cover remains scoped, version-protected, verified and non-publishing', () => {
     const service = source('services/itemPhotoService.ts');
