@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "services/nativeBackgroundCompositor.ts",
+    "services/nativeSegmentationEngine.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "supabase",
+    "app",
+    "hooks",
+    "components",
+    "test-lab-app"
+  ]
+}
