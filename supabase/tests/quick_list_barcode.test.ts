@@ -1,0 +1,7 @@
+import { assertEquals } from 'jsr:@std/assert';
+import { lookupBarcodeProducts } from '../functions/_shared/quickListBarcode.ts';
+Deno.test('exact GTIN product leads only; seller photos and physical condition are never copied',async()=>{
+ const calls:string[]=[];const fakeFetch=(async(input:RequestInfo|URL)=>{const url=String(input);calls.push(url);if(url.includes('item_summary/search'))return Response.json({itemSummaries:[{itemId:'v1|1|0'},{itemId:'v1|2|0'}]});return Response.json(url.includes('v1%7C1%7C0')?{itemId:'v1|1|0',gtin:'4006381333931',title:'Verified GTIN lead',brand:'Example',categoryId:'123',condition:'New',image:{imageUrl:'https://seller.example/photo.jpg'},localizedAspects:[{name:'Model',value:'A'},{name:'Condition',value:'New'}]}:{itemId:'v1|2|0',gtin:'4006381333932',title:'Wrong variant'});}) as typeof fetch;
+ const result=await lookupBarcodeProducts('fake-token-not-a-secret','4006381333931',fakeFetch);assertEquals(result.status,'candidates');assertEquals(result.products.length,1);assertEquals(result.products[0].specifics.Condition,undefined);assertEquals(result.products[0].image,undefined);assertEquals(calls.length,3);
+});
+Deno.test('catalogue denial is a usable visual-identification fallback, not a fabricated product',async()=>{const result=await lookupBarcodeProducts('fake','4006381333931',(async()=>new Response('',{status:403})) as typeof fetch);assertEquals(result.status,'unavailable');assertEquals(result.products,[]);});

@@ -4,6 +4,7 @@ import { useAuth } from '@/template';
 import { useApp } from './useApp';
 import { loadCommandSnapshot, sumCommandModules, type CommandSnapshot } from '@/services/commandCentreService';
 import type { ProductionNicheId } from '@/constants/niches';
+import {parseCanonicalCounts} from '@/services/canonicalInventoryService';
 import { useUnifiedShell } from './useUnifiedShell';
 export type CommandAction = 'open' | 'identify' | 'inventory' | 'listings' | 'review' | 'sales';
 const destinations: Record<CommandAction, string> = { open: '/(tabs)', identify: '/(tabs)/scan', inventory: '/(tabs)/inventory', listings: '/(tabs)/listings', review: '/review-required', sales: '/ebay-hub' };
@@ -30,7 +31,15 @@ export function useCommandCentre(platformOverride?: boolean, enabledOverride?: b
  useEffect(() => { void refresh(); return () => { generation.current++; pending.current = null; }; }, [refresh]);
  const snapshot = state.key === key && enabled ? state.snapshot : null;
  const modules = useMemo(() => snapshot?.modules.filter(row => platform || shell.modules.some(module => module.id === row.id)) ?? [], [snapshot, platform, shell.modules]);
- const totals = useMemo(() => snapshot ? sumCommandModules(modules) : null, [snapshot, modules]);
+ const totals = useMemo(() => {
+  if(!snapshot)return null;
+  const totals=sumCommandModules(modules);
+  // Owner-wide totals include retained unclassified history. Per-niche cards
+  // still use only their exact canonical specialist scope.
+  const ownerCounts=(snapshot as CommandSnapshot & {canonicalCounts?:unknown}).canonicalCounts;
+  if(platform&&ownerCounts){const c=parseCanonicalCounts(ownerCounts);return {...totals,inventory:c.total,stock:c.stock,drafts:c.draft,live:c.liveListings,sold:c.sold,units:c.units};}
+  return totals;
+ }, [snapshot, modules, platform]);
  const open = useCallback(async (id: ProductionNicheId, action: CommandAction = 'open') => {
   // Inspection never binds module scope. Only explicit confirmed workspace entry does.
   if (await app.openModule(id)) router.replace(destinations[action] as any);

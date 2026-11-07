@@ -1,0 +1,59 @@
+name: SWISH production optimisation evidence
+on:
+  pull_request:
+    paths: ['app/**','app.config.js','app.json','components/**','contexts/**','hooks/**','services/**','shared/**','supabase/**','niche-modules.json','scripts/**','.github/workflows/production-optimisation-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: production-optimisation-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  client:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9.15.9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: bash scripts/install-dependencies.sh
+      - run: mkdir -p verification-output && git rev-parse HEAD > verification-output/source-sha.txt
+      - name: TypeScript (entire available application)
+        run: npx tsc --noEmit > verification-output/typescript.txt 2>&1
+      - name: Full regression suite (includes mocked storage, queue and publication tests)
+        if: ${{ !cancelled() }}
+        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand --json --outputFile=verification-output/jest.json
+      - name: Shared Expo web bundle
+        if: ${{ !cancelled() }}
+        run: npx expo export --platform web --output-dir verification-output/web > verification-output/web.txt 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: optimisation-client-evidence, path: verification-output/ }
+  edge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: denoland/setup-deno@v2
+        with: { deno-version: v2.x }
+      - run: mkdir -p verification-output && git rev-parse HEAD > verification-output/source-sha.txt
+      - name: Deployable dependency boundaries and mirrored contracts
+        run: node scripts/validate-edge-deployment.mjs > verification-output/deployment.txt 2>&1
+      - name: Typecheck every deployable Edge Function
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          mapfile -t functions < <(find supabase/functions -mindepth 2 -maxdepth 2 -name index.ts | sort)
+          deno check "${functions[@]}" > verification-output/edge-types.txt 2>&1
+      - name: Existing pure Edge regression fixtures (no live calls)
+        if: ${{ !cancelled() }}
+        run: deno test supabase/tests/quick_list_barcode.test.ts supabase/tests/numismatic_evidence.test.ts supabase/tests/identification_policy.test.ts > verification-output/edge-tests.txt 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: optimisation-edge-evidence, path: verification-output/ }
+# Companion evidence only: does not replace APK/iOS/niche release gates or perform
+# marketplace writes, deploy functions, call paid providers, or certify <60s.

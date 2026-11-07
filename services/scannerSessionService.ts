@@ -8,10 +8,12 @@ export function createEmptyCaptureDraft(specialistId: string): CaptureDraft {
 /** A scope alone is not sufficient: leaving and returning must reject late work. */
 export function createScannerSession() {
   let sequence = 0;
+  // A fresh process or remounted scanner must not recycle scan-1 for another copy.
+  const visitNamespace = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,12)}`;
   const session = {
     current: '',
     begin(ownerScope: string): string {
-      session.current = `${ownerScope}:scan-${++sequence}`;
+      session.current = `${ownerScope}:scan-${visitNamespace}-${++sequence}`;
       return session.current;
     },
     end(token: string): void {

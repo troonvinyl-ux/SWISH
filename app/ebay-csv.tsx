@@ -31,6 +31,8 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { getSupabaseClient } from '@/template';
 import { markItemSold } from '@/services/itemService';
+import { importCanonicalEbayInventory } from '@/services/ebayInventoryImportService';
+import { getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { useAlert } from '@/template';
@@ -495,9 +497,11 @@ async function importActiveListings(
   // Pre-load existing listings for matching
   const { data: existingListings } = await supabase
     .from('listings')
-    .select('id, item_id, external_listing_id, price, status, category_id')
+    .select('id, item_id, external_listing_id, price, status, category_id, items!inner(specialist_id)')
     .eq('tenant_id', tenantId)
-    .eq('marketplace_id', 'ebay')
+    .eq('items.tenant_id', tenantId)
+    .in('items.specialist_id', getProductionNicheSpecialistIds(targetNiche))
+    .in('marketplace_id', ['ebay','EBAY_GB'])
     .not('external_listing_id', 'is', null);
 
   const listingByEbayId = new Map<string, { id: string; itemId: string; categoryId?: string }>(
@@ -510,13 +514,14 @@ async function importActiveListings(
   // Pre-load existing items for SKU matching
   const { data: existingItems } = await supabase
     .from('items')
-    .select('id, sku, inventory_id')
+    .select('id, sku, inventory_id, specialist_id')
     .eq('tenant_id', tenantId)
+    .in('specialist_id', getProductionNicheSpecialistIds(targetNiche))
     .not('sku', 'is', null)
     .neq('sku', '');
 
   const itemBySku = new Map<string, string>(
-    (existingItems ?? []).filter(i => i.sku).map(i => [i.sku, i.id]),
+    (existingItems ?? []).filter(i => i.inventory_id && i.sku === i.inventory_id).map(i => [i.sku, i.id]),
   );
 
   for (let i = 0; i < rows.length; i++) {
@@ -562,7 +567,7 @@ async function importActiveListings(
       const existing = listingByEbayId.get(ebayId);
       if (existing) {
         const listingUpdate: Record<string, any> = {
-          status: listingStatus,
+          // An old CSV is not current GetItem evidence; preserve canonical lifecycle.
           import_source: 'csv',
           import_id: sessionId,
           updated_at: new Date().toISOString(),
@@ -576,7 +581,8 @@ async function importActiveListings(
           categoryIdsSet++;
         }
 
-        await supabase.from('listings').update(listingUpdate).eq('id', existing.id);
+        const refreshed=await supabase.from('listings').update(listingUpdate).eq('id', existing.id).eq('tenant_id',tenantId).select('id').maybeSingle();
+        if(refreshed.error||!refreshed.data)throw new Error(refreshed.error?.message??'Existing listing refresh not confirmed.');
 
         // Update linked item
         if (existing.itemId) {
@@ -600,7 +606,7 @@ async function importActiveListings(
             if (attrsChanged) itemUpdate.attributes = attrs;
           }
 
-          await supabase.from('items').update(itemUpdate).eq('id', existing.itemId);
+          await supabase.from('items').update(itemUpdate).eq('id', existing.itemId).eq('tenant_id',tenantId);
         }
 
         updated++;
@@ -620,6 +626,10 @@ async function importActiveListings(
 
       // ── Check: item exists by SKU ─────────────────────────────────────────
       let itemId: string | null = sku ? (itemBySku.get(sku) ?? null) : null;
+      const quantityRaw=get(row,mapping,'quantity');
+      const quantity=quantityRaw?Number(quantityRaw):1;
+      if(!Number.isSafeInteger(quantity)||quantity<0)throw new Error('Quantity requires review; use a non-negative whole number.');
+      let itemPayload: Record<string,unknown> = {};
 
       // Determine specialist_id from niche classification or target niche
       const itemClassification = classifyListing(csvCategoryId, csvCategoryName, title);
@@ -627,10 +637,9 @@ async function importActiveListings(
         ? nicheToSpecialistId(targetNiche)
         : nicheToSpecialistId(itemClassification.niche);
 
+      itemPayload={canonical_title:title.slice(0,200),specialist_id:specialistId,sku:sku||'',quantity,attributes:initialAttributes};
       if (!itemId) {
-        const { data: newItem, error: itemErr } = await supabase
-          .from('items')
-          .insert({
+        itemPayload = {
             tenant_id: tenantId,
             canonical_title: title.slice(0, 200),
             specialist_id: specialistId,
@@ -640,22 +649,13 @@ async function importActiveListings(
             condition: condition || '',
             expected_selling_price: price,
             sku: sku || null,
-            inventory_id: sku || `KC-EBAY-${ebayId}`,
+            inventory_id: `KC-EBAY-${ebayId}`,
+            quantity,
             inventory_origin: 'ebay_csv',
             source_import_id: sessionId,
             attributes: Object.keys(initialAttributes).length > 0 ? initialAttributes : {},
-          })
-          .select('id')
-          .single();
-
-        if (itemErr || !newItem) {
-          errors.push(`Row ${i + 1} (${ebayId}): ${itemErr?.message ?? 'item insert failed'}`);
-          failed++;
-          continue;
-        }
-
-        itemId = newItem.id;
-        if (sku) itemBySku.set(sku, itemId!);
+          };
+        // No item is inserted here. The canonical item and listing commit together.
       } else {
         matched++;
         // Backfill category data into existing item attributes if missing
@@ -671,7 +671,7 @@ async function importActiveListings(
             await supabase.from('items').update({
               attributes: existingAttrs,
               updated_at: new Date().toISOString(),
-            }).eq('id', itemId);
+            }).eq('id', itemId).eq('tenant_id',tenantId);
           }
         }
       }
@@ -701,17 +701,10 @@ async function importActiveListings(
         categoryIdsSet++;
       }
 
-      const { error: listingErr } = await supabase.from('listings').insert(listingInsert);
-
-      if (listingErr) {
-        if (listingErr.code === '23505') { skipped++; continue; } // duplicate
-        errors.push(`Row ${i + 1} (${ebayId}): ${listingErr.message}`);
-        failed++;
-        continue;
-      }
-
-      listingByEbayId.set(ebayId, { id: '', itemId: itemId!, categoryId: csvCategoryId || undefined });
-      imported++;
+      const saved=await importCanonicalEbayInventory(tenantId,String(targetNiche??''),ebayId,itemPayload,listingInsert,itemId??undefined);
+      itemId=saved.itemId;
+      listingByEbayId.set(ebayId, { id: saved.listingId, itemId: saved.itemId, categoryId: csvCategoryId || undefined });
+      if(saved.existing){matched++;updated++;}else imported++;
     } catch (e: any) {
       errors.push(`Row ${i + 1}: ${e.message}`);
       failed++;
@@ -1189,6 +1182,7 @@ export default function EbayCsvScreen() {
     tech: 'tech',
     surplus_flip: 'surplus_flip',
     collectibles: 'collectibles',
+    tunes_flip: 'tunes_flip',
   };
   // Never let an unknown/general context disable filtering and import every niche.
   // Unclassified rows can remain generic for manual review, but never enter another

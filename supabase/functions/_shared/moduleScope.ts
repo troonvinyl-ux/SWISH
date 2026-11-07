@@ -1,6 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import registry from './niche-modules.json' with { type: 'json' };
 import { corsHeaders } from './cors.ts';
+import { normalizeIdentifySpecialist } from './identifySpecialistCompatibility.ts';
 type Handler = (request: Request) => Response | Promise<Response>;
 const json = (message: string, status: number) => new Response(JSON.stringify({ error: message }), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -34,7 +35,12 @@ export function withModuleScope(handler: Handler): Handler {
    const product=(registry.products as Record<string,{specialists:string[];legacySpecialists:string[];defaultSpecialist:string}>)[nicheId];
    const specialists=[...new Set([...product.specialists,...product.legacySpecialists])];
    for(const value of [body.nicheId,body.niche_id]) if(value!=null && value!==nicheId)return json('Niche differs from the authorized module.',403);
-   for(const value of [body.specialistId,body.specialist_id])if(value!=null && !specialists.includes(value))return json('Specialist belongs to another module.',403);
+   // Compatibility for the incorrect specialist sent by older Collectibles Quick
+   // List clients. Scope comes exclusively from swish_current_module, not the body.
+   const operation=new URL(request.url).pathname.split('/').pop() ?? '';
+   const requestedSpecialistId=normalizeIdentifySpecialist(nicheId,operation,body.specialistId);
+   const requestedSpecialistAlias=normalizeIdentifySpecialist(nicheId,operation,body.specialist_id);
+   for(const value of [requestedSpecialistId,requestedSpecialistAlias])if(value!=null && !specialists.includes(value))return json('Specialist belongs to another module.',403);
    if(body.specialistIds && (!Array.isArray(body.specialistIds) || body.specialistIds.some((id:unknown)=>typeof id!=='string'||!specialists.includes(id))))return json('Invalid specialist scope.',403);
    const allowed=await client.rpc('swish_can_access_niche',{p_tenant_id:tenant,p_niche_id:nicheId});
    if(allowed.error || allowed.data!==true)return json('Active module entitlement could not be verified.',403);
@@ -60,7 +66,7 @@ export function withModuleScope(handler: Handler): Handler {
    // provenance, not an authorization denial. Keep every account, module and
    // resource check above; handler-level review, original-photo and eBay checks
    // still apply. This does not record Discogs approval or enable paid checkout.
-   const scoped={...body,tenantId:tenant,tenant_id:tenant,nicheId,niche_id:nicheId,specialistIds:specialists,specialistId:body.specialistId ?? product.defaultSpecialist};
+   const scoped={...body,tenantId:tenant,tenant_id:tenant,nicheId,niche_id:nicheId,specialistIds:specialists,specialistId:requestedSpecialistId ?? requestedSpecialistAlias ?? product.defaultSpecialist,...(body.specialist_id!=null?{specialist_id:requestedSpecialistAlias}: {})};
    const headers=new Headers(request.headers);headers.set('Content-Type','application/json');headers.delete('Content-Length');
    return handler(new Request(request.url,{method:request.method,headers,body:JSON.stringify(scoped)}));
   }catch{console.error('[SWISH module scope] Authorization failed; no request payload logged.');return json('Module request could not be verified. Retry.',503);}
