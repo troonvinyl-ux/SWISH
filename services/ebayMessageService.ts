@@ -7,6 +7,12 @@ export interface EbayMessage {
 }
 export interface EbayReplyInput { messageId: string; replyText: string; buyerUsername: string; ebayItemId?: string; conversationId?: string }
 export interface EbayReplyResult { ebaySuccess: boolean; localSyncPending: boolean; message: string; error?: string }
+/** Suggested text only. Never claim order progress, dispatch or refunds without actual evidence. */
+export function suggestEbayReply(message: EbayMessage): string {
+  if (/return|refund/i.test(message.subject)) return 'Thank you for your message. Please share details of the issue so I can review your order and the available resolution options.\n\nKind regards';
+  if (/dispatch|shipping|where/i.test(message.subject)) return 'Thank you for your message. I will check the current order and tracking information and get back to you.\n\nKind regards';
+  return 'Thank you for your message. I will review your question and get back to you.\n\nKind regards';
+}
 async function invoke(route: string, tenantId: string, input: Record<string, unknown> = {}) {
   if (!tenantId.trim()) return { data: null, error: 'Business account is required.' };
   try {

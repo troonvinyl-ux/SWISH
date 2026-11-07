@@ -4,7 +4,9 @@ import {isLiveListing,isDraftListing} from './listingLifecycle';
 import {getProductionNicheSpecialistIds,resolveProductionNiche} from './nicheRouting';
 import {getSupabaseClient} from '@/template';
 import {FunctionsHttpError} from '@supabase/supabase-js';
-import {backendRead,shareBackendRequest} from './backendRequestService';
+import {backendRead,shareBackendRequest,backendDataScope} from './backendRequestService';
+import {readUnchangedInventory,rememberInventory,forgetInventory} from './inventorySnapshotReuseService';
+import {invokeScopedSync} from './syncRequestService';
 import {mapProjectedInventory} from './inventoryTabQueryService';
 import {readCanonicalInventoryCounts,type CanonicalInventoryCounts} from './canonicalInventoryService';
 export {loadInventoryTab,loadInventoryCounts} from './inventoryTabQueryService';
@@ -15,8 +17,14 @@ export async function loadInventoryView(tenantId:string,nicheId:string):Promise<
  const canonicalNiche=resolveProductionNiche(nicheId),specialists=getProductionNicheSpecialistIds(canonicalNiche);
  if(!tenantId?.trim()||!canonicalNiche||!specialists.length)return {items:[],listings:[],error:'A verified account and registered niche are required.'};
  return shareBackendRequest(`inventory-view:${tenantId}:${canonicalNiche}`,async()=>{
+  let cacheScope='';
   try{
+   const sessionScope=await backendDataScope();cacheScope=`${sessionScope}:${tenantId}:${canonicalNiche}`;
    const canonicalCounts=await readCanonicalInventoryCounts(tenantId,canonicalNiche);
+   if(await backendDataScope()!==sessionScope)throw new Error('Authenticated session changed during inventory read.');
+   // Every reuse follows a fresh paid/RLS count RPC. No old access decision grants another read.
+   const retained=readUnchangedInventory<InventoryRead>(cacheScope,canonicalCounts.revision??null);
+   if(retained)return {...retained,canonicalCounts};
    const rows:InventoryViewItem[]=[];
    for(let offset=0;offset<50000;offset+=200){
     const page=await backendRead(`canonical-items:${tenantId}:${canonicalNiche}:${offset}`,signal=>getSupabaseClient().from('swish_inventory_canonical_rows').select('*').eq('tenant_id',tenantId).in('specialist_id',specialists).order('sort_at',{ascending:false}).order('item_id',{ascending:true}).range(offset,offset+199).abortSignal(signal));
@@ -25,18 +33,20 @@ export async function loadInventoryView(tenantId:string,nicheId:string):Promise<
     if((page.data?.length??0)<200){
      const unique=[...new Map(rows.map(row=>[row.id,row])).values()];
      if(unique.length!==canonicalCounts.total)throw new Error('Inventory changed during the read. Refresh to verify the complete canonical collection.');
-     return {items:unique as Item[],listings:unique.flatMap(row=>row.listing?[row.listing]:[]),canonicalCounts,error:null};
+     if(canonicalCounts.revision){const latest=await readCanonicalInventoryCounts(tenantId,canonicalNiche);if(latest.revision!==canonicalCounts.revision)throw new Error('Inventory changed during the read. Refresh to verify the complete canonical collection.');}
+     if(await backendDataScope()!==sessionScope)throw new Error('Authenticated session changed during inventory read.');
+     const result:InventoryRead={items:unique as Item[],listings:unique.flatMap(row=>row.listing?[row.listing]:[]),canonicalCounts,error:null};
+     rememberInventory(cacheScope,canonicalCounts.revision??null,result);return result;
     }
    }
    throw new Error('Inventory exceeds the bounded query size. Narrow the scope.');
-  }catch(cause){return {items:[],listings:[],error:cause instanceof Error?cause.message:'Canonical inventory unavailable.'};}
+  }catch(cause){if(cacheScope)forgetInventory(cacheScope);return {items:[],listings:[],error:cause instanceof Error?cause.message:'Canonical inventory unavailable.'};}
  });
 }
 export function buildInventoryViews(items:Item[],listings:ListingWithItem[]):Record<InventoryTab,InventoryViewItem[]>{
  const result:Record<InventoryTab,InventoryViewItem[]>={stock:[],draft:[],live:[],sold:[]};
  const uniqueItems=[...new Map(items.map(item=>[item.id,item])).values()],identities=new Set<string>(),linksByItem=new Map<string,ListingWithItem[]>();
- // Compatibility for pure/offline callers. Current screens use server-projected
- // inventoryTab; raw relationship records are never materialised as new items.
+ // Raw relationship records never become physical inventory cards.
  const ordered=[...listings].sort((a,b)=>String(b.updatedAt??'').localeCompare(String(a.updatedAt??''))||String(b.createdAt??'').localeCompare(String(a.createdAt??''))||String(a.id).localeCompare(String(b.id)));
  for(const listing of ordered){
   const market=['ebay','ebay_gb'].includes(String(listing.marketplaceId??'').trim().toLowerCase())?'ebay':listing.marketplaceId;
@@ -56,15 +66,17 @@ export function buildInventoryViews(items:Item[],listings:ListingWithItem[]):Rec
  }
  return result;
 }
-/** One card per canonical identity, including archived/sold history. */
 export function buildAllInventoryRows(items:Item[],views:Record<InventoryTab,InventoryViewItem[]>):InventoryViewItem[]{
  const classified=new Map<string,InventoryViewItem>();
  for(const tab of ['stock','draft','live','sold'] as const)for(const row of views[tab])classified.set(row.id,row);
  return [...new Map(items.map(item=>[item.id,item])).values()].map(item=>classified.get(item.id)??{...item,canonical_title:item.canonicalTitle,specialist_id:item.specialistId,media:item.media,attributes:item.attributes});
 }
 export async function syncInventoryOrders(tenantId:string,nicheId:string):Promise<{imported:number;error:string|null}>{
- const {data,error}=await getSupabaseClient().functions.invoke('swish-ebay-orders',{body:{tenantId,nicheId,specialistIds:getProductionNicheSpecialistIds(nicheId),daysBack:90,mode:'both'}});
- if(error){let message=error.message;if(error instanceof FunctionsHttpError){try{const text=await error.context.text();const body=JSON.parse(text);message=body.error??message;}catch{/* retain transport error */}}return {imported:0,error:message};}
- if(!data?.success)return {imported:0,error:data?.error??'Order sync was not confirmed'};
- return {imported:data.imported??0,error:data.errors?.length?data.errors.join('\n'):null};
+ try{
+  const niche=resolveProductionNiche(nicheId);if(!tenantId?.trim()||!niche)return {imported:0,error:'Open a verified niche before syncing orders.'};
+  const {data,error}=await invokeScopedSync('swish-ebay-orders',{tenantId,nicheId:niche,specialistIds:getProductionNicheSpecialistIds(niche),daysBack:90,mode:'both'});
+  if(error){let message=error.message;if(error instanceof FunctionsHttpError){try{const text=await error.context.text();const body=JSON.parse(text);message=body.error??body.message??message;}catch{/* retain the transport error */}}return {imported:0,error:message};}
+  if(!data?.success)return {imported:0,error:data?.error??'Order sync was not confirmed'};
+  return {imported:data.imported??0,error:data.errors?.length?data.errors.join('\n'):null};
+ }catch(cause){return {imported:0,error:cause instanceof Error?cause.message:'Order sync did not finish. Reload before retrying.'};}
 }

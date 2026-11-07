@@ -1,3 +1,5 @@
+import { specialistNiche } from './specialistRegistry.ts';
+import { getNicheWorkflowPolicy } from './nichePolicy.ts';
 export interface ListingConfidenceGateResult {
   allowed: boolean;
   specialistId: string;
@@ -7,19 +9,7 @@ export interface ListingConfidenceGateResult {
   reason?: string;
 }
 
-const COIN_SPECIALIST_IDS = new Set([
-  'coins',
-  'coins_uk',
-  'coins_world',
-  'coins_currency',
-  'numismatic',
-  'islamic_silver',
-  'banknotes',
-  'gold',
-  'silver',
-  'jewellery_precious_metals',
-  'ancient_artefacts',
-]);
+// Registry ownership and shared workflow policy replace an independent specialist allow-list.
 
 /**
  * Server-side eBay publish policy. Coin listings require >=95% identification
@@ -35,8 +25,9 @@ export function assessListingConfidence(
   const parsed = Number(confidenceInput ?? 0);
   const confidence = Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : 0;
   const state = String(identificationStateInput ?? '').trim().toLowerCase();
-  const isCoin = COIN_SPECIALIST_IDS.has(specialistId);
-  const threshold = isCoin ? 0.95 : 0.30;
+  const nicheId = specialistNiche(specialistId);
+  const isCoin = nicheId === 'coins';
+  const threshold = getNicheWorkflowPolicy(nicheId ?? '')?.publicationMinimum ?? 0.30;
 
   if (state === 'observation_only') {
     return {

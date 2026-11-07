@@ -14,6 +14,8 @@
 // Returns 'unclassified' for ambiguous listings — never silently assigns
 // a wrong niche.
 
+import { NICHE_MODULES } from '@/constants/niches';
+import { inferImportNiche } from '@/shared/ebayImportScope';
 export type NicheClassification =
   | 'coins'         // CoinFlip — numismatics, banknotes, medals
   | 'motocross'     // MXFlip — motocross, enduro, trail, supermoto, MX parts
@@ -50,7 +52,8 @@ const CATEGORY_ID_TO_NICHE: Record<string, NicheClassification> = {
   '11116':  'coins', // Banknotes
   '14486':  'coins', // Banknotes — British
   '14487':  'coins', // Banknotes — World
-  '1469':   'coins', // Other Collectables (legacy coin listing category)
+  // '1469' is broad Other Collectables, not proof of numismatic ownership.
+  // Existing records retain their IDs; new imports require item-specific evidence.
   '4744':   'coins', // Celtic Coins
   '37968':  'coins', // Byzantine Coins
   '40717':  'coins', // Islamic Coins (Indian/Middle East)
@@ -295,6 +298,11 @@ export function classifyListing(
   const titleNiches = new Set(TITLE_NICHE_KEYWORDS
     .filter(rule => rule.patterns.some(pattern => pattern.test(titleStr)))
     .map(rule => rule.niche));
+  // Same conservative import evidence gate used by the Edge sync path.
+  const sharedCategory = inferImportNiche(catName, '');
+  const sharedTitle = inferImportNiche('', titleStr);
+  if (sharedTitle) titleNiches.add(sharedTitle as NicheClassification);
+  if (sharedCategory && [...titleNiches].some(niche => niche !== sharedCategory)) return { niche: 'unclassified', confidence: 'none', reason: 'Category and title evidence conflict; manual classification required' };
   const categoryNiche = CATEGORY_ID_TO_NICHE[catId];
   if (categoryNiche && [...titleNiches].some(niche => niche !== categoryNiche)) {
     return { niche: 'unclassified', confidence: 'none', reason: 'Category and title evidence conflict; manual classification required' };
@@ -312,8 +320,12 @@ export function classifyListing(
 
   // Also check sub-IDs from category path patterns (e.g. category path contains a known ID)
   if (catName) {
+    const pathIds = new Set(catName.match(/\b\d+\b/g) ?? []);
+    const matchedNiches = new Set([...pathIds].map(id => CATEGORY_ID_TO_NICHE[id]).filter(Boolean));
+    if (matchedNiches.size > 1) return { niche: 'unclassified', confidence: 'none', reason: 'Category path spans specialist niches; review required' };
     for (const [id, niche] of Object.entries(CATEGORY_ID_TO_NICHE)) {
-      if (catName.includes(id)) {
+      if (pathIds.has(id)) {
+        if ([...titleNiches].some(value => value !== niche)) return { niche: 'unclassified', confidence: 'none', reason: 'Category path and item evidence conflict; review required' };
         return {
           niche,
           confidence: 'category_id',
@@ -366,21 +378,8 @@ export function classifyListing(
  * Determine the specialist_id to assign to an item based on its niche classification.
  */
 export function nicheToSpecialistId(niche: NicheClassification): string {
-  switch (niche) {
-    case 'coins':         return 'coins'; // coins specialist
-    case 'motocross':     return 'motocross';
-    case 'bicycles':      return 'bicycles';
-    case 'clothing':      return 'clothing';
-    case 'trading_cards': return 'pokemon_cards';
-    case 'antiques':      return 'antiques';
-    case 'fossils':       return 'fossils';
-    case 'beauty':        return 'beauty';
-    case 'tech':          return 'tech';
-    case 'surplus_flip':  return 'surplus_trader';
-    case 'collectibles':  return 'collectibles';
-    case 'tunes_flip':    return 'vinyl_records';
-    default:              return 'curiosities_collectibles';
-  }
+  return niche !== 'unclassified' && Object.prototype.hasOwnProperty.call(NICHE_MODULES, niche)
+    ? NICHE_MODULES[niche].defaultSpecialist : 'curiosities_collectibles';
 }
 
 /**

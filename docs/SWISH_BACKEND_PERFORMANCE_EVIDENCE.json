@@ -1,0 +1,16 @@
+{
+  "status": "targeted_implementation_with_executed_sql_evidence",
+  "measurementType": "administrative_warm_cache_explain_analyze_not_subscriber_or_network_latency",
+  "sqlScope": { "tenantId": "53d169c0-8d37-4378-b8ef-84fbb3991661", "nicheId": "coins", "records": 250 },
+  "before": { "samplesMs": [53.266, 51.501, 51.121, 50.444, 51.121], "medianMs": 51.121, "p90Ms": 52.56, "sharedHitBlocks": [18138, 18105, 18105, 18105, 18105] },
+  "after": { "samplesMs": [49.687, 45.087, 46.503, 44.827, 45.009], "medianMs": 45.087, "p90Ms": 48.4134, "sharedHitBlocks": [8984, 8951, 8951, 8951, 8951] },
+  "unchangedCounts": { "total": 250, "units": 250, "stock": 22, "draft": 8, "live": 206, "sold": 14, "archived": 0, "liveListings": 206 },
+  "preservation": { "canonicalItemsBefore": 763, "canonicalItemsAfter": 763, "itemsWithMediaBefore": 758, "itemsWithMediaAfter": 758, "itemsRls": true, "listingsRls": true, "countsSecurityInvoker": true, "countAnonExecute": false, "countAuthenticatedExecute": true, "leaseAnonExecute": false, "leaseAuthenticatedExecute": false, "leaseServiceExecute": true, "noSessionCountRejected": true, "newSyncLeasesExecuted": 0 },
+  "historicalOnly": { "windowDays": 7, "listingEdgeSamples": 83, "listingEdgeMeanMs": 952.1, "listingEdgeMedianMs": 502, "listingEdgeP90Ms": 2602.8, "listingHttpFailures": 0, "syncRuns": [{ "status": "completed", "durationMs": 2144, "recordsFetched": 0 }, { "status": "failed", "durationMs": 1016, "recordsFetched": 0 }, { "status": "completed", "durationMs": 2127, "recordsFetched": 0 }] },
+  "structuralBudgetsNotExecutedMeasurements": { "frontBackPhotoDatabaseRequestsBefore": 8, "frontBackPhotoDatabaseRequestsAfter": 3, "unchangedMediaLinkRequestsBefore": 4, "unchangedMediaLinkRequestsAfter": 1, "unchangedInventoryDataPagesAfter": 0, "freshAuthorizationCountRequestsRequired": 1, "coldInventoryClosingRevisionCheckAdded": true, "syncReadConcurrencyBefore": 1, "syncReadConcurrencyAfter": 3 },
+  "indexesAdded": [],
+  "tests": { "sqlSampling": "executed", "sqlSecurityObservations": "executed", "jest": "not_executed", "typescript": "not_executed", "edgeTypechecks": "not_executed", "authenticatedDeviceAndWeb": "not_executed", "liveSyncLease": "not_executed", "liveProviderAfterTimings": "not_executed" },
+  "afterRuntimePercentiles": { "apiMedianMs": null, "uploadMedianMs": null, "identifyMedianMs": null, "listingMedianMs": null, "syncMedianMs": null, "captureToLiveMedianMs": null, "captureToLiveP90Ms": null },
+  "under60SecondsCertified": false,
+  "report": "docs/SWISH_BACKEND_PERFORMANCE.md"
+}

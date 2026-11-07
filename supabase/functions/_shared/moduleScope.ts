@@ -4,11 +4,20 @@ import { corsHeaders } from './cors.ts';
 import { normalizeIdentifySpecialist } from './identifySpecialistCompatibility.ts';
 import { moduleRequestAliasIssue, MODULE_RESOURCE_ALIASES } from './moduleRequestContract.ts';
 import { nicheBarcodeAllowed } from './nichePolicy.ts';
+import { withEdgeFunctionLogging, isEdgeFunctionLogged } from './edgeFunctionLogging.ts';
 type Handler = (request: Request) => Response | Promise<Response>;
 const json = (message: string, status: number) => new Response(JSON.stringify({ error: message }), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ownerRoutes = new Set(['get_api_usage','sync_categories','rebuild_cache','diagnostics','get_funds_summary','get_payouts']);
-export function serveModule(handler: Handler) { Deno.serve(withModuleScope(handler)); }
+export function serveModule(handler: Handler) {
+ const scoped=withModuleScope(handler);
+ Deno.serve(request=>{
+  // Retain already-instrumented listing/status handlers without double counting.
+  if(isEdgeFunctionLogged(handler))return scoped(request);
+  const name=new URL(request.url).pathname.split('/').pop()??'module';
+  return withEdgeFunctionLogging(name,scoped)(request);
+ });
+}
 export function withModuleScope(handler: Handler): Handler {
  return async request => {
   if(request.method==='OPTIONS') return new Response(null,{headers:corsHeaders});
