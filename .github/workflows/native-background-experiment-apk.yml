@@ -11,6 +11,7 @@ on:
       - 'test-lab-app/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
+      - 'tsconfig.native-background-experiment.json'
 permissions:
   contents: read
 jobs:
@@ -33,7 +34,7 @@ jobs:
         run: |
           test -f services/nativeBackgroundCompositor.ts
           test -f services/nativeSegmentationEngine.ts
-          pnpm exec tsc --noEmit --pretty false
+          pnpm exec tsc --project tsconfig.native-background-experiment.json --noEmit --pretty false
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
