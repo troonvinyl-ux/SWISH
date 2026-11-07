@@ -2,18 +2,23 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useApp } from './useApp';
 import { useTunesCatalogue } from './useTunesCatalogue';
 import { musicGrade, isFreshMusicRelease } from '@/shared/musicRelease';
-import { musicCaptureResult, musicCaptureSlots, musicDiscCount, retainedMusicSlots, switchMusicCaptureMode } from '@/services/musicCaptureService';
+import { musicCaptureResult, musicDiscCount, retainedMusicSlots, switchMusicCaptureMode } from '@/services/musicCaptureService';
 import { useAuth, useAlert } from '@/template';
-import { captureFromCamera, pickFromLibrary, identifyItemWithAI, saveIdentifiedItem, uploadItemImages, updateItemMedia, saveCoinReferenceImages, prepareImageForAI, type AIIdentificationResult, type CapturedImage } from '@/services/aiIdentificationService';
+import { captureFromCamera, pickFromLibrary, identifyItemWithAI, saveIdentifiedItem, saveCoinReferenceImages, prepareImageForAI, type AIIdentificationResult, type CapturedImage } from '@/services/aiIdentificationService';
 import { getMarketValue, type MarketValueResult } from '@/services/marketValueService';
 import { saveCaptureValuation } from '@/services/captureValuationService';
-import { SPECIALISTS, type SpecialistId } from '@/constants/specialists';
+import type { SpecialistId } from '@/constants/specialists';
 import { getSpecialistProfile } from '@/shared/specialistIntelligence';
-import { persistCaptureDraft, retainCaptureImage, type CaptureDraft } from '@/services/captureDraftService';
+import { persistCaptureDraft, readCaptureDraft, retainCaptureImage, type CaptureDraft } from '@/services/captureDraftService';
+import { getItem } from '@/services/itemService';
 import { createEmptyCaptureDraft as emptyDraft } from '@/services/scannerSessionService';
 import { useScannerSession } from './useScannerSession';
 import { inspectPhotoQuality } from '@/services/photoQualityService';
 import { prepareCapturedImages } from '@/services/sharedImagePreparationService';
+import { captureCanonicalId } from '@/services/captureIdentityService';
+import { nicheCaptureSlots } from '@/services/nicheCaptureService';
+import { persistCapturedItemPhotos } from '@/services/photoPersistenceService';
+import { isProductionNiche } from '@/constants/niches';
 
 export function useGenericCapture(){
  const tunes=useTunesCatalogue();
@@ -25,6 +30,7 @@ export function useGenericCapture(){
  const tunesRef=useRef(tunes);tunesRef.current=tunes;
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;};},[]);
  const [draft,setDraft]=useState<CaptureDraft>(emptyDraft(activeNiche.defaultSpecialist));const [loadedScope,setLoadedScope]=useState('');
+ const [recovery,setRecovery]=useState<{storageScope:string;draft:CaptureDraft}|null>(null);
  const [busy,setBusy]=useState(false);const [market,setMarket]=useState<MarketValueResult|null>(null);const [phase,setPhase]=useState('');const [error,setError]=useState<string|null>(null);const [allowPhotoWarnings,setAllowPhotoWarnings]=useState(false);
  const profile=getSpecialistProfile(activeNiche.id);const ready=Boolean(scope)&&loadedScope===scope;const visible=ready?draft:emptyDraft(activeNiche.defaultSpecialist);const specialistId=visible.specialistId as SpecialistId;
  const music=activeNiche.id==='tunes_flip';
@@ -32,20 +38,19 @@ export function useGenericCapture(){
  const musicRelease=!ready?null:music&&tunes.ready&&tunes.state.release&&!tunes.state.confirmed?null:music&&tunes.ready&&tunes.state.confirmed&&isFreshMusicRelease(tunes.state.release)?tunes.state.release:visible.musicRelease;
  const catalogueConfirmed=music&&isFreshMusicRelease(musicRelease);
  const discCount=musicDiscCount(visible.answers.observed_disc_count)??(catalogueConfirmed?musicRelease?.discCount:null)??1;
- const slots=useMemo(()=>music?retainedMusicSlots(musicCaptureSlots(visible.mode,discCount),visible.images):visible.mode==='part'?[
-  {id:'main',label:'Complete component',description:'Show shape, mounting points and included hardware',required:true},
-  {id:'part_number',label:'Part number / label',description:'Read the full stamped or printed model number',required:true},
-  {id:'mounts',label:'Mounts and connections',description:'Show mounts, connectors and scale',required:false},
-  {id:'condition',label:'Wear / damage',description:'Show damage, corrosion and missing parts',required:false},
- ]:SPECIALISTS[specialistId]?.captureRequirements??[],[music,visible.mode,discCount,visible.images,specialistId]);
+ const slots=useMemo(()=>{
+  if(!isProductionNiche(activeNiche.id))return [];
+  const shared=nicheCaptureSlots(activeNiche.id,specialistId,visible.mode,discCount);
+  return music?retainedMusicSlots(shared,visible.images):shared;
+ },[activeNiche.id,music,visible.mode,discCount,visible.images,specialistId]);
  useEffect(()=>{
   // Every entry starts a new physical item, even when Expo keeps the tab mounted.
   const fresh=emptyDraft(activeNiche.defaultSpecialist);
   lock.current=false;setDraft(fresh);setMarket(null);setError(null);setPhase('');setBusy(false);setLoadedScope(scope);setAllowPhotoWarnings(false);
-  if(scope&&user&&tenant){void persistCaptureDraft(storageScope,fresh).catch(()=>{if(current.current===scope)setError('Local scan state could not be cleared. Saved inventory is unchanged.');});}
+  if(scope&&user&&tenant){void readCaptureDraft(storageScope).then(saved=>{if(current.current===scope)setRecovery(saved&&(saved.images.length||saved.savedId)?{storageScope,draft:saved}:null);}).catch(()=>{if(current.current===scope)setError('Retained scan could not be read. Saved inventory is unchanged.');});}
   return()=>{if(scope&&music)tunesRef.current.reset();};
  },[scope,storageScope,activeNiche.defaultSpecialist,music,user?.id,tenant?.id,current]);
- useEffect(()=>{if(!ready||!user||!tenant)return;const timer=setTimeout(()=>{if(!isCurrentSession())return;void persistCaptureDraft(storageScope,draft).catch(()=>{if(isCurrentSession())setError('Draft could not be retained on this device. Keep this screen open and retry.');});},250);return()=>clearTimeout(timer);},[draft,ready,scope,storageScope,user?.id,tenant?.id,isCurrentSession]);
+ useEffect(()=>{if(!ready||!user||!tenant||(!draft.images.length&&!draft.result&&!draft.savedId))return;const timer=setTimeout(()=>{if(!isCurrentSession())return;void persistCaptureDraft(storageScope,draft).catch(()=>{if(isCurrentSession())setError('Draft could not be retained on this device. Keep this screen open and retry.');});},250);return()=>clearTimeout(timer);},[draft,ready,scope,storageScope,user?.id,tenant?.id,isCurrentSession]);
  // Confirmed catalogue fields reach the review immediately without another identification request.
  // The timestamped CC0 snapshot belongs to this physical-item scan visit only.
  useEffect(()=>{
@@ -68,8 +73,12 @@ export function useGenericCapture(){
   if(!isCurrentSession())return;
   const photoQuality=selected.photoQuality??await inspectPhotoQuality(retained.uri);
   const image={...retained,photoQuality};
-  if(isCurrentSession()){setMarket(null);setAllowPhotoWarnings(false);setDraft(previous=>({...previous,images:[...previous.images.filter(row=>row.slotId!==slotId),image],result:null}));}
- },[slots,isCurrentSession]);
+  if(isCurrentSession()){
+   const next={...visible,images:[...visible.images.filter(row=>row.slotId!==slotId),image],result:null};
+   await persistCaptureDraft(storageScope,next);
+   if(isCurrentSession()){setMarket(null);setAllowPhotoWarnings(false);setDraft(next);}
+  }
+ },[slots,isCurrentSession,visible,storageScope]);
  const capture=useCallback(async(slotId:string,library:boolean)=>{
   const slot=slots.find(row=>row.id===slotId);if(!isCurrentSession()||!slot||lock.current||!ready||visible.savedId)return;
   if(visible.images.length>=8&&!visible.images.some(image=>image.slotId===slotId)){setError('Eight original views are retained. Remove an unwanted view before adding another.');return;}
@@ -134,16 +143,17 @@ export function useGenericCapture(){
   if(music&&result&&(!musicGrade(String(result.attributes.media_grade))||!musicGrade(String(result.attributes.sleeve_grade))||(result.attributes.discogs_pressing_confirmed!==true&&!/^yes$/i.test(String(result.attributes.pressing_reviewed))))){setError('Confirm the exact pressing (Discogs or manual review) and separate media/sleeve grades before saving.');return;}
   if(result&&!activeNiche.specialists.includes(result.specialistId)){setError('This result belongs to another specialist. Nothing was saved.');return;}
   if(!tenant||!result||lock.current||!ready||!result.canonicalTitle.trim())return;
-  if(music&&!visible.savedId){
+  if(!visible.savedId){
    const missing=slots.filter(slot=>slot.required&&!visible.images.some(image=>image.slotId===slot.id));if(missing.length){setError(`Add the required photographs: ${missing.map(slot=>slot.label).join(', ')}.`);return;}
-   if(visible.mode==='cd_box_set'&&!musicDiscCount(visible.answers.observed_disc_count)){setError('Enter the whole number of discs physically present; catalogue disc count does not confirm completeness.');return;}
+   if(music&&visible.mode==='cd_box_set'&&!musicDiscCount(visible.answers.observed_disc_count)){setError('Enter the whole number of discs physically present; catalogue disc count does not confirm completeness.');return;}
   }
   lock.current=true;setBusy(true);setPhase(visible.savedId?'Retrying saved media':'Saving reviewed inventory');setError(null);let id=visible.savedId;
   try{
    if(!id){
     const cost=Number(visible.answers._acquired_cost??0);const quantity=Number(visible.answers._quantity??1);
     if(!Number.isFinite(cost)||cost<0||!Number.isInteger(quantity)||quantity<1)throw new Error('Enter a non-negative acquisition cost and a whole quantity of at least one.');
-    const response=await saveIdentifiedItem(tenant.id,result,{mediaUris:[],acquiredCost:cost,quantity});
+    const canonicalItemId=await captureCanonicalId(tenant.id,activeNiche.id,scope);
+    const response=await saveIdentifiedItem(tenant.id,result,{mediaUris:[],acquiredCost:cost,quantity,canonicalItemId,captureSessionId:scope});
     if(response.error||!response.item)throw new Error(response.error??'Inventory save not confirmed.');
     id=response.item.id;const savedDraft={...visible,result,savedId:id};
     if(current.current===scope){setDraft(savedDraft);await persistCaptureDraft(storageScope,savedDraft).catch(()=>{if(isCurrentSession())setError('Inventory is saved, but local retry state could not be retained. Keep this screen open or open the saved item.');});if(isCurrentSession())triggerInventoryReload();}
@@ -151,14 +161,17 @@ export function useGenericCapture(){
    // Finish linking the original record if navigation occurs during a save.
    // Its captured tenant/item IDs remain fixed; it cannot populate the new scanner.
    if(isCurrentSession())setPhase('Uploading and linking original photographs');
-   const upload=await uploadItemImages(id,visible.images,true);
-   if(upload.urls.length){await updateItemMedia(tenant.id,id,upload.urls);if(isCurrentSession())triggerInventoryReload();}
-   if(upload.errors.length||upload.urls.length!==visible.images.length)throw new Error(`Inventory is saved; some original photos need retry. ${upload.errors.join(' ')} Retry here without creating another item.`);
+   const upload=await persistCapturedItemPhotos(tenant.id,id,visible.images);
+   if(isCurrentSession())triggerInventoryReload();
+   if(!upload.complete||upload.urls.length!==visible.images.length)throw new Error(`Inventory is saved; some original photos need retry. ${upload.errors.join(' ')} Retry here without creating another item.`);
    if(market){const failure=await saveCaptureValuation(tenant.id,id,market);if(failure)throw new Error(`Original photos are saved, but valuation could not be linked: ${failure} Retry here without creating another item.`);}
    const references=await saveCoinReferenceImages(tenant.id,id,visible.images);
    if(references.errors.length)throw new Error('Original photos are saved. Some viewing aids could not be linked. Retry here without creating another item.');
    if(isCurrentSession())triggerInventoryReload();
-  }catch(cause:unknown){if(isCurrentSession())setError(cause instanceof Error?cause.message:'Save failed.');}finally{if(isCurrentSession()){lock.current=false;setBusy(false);setPhase('');}}
+  }catch(cause:unknown){if(isCurrentSession())setError(cause instanceof Error?cause.message:'Save failed.');}finally{
+   if(id)await persistCaptureDraft(storageScope,{...visible,result,savedId:id,images:visible.images}).catch(()=>{if(isCurrentSession())setError('Inventory is saved, but local photo retry state could not be retained. Keep this screen open.');});
+   if(isCurrentSession()){setDraft(previous=>({...previous,images:[...visible.images]}));lock.current=false;setBusy(false);setPhase('');}
+  }
  },[tenant?.id,ready,visible,scope,current,storageScope,reviewedResult,triggerInventoryReload,activeNiche,market,music,slots,isCurrentSession]);
  const retryStudio=useCallback(async()=>{
   if(!isCurrentSession()||busy||!ready||lock.current||!tenant)return;lock.current=true;setBusy(true);setError(null);setPhase('Removing backgrounds with BackgroundErase; originals retained');
@@ -166,11 +179,20 @@ export function useGenericCapture(){
   catch(cause:unknown){if(isCurrentSession())setError(cause instanceof Error?cause.message:'Studio preparation failed. Original photographs are unchanged.');}
   finally{if(isCurrentSession()){lock.current=false;setBusy(false);setPhase('');}}
  },[busy,ready,tenant?.id,visible.images,activeNiche.id,isCurrentSession]);
+ const resume=useCallback(async()=>{
+  if(!isCurrentSession()||busy||lock.current||!recovery||recovery.storageScope!==storageScope||!tenant)return;
+  lock.current=true;setBusy(true);setError(null);
+  try{const saved=recovery.draft;if(!activeNiche.specialists.includes(saved.specialistId as SpecialistId))throw new Error('Retained scan belongs to another specialist.');
+   if(saved.savedId){const checked=await getItem(saved.savedId);if(checked.error||!checked.item||checked.item.tenantId!==tenant.id||!activeNiche.specialists.includes(checked.item.specialistId))throw new Error('Retained inventory ownership could not be verified.');}
+   if(isCurrentSession()){setDraft(saved);setRecovery(null);setMarket(null);}
+  }catch(cause){if(isCurrentSession())setError(cause instanceof Error?cause.message:'Retained scan could not be resumed.');}
+  finally{if(isCurrentSession()){lock.current=false;setBusy(false);}}
+ },[busy,recovery,storageScope,tenant?.id,activeNiche,isCurrentSession]);
  const reset=useCallback(()=>{
   if(busy||lock.current||!isCurrentSession())return;
   const clear=()=>{if(!isCurrentSession())return;if(music)tunesRef.current.reset();restart();};
   if(visible.savedId||(!visible.images.length&&!visible.result))clear();
   else showAlert('Start a new scan?','Clear this scan’s photos and identification. Saved inventory items are not changed.',[{text:'Keep scan',style:'cancel'},{text:'New scan',style:'destructive',onPress:clear}]);
  },[busy,music,visible.savedId,visible.images.length,visible.result,showAlert,restart,isCurrentSession]);
- return {sessionId:scope,isCurrentSession,market:ready?market:null,value,retryStudio,allowPhotoWarnings:ready?allowPhotoWarnings:false,setAllowPhotoWarnings,activeNiche,profile,slots,images:visible.images,addCapturedPhoto,removeCapturedPhoto,result,catalogueConfirmed,catalogueExpired:music&&Boolean(visible.musicRelease)&&!isFreshMusicRelease(visible.musicRelease),discCount,busy:busy||!ready,savedId:visible.savedId,error:ready?error:null,phase:ready?phase:'',answers:visible.answers,mode:visible.mode,specialistId,capture,identify,save,reset,answer,correctTitle,changeMode,changeSpecialist};
+ return {sessionId:scope,isCurrentSession,resume,recoveryAvailable:recovery?.storageScope===storageScope&&!visible.images.length,market:ready?market:null,value,retryStudio,allowPhotoWarnings:ready?allowPhotoWarnings:false,setAllowPhotoWarnings,activeNiche,profile,slots,images:visible.images,addCapturedPhoto,removeCapturedPhoto,result,catalogueConfirmed,catalogueExpired:music&&Boolean(visible.musicRelease)&&!isFreshMusicRelease(visible.musicRelease),discCount,busy:busy||!ready,savedId:visible.savedId,error:ready?error:null,phase:ready?phase:'',answers:visible.answers,mode:visible.mode,specialistId,capture,identify,save,reset,answer,correctTitle,changeMode,changeSpecialist};
 }

@@ -8,6 +8,8 @@ import { isLiveListing } from '@/services/listingLifecycle';
 import { evaluateSpecialistSafety } from '@/shared/specialistIntelligence';
 import { resolveProductionNiche } from '@/services/nicheRouting';
 import { backendRead, shareBackendRequest } from './backendRequestService';
+import { readListingPublication, type ListingPublication } from './listingPublicationService';
+import { readCanonicalInventoryCounts } from './canonicalInventoryService';
 
 export interface GeneratedListing {
   title: string;
@@ -405,10 +407,7 @@ export async function getLiveListingCount(tenantId: string, specialistIds?: stri
   const niches=[...new Set(specialistIds.map(resolveProductionNiche))];
   if (niches.length !== 1 || !niches[0]) throw new Error('A single registered inventory niche is required');
   // Shares the same one-pass server aggregate as the tab counters. Failures are not zero stock.
-  const { data } = await backendRead(`tab-counts:${tenantId}:${niches[0]}`, signal => getSupabaseClient().rpc('swish_inventory_tab_counts', { p_tenant_id:tenantId,p_niche_id:niches[0] }).abortSignal(signal));
-  const count=Number(data?.live);
-  if (!Number.isSafeInteger(count) || count<0) throw new Error('Live inventory count unavailable');
-  return count;
+  return (await readCanonicalInventoryCounts(tenantId,niches[0])).liveListings;
 }
 
 // ── One-step verify + publish ──────────────────────────────────────────────────
@@ -469,6 +468,37 @@ export interface SubmitResult {
   error?: string;
   publishedAt?: string;
   externalListingId?: string;
+  // Provider acceptance and local reconciliation are separate outcomes.
+  accepted?: boolean;
+  reconciliationPending?: boolean;
+  publicationUnconfirmed?: boolean;
+}
+
+export function publicationSubmitResult(publication: ListingPublication): SubmitResult {
+  return { success: publication.live, step: publication.live ? 'done' : 'failed', accepted: publication.recorded,
+    reconciliationPending: !publication.reconciled, externalListingId: publication.externalListingId,
+    publishedAt: publication.publishedAt,
+    warnings: !publication.reconciled ? ['Published on eBay. SWISH stock synchronisation is pending; do not submit again.'] : [],
+    ...(publication.live ? {} : { error: 'This item already has a saved eBay listing. Check its current status; do not submit it again.' }) };
+}
+
+async function acceptedPublication(tenantId: string, listingId: string, externalListingId: string, publishedAt?: string, warnings: string[] = []): Promise<SubmitResult> {
+  let confirmed = false;
+  // Bounded READ retries only. Never retry the marketplace creation request.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const checked = await readListingPublication(tenantId, listingId);
+    confirmed = Boolean(checked.publication?.live && checked.publication.reconciled && checked.publication.externalListingId === externalListingId);
+    if (confirmed) break;
+    if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 200));
+  }
+  return { success: true, accepted: true, step: 'done', externalListingId, publishedAt,
+    reconciliationPending: !confirmed, warnings: [...warnings, ...(!confirmed ? ['Published on eBay. SWISH stock synchronisation is pending; do not submit again.'] : [])] };
+}
+async function unconfirmedPublication(tenantId: string, listingId: string): Promise<SubmitResult> {
+  const checked = await readListingPublication(tenantId, listingId);
+  if (checked.publication?.recorded) return publicationSubmitResult(checked.publication);
+  return { success: false, step: 'failed', publicationUnconfirmed: true,
+    error: 'Publication outcome is not yet confirmed. Check the existing listing or synchronise eBay; do not submit again or create a duplicate.' };
 }
 
 // ── Delete a listing from SWISH DB (and optionally end it on eBay first) ────────
@@ -509,7 +539,23 @@ export async function deleteListing(
   return { error: null };
 }
 
-export async function submitListingToMarketplace(
+// Collapse duplicate taps/callers to one publish operation for the saved draft.
+const submissionsInFlight = new Map<string, Promise<SubmitResult>>();
+export function submitListingToMarketplace(
+  tenantId: string, listingId: string, onStep?: (step: SubmitStep) => void,
+  auctionParams?: { listingType?: ListingFormat; auctionDays?: number; startPrice?: number; reservePrice?: number },
+): Promise<SubmitResult> {
+  const key = `${tenantId}:${listingId}`;
+  const existing = submissionsInFlight.get(key);
+  if (existing) return existing;
+  const pending = performListingSubmission(tenantId, listingId, onStep, auctionParams)
+    .catch((): SubmitResult => ({ success: false, step: 'failed', error: 'Listing checks could not be completed. Reopen the saved draft.' }))
+    .finally(() => submissionsInFlight.delete(key));
+  submissionsInFlight.set(key, pending);
+  return pending;
+}
+
+async function performListingSubmission(
   tenantId: string,
   listingId: string,
   onStep?: (step: SubmitStep) => void,
@@ -521,6 +567,11 @@ export async function submitListingToMarketplace(
   }
 ): Promise<SubmitResult> {
   const supabase = getSupabaseClient();
+  const before = await readListingPublication(tenantId, listingId);
+  if (before.error || !before.publication) return { success: false, step: 'failed', error: before.error ?? 'Saved listing status unavailable.' };
+  if (before.publication.recorded) return publicationSubmitResult(before.publication);
+  if (before.publication.claimPending || before.publication.externalListingId || ['active', 'live'].includes(before.publication.status)) return {
+    success: false, step: 'failed', publicationUnconfirmed: true, error: 'An existing publication needs checking. Synchronise eBay instead of submitting again.' };
 
   // ── Step 1: Verify ──────────────────────────────────────────────────────────
   onStep?.('verifying');
@@ -555,12 +606,16 @@ export async function submitListingToMarketplace(
   // fallback may fail for numismatic titles. Resolve and persist it here first.
   onStep?.('checking_policies');
 
-  const { data: listingRow, error: listingReadError } = await supabase
-    .from('listings')
-    .select('category_id, items(attributes, specialist_id)')
-    .eq('id', listingId)
-    .eq('tenant_id', tenantId)
-    .maybeSingle();
+  // These independent READS share the captured tenant; no write or publication
+  // runs until all existing identity, specialist and policy checks below pass.
+  const [listingRead, connectorRead] = await Promise.all([
+    supabase.from('listings').select('category_id, items(attributes, specialist_id)')
+      .eq('id', listingId).eq('tenant_id', tenantId).maybeSingle(),
+    supabase.from('marketplace_connectors')
+      .select('selected_fulfillment_policy_id, selected_return_policy_id')
+      .eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle(),
+  ]);
+  const { data: listingRow, error: listingReadError } = listingRead;
 
   // Resolve the stored category ID from the listing or item attributes.
   // DO NOT auto-assign specialist fallback IDs — they have NOT been validated
@@ -609,12 +664,8 @@ export async function submitListingToMarketplace(
   }
 
   // Check business policies are selected
-  const { data: connRow } = await supabase
-    .from('marketplace_connectors')
-    .select('selected_fulfillment_policy_id, selected_return_policy_id')
-    .eq('tenant_id', tenantId)
-    .eq('marketplace_id', 'ebay')
-    .maybeSingle();
+  const { data: connRow, error: connectorError } = connectorRead;
+  if (connectorError) return { success: false, step: 'failed', error: 'eBay policies could not be read. Retry the saved draft; no publication was requested.' };
 
   if (!connRow?.selected_fulfillment_policy_id) {
     return {
@@ -635,12 +686,15 @@ export async function submitListingToMarketplace(
 
   // ── Step 3: Notify category resolution is happening (inside edge fn) ─────────
   onStep?.('resolving_category');
-  await new Promise(r => setTimeout(r, 300)); // brief pause so UI registers the step
+  // Progress is state-driven; no artificial pause on the commercial critical path.
 
   // ── Step 4: Submit to eBay via real API call ────────────────────────────────
   onStep?.('publishing');
 
-  const { data: ebayData, error: ebayError } = await supabase.functions.invoke('swish-ebay-list', {
+  let ebayData: any = null;
+  let ebayError: any = null;
+  try {
+  const response = await supabase.functions.invoke('swish-ebay-list', {
     body: {
       tenantId,
       listingId,
@@ -653,12 +707,17 @@ export async function submitListingToMarketplace(
       categoryId: storedCategoryId || undefined,
     },
   });
+  ebayData = response.data; ebayError = response.error;
+  } catch { return unconfirmedPublication(tenantId, listingId); }
 
   if (ebayError) {
     let msg = ebayError.message;
+    let errorPayload: any = null;
+    let errorStatus = 0;
     if (ebayError instanceof FunctionsHttpError) {
       try {
         const statusCode = ebayError.context?.status ?? 0;
+        errorStatus = statusCode;
         const t = await ebayError.context?.text();
         if (t) {
           // Handle raw HTML 504 gateway responses — never show HTML to the user
@@ -667,6 +726,7 @@ export async function submitListingToMarketplace(
           } else {
             try {
               const parsed = JSON.parse(t);
+              errorPayload = parsed;
               msg = parsed.error ?? parsed.message ?? t;
             } catch {
               msg = t.slice(0, 300);
@@ -677,15 +737,20 @@ export async function submitListingToMarketplace(
         }
       } catch {}
     }
-    return {
-      success: false,
-      step: 'failed',
-      verificationPassed: true,
-      error: msg,
-    };
+    if (errorPayload?.accepted === true && /^\d+$/.test(String(errorPayload.externalListingId ?? ''))) {
+      const result = await acceptedPublication(tenantId, listingId, String(errorPayload.externalListingId), errorPayload.publishedAt, errorPayload.warnings ?? []);
+      onStep?.('done'); return result;
+    }
+    if (!errorStatus || errorStatus >= 500 || errorPayload?.code === 'PUBLISH_RECONCILIATION_REQUIRED') return unconfirmedPublication(tenantId, listingId);
+    return { success: false, step: 'failed', verificationPassed: true, error: msg };
   }
 
   if (!ebayData?.success) {
+    if (ebayData?.accepted === true && /^\d+$/.test(String(ebayData.externalListingId ?? ''))) {
+      const result = await acceptedPublication(tenantId, listingId, String(ebayData.externalListingId), ebayData.publishedAt, ebayData.warnings ?? []);
+      onStep?.('done'); return result;
+    }
+    if (!ebayData || ebayData?.code === 'PUBLISH_RECONCILIATION_REQUIRED') return unconfirmedPublication(tenantId, listingId);
     return {
       success: false,
       step: 'failed',
@@ -695,26 +760,11 @@ export async function submitListingToMarketplace(
     };
   }
 
-  if (nicheId) {
-    const { data: persisted, error: persistenceError } = await supabase.from('listings').select('external_listing_id,status,items!inner(status)').eq('id', listingId).eq('tenant_id', tenantId).maybeSingle();
-    if (!ebayData.externalListingId || persistenceError || persisted?.external_listing_id !== ebayData.externalListingId || persisted?.status !== 'active' || !['listed','active'].includes((persisted?.items as any)?.status)) {
-      return { success: false, step: 'failed', externalListingId: ebayData.externalListingId, error: 'eBay accepted the item but SWISH reconciliation is not confirmed. Do not republish or create a duplicate. Synchronise this listing and inspect its saved ID.', warnings: ebayData.warnings };
-    }
-  }
+  if (!/^\d+$/.test(String(ebayData.externalListingId ?? ''))) return unconfirmedPublication(tenantId, listingId);
+  const accepted = await acceptedPublication(tenantId, listingId, String(ebayData.externalListingId), ebayData.publishedAt,
+    [...(verification.warnings ?? []), ...verificationAdvisories, ...(ebayData.warnings ?? [])]);
   onStep?.('done');
-
-  return {
-    success: true,
-    step: 'done',
-    verificationPassed: true,
-    warnings: [
-      ...(verification.warnings ?? []),
-      ...verificationAdvisories,
-      ...(ebayData.warnings ?? []),
-    ],
-    publishedAt: ebayData.publishedAt,
-    externalListingId: ebayData.externalListingId,
-  };
+  return { ...accepted, verificationPassed: true };
 }
 
 
@@ -728,6 +778,8 @@ export interface OneTapListingResult {
   error: string | null;
   warnings: string[];
   externalListingId?: string;
+  publicationUnconfirmed?: boolean;
+  reconciliationPending?: boolean;
 }
 
 export async function publishGeneratedListing(
@@ -754,7 +806,9 @@ export async function publishGeneratedListing(
     return {
       listing: saved,
       success: false,
-      error: published.error ?? 'eBay did not confirm publication. The saved draft is available to retry.',
+      error: published.error ?? 'Publication needs checking. Reopen the saved listing before any further action.',
+      externalListingId: published.externalListingId,
+      publicationUnconfirmed: published.publicationUnconfirmed || published.accepted,
       warnings: published.warnings ?? [],
     };
   }
@@ -765,6 +819,7 @@ export async function publishGeneratedListing(
     error: null,
     warnings: published.warnings ?? [],
     externalListingId: published.externalListingId,
+    reconciliationPending: published.reconciliationPending,
   };
 }
 

@@ -20,6 +20,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
+import { useModuleOperationGuard } from '@/hooks/useModuleOperationGuard';
 import { getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 import { useAlert } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
@@ -520,6 +521,12 @@ const dm = StyleSheet.create({
 // ── Main Screen ────────────────────────────────────────────────────────────────
 
 export default function OrdersScreen() {
+  const guard = useModuleOperationGuard();
+  return <OrdersContent key={guard.scope}/>;
+}
+function OrdersContent() {
+  const { scope, ready, isCurrent } = useModuleOperationGuard();
+  const loadVersion = useRef(0);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { tenant, activeNicheId, fixedNicheId } = useApp();
@@ -553,7 +560,8 @@ export default function OrdersScreen() {
   // ── Load ─────────────────────────────────────────────────────────────────
 
   const load = useCallback(async () => {
-    if (!tenant) {
+    const version = ++loadVersion.current;
+    if (!tenant || !ready || !isCurrent(scope)) {
       setOrders([]);
       setLoadError('Your SWISH workspace is not ready. Return to the dashboard and try again.');
       setLoading(false);
@@ -564,18 +572,18 @@ export default function OrdersScreen() {
     setOrders([]);
     try {
       const { orders: data, error } = await getAllOrders(tenant.id, undefined, specialistIds);
+      if (!isCurrent(scope) || version !== loadVersion.current) return;
       if (error) {
         setLoadError(error);
         return;
       }
       setOrders(data);
     } catch (error: unknown) {
-      setLoadError(error instanceof Error ? error.message : 'Please try again.');
+      if (isCurrent(scope) && version === loadVersion.current) setLoadError(error instanceof Error ? error.message : 'Please try again.');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isCurrent(scope) && version === loadVersion.current) { setLoading(false); setRefreshing(false); }
     }
-  }, [tenant?.id, effectiveNicheId, specialistIds]);
+  }, [tenant?.id, effectiveNicheId, specialistIds, scope, ready, isCurrent]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -638,13 +646,14 @@ export default function OrdersScreen() {
   // ── Import eBay orders ─────────────────────────────────────────────────────
 
   const handleImportOrders = useCallback(async () => {
-    if (!tenant) return;
+    if (!tenant || !isCurrent(scope)) return;
     setImportingOrders(true);
     try {
       const supabase = getSupabaseClient();
       const { data, error } = await supabase.functions.invoke('swish-ebay-orders', {
-        body: { tenantId: tenant.id, daysBack: 90 },
+        body: { tenantId: tenant.id, nicheId: effectiveNicheId, daysBack: 90 },
       });
+      if (!isCurrent(scope)) return;
       if (error) {
         let msg = error.message;
         if (error instanceof FunctionsHttpError) {
@@ -671,11 +680,11 @@ export default function OrdersScreen() {
       // Order rows may have been committed even when a later status refresh failed.
       await load();
       const isPartial = partial || quantityStatusPending > 0 || (Array.isArray(errors) && errors.length > 0);
-      showAlert(isPartial ? 'Import Partially Complete' : 'Sync Complete', lines.join('\n'));
+      if (isCurrent(scope)) showAlert(isPartial ? 'Import Partially Complete' : 'Sync Complete', lines.join('\n'));
     } finally {
-      setImportingOrders(false);
+      if (isCurrent(scope)) setImportingOrders(false);
     }
-  }, [tenant, showAlert, load]);
+  }, [tenant, showAlert, load, scope, isCurrent, effectiveNicheId]);
 
   // ── Advance status ─────────────────────────────────────────────────────────
 
@@ -690,7 +699,9 @@ export default function OrdersScreen() {
         {
           text: 'Confirm',
           onPress: async () => {
+            if (!isCurrent(scope)) return;
             const { error } = await updateOrderFulfilmentStatus(order.id, next);
+            if (!isCurrent(scope)) return;
             if (error) { showAlert('Error', error); return; }
             setOrders(prev => prev.map(o =>
               o.id === order.id ? { ...o, fulfilmentStatus: next } : o
@@ -699,7 +710,7 @@ export default function OrdersScreen() {
         },
       ]
     );
-  }, [showAlert]);
+  }, [showAlert, scope, isCurrent]);
 
   // ── Dispatch ───────────────────────────────────────────────────────────────
 
@@ -717,7 +728,7 @@ export default function OrdersScreen() {
     carrier: string;
     photoUrl: string;
   }) => {
-    if (!dispatchOrder || !tenant) return;
+    if (!dispatchOrder || !tenant || !isCurrent(scope)) return;
 
     // Call eBay Fulfillment API via edge function — REAL eBay update
     // SWISH only marks dispatched if eBay confirms
@@ -728,12 +739,14 @@ export default function OrdersScreen() {
           route: 'dispatch',
           tenantId: tenant.id,
           orderId: dispatchOrder.id,
+          nicheId: effectiveNicheId,
           carrier: carrier || 'Royal Mail',
           trackingNumber: tracking || '',
           ...(photoUrl ? { dispatchPhotoUrl: photoUrl } : {}),
         },
       });
 
+      if (!isCurrent(scope)) return;
       if (error) {
         let errMsg = error.message;
         if (error instanceof FunctionsHttpError) {
@@ -771,9 +784,9 @@ export default function OrdersScreen() {
       showAlert('Dispatched', alertParts.join('\n') || 'Order marked as dispatched.');
       setDispatchOrder(null);
     } catch (e: any) {
-      showAlert('Error', `Dispatch failed: ${e.message}`);
+      if (isCurrent(scope)) showAlert('Error', `Dispatch failed: ${e.message}`);
     }
-  }, [dispatchOrder, tenant, showAlert]);
+  }, [dispatchOrder, tenant, showAlert, scope, isCurrent, effectiveNicheId]);
 
   // ── View item ──────────────────────────────────────────────────────────────
 

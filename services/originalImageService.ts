@@ -5,6 +5,8 @@ import { decode, encode } from 'base64-arraybuffer';
 import { getSupabaseClient } from '@/template';
 import { readBinaryBlob } from './binaryBlobService';
 export interface OriginalBytes {bytes:ArrayBuffer;contentType:string;extension:string;hash:string}
+// Matches the existing item-images bucket; do not resize evidence to fit it.
+export const ORIGINAL_UPLOAD_LIMIT_BYTES=5*1024*1024;
 export function originalMime(bytes:Uint8Array):{contentType:string;extension:string} {
  if(bytes[0]===255&&bytes[1]===216)return {contentType:'image/jpeg',extension:'jpg'};
  if(bytes[0]===137&&bytes[1]===80&&bytes[2]===78&&bytes[3]===71)return {contentType:'image/png',extension:'png'};
@@ -37,14 +39,29 @@ export async function verifyStoredOriginal(path:string,expectedHash:string):Prom
  if(hash!==expectedHash)throw new Error('Stored original fingerprint differs; no evidence link accepted.');
 }
 export async function uploadUntouchedOriginal(itemId:string,slotId:string,uri:string):Promise<{url:string;hash?:string}> {
- if(/^https:\/\//.test(uri)){if(/\/studio\/|\/references\//.test(uri))throw new Error('A presentation image cannot be used as original evidence.');return {url:uri};}
+ if(/^https:\/\//.test(uri)){
+  if(/\/studio\/|\/references\//.test(uri))throw new Error('A presentation image cannot be used as original evidence.');
+  const storage=getSupabaseClient().storage.from('item-images');
+  const prefix=storage.getPublicUrl(`${itemId}/`).data?.publicUrl;
+  if(prefix&&uri.startsWith(prefix)){
+   const path=`${itemId}/${decodeURIComponent(uri.slice(prefix.length))}`;
+   const hash=path.match(/_([a-f0-9]{64})\.(?:jpg|jpeg|png|webp|gif)$/i)?.[1];
+   if(hash)await verifyStoredOriginal(path,hash);
+   else{const check=await storage.download(path);if(check.error||!check.data)throw new Error('Stored original could not be verified.');originalMime(new Uint8Array(await readBinaryBlob(check.data)));}
+   return {url:uri,...(hash?{hash}:{})};
+  }
+  // External/imported photographs are copied into this canonical item's existing bucket.
+ }
  const original=await readOriginalBytes(uri);const safeSlot=slotId.replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,40)||'photo';
+ if(original.bytes.byteLength>ORIGINAL_UPLOAD_LIMIT_BYTES)throw new Error('The original exceeds the existing 5 MB upload limit. It is retained unchanged; choose a smaller original or explicitly export a copy.');
  const path=`${itemId}/originals/${safeSlot}_${original.hash}.${original.extension}`;
  const storage=getSupabaseClient().storage.from('item-images');
- const existing=await storage.download(path);
- if(existing.error){const upload=await storage.upload(path,Platform.OS==='web'?new Blob([original.bytes],{type:original.contentType}):original.bytes,{contentType:original.contentType,upsert:false,cacheControl:'31536000'});if(upload.error&&!/already exists|duplicate/i.test(upload.error.message))throw new Error('Original photograph upload failed.');}
- // A successful upload alone does not prove byte preservation; verify stored bytes.
- const readback=existing.error?await storage.download(path):existing;
+ // Immutable upload first: avoid a full speculative GET for every new photo.
+ // Duplicate paths are harmless (upsert stays false), but still require exact readback.
+ const upload=await storage.upload(path,Platform.OS==='web'?new Blob([original.bytes],{type:original.contentType}):original.bytes,{contentType:original.contentType,upsert:false,cacheControl:'31536000'});
+ if(upload.error&&!/already exists|duplicate/i.test(upload.error.message))throw new Error('Original photograph upload failed. Check the connection and retry the saved item.');
+ // A successful upload or duplicate conflict does not prove byte preservation.
+ const readback=await storage.download(path);
  if(readback.error||!readback.data)throw new Error('Stored original could not be verified.');
  const received=new Uint8Array(await readBinaryBlob(readback.data)),sent=new Uint8Array(original.bytes);
  if(received.length!==sent.length||received.some((byte,index)=>byte!==sent[index]))throw new Error('Stored original bytes differ; no evidence link accepted.');

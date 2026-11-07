@@ -7,8 +7,9 @@ import { listItems,getItemStatusCounts,ITEM_LIFECYCLE,type ItemFilter,type Item 
 import { getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 import { backendReadsBusy } from '@/services/backendRequestService';
 import { isBackendUnavailable } from '@/services/backendAvailabilityService';
-export interface InventoryStats { activeTotal:number;draftCount:number;liveCount:number;soldCount:number;archivedCount:number;grandTotal:number }
-interface Snapshot {scope:string;items:Item[];counts:Record<string,number>;error:string|null;loading:boolean}
+import { readCanonicalInventoryCounts,emptyCanonicalCounts,type CanonicalInventoryCounts } from '@/services/canonicalInventoryService';
+export interface InventoryStats { activeTotal:number;stockCount:number;draftCount:number;liveCount:number;liveItemCount:number;soldCount:number;archivedCount:number;grandTotal:number;unitTotal:number }
+interface Snapshot {scope:string;items:Item[];counts:Record<string,number>;canonical:CanonicalInventoryCounts;error:string|null;loading:boolean}
 /** Same canonical data on native and web. Sharing happens in the services, never in local grants. */
 export function useInventory(filter:ItemFilter={}) {
   const {tenant,activeNicheId,fixedNicheId,inventoryReloadSignal,subscriptionLoading,accessReady,moduleLoading,moduleEpoch,accessError,tenantError}=useApp();
@@ -20,7 +21,7 @@ export function useInventory(filter:ItemFilter={}) {
   const ready=Boolean(user?.id&&tenant?.id&&accessReady&&!moduleLoading&&!subscriptionLoading);
   const readyRef=useRef(ready);readyRef.current=ready;
   const inFlight=useRef<{scope:string;promise:Promise<void>}|null>(null);
-  const [snapshot,setSnapshot]=useState<Snapshot>({scope:'',items:[],counts:{},error:null,loading:false});
+  const [snapshot,setSnapshot]=useState<Snapshot>({scope:'',items:[],counts:{},canonical:emptyCanonicalCounts(),error:null,loading:false});
   const load=useCallback(async()=>{
     if(!tenant?.id||!ready)return;
     if(inFlight.current?.scope===scope)return inFlight.current.promise;
@@ -29,19 +30,19 @@ export function useInventory(filter:ItemFilter={}) {
     const requested=filter.specialistIds??(filter.specialistId?[filter.specialistId]:allowList);
     const effectiveFilter:ItemFilter={...filter,specialistId:undefined,specialistIds:requested.filter(id=>allowList.includes(id))};
     if(!effectiveFilter.lifecycleGroup&&!effectiveFilter.statuses&&!effectiveFilter.status&&!effectiveFilter.reviewRequired)effectiveFilter.lifecycleGroup='active';
-    setSnapshot(prev=>prev.scope===scope?{...prev,loading:true}:{scope,items:[],counts:{},error:null,loading:true});
+    setSnapshot(prev=>prev.scope===scope?{...prev,loading:true}:{scope,items:[],counts:{},canonical:emptyCanonicalCounts(),error:null,loading:true});
     const task=(async()=>{
       try {
         // Individual pages and summaries are session-keyed, deduplicated and bounded by the shared scheduler.
-        const [result,counts]=await Promise.all([listItems(tenant.id,effectiveFilter),getItemStatusCounts(tenant.id,effectiveFilter.specialistIds)]);
+        const [result,counts,canonical]=await Promise.all([listItems(tenant.id,effectiveFilter),getItemStatusCounts(tenant.id,effectiveFilter.specialistIds),readCanonicalInventoryCounts(tenant.id,niche)]);
         if(!alive.current||!readyRef.current||scopeRef.current!==scope||requestId.current!==version)return;
         if(result.error)throw new Error(result.error);
-        setSnapshot({scope,items:result.items,counts,error:null,loading:false});
+        setSnapshot({scope,items:result.items,counts,canonical,error:null,loading:false});
       } catch(cause) {
         if(alive.current&&scopeRef.current===scope&&requestId.current===version){
           const failure=cause instanceof Error?cause.message:'Inventory refresh failed';
           // Explicit authorization/entitlement denials discard visible data. Only transient reads retain it.
-          setSnapshot(prev=>({scope,items:prev.scope===scope&&isBackendUnavailable(failure)?prev.items:[],counts:prev.scope===scope&&isBackendUnavailable(failure)?prev.counts:{},loading:false,error:failure}));
+          setSnapshot(prev=>({scope,items:prev.scope===scope&&isBackendUnavailable(failure)?prev.items:[],counts:prev.scope===scope&&isBackendUnavailable(failure)?prev.counts:{},canonical:prev.scope===scope&&isBackendUnavailable(failure)?prev.canonical:emptyCanonicalCounts(),loading:false,error:failure}));
         }
       } finally {
         if(inFlight.current?.scope===scope)inFlight.current=null;
@@ -61,10 +62,9 @@ export function useInventory(filter:ItemFilter={}) {
   const items=ready&&snapshot.scope===scope?snapshot.items:[];
   const statusGroups=ready&&snapshot.scope===scope?snapshot.counts:{};
   const stats=useMemo(():InventoryStats=>{
-    const sum=(statuses:readonly string[])=>statuses.reduce((total,status)=>total+(statusGroups[status]??0),0);
-    const draftCount=sum(ITEM_LIFECYCLE.DRAFT_STATUSES),liveCount=sum(ITEM_LIFECYCLE.LIVE_STATUSES);
-    return {draftCount,liveCount,activeTotal:draftCount+liveCount,soldCount:sum(ITEM_LIFECYCLE.SOLD_STATUSES),archivedCount:sum(ITEM_LIFECYCLE.ARCHIVED_STATUSES),grandTotal:Object.values(statusGroups).reduce((a,b)=>a+b,0)};
-  },[statusGroups]);
+    const c=ready&&snapshot.scope===scope?snapshot.canonical:emptyCanonicalCounts();
+    return {stockCount:c.stock,draftCount:c.draft,liveCount:c.liveListings,liveItemCount:c.live,activeTotal:c.total-c.sold-c.archived,soldCount:c.sold,archivedCount:c.archived,grandTotal:c.total,unitTotal:c.units};
+  },[snapshot,scope,ready]);
   const totalValue=useMemo(()=>items.reduce((sum,item)=>sum+(item.valuationMid>0?item.valuationMid:item.expectedSellingPrice??0),0),[items]);
   return {items,stats,statusGroups,totalValue,reviewCount:statusGroups.review_required??0,loading:ready&&(snapshot.scope!==scope||snapshot.loading),syncError:tenantError??accessError??(snapshot.scope===scope?snapshot.error:null),reload:load};
 }

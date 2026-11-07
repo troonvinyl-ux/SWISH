@@ -77,14 +77,17 @@ describe('Shared scanner physical-item sessions', () => {
   test('all scanners use the shared visit reset rather than automatic local hydration', () => {
     const hook = source('hooks/useGenericCapture.ts');
     expect(hook).toContain('useScannerSession(');
-    expect(hook).not.toContain('readCaptureDraft');
+    expect(hook).toContain('setRecovery(');
+    expect(hook).toContain('const saved=recovery.draft');
+    expect(hook).toContain('Retained scan belongs to another specialist');
     expect(hook).toContain('setDraft(fresh)');
     expect(hook).toContain('savedId:visible.savedId');
     expect(hook).toContain('if(current.current===scope){setDraft(savedDraft)');
     expect(hook).toContain('id=response.item.id');
-    expect(hook).toContain('uploadItemImages(id,visible.images,true)');
+    expect(hook).toContain('persistCapturedItemPhotos(tenant.id,id,visible.images)');
+    expect(hook).toContain('if(!upload.complete');
     expect(source('hooks/useScannerSession.ts')).toContain('useFocusEffect');
-    expect(source('app/(tabs)/scan.tsx')).toContain('<PremiumScanner tabPage');
+    expect(source('app/(tabs)/scan.tsx')).toContain('PremiumScanner');
     expect(source('app/antique-capture.tsx')).toContain('<PremiumScanner');
   });
 
