@@ -54,7 +54,8 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow SWISH to use the camera to scan and identify antiques.",
+          "cameraPermission": "Allow SWISH to photograph items and scan product barcodes.",
+          "barcodeScannerEnabled": true,
           "microphonePermission": false,
           "recordAudioAndroid": false
         }

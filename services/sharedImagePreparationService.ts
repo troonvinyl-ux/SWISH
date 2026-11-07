@@ -1,4 +1,5 @@
-// One shared engine for all niches. Provider calls and pixel compositing stay server-side.
+// One BackgroundErase gateway for all niches. Provider calls and credentials stay server-side.
+// Local codecs only create transport copies; they do not crop, beautify, reconstruct or replace originals.
 import * as ImageManipulator from 'expo-image-manipulator';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { getSupabaseClient } from '@/template';
@@ -11,7 +12,7 @@ export interface StudioRequest {
 }
 export interface PreparedObjectImageReference {enhancedUri:string;warning:string;generatedBy?:string;studio?:StudioResult}
 const flights=new Map<string,Promise<StudioResult>>();
-const warning='AI-cleaned presentation. Originals retained for condition evidence; pixel-exact fidelity is not guaranteed.';
+const warning='BackgroundErase cutout. Original evidence retained; review fine edges, defects and lettering before listing.';
 function fallback(uri:string,message:string):StudioResult{return {version:SMART_STUDIO_VERSION,status:'fallback',originalUri:uri,confidence:0,warnings:[message],quality:{sourcePixelsOnly:true,completeness:'not_assessed',boundary:'not_assessed',detailCheck:'Original unchanged',background:'original'}};}
 function checkSignal(signal:AbortSignal){if(signal.aborted)throw new Error('Studio processing cancelled or timed out; original retained.');}
 async function copy(uri:string,maxEdge:number,signal:AbortSignal,width?:number,height?:number):Promise<string>{
@@ -29,20 +30,18 @@ async function process(request:StudioRequest,signal:AbortSignal):Promise<StudioR
  const {default:AsyncStorage}=await import('@react-native-async-storage/async-storage');
  const {digestStringAsync,CryptoDigestAlgorithm}=await import('expo-crypto');
  const imageDataUrl=await copy(uri,request.quality==='high'?1600:1280,signal,request.original.width,request.original.height);
- const references:Array<{imageDataUrl:string;angle:string}>=[];
- for(const image of (request.additionalPhotos??[]).filter(p=>p.uri!==uri).slice(0,2)){try{const data=await copy(image.uri,480,signal);if(data.length<=350_000)references.push({imageDataUrl:data,angle:image.angle.slice(0,80)});}catch{checkSignal(signal);}}
- const hash=await digestStringAsync(CryptoDigestAlgorithm.SHA256,JSON.stringify({version:SMART_STUDIO_VERSION,imageDataUrl,userId,tenantId:request.tenantId,nicheId:request.nicheId,angle:request.angle,hint:request.hint,quality:request.quality,references}));
+ const hash=await digestStringAsync(CryptoDigestAlgorithm.SHA256,JSON.stringify({version:SMART_STUDIO_VERSION,imageDataUrl,userId,tenantId:request.tenantId,nicheId:request.nicheId}));
  const key=`@swish_studio:${userId}:${hash}`;checkSignal(signal);
  const cached=await AsyncStorage.getItem(key).catch(()=>null);checkSignal(signal);
- if(cached){try{const saved=JSON.parse(cached);if(saved.version===SMART_STUDIO_VERSION&&saved.enhancedUri?.startsWith('https://')&&saved.cachedAt>Date.now()-6*60*60*1000)return {...saved,originalUri:uri};}catch{/* Corrupt cache is not evidence. */}}
+ if(cached){try{const saved=JSON.parse(cached);if(studioImageIsUsable(saved)&&saved.cachedAt>Date.now()-6*60*60*1000)return {...saved,originalUri:uri};}catch{/* Corrupt cache is not evidence. */}}
  if(flights.has(key))return {...await flights.get(key)!,originalUri:uri};
  const work=(async()=>{
   checkSignal(signal);
-  const {data,error}=await client.functions.invoke('swish-coin-image-enhance',{body:{imageDataUrl,tenantId:request.tenantId,nicheId:request.nicheId,angle:request.angle,hint:request.hint,references},signal});
+  const {data,error}=await client.functions.invoke('swish-coin-image-enhance',{body:{imageDataUrl,tenantId:request.tenantId,nicheId:request.nicheId},signal});
   if(error){let message=error.message||'Studio unavailable.';if(error instanceof FunctionsHttpError){try{const text=await error.context.text(),body=JSON.parse(text);message=`[Code: ${error.context.status}] ${typeof body.error==='string'?body.error:'Studio request failed.'}`;}catch{message=`[Code: ${error.context?.status??500}] Studio unavailable.`;}}throw new Error(message);}
   checkSignal(signal);
   if(data?.version!==SMART_STUDIO_VERSION||!['ready','review','fallback'].includes(data?.status))throw new Error('Smart Studio returned no usable image reference or provenance.');
-  if(data.status!=='fallback'&&!studioImageIsUsable(data))throw new Error('Cleanup did not confirm detail-preservation checks; original retained.');
+  if(data.status!=='fallback'&&!studioImageIsUsable(data))throw new Error('BackgroundErase returned no validated cutout; original retained.');
   const result:StudioResult={...data,originalUri:uri,warnings:[...(Array.isArray(data.warnings)?data.warnings:[]),warning]};
   if(result.enhancedUri)await AsyncStorage.setItem(key,JSON.stringify({...result,cachedAt:Date.now()})).catch(()=>{});
   return result;
@@ -64,12 +63,13 @@ export function prepareObjectImage(request:StudioRequest):Promise<StudioResult>{
 // Backward-compatible Coin Flipper alias; same direct cleanup engine.
 export async function generateSharedObjectImageReference(uri:string,options:Omit<StudioRequest,'original'>={}):Promise<PreparedObjectImageReference>{
  const studio=await prepareObjectImage({...options,original:{uri}});if(!studio.enhancedUri)throw new Error(studio.warnings.join(' '));
- return {enhancedUri:studio.enhancedUri,warning:studio.warnings.join(' '),generatedBy:'AI photo cleanup',studio};
+ return {enhancedUri:studio.enhancedUri,warning:studio.warnings.join(' '),generatedBy:'BackgroundErase',studio};
 }
 /** Serial, hard-budgeted batch. Neither this service nor the server calls identification. */
 export async function prepareCapturedImages(images:readonly CapturedImage[],options:{tenantId?:string;nicheId?:string;deadlineMs?:number}={}):Promise<CapturedImage[]>{
  const output:CapturedImage[]=[];const deadline=Date.now()+(options.deadlineMs??150_000);
  for(const image of images){
+  // Rechecks and inventory saves reuse this attempt, including a failed attempt: no automatic paid replay.
   if(image.studio?.version===SMART_STUDIO_VERSION&&image.studio.originalUri===image.uri){output.push(image);continue;}
   const remaining=deadline-Date.now();
   const studio=remaining>0?await prepareObjectImage({original:image,nicheId:options.nicheId,tenantId:options.tenantId,angle:image.slotLabel||image.slotId,timeoutMs:remaining}):fallback(image.uri,'Studio batch time budget reached; original retained. Retry studio separately.');
