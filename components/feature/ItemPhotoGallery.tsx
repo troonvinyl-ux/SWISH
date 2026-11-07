@@ -1,4 +1,5 @@
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
+import { preferredListingPhotos, originalForStudioImage } from '@/shared/smartStudio';
 import { ActivityIndicator, FlatList, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -22,23 +23,22 @@ const ZoomPhoto = memo(function ZoomPhoto({ uri, width, height, panning, onZoom 
   return <GestureDetector gesture={Gesture.Exclusive(tap, Gesture.Simultaneous(pinch, pan))}><View style={{ width, height, overflow: 'hidden' }}><Animated.View style={[StyleSheet.absoluteFill, style]}><Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="contain" transition={200} accessibilityLabel="Item photograph" /></Animated.View></View></GestureDetector>;
 });
 interface ItemPhotoGalleryProps {
-  media: string[]; accent: string; tip: string; saving: boolean; error: string | null;
+  media: string[]; attributes?: Record<string,any>; accent: string; tip: string; saving: boolean; error: string | null;
   onSelectMain: (url: string) => void; onFetch: () => void; fetching: boolean;
   fetchResult: { downloaded: number; failed: number; requiresReauth?: boolean } | null;
   onReconnect: () => void; onReIdentify: () => void;
   studio?: ItemSmartStudioController;
 }
-export const ItemPhotoGallery = memo(function ItemPhotoGallery({ media, accent, tip, saving, error, onSelectMain, onFetch, fetching, fetchResult, onReconnect, onReIdentify, studio }: ItemPhotoGalleryProps) {
+export const ItemPhotoGallery = memo(function ItemPhotoGallery({ media: originalMedia, attributes = {}, accent, tip, saving, error, onSelectMain, onFetch, fetching, fetchResult, onReconnect, onReIdentify, studio }: ItemPhotoGalleryProps) {
+  const media = useMemo(() => preferredListingPhotos(originalMedia,attributes),[originalMedia,attributes]);
   const gallery = useStockPhotoGallery(media);
-  const [originalView,setOriginalView]=useState(false);
-  const displayPhoto=useCallback((uri:string)=>{const result=studio?.resultFor(uri);return !originalView&&result?.status==='ready'?result.enhancedUri??uri:uri;},[studio,originalView]);
+  const displayPhoto = useCallback((uri:string) => uri,[]);
   const [viewerSize, setViewerSize] = useState({ width: 375, height: 400 });
   const renderPhoto = useCallback(({ item: uri }: { item: string }) => <ZoomPhoto key={`${uri}:${gallery.width}:${gallery.fullscreen}`} uri={displayPhoto(uri)} width={gallery.width} height={gallery.height} panning={gallery.zoomed} onZoom={gallery.setZoomed} />, [displayPhoto,gallery.width, gallery.height, gallery.zoomed, gallery.fullscreen, gallery.setZoomed]);
   const main = gallery.activeUrl === media[0];
   return <GestureHandlerRootView style={s.card} onLayout={event => gallery.setWidth(Math.max(1, event.nativeEvent.layout.width - Spacing.base * 2 - Spacing.xxs))}>
     <View style={s.headingRow}><MaterialIcons name="photo-library" size={22} color={accent} /><Text style={s.heading}>Item photos</Text><Text style={s.counter}>{media.length ? `${gallery.index + 1} / ${media.length}` : 'No photos'}</Text></View>
     {media.length ? <>
-      {studio?.resultFor(gallery.activeUrl)?.status==='ready'?<View style={s.headingRow}><Pressable onPress={()=>setOriginalView(false)} style={({pressed})=>[s.viewTab,!originalView?{borderColor:accent}:null,pressed?s.pressed:null]}><Text style={s.body}>Clean photo</Text></Pressable><Pressable onPress={()=>setOriginalView(true)} style={({pressed})=>[s.viewTab,originalView?{borderColor:accent}:null,pressed?s.pressed:null]}><Text style={s.body}>Original</Text></Pressable></View>:null}
       <View style={[s.hero, { height: gallery.height }]}>
         <FlatList ref={gallery.list} data={media} horizontal pagingEnabled scrollEnabled={!gallery.zoomed} keyExtractor={(uri, index) => `${uri}:${index}`} renderItem={renderPhoto} getItemLayout={(_, index) => ({ length: gallery.width, offset: index * gallery.width, index })} onScroll={event => gallery.onScroll(event.nativeEvent.contentOffset.x)} scrollEventThrottle={16} showsHorizontalScrollIndicator={false} />
         <View pointerEvents="none" style={s.mainBadge}><MaterialIcons name={main ? 'star' : 'photo'} size={16} color={accent} /><Text style={s.badgeText}>{main ? 'Main image' : `Photo ${gallery.index + 1}`}</Text></View>
@@ -47,8 +47,8 @@ export const ItemPhotoGallery = memo(function ItemPhotoGallery({ media, accent, 
       <View style={s.thumbnails}><FlatList ref={gallery.thumbnails} horizontal data={media} keyExtractor={(uri, index) => `thumb:${uri}:${index}`} showsHorizontalScrollIndicator={false} contentContainerStyle={s.rail} renderItem={({ item: uri, index }) => <Pressable accessibilityRole="button" accessibilityLabel={`View photo ${index + 1}${index === 0 ? ', main image' : ''}`} accessibilityState={{ selected: index === gallery.index }} onPress={() => gallery.select(index)} style={({ pressed }) => [s.thumb, index === gallery.index ? { borderColor: accent } : null, pressed ? s.pressed : null]}><Image source={{ uri:displayPhoto(uri) }} contentFit="contain" style={StyleSheet.absoluteFill} transition={200} />{index === 0 ? <View style={s.thumbBadge}><MaterialIcons name="star" size={14} color={accent} /></View> : null}</Pressable>} /></View>
       <Pressable disabled={saving || main} accessibilityRole="button" accessibilityLabel={main ? 'This is the saved main image' : 'Set selected photo as main image'} onPress={() => onSelectMain(gallery.activeUrl)} style={({ pressed }) => [s.mainButton, { borderColor: accent, backgroundColor: main ? Colors.surfaceHighlight : Colors.primaryDim }, pressed || saving ? s.pressed : null]}>{saving ? <ActivityIndicator color={accent} /> : <MaterialIcons name={main ? 'check-circle' : 'star-outline'} size={22} color={accent} />}<Text style={[s.mainText, { color: accent }]}>{saving ? 'Saving main image…' : main ? 'Main image selected' : 'Set as main image'}</Text></Pressable>
       <Text style={s.body}>Select a thumbnail, then set it as the main image. This becomes the inventory cover and first photo for listing updates.</Text>
-      <Text style={s.caption}>Pinch or double-tap to zoom. Live eBay photos change only after an explicit listing revision.</Text>
-      {studio ? <ExistingPhotoStudioControls originalUri={gallery.activeUrl} studio={studio} accent={accent} disabled={saving || fetching} /> : null}
+      <Text style={s.caption}>Processed photos are shown once ready. Untouched originals stay archived for future reference, not in this gallery. Live eBay photos change only after an explicit listing revision.</Text>
+      {studio ? <ExistingPhotoStudioControls originalUri={originalForStudioImage(gallery.activeUrl,attributes)} studio={studio} accent={accent} disabled={saving || fetching} /> : null}
     </> : <View style={s.empty}><MaterialIcons name="add-photo-alternate" size={40} color={accent} /><Text style={s.emptyTitle}>Add photos of your item</Text><Text style={s.body}>{tip}</Text><Pressable onPress={onReIdentify} style={({ pressed }) => [s.mainButton, pressed ? s.pressed : null]}><Text style={[s.mainText, { color: accent }]}>Capture or choose photos</Text></Pressable></View>}
     {error ? <View style={s.error}><MaterialIcons name="error-outline" size={20} color={Colors.warning} /><Text accessibilityRole="alert" style={s.errorText}>{error}</Text></View> : null}
     {!media.length || fetchResult ? <Pressable disabled={fetching} onPress={fetchResult?.requiresReauth ? onReconnect : onFetch} style={({ pressed }) => [s.fetch, pressed || fetching ? s.pressed : null]}>{fetching ? <ActivityIndicator color={Colors.info} /> : <MaterialIcons name="cloud-download" size={20} color={Colors.info} />}<Text style={s.fetchText}>{fetching ? 'Fetching photos…' : fetchResult?.requiresReauth ? 'Reconnect eBay to fetch photos' : fetchResult?.downloaded ? `${fetchResult.downloaded} photos fetched · Fetch again` : fetchResult?.failed ? 'Photo fetch failed · Retry' : 'Fetch photos from eBay'}</Text></Pressable> : null}
@@ -56,7 +56,6 @@ export const ItemPhotoGallery = memo(function ItemPhotoGallery({ media, accent, 
   </GestureHandlerRootView>;
 });
 const s = StyleSheet.create({
-  viewTab:{flex:1,minHeight:48,alignItems:'center',justifyContent:'center',borderRadius:Radius.md,borderWidth:1,borderColor:Colors.surfaceBorder,backgroundColor:Colors.surfaceHighlight},
   emptyTitle: { fontSize: Typography.size.md, color: Colors.textPrimary, fontWeight: Typography.weight.semibold },
   exportRow: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: Spacing.base, paddingBottom: Spacing.sm, gap: Spacing.sm },
   exportButton: { flexGrow: 1, minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.md, backgroundColor: Colors.surfaceHighlight, borderRadius: Radius.md },

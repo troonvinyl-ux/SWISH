@@ -1,0 +1,12 @@
+jest.mock('@/template',()=>({getSupabaseClient:jest.fn()}));
+import fs from 'node:fs';
+import {getSupabaseClient} from '@/template';
+import {reviseListingPrice} from '../listingPriceRevisionService';
+const input={tenantId:'tenant',nicheId:'collectibles',listingId:'listing',newPrice:15.58,expectedPrice:11.95};
+function setup(data:any){const invoke=jest.fn().mockResolvedValue({data,error:null});(getSupabaseClient as jest.Mock).mockReturnValue({functions:{invoke}});return invoke;}
+beforeEach(()=>jest.clearAllMocks());
+test('one click sends only listing identity, new price and current price expectation',async()=>{const invoke=setup({success:true,verified:true,price:15.58,warnings:['Final Value Fee waived.']});const result=await reviseListingPrice(input);expect(result.error).toBeNull();expect(result.price).toBe(15.58);expect(invoke).toHaveBeenCalledTimes(1);expect(invoke).toHaveBeenCalledWith('swish-ebay-list',{body:{route:'revise_price',...input}});});
+test.each([{success:true,price:15.58},{success:true,verified:true,price:99},{success:false,accepted:true,error:'Readback pending'}])('acknowledgement or mismatched price cannot claim success',async data=>{setup(data);const result=await reviseListingPrice(input);expect(result.price).toBeNull();expect(result.error).not.toBeNull();});
+test('transport timeout is uncertain and never retries the marketplace write',async()=>{const invoke=setup(null);invoke.mockRejectedValue(new Error('timeout'));const result=await reviseListingPrice(input);expect(result.unconfirmed).toBe(true);expect(invoke).toHaveBeenCalledTimes(1);});
+test('invalid price never invokes the backend',async()=>{const invoke=setup(null);await reviseListingPrice({...input,newPrice:NaN});expect(invoke).not.toHaveBeenCalled();});
+test('server price-only path preserves unrelated listing fields and retains authentication/readback/CAS',()=>{const source=fs.readFileSync('supabase/functions/swish-ebay-list/index.ts','utf8');const price=source.split("if (route === 'revise_price') {")[1].split('// ── Route: revise_sku')[0];expect(price).toContain('ReviseInventoryStatusRequest');expect(price).toContain('before.sellerPrice');expect(price).toContain('live.sellerPrice');expect(price).toContain("eq('updated_at', row.updated_at)");expect(price).not.toContain('<Description>');expect(price).not.toContain('<PictureDetails>');expect(price).not.toContain('<Quantity>');expect(source).toContain("'inspect_live', 'revise_price'");expect(source).toContain('requirePaidNiche');});

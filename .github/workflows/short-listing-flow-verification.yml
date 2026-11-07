@@ -1,0 +1,31 @@
+name: Short listing flow verification
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['app/**', 'services/**', 'hooks/**', 'components/**', 'contexts/**', 'shared/**', '.github/workflows/short-listing-flow-verification.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: {version: 9.15.9}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - run: bash scripts/install-dependencies.sh
+      - run: mkdir -p verification-output
+      - name: TypeScript
+        run: npx tsc --noEmit > verification-output/short-flow-typescript.txt 2>&1
+      - name: Autofill, draft-only persistence, processed photos and publication contracts
+        if: ${{ !cancelled() }}
+        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/listingAutofill.test.ts services/__tests__/shortListingFlow.test.ts services/__tests__/shortListingRoutes.test.ts services/__tests__/quickListPreparation.test.ts services/__tests__/quickListContracts.test.ts services/__tests__/quickListLiveEvidence.test.ts services/__tests__/universalQuickList.test.ts services/__tests__/processedPhotoPresentation.test.ts --json --outputFile=verification-output/short-listing-flow.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: short-listing-flow-${{ github.sha }}
+          path: verification-output/
+# Mocked CI never sends paid image/AI requests or publishes to a seller account.
+# Device photography and connected-account acceptance must be recorded separately.
