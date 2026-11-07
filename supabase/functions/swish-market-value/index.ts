@@ -1188,9 +1188,13 @@ serveModule(async (req: Request) => {
   // ── Credentials + token refresh ────────────────────────────────────────────
   // Fail closed before credential refresh or research if the requested resource is another niche.
   if (!requestedNiche || (body.nicheId && body.nicheId !== requestedNiche)) return jsonResponse({ error: 'Registered matching specialist required.' }, 403);
+  // Read identity and canonical media together before any credential/research work.
+  // Middleware RLS/resource checks remain intact; no ownership decision is cached.
+  let itemRow: { media?: string[]; specialist_id: string } | null = null;
   if (itemId) {
-    const { data: owned, error: ownershipError } = await supabase.from('items').select('specialist_id').eq('id', itemId).eq('tenant_id', tenantId).maybeSingle();
+    const { data: owned, error: ownershipError } = await supabase.from('items').select('media, specialist_id').eq('id', itemId).eq('tenant_id', tenantId).maybeSingle();
     if (ownershipError || !owned || specialistNiche(owned.specialist_id) !== requestedNiche) return jsonResponse({ error: 'Item and valuation specialist belong to different products.' }, 403);
+    itemRow = owned;
   }
   const creds = await getAndRefreshConnectorCreds(supabase, tenantId);
   if (!creds) {
@@ -1202,16 +1206,7 @@ serveModule(async (req: Request) => {
   // Always verify an item ID, even when the caller also supplies image URLs.
   // Otherwise a request could attach another niche's item ID to a different
   // specialist context while still passing tenant-level access checks.
-  let itemRow: any = null;
-  if (itemId) {
-    const { data, error } = await supabase.from('items')
-      .select('media, specialist_id')
-      .eq('id', itemId)
-      .eq('tenant_id', tenantId)
-      .maybeSingle();
-    if (error || !data) return jsonResponse({ error: 'Item not found in this tenant.' }, 404);
-    itemRow = data;
-
+  if (itemId && itemRow) {
     const itemProduct = productForSpecialist(itemRow.specialist_id);
     const requestedProduct = productForSpecialist(specialistId);
     if (!itemProduct || !requestedProduct || itemProduct !== requestedProduct) {
@@ -1237,6 +1232,17 @@ serveModule(async (req: Request) => {
 
   // ── Phase 1: Gemini + App token (parallel, non-blocking) ──────────────────
   const appTokenPromise=getEbayAppToken(creds.clientId,creds.clientSecret);
+  // Visual and catalogue discovery need originals/title, not the AI estimate.
+  // Start them now instead of serialising them behind its 25-second deadline.
+  const visualPromise=appTokenPromise.then(token=>
+    token && (inlineImageBase64 || imageUrls.length > 0)
+      ? runEbayVisualSearch(inlineImageBase64 || imageUrls[0], token)
+      : { available: false, items: [], totalFound: 0 } as VisualSearchResult);
+  const isCoinResearch = specialistId.toLowerCase().includes('coin')
+    || ['islamic_silver', 'ancient_artefacts', 'gold', 'silver', 'banknotes'].includes(specialistId);
+  const canoaPromise = isCoinResearch
+    ? searchCanoaCoinTypes(cleanTitle)
+    : Promise.resolve({ available: false, query: cleanTitle, items: [] as CanoaCoinCandidate[] });
   const earlyQuery=buildSearchQueries(cleanTitle,attributes,specialistId,[])[0];
   const earlyMarket=quickList?appTokenPromise.then(token=>Promise.all([searchEbayBrowse(creds.accessToken,earlyQuery,50,false,token),searchEbaySoldListings(token,earlyQuery,50)])):null;
   const numistaSalesPromise=requestedNiche==='coins'&&Number.isSafeInteger(Number(numistaTypeId))&&Number(numistaTypeId)>0?fetchNumistaSaleEvidence(Number(numistaTypeId)):Promise.resolve(null);
@@ -1248,11 +1254,7 @@ serveModule(async (req: Request) => {
 
   // CANOA covers ancient-world reference catalogues; keep it supplementary and
   // non-blocking. Modern/princely-state and Islamic coin coverage may be absent.
-  const isCoinResearch = specialistId.toLowerCase().includes('coin')
-    || ['islamic_silver', 'ancient_artefacts', 'gold', 'silver', 'banknotes'].includes(specialistId);
-  const canoaPromise = isCoinResearch
-    ? searchCanoaCoinTypes(cleanTitle)
-    : Promise.resolve({ available: false, query: cleanTitle, items: [] as CanoaCoinCandidate[] });
+  // The supplementary catalogue flight is already running in Phase 1.
 
   // ── Build search queries ───────────────────────────────────────────────────
   const searchQueries = buildSearchQueries(cleanTitle, attributes, specialistId, gemini.searchTerms);
@@ -1264,7 +1266,7 @@ serveModule(async (req: Request) => {
   const [teapeakResult, firstBrowseResult, visualSearch, firstSoldSearch] = await Promise.all([
     unavailableProductResearch(primaryQuery),
     earlyMarket?earlyMarket.then(results=>results[0]):searchEbayBrowse(creds.accessToken, primaryQuery, 50, false, appToken),
-    (appToken && (inlineImageBase64 || imageUrls.length > 0)) ? runEbayVisualSearch(inlineImageBase64 || imageUrls[0], appToken) : Promise.resolve<VisualSearchResult>({ available: false, items: [], totalFound: 0 }),
+    visualPromise,
     earlyMarket?earlyMarket.then(results=>results[1]):searchEbaySoldListings(appToken, primaryQuery, 50),
   ]);
 

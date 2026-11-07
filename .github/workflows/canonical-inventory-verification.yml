@@ -1,0 +1,32 @@
+name: SWISH canonical inventory counting
+on:
+  pull_request:
+    paths: ['services/**','hooks/**','components/**','app/**','supabase/**','.github/workflows/canonical-inventory-verification.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  canonical-counting:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: {version: 9.15.9}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - run: bash scripts/install-dependencies.sh
+      - run: mkdir -p verification-output && git rev-parse HEAD > verification-output/source-sha.txt
+      - name: Canonical item, tenant, quantity, import and reporting regressions
+        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/canonicalInventoryCounting.test.ts services/__tests__/inventoryTabStatus.test.ts services/__tests__/inventoryNicheProjection.test.ts services/__tests__/coinInventoryRecovery.test.ts services/__tests__/commandCentre.test.ts services/__tests__/scannerSession.test.ts services/__tests__/quickListContracts.test.ts --json --outputFile=verification-output/canonical-jest.json
+      - name: Application TypeScript
+        if: ${{ !cancelled() }}
+        run: npx tsc --noEmit > verification-output/typescript.txt 2>&1
+      - name: Shared app/web Expo export
+        if: ${{ !cancelled() }}
+        run: npx expo export --platform web --output-dir verification-output/web > verification-output/web.txt 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: canonical-inventory-evidence, path: verification-output/}
+# No live seller writes or historical identity deletion. Authenticated module,
+# real-device and concurrent RPC acceptance are still required separately.

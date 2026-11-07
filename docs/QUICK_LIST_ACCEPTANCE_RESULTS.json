@@ -1,0 +1,22 @@
+{
+  "status": "not_verified",
+  "branchCreated": false,
+  "pullRequestCreated": false,
+  "livePublicationsPerformed": 0,
+  "verifiedCoinFixturesTested": 0,
+  "realBarcodeFixturesTested": 0,
+  "medianCompletionMs": null,
+  "p90CompletionMs": null,
+  "successfulWithin60Pct": null,
+  "eligibleWithin60Pct": null,
+  "barcodeMatchPct": null,
+  "aiIdentificationSuccessPct": null,
+  "failedPublicationPct": null,
+  "averageActualUserActions": null,
+  "androidBuild": "not_run",
+  "webBuild": "not_run",
+  "pwaCameraAcceptance": "not_run",
+  "existingRegressions": "not_run",
+  "targetAchieved": false,
+  "blockers": ["No execution/Git/PR/device tool in this session", "Verified coin fixtures and approved real-product live tests needed", "API permission/licence/response validation and full startup profiling required"]
+}

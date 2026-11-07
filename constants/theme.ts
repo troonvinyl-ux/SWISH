@@ -4,10 +4,10 @@
 export const Colors = {
   // Core backgrounds
   background: '#09090E',
-  surface: '#111218',
-  surfaceElevated: '#18191F',
-  surfaceBorder: '#1E2028',
-  surfaceHighlight: '#22242C',
+  surface: '#13151C',
+  surfaceElevated: '#191C25',
+  surfaceBorder: '#323743',
+  surfaceHighlight: '#232834',
   specialistSurface: '#17130D',
   specialistBorder: '#554322',
   specialistGold: '#D8AD52',
@@ -37,8 +37,8 @@ export const Colors = {
 
   // Text hierarchy
   textPrimary: '#F1F2F4',
-  textSecondary: '#8B8FA8',
-  textTertiary: '#50535E',
+  textSecondary: '#B1B7C8',
+  textTertiary: '#9AA3B7',
   textDisabled: '#33353D',
   textInverse: '#09090E',
 

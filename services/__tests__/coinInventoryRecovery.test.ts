@@ -35,8 +35,8 @@ describe('Existing coin reads preserve canonical scope and original data',()=>{
   await expect(getItemStatusCounts('existing-tenant',['coins'])).rejects.toThrow('RLS read failed');
  });
  test('canonicalises legacy coin aliases before asking the server for permission',async()=>{
-  const {client}=mockClient([{data:[],error:null},{data:[],error:null}]);expect((await loadInventoryView('existing-tenant','coins_world')).error).toBeNull();
-  expect(client.rpc).toHaveBeenCalledWith('swish_can_access_niche',{p_tenant_id:'existing-tenant',p_niche_id:'coins'});expect(client.rpc).toHaveBeenCalledTimes(1);
+  const {client}=mockClient([{data:[],error:null}]);client.rpc.mockReturnValue({abortSignal:jest.fn().mockResolvedValue({data:{total:0,units:0,stock:0,draft:0,live:0,sold:0,archived:0,live_listings:0},error:null})});expect((await loadInventoryView('existing-tenant','coins_world')).error).toBeNull();
+  expect(client.rpc).toHaveBeenCalledWith('swish_inventory_tab_counts',{p_tenant_id:'existing-tenant',p_niche_id:'coins'});expect(client.rpc).toHaveBeenCalledTimes(1);
  });
  test('denied access never queries items or a different tenant',async()=>{
   const {client}=mockClient([]);client.rpc.mockReturnValue({abortSignal:jest.fn().mockResolvedValue({data:false,error:null})});

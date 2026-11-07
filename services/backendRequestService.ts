@@ -31,7 +31,12 @@ export function backendReadsBusy(): boolean { return active > 0 || queue.length 
 
 /** Share work only while pending; never reuse an earlier authorization decision as a new grant. */
 export async function shareBackendRequest<T>(key: string, operation: () => Promise<T>): Promise<T> {
-  const scope = await readScope();
+  return shareScopedRequest(await readScope(), key, operation);
+}
+
+// Carry one captured session through deduplication, dispatch and completion.
+// Recapturing here could put an old queued operation in a new session's flight.
+async function shareScopedRequest<T>(scope: string, key: string, operation: () => Promise<T>): Promise<T> {
   const scopedKey = `${scope}:${key}`;
   const existing = flights.get(scopedKey);
   if (existing) return existing as Promise<T>;
@@ -47,7 +52,7 @@ export async function shareBackendRequest<T>(key: string, operation: () => Promi
  */
 export async function backendRead<T>(key: string, operation: (signal: AbortSignal) => PromiseLike<T>, priority: ReadPriority = 'foreground', timeoutMs = 12000): Promise<T> {
   const scope = await readScope();
-  return shareBackendRequest(`read:${key}`, async () => {
+  return shareScopedRequest(scope, `read:${key}`, async () => {
     const scopedKey = `${scope}:${key}`;
     const failure = failures.get(scopedKey);
     if (failure && Date.now() < failure.until) throw new Error(failure.message);
@@ -75,7 +80,14 @@ export async function backendRead<T>(key: string, operation: (signal: AbortSigna
         priority: priorities[priority], expired: () => finished,
         start: () => {
           started = true;
-          void Promise.resolve().then(() => operation(controller.signal)).then(async value => {
+          void Promise.resolve().then(async () => {
+            // A queued RPC must never run under a replacement login. In particular,
+            // module activation uses this governor; post-response checks alone are too late.
+            if (finished || controller.signal.aborted) throw new Error('Backend request expired before dispatch.');
+            if (await readScope() !== scope) throw new Error('Authenticated session changed before backend dispatch.');
+            if (finished || controller.signal.aborted) throw new Error('Backend request expired before dispatch.');
+            return operation(controller.signal);
+          }).then(async value => {
             if (finished) return;
             const result = value as { error?: { message?: string; code?: string; context?: Response }; status?: number };
             if (result?.error) {

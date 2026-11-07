@@ -1,4 +1,5 @@
 import { availableListingPhotos, preferredListingPhotos } from '@/shared/smartStudio';
+import { photoPersistenceIssue } from '@/shared/photoPersistence';
 import { getSupabaseClient } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { getProductionNicheSpecialistIds } from './nicheRouting';
@@ -134,6 +135,8 @@ export async function checkAntiqueListing(tenantId: string, listingId: string, n
     const loaded = await loadListingEditor(tenantId, listingId, nicheId);
     if (loaded.error || !loaded.data) return { ready: false, error: loaded.error };
     const row: any = loaded.data; const item = row.items; const attributes = item.attributes ?? {};
+    const photoIssue = photoPersistenceIssue(item.media ?? [], attributes);
+    if(photoIssue)return {ready:false,error:photoIssue};
     const categoryId = String(row.category_id ?? '');
     if (!categoryId || attributes.ebay_category_id !== categoryId) return { ready: false, error: 'Save the same category on this draft and inventory item before submitting.' };
     const [aspects, conditions, validation] = await Promise.all([

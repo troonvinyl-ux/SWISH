@@ -9,6 +9,7 @@ import {fetchAndStoreEbayImages,itemNeedsImages} from '@/services/ebayImageServi
 import type {Item} from '@/services/itemService';
 import {backendReadsBusy} from '@/services/backendRequestService';
 import {isBackendUnavailable} from '@/services/backendAvailabilityService';
+import type {CanonicalInventoryCounts} from '@/services/canonicalInventoryService';
 export function useMasterInventory(){
  const {tenant,fixedNicheId,activeNicheId,inventoryReloadSignal,subscriptionLoading,accessReady,moduleLoading,moduleEpoch,accessError,tenantError,moduleError}=useApp();
  const {user}=useAuth(),{showAlert}=useAlert();
@@ -19,7 +20,7 @@ export function useMasterInventory(){
  const nicheId=fixedNicheId??activeNicheId,scope=`${user?.id??''}:${tenant?.id??''}:${nicheId}:${moduleEpoch}`;
  const scopeRef=useRef(scope);scopeRef.current=scope;
  const request=useRef(0),pending=useRef<{scope:string;promise: Promise<void>}|null>(null),imagesStarted=useRef(new Set<string>());
- const [snapshot,setSnapshot]=useState<{scope:string;items:Item[];listings:ListingWithItem[];error:string|null}>({scope:'',items:[],listings:[],error:null});
+ const [snapshot,setSnapshot]=useState<{scope:string;items:Item[];listings:ListingWithItem[];canonicalCounts?:CanonicalInventoryCounts;error:string|null}>({scope:'',items:[],listings:[],error:null});
  const [loading,setLoading]=useState(false),[refreshing,setRefreshing]=useState(false),[activeTab,setActiveTab]=useState<InventoryTab>('stock');
  const [submitStep,setSubmitStep]=useState<SubmitStep|null>(null),[submitTitle,setSubmitTitle]=useState(''),[syncing,setSyncing]=useState(false);
  const reload=useCallback(async()=>{
@@ -27,7 +28,7 @@ export function useMasterInventory(){
   if(pending.current?.scope===scope)return pending.current.promise;
   const version=++request.current;setLoading(true);
   const valid=()=>alive.current&&scopeRef.current===scope&&request.current===version;
-  const failed=(failure:string)=>{if(valid())setSnapshot(previous=>({scope,items:previous.scope===scope&&isBackendUnavailable(failure)?previous.items:[],listings:previous.scope===scope&&isBackendUnavailable(failure)?previous.listings:[],error:failure}));};
+  const failed=(failure:string)=>{if(valid())setSnapshot(previous=>({scope,items:previous.scope===scope&&isBackendUnavailable(failure)?previous.items:[],listings:previous.scope===scope&&isBackendUnavailable(failure)?previous.listings:[],canonicalCounts:previous.scope===scope&&isBackendUnavailable(failure)?previous.canonicalCounts:undefined,error:failure}));};
   const task=(async()=>{
    try {
     const result=await loadInventoryView(tenant.id,nicheId);
@@ -58,7 +59,9 @@ export function useMasterInventory(){
  const views=useMemo(()=>ready&&snapshot.scope===scope?buildInventoryViews(snapshot.items,snapshot.listings):{stock:[],draft:[],live:[],sold:[]},[snapshot,scope,ready]);
  const allItems=useMemo(()=>ready&&snapshot.scope===scope?buildAllInventoryRows(snapshot.items,views):[],[snapshot,scope,ready,views]);
  const refresh=useCallback(async()=>{setRefreshing(true);try{await reload();}finally{setRefreshing(false);}},[reload]);
- const counts=useMemo(()=>({stock:views.stock.length,draft:views.draft.length,live:views.live.length,sold:views.sold.length}),[views]);
+ const canonical=ready&&snapshot.scope===scope?snapshot.canonicalCounts:undefined;
+ const counts=useMemo(()=>({stock:canonical?.stock??views.stock.length,draft:canonical?.draft??views.draft.length,live:canonical?.live??views.live.length,sold:canonical?.sold??views.sold.length}),[views,canonical]);
+ const totalCount=canonical?.total??allItems.length,unitCount=canonical?.units??0,liveListingCount=canonical?.liveListings??0;
  const submit=useCallback(async(item:InventoryViewItem)=>{
   if(!tenant||!item.listing||submitStep)return;
   const actionScope=scope;setSubmitTitle(item.canonical_title);setSubmitStep('verifying');
@@ -85,5 +88,5 @@ export function useMasterInventory(){
    if(result.error)showAlert('Order Sync Incomplete',result.error);else showAlert('Order Sync Complete',`${result.imported} new orders imported.`);await reload();
   }finally{if(scopeRef.current===scope)setSyncing(false);}
  },[tenant?.id,nicheId,scope,syncing,showAlert,reload]);
- return {nicheId,views,counts,allItems,activeTab,setActiveTab,reload,refresh,refreshing,submit,end,syncSold,syncing,submitStep,submitTitle,ready,scope,error:tenantError??accessError??(!ready?moduleError:null)??(snapshot.scope===scope?snapshot.error:null),loading:ready&&(snapshot.scope!==scope||loading)};
+ return {nicheId,views,counts,allItems,totalCount,unitCount,liveListingCount,activeTab,setActiveTab,reload,refresh,refreshing,submit,end,syncSold,syncing,submitStep,submitTitle,ready,scope,error:tenantError??accessError??(!ready?moduleError:null)??(snapshot.scope===scope?snapshot.error:null),loading:ready&&(snapshot.scope!==scope||loading)};
 }

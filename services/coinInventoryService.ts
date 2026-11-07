@@ -6,6 +6,7 @@ import { getSupabaseClient } from '@/template';
 import { NICHE_MODULES, isProductionNiche } from '@/constants/niches';
 import { inferImportNiche } from '@/shared/ebayImportScope';
 import { getProductionNicheSpecialistIds } from './nicheRouting';
+import { importCanonicalEbayInventory } from './ebayInventoryImportService';
 
 // ── KC Inventory ID generation ────────────────────────────────────────────────
 
@@ -240,9 +241,8 @@ export async function importEbayCandidate(
   const product = NICHE_MODULES[scope.data.niche_id];
   nicheSpecialistId = nicheSpecialistId ?? product.defaultSpecialist;
   if (!product.specialists.includes(nicheSpecialistId) || inferImportNiche(candidate.categoryName,candidate.title) !== scope.data.niche_id) return {itemId:null,inventoryId:null,error:'This listing belongs to another niche or needs manual classification review.'};
-  // Generate the existing canonical inventory ID only after scope validation.
-  const { inventoryId, error: idErr } = await generateInventoryId(tenantId);
-  if (idErr || !inventoryId) return { itemId: null, inventoryId: null, error: idErr ?? 'ID generation failed' };
+  // The transactional importer generates the permanent reference only for a new item.
+  const inventoryId: string | null = null;
 
   // Build attributes from item specifics + eBay metadata
   // BUG B FIX: Always store _ebay_item_id so swish-image-download can call GetItem
@@ -308,9 +308,7 @@ export async function importEbayCandidate(
   const derivedSpecialistId = nicheSpecialistId;
 
   // Create the inventory item with all available eBay data
-  const { data: itemData, error: itemErr } = await supabase
-    .from('items')
-    .insert({
+  const itemPayload = {
       tenant_id: tenantId,
       acquisition_id: candidate.acquisitionId || null,
       canonical_title: candidate.title,
@@ -341,7 +339,7 @@ export async function importEbayCandidate(
       pocket_position: candidate.pocketPosition || '',
       catalogue_number: catalogueNumber || '',
       sku: candidate.sku || '',
-      quantity: candidate.quantity || 1,
+      quantity: candidate.quantity ?? 1,
       // Coin-specific fields auto-derived from item specifics
       ...(scope.data.niche_id === 'coins' && ruler ? { ruler } : {}),
       ...(scope.data.niche_id === 'coins' && denomination ? { denomination } : {}),
@@ -355,23 +353,14 @@ export async function importEbayCandidate(
         sold_at: new Date().toISOString(),
         marketplace: 'ebay',
       } : {}),
-    })
-    .select('id')
-    .single();
-
-  if (itemErr) return { itemId: null, inventoryId: null, error: itemErr.message };
-
-  const itemId = itemData.id;
+    };
 
   // Create the corresponding eBay listing record with full eBay metadata
   // CRITICAL — BUG A FIX: Always persist category_id and category_name
   // so swish-ebay-list can use them during publish/revise without requiring
   // the user to re-select category every time.
-  const { error: listingErr } = await supabase
-    .from('listings')
-    .insert({
+  const listingPayload = {
       tenant_id: tenantId,
-      item_id: itemId,
       marketplace_id: 'ebay',
       external_listing_id: candidate.ebayItemId,
       title: candidate.title,
@@ -389,25 +378,11 @@ export async function importEbayCandidate(
       ...(listingStatus === 'ended' || listingStatus === 'sold' ? {
         ended_at: candidate.endedAt ?? new Date().toISOString(),
       } : {}),
-    });
-
-  // Log import fields for diagnostics
-  console.log(
-    `[eBay Import] itemId=${itemId} ebayItemId=${candidate.ebayItemId}` +
-    ` descriptionLength=${candidate.description?.length ?? 0}` +
-    ` categoryId=${candidate.categoryId ?? '(none)'}` +
-    ` categoryName=${candidate.categoryName ?? '(none)'}` +
-    ` imageCount=${candidate.photos?.length ?? 0}` +
-    ` listingStatus=${listingStatus}`,
-  );
-
-  if (listingErr) {
-    // Rollback item insert if listing fails
-    await supabase.from('items').delete().eq('id', itemId);
-    return { itemId: null, inventoryId: null, error: listingErr.message };
-  }
-
-  return { itemId, inventoryId, error: null };
+    };
+  try {
+    const saved=await importCanonicalEbayInventory(tenantId,scope.data.niche_id,candidate.ebayItemId,itemPayload,listingPayload);
+    return {itemId:saved.itemId,inventoryId:saved.inventoryId,error:null};
+  }catch(cause){return {itemId:null,inventoryId:null,error:cause instanceof Error?cause.message:'Import was not confirmed; no replacement item was created.'};}
 }
 
 /**

@@ -1,4 +1,4 @@
-import {createContext,useCallback,useEffect,useRef,useState,type ReactNode} from 'react';
+import {createContext,useCallback,useEffect,useMemo,useRef,useState,type ReactNode} from 'react';
 import {AppState,Platform} from 'react-native';
 import Constants from 'expo-constants';
 import {useAuth} from '@/template';
@@ -11,6 +11,7 @@ import type {SubscriptionStatus} from '@/services/subscriptionService';
 import {recordNavigationFailure} from '@/services/verificationCentreService';
 import {isBackendUnavailable} from '@/services/backendAvailabilityService';
 const verificationMaxAge=300000;
+const noEnabledNiches:NicheId[]=[];
 export const SWISH_MASTER_ADMIN_EMAIL='troonvinyl@gmail.com';
 /** Presentation helper only. Backend identity, never editable metadata, determines privilege. */
 export function isSwishMasterAdmin(email?:string|null){return (email??'').trim().toLowerCase()===SWISH_MASTER_ADMIN_EMAIL;}
@@ -166,6 +167,7 @@ export function AppProvider({children}:{children:ReactNode}){
   return()=>{clearInterval(timer);listener.remove();};
  },[user?.id,loadAccess]);
  const accountMatches=Boolean(user?.id&&loadedUserId===user.id),effectiveAccess=accountMatches?access:null,effectiveTenant=accountMatches?tenant:null;
+ const triggerInventoryReload=useCallback(()=>setReloadSignal(v=>v+1),[]);
  const reloadBusinessConfig=useCallback(async()=>{
   const account=tenantRef.current,uid=userRef.current,id=activeRef.current,version=scopeRequest.current;
   if(!account)return;
@@ -174,14 +176,17 @@ export function AppProvider({children}:{children:ReactNode}){
  },[]);
  const setActiveNiche=useCallback((id:NicheId)=>{if(isProductionNiche(id)&&activeRef.current!==id)void openModule(id);},[openModule]);
  const refreshPreferences=useCallback((_id:NicheId)=>{void loadAccess();},[loadAccess]);
- return <AppContext.Provider value={{
+ // Keep actions and the provider value stable on unrelated parent/auth renders.
+ // Genuine module, access and inventory updates still notify every existing consumer.
+ const value=useMemo<AppContextType>(()=>({
   tenant:effectiveTenant,tenantLoading:Boolean(user?.id)&&(!accountMatches||tenantLoading),tenantError,reloadTenant:loadTenant,
   businessConfig:accountMatches?businessConfig:null,reloadBusinessConfig,
   isMasterAdmin:effectiveAccess?.owner===true,accessReady:!!effectiveAccess&&!accessError,accessError,
   canSwitchNiche:!fixedNiche&&!!effectiveAccess&&(effectiveAccess.owner||effectiveAccess.nicheIds.length>1),moduleLoading,moduleError,moduleEpoch,openModule,returnToMaster,
   subscriptionStatus:effectiveAccess?.billingStatus??null,subscriptionLoading,subscriptionTier:effectiveTenant?.subscriptionTier??null,refreshSubscription:loadAccess,
-  activeNiche:NICHES[accountMatches?activeNicheId:'general'],activeNicheId:accountMatches?activeNicheId:'general',fixedNicheId:fixedNiche,enabledNiches:effectiveAccess?.nicheIds??[],
+  activeNiche:NICHES[accountMatches?activeNicheId:'general'],activeNicheId:accountMatches?activeNicheId:'general',fixedNicheId:fixedNiche,enabledNiches:effectiveAccess?.nicheIds??noEnabledNiches,
   nichePreferencesLoading:Boolean(user?.id)&&(!accountMatches||(!effectiveAccess&&!accessError&&!tenantError)),setActiveNiche,enableNiche:refreshPreferences,disableNiche:refreshPreferences,
-  activeAcquisitionId,setActiveAcquisitionId,scanMode,setScanMode,inventoryReloadSignal,triggerInventoryReload:()=>setReloadSignal(v=>v+1),
- }}>{children}</AppContext.Provider>;
+  activeAcquisitionId,setActiveAcquisitionId,scanMode,setScanMode,inventoryReloadSignal,triggerInventoryReload,
+ }),[effectiveTenant,tenantLoading,accountMatches,tenantError,loadTenant,businessConfig,reloadBusinessConfig,effectiveAccess,accessError,moduleLoading,moduleError,moduleEpoch,openModule,returnToMaster,subscriptionLoading,activeNicheId,user?.id,setActiveNiche,refreshPreferences,activeAcquisitionId,scanMode,inventoryReloadSignal,triggerInventoryReload]);
+ return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

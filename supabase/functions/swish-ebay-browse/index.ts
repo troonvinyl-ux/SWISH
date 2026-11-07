@@ -6,6 +6,7 @@
 import { serveModule } from '../_shared/moduleScope.ts';
 import { inferImportNiche } from '../_shared/ebayImportScope.ts';
 import { lookupBarcodeProducts } from '../_shared/quickListBarcode.ts';
+import { parseEbayListingStatus } from '../_shared/listingStatus.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 
@@ -184,7 +185,8 @@ async function getItemFull(
     const itemMatch = xmlText.match(/<Item[^>]*>([\s\S]*?)<\/Item>/);
     if (!itemMatch) return null;
     const itemXml = itemMatch[1];
-    return parseItemXml(itemXml, 'active');
+    const observation=parseEbayListingStatus(xmlText,ebayItemId);
+    return {...parseItemXml(itemXml,observation.status),quantity:observation.quantity,quantitySold:observation.quantitySold,endedAt:observation.endedAt};
   } catch {
     return null;
   }
@@ -325,7 +327,9 @@ function parseItemXml(itemXml: string, ebayStatus: string): Record<string, any> 
     currency,
     sku,
     keywords,
-    ebayStatus,
+    // Section membership is not proof that every unit sold. Preserve partial
+    // multi-quantity inventory rather than converting it into sold products.
+    ebayStatus:quantitySold>=quantity?'sold':ebayStatus==='sold'?(extractTag(itemXml,'ListingStatus').toLowerCase()==='active'?'active':'ended'):ebayStatus,
   };
 }
 
