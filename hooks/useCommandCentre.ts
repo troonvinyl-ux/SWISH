@@ -23,7 +23,7 @@ export function useCommandCentre(platformOverride?: boolean, enabledOverride?: b
   try {
    const result = await loadCommandSnapshot(app.tenant?.id ?? null, platform, user.id);
    if (current.current !== key || generation.current !== version) return;
-   setState(previous => ({ key, snapshot: result.snapshot ?? (result.retryable && previous.key === key ? previous.snapshot : null), error: result.error, loading: false, stale: result.retryable && Boolean(result.error) }));
+   setState(previous => { const retained=result.retryable && previous.key === key ? previous.snapshot : null;return { key, snapshot: result.snapshot ?? retained, error: result.error, loading: false, stale: Boolean(result.error && retained) }; });
   } catch {
    if (current.current === key && generation.current === version) setState({ key, snapshot: null, error: 'Reporting session could not be verified. Refresh access to retry.', loading: false, stale: false });
   } finally { if (pending.current?.generation === version) pending.current = null; }
@@ -44,5 +44,5 @@ export function useCommandCentre(platformOverride?: boolean, enabledOverride?: b
   // Inspection never binds module scope. Only explicit confirmed workspace entry does.
   if (await app.openModule(id)) router.replace(destinations[action] as any);
  }, [app.openModule, router]);
- return { snapshot, modules, totals, platform, refresh, open, loading: enabled && (state.key !== key || state.loading), error: state.key === key ? state.error : null, stale: state.key === key && state.stale, shell };
+ return { snapshot, modules, totals, operations:snapshot?.operations??null, platform, refresh, open, loading: enabled && (state.key !== key || state.loading), error: state.key === key ? state.error : null, stale: state.key === key && state.stale, shell };
 }

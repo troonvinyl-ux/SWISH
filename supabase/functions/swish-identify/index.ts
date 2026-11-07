@@ -232,6 +232,10 @@ EVIDENCE RULE: If a product tag explicitly reads a product name/year and a separ
 Be conservative about anything the images do not establish. Never invent attributions.`,
 };
 
+// Canonical Collectibles uses the existing evidence-led domain prompt. The
+// legacy generic key is not an entitlement or inventory alias.
+SPECIALIST_SYSTEM_PROMPTS.collectibles = SPECIALIST_SYSTEM_PROMPTS.curiosities_collectibles;
+
 // ── Master evidence rules (appended to all) ───────────────────────────────────
 const MASTER_EVIDENCE_RULES = `
 

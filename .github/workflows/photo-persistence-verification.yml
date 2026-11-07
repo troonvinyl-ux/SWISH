@@ -1,0 +1,37 @@
+name: Shared canonical photo persistence
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['services/**', 'shared/**', 'hooks/**', 'components/**', 'supabase/**', '.github/workflows/photo-persistence-verification.yml']
+  push:
+    branches: [main]
+    paths: ['services/**', 'shared/**', 'hooks/**', 'components/**', 'supabase/**']
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: {version: 9.15.9}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - run: bash scripts/install-dependencies.sh
+      - run: mkdir -p verification-output && git rev-parse HEAD > verification-output/source-sha.txt
+      - name: TypeScript
+        run: npx tsc --noEmit > verification-output/typescript.txt 2>&1
+      - name: All-niche mocked canonical photo lifecycle
+        if: ${{ !cancelled() }}
+        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/photoCarryForwardIntegration.test.ts services/__tests__/inventoryPhotoPersistence.test.ts services/__tests__/capturedPhotoRecovery.test.ts services/__tests__/photoPipelineBoundary.test.ts services/__tests__/originalImageBytes.test.ts --json --outputFile=verification-output/photo-persistence-jest.json
+      - name: Edge dependency boundary
+        if: ${{ !cancelled() }}
+        run: node scripts/validate-edge-deployment.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: canonical-photos-${{ github.sha }}
+          path: verification-output/
+# Mocked service coverage is not device/restart or live eBay acceptance.
+# No secrets, real inventory writes, paid calls or publication are performed here.

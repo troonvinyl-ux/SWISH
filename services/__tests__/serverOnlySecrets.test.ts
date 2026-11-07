@@ -5,12 +5,12 @@ import * as path from 'path';
 import { aggregateActualEbayFees, withActualEbayFeeNote } from '../../supabase/functions/_shared/ebayFinance';
 
 const projectRoot = path.resolve(__dirname, '../..');
-const clientDirectories = ['app', 'services', 'hooks', 'contexts', 'components', 'constants', 'template', 'plugins'];
+const clientDirectories = ['app', 'services', 'hooks', 'contexts', 'components', 'constants', 'template', 'plugins', 'shared'];
 const secretNames = [
   'EBAY_SIGNATURE_KEY_JWE', 'EBAY_SIGNATURE_PRIVATE_KEY',
   'EBAY_CLIENT_SECRET', 'EBAY_CLIENT_ID', 'SWISH_CREDENTIAL_KEY',
   'ONSPACE_AI_API_KEY', 'ONSPACE_AI_KEY', 'STRIPE_SECRET_KEY',
-  'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_DB_URL', 'NUMISTA_API_KEY',
+  'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_DB_URL', 'NUMISTA_API_KEY', 'BACKGROUND_ERASE_API_KEY',
 ];
 const allowedPublicVariables = new Set(['EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_ANON_KEY']);
 
@@ -492,15 +492,16 @@ describe('SWISH rendered coin reference separation', () => {
     'utf8',
   );
 
-  test('rendered references are stored in attributes and not canonical listing media', () => {
+  test('legacy rendered references are not uploaded; only shared provider links are retained', () => {
     const start = identificationService.indexOf('export async function saveCoinReferenceImages(');
     const end = identificationService.indexOf('export async function saveIdentifiedItem(', start);
     expect(start).toBeGreaterThanOrEqual(0);
     expect(end).toBeGreaterThan(start);
     const implementation = identificationService.slice(start, end);
-    expect(implementation).toContain('attributes: { ...attributes, _coin_reference_images: { ...existing, ...urls } }');
-    expect(implementation).toContain(".eq('tenant_id', tenantId)");
-    expect(implementation).toContain('/references/');
+    expect(implementation).toContain('linkStudioImages(tenantId,itemId,studioImages)');
+    expect(implementation).toContain('studioImageIsUsable(image.studio)');
+    expect(implementation).not.toContain('/references/');
+    expect(implementation).not.toContain('.upload(');
     expect(implementation).not.toContain('media:');
     expect(implementation).not.toContain("from('ebay'");
   });
@@ -528,8 +529,10 @@ describe('SWISH coin image enhancement provider error safety', () => {
   );
 
   test('does not log raw AI provider response bodies', () => {
-    const engine=fs.readFileSync(path.join(projectRoot,'supabase/functions/_shared/smartStudioEngine.ts'),'utf8');
-    expect(engine).toContain("console.error('[swish-coin-image-enhance] model request failed', response.status)");
+    const engine=fs.readFileSync(path.join(projectRoot,'supabase/functions/_shared/backgroundEraseService.ts'),'utf8');
+    expect(engine).toContain("console.error('[BackgroundErase] provider HTTP status',response.status)");
+    expect(engine).toContain("Deno.env.get('BACKGROUND_ERASE_API_KEY')");
+    expect(engine).not.toContain('response.text()');
     expect(engine).not.toContain('console.log(imageDataUrl)');
     expect(imageEnhance).not.toContain("response.text()).slice(0, 500)");
     expect(imageEnhance).not.toContain("response.status, detail");

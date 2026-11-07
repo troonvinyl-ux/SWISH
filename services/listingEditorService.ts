@@ -1,4 +1,6 @@
 import { availableListingPhotos, preferredListingPhotos } from '@/shared/smartStudio';
+import { recordCommandPreflight } from './commandPreflightEvidenceService';
+import { evaluateSpecialistSafety } from '@/shared/specialistIntelligence';
 import { photoPersistenceIssue } from '@/shared/photoPersistence';
 import { getSupabaseClient } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
@@ -135,10 +137,14 @@ export async function checkAntiqueListing(tenantId: string, listingId: string, n
     const loaded = await loadListingEditor(tenantId, listingId, nicheId);
     if (loaded.error || !loaded.data) return { ready: false, error: loaded.error };
     const row: any = loaded.data; const item = row.items; const attributes = item.attributes ?? {};
+    const finish=async(result:SpecialistPreflightResult,issue:string|null=null):Promise<SpecialistPreflightResult>=>{
+      await recordCommandPreflight({tenantId,listingId,itemId:item.id,nicheId,itemUpdatedAt:item.updated_at,listingUpdatedAt:row.updated_at,ready:result.ready,issue});
+      return result;
+    };
     const photoIssue = photoPersistenceIssue(item.media ?? [], attributes);
-    if(photoIssue)return {ready:false,error:photoIssue};
+    if(photoIssue)return finish({ready:false,error:photoIssue},'photos');
     const categoryId = String(row.category_id ?? '');
-    if (!categoryId || attributes.ebay_category_id !== categoryId) return { ready: false, error: 'Save the same category on this draft and inventory item before submitting.' };
+    if (!categoryId || attributes.ebay_category_id !== categoryId) return finish({ ready: false, error: 'Save the same category on this draft and inventory item before submitting.' },'category');
     const [aspects, conditions, validation] = await Promise.all([
       invokeListingOperation({ route: 'get_category_aspects', tenantId, categoryId, forceLive: true }),
       invokeListingOperation({ route: 'get_condition_policies', tenantId, categoryId }),
@@ -150,10 +156,10 @@ export async function checkAntiqueListing(tenantId: string, listingId: string, n
     const conditionPolicy = conditions.data.policy as AntiqueConditionPolicy;
     const conditionId = String(attributes.ebay_condition_id ?? '');
     const condition = selectAntiqueCondition(conditionPolicy, conditionId);
-    if (condition.error) return { ready: false, error: 'Choose the eBay condition that matches this item.', issue: 'condition', conditionPolicy, conditionId, categoryId };
+    if (condition.error) return finish({ ready: false, error: 'Choose the eBay condition that matches this item.', issue: 'condition', conditionPolicy, conditionId, categoryId },'condition');
     const specifics = Array.isArray(attributes.ebay_item_specifics) ? attributes.ebay_item_specifics : [];
     const missing = validateAntiqueSpecifics(specifics, normalizeAntiqueAspects(aspects.data.aspects));
-    if (missing) return { ready: false, error: missing, conditionPolicy, conditionId, categoryId };
+    if (missing) return finish({ ready: false, error: missing, conditionPolicy, conditionId, categoryId },'specifics');
     const originalMedia = item.media ?? [];
     const allowedMedia = availableListingPhotos(originalMedia, attributes);
     const media = Array.isArray(attributes.ebay_listing_media) ? attributes.ebay_listing_media : preferredListingPhotos(originalMedia, attributes);
@@ -161,8 +167,10 @@ export async function checkAntiqueListing(tenantId: string, listingId: string, n
     const options = attributes.ebay_listing_options ?? {};
     const price = options.listingType === 'Chinese' ? Number(options.startPrice) : Number(row.price);
     const basic = validateAntiqueListingBasics({ title: row.title, description: row.description, price, quantity: Number(item.quantity ?? 1), media });
-    if (basic) return { ready: false, error: basic };
-    return { ready: true, error: null, conditionPolicy, conditionId, categoryId };
+    if (basic) return finish({ ready: false, error: basic },'listing');
+    const safety=evaluateSpecialistSafety(nicheId,attributes);
+    if(safety.blocked)return finish({ready:false,error:safety.reasons.join(' ')},'safety');
+    return finish({ ready: true, error: null, conditionPolicy, conditionId, categoryId });
   } catch { return { ready: false, error: 'Specialist preflight could not run. No successful validation was inferred.' }; }
 }
 

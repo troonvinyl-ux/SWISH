@@ -1,0 +1,40 @@
+{
+  "status": "implemented_acceptance_pending",
+  "targetAchieved": false,
+  "targetMs": 60000,
+  "clock": "expo_js_launch_or_foreground",
+  "nativeProcessStartupMeasured": false,
+  "backendReadOnlyBaseline": {
+    "timingEvents": 0,
+    "serverLiveConfirmations": 0,
+    "v2TimingEvents": 0,
+    "telemetryIndexInstalled": true
+  },
+  "medianCompletionMs": null,
+  "p90CompletionMs": null,
+  "deviceCapturesPerformed": 0,
+  "paidProviderCallsPerformed": 0,
+  "livePublicationsPerformed": 0,
+  "userInventoryRecordsModifiedByAudit": 0,
+  "typescript": "not_run",
+  "regressions": "authored_not_run",
+  "androidBuild": "not_run",
+  "iosBuild": "not_run",
+  "deviceRestartAcceptance": "not_run",
+  "registeredNicheAcceptance": {
+    "coins": "not_run",
+    "collectibles": "not_run",
+    "motocross": "not_run",
+    "bicycles": "not_run",
+    "clothing": "not_run",
+    "antiques": "not_run",
+    "trading_cards": "not_run",
+    "fossils": "not_run",
+    "beauty": "not_run",
+    "tech": "not_run",
+    "tunes_flip": "not_run",
+    "surplus_flip": "not_run"
+  },
+  "report": "docs/SWISH_UNIVERSAL_QUICK_LIST.md",
+  "ciWorkflow": ".github/workflows/universal-quick-list-verification.yml"
+}

@@ -86,6 +86,7 @@ export interface MarketValueResult {
   soldMarket: SoldMarketData;
   activeAskingPrices: ActiveAskingPrices;
   numistaSales?: NumistaSalesData | null;
+  numistaSaleEvidence?: {source:string;numistaN:string;available:boolean;message:string;records:Array<{kind:string;price:number|null;currency:string;date:string;condition:string;url:string}>};
   combinedEvidence?: {
     numistaRelevant: number;
     ebayRelevant: number;
@@ -160,6 +161,7 @@ export async function getMarketValue(params: {
   numistaMatchScore?: number;
   numistaMatchTier?: string;
   applyToItem?: boolean;
+  quickList?: boolean; // Starts deterministic market calls while optional AI research runs.
   /** Stored item image URLs to pass for Gemini vision + eBay visual search */
   imageUrls?: string[];
   /** Original capture encoded for in-memory research; never stored in the database. */

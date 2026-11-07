@@ -1,0 +1,37 @@
+name: Universal Quick List regression verification
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['app/**', 'services/**', 'hooks/**', 'components/**', 'shared/**', 'contexts/**', 'constants/**', 'niche-modules.json', '.github/workflows/universal-quick-list-verification.yml']
+  push:
+    branches: [main]
+    paths: ['app/**', 'services/**', 'hooks/**', 'components/**', 'shared/**', 'contexts/**']
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: {version: 9.15.9}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - run: bash scripts/install-dependencies.sh
+      - run: mkdir -p verification-output && git rev-parse HEAD > verification-output/source-sha.txt
+      - name: TypeScript
+        run: npx tsc --noEmit > verification-output/typescript.txt 2>&1
+      - name: Universal policy, canonical photos and publication guards (mocked)
+        if: ${{ !cancelled() }}
+        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/universalQuickList.test.ts services/__tests__/quickListPreparation.test.ts services/__tests__/quickListContracts.test.ts services/__tests__/quickListLiveEvidence.test.ts services/__tests__/quickListSpecialistScope.test.ts services/__tests__/photoCarryForwardIntegration.test.ts services/__tests__/photoPipelineBoundary.test.ts --json --outputFile=verification-output/universal-quick-list.json
+      - name: Edge dependency validation
+        if: ${{ !cancelled() }}
+        run: node scripts/validate-edge-deployment.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: universal-quick-list-${{ github.sha }}
+          path: verification-output/
+# Pure/mocked CI is not native capture, restart, AI accuracy or live eBay acceptance.
+# This workflow performs no real inventory writes, paid calls or publication.

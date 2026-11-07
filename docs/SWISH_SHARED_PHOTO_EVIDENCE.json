@@ -1,0 +1,30 @@
+{
+  "request": "Prompt 3 — Shared Photo Pipeline and Image Persistence",
+  "status": "implementation_delivered_acceptance_open",
+  "endToEndComplete": false,
+  "dataMutationsPerformed": false,
+  "newStorageSystem": false,
+  "backendReadOnlyEvidence": {
+    "canonicalItemsBefore": 763,
+    "canonicalItemsAfter": 763,
+    "itemsWithAnyMedia": 758,
+    "itemsWithoutMedia": 5,
+    "storedOriginalObjects": 15,
+    "sameItemLinkedOriginalObjects": 13,
+    "unlinkedOriginalObjects": 2,
+    "historicalTemporaryReferenceItems": 2,
+    "productionItemsExercisingNewPipeline": 0,
+    "publicationClaimGuardInstalled": true,
+    "preservationTriggerInstalled": true,
+    "anonClaimExecute": false,
+    "authenticatedClaimExecute": false,
+    "serviceRoleClaimExecute": true,
+    "readOnlyPartialCaptureFixtureBlocked": true
+  },
+  "verificationScope": "Canonical-reference and schema readback only; not downloaded byte fidelity or new camera/restart/publication acceptance.",
+  "notExecuted": ["Jest", "TypeScript build", "native builds", "camera capture on device", "force-stop/restart acceptance", "authenticated web reload acceptance", "BackgroundErase live processing", "live eBay photo inspection"],
+  "nicheAcceptance": {
+    "coins": "not_run", "collectibles": "not_run", "motocross": "not_run", "bicycles": "not_run", "clothing": "not_run", "antiques": "not_run", "beauty": "not_run", "fossils": "not_run", "trading_cards": "not_run", "tech": "not_run", "surplus_flip": "not_run", "tunes_flip": "not_run"
+  },
+  "report": "docs/SWISH_SHARED_PHOTO_PIPELINE.md"
+}

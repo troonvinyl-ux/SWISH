@@ -163,7 +163,7 @@ export function mapItem(row: any): Item {
     manufacturer: row.manufacturer ?? undefined,
     yearMade: row.year_made ?? undefined,
     countryOfOrigin: row.country_of_origin ?? undefined,
-    quantity: row.quantity ? Number(row.quantity) : undefined,
+    quantity: row.quantity == null ? 1 : Number(row.quantity),
     sku: row.sku ?? undefined,
     storageLocation: row.storage_location ?? undefined,
     customNotes: row.custom_notes ?? undefined,
@@ -280,6 +280,7 @@ export async function createItem(
   const { data, error } = await supabase
     .from('items')
     .insert({
+      ...(input.id ? { id: input.id } : {}),
       tenant_id: tenantId,
       acquisition_id: input.acquisitionId ?? null,
       canonical_title: input.canonicalTitle,
@@ -316,6 +317,12 @@ export async function createItem(
     .select()
     .single();
 
+  if (error && input.id) {
+    // A timed-out INSERT may have committed. Reopen the same tenant/item identity;
+    // never overwrite it or create a replacement on retry.
+    const existing = await supabase.from('items').select('*').eq('id',input.id).eq('tenant_id',tenantId).maybeSingle();
+    if(!existing.error && existing.data && existing.data.specialist_id===input.specialistId)return {item:mapItem(existing.data),error:null};
+  }
   if (error) return { item: null, error: error.message };
   return { item: mapItem(data), error: null };
 }

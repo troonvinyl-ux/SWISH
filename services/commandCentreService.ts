@@ -2,6 +2,7 @@ import { getSupabaseClient } from '@/template';
 import { backendRead, shareBackendRequest } from './backendRequestService';
 import { isBackendUnavailable } from './backendAvailabilityService';
 import { parseCanonicalCounts } from './canonicalInventoryService';
+import { validateCommandOperations, type CommandOperations } from './commandReportService';
 import { PRODUCTION_NICHE_IDS, isProductionNiche, type ProductionNicheId } from '@/constants/niches';
 export type RecordedHealth = 'recorded_success' | 'attention' | 'failed' | 'unknown' | 'not_connected';
 export interface CommandModule {
@@ -11,7 +12,7 @@ export interface CommandModule {
 }
 export interface CommandSnapshot {
  verifiedOwner:boolean;scope:'platform'|'tenant';tenantId:string|null;checkedAt:string;weekStart:string;monthStart:string;timezone:string;currencies:string[];modules:CommandModule[];
- registeredUsers:number|null;activeSubscribers:number|null;subscriptionRevenue:null;canonicalCounts?:unknown;unclassifiedInventory?:number;
+ registeredUsers:number|null;activeSubscribers:number|null;subscriptionRevenue:null;canonicalCounts?:unknown;unclassifiedInventory?:number;operations?:CommandOperations;
  aiActivity:{identifications:number;valuations:number;failures:number};
  activity:{tenant_id:string;niche_id:string;function_name:string;outcome:string;status_code:number;created_at:string}[];limitations:string[];
 }
@@ -31,6 +32,7 @@ export function validateCommandSnapshot(value:unknown,platform:boolean,tenantId:
  // pre-migration contracts are errors, not inferred zero/partial inventory.
  if(platform){try{parseCanonicalCounts(row.canonicalCounts);}catch{return false;}}
  if(row.unclassifiedInventory!=null&&(!Number.isSafeInteger(row.unclassifiedInventory)||row.unclassifiedInventory<0))return false;
+ if(row.operations!==undefined&&(!validateCommandOperations(row.operations)||row.operations.niches.length!==row.modules.length||row.modules.some(module=>!row.operations!.niches.some(niche=>niche.id===module.id))))return false;
  const ids=new Set<string>();
  return row.modules.every(module=>{
   if(!isProductionNiche(module.id)||ids.has(module.id))return false;ids.add(module.id);
@@ -43,7 +45,7 @@ export async function loadCommandSnapshot(tenantId:string|null,platform:boolean,
  return shareBackendRequest(`command:${userId}:${tenantId??''}:${platform}`,async()=>{
   try{
    const {data,error}=await backendRead(`command-snapshot:${tenantId??''}:${platform}`,signal=>getSupabaseClient().rpc('swish_command_snapshot',{p_tenant_id:tenantId,p_platform:platform}).abortSignal(signal));
-   if(error)return {snapshot:null,error:'Canonical reporting permission or data query was not confirmed.',retryable:false};
+   if(error){const temporary=isBackendUnavailable(error.message);return {snapshot:null,error:temporary?'Canonical reporting is temporarily unavailable. The last successful snapshot is retained.':'Canonical reporting permission or data query was not confirmed.',retryable:temporary};}
    if(!validateCommandSnapshot(data,platform,tenantId))return {snapshot:null,error:'Reporting scope or data contract was not confirmed.',retryable:false};
    return {snapshot:data,error:null,retryable:false};
   }catch(cause){const temporary=isBackendUnavailable(cause instanceof Error?cause.message:'');return {snapshot:null,error:temporary?'Canonical reporting is temporarily unavailable. Retry when the backend responds.':'Reporting permission or session was not verified. Refresh access and retry.',retryable: temporary};}

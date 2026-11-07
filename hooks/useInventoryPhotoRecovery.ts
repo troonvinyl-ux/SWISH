@@ -15,7 +15,7 @@ export function useInventoryPhotoRecovery(item: Item | null, onRecovered: (item:
   const attempted = useRef('');
   const locked = useRef('');
   const [state, setState] = useState<{ scope: string; busy: boolean; error: string | null }>({ scope: '', busy: false, error: null });
-  const eligible = Boolean(user && tenant && accessReady && !moduleLoading && !subscriptionLoading && item && item.tenantId === tenant.id && !item.media.length &&
+  const eligible = Boolean(user && tenant && accessReady && !moduleLoading && !subscriptionLoading && item && item.tenantId === tenant.id && (!item.media.length || (item.attributes?._photo_pipeline && item.attributes._photo_pipeline.status !== 'complete')) &&
     resolveProductionNiche(item.specialistId) === nicheId);
 
   const retry = useCallback(async () => {
