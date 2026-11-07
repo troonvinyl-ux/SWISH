@@ -12,7 +12,7 @@ jest.mock('@/template',()=>({getSupabaseClient:jest.fn()}));
 jest.mock('@/services/subscriptionService',()=>({checkSubscription:jest.fn()}));
 const source=(file:string)=>fs.readFileSync(path.resolve(__dirname,'../..',file),'utf8');
 const sha='a'.repeat(40);
-const moduleRow=(id:'coins'|'clothing',listed:number,sales:number)=>({id,inventory:2,sold_total:1,review:0,listed_inventory:1,live:1,drafts:1,listed_value:listed,sold_week:1,sales_week:sales,sales_month:sales,realised_total:sales,completed_sales:1,duplicate_sales:0,outstanding:1,ebay_status:'unknown',ai_status:'unknown',last_sync:null,ai_checked_at:null} as CommandModule);
+const moduleRow=(id:'coins'|'clothing',listed:number,sales:number)=>({id,inventory:2,stock_total:0,inventory_units:2,sold_total:1,review:0,listed_inventory:1,live:1,drafts:1,listed_value:listed,sold_week:1,sales_week:sales,sales_month:sales,realised_total:sales,completed_sales:1,duplicate_sales:0,outstanding:1,ebay_status:'unknown',ai_status:'unknown',last_sync:null,ai_checked_at:null} as CommandModule);
 
 describe('Command centre data and routing contracts',()=>{
  test('single-niche direct entry and multi/owner portfolio beat restored niche',()=>{

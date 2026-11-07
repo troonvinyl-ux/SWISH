@@ -68,7 +68,7 @@ export function useListingEditor(listingId: string) {
       if (result.error || !result.data) { setError(result.error); return; }
       const initialItem = (result.data as any).items;
       let recoveredPhotos = false;
-      if (initialItem?.id && !(initialItem.media ?? []).length) {
+      if (initialItem?.id && (!(initialItem.media ?? []).length || (initialItem.attributes?._photo_pipeline && initialItem.attributes._photo_pipeline.status !== 'complete'))) {
         const recovered = await recoverCapturedItemPhotos(tenant.id, initialItem.id, nicheId);
         if (currentScope.current !== scope) return;
         if (recovered.error || !recovered.item) setError(recovered.error ?? 'Captured photos could not be recovered. Open the saved inventory item to retry.');

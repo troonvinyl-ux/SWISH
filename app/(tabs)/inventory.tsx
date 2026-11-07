@@ -47,6 +47,7 @@ const InventoryCard = memo(function InventoryCard({ item, tab, config, onOpen, o
       {item.inventoryId ? <Text style={[s.reference, { color }]}>{item.inventoryId}</Text> : null}
       <Text style={s.itemTitle} numberOfLines={2}>{item.canonical_title || 'Untitled'}</Text>
       {meta ? <Text style={s.sub} numberOfLines={1}>{meta}</Text> : null}
+      {item.attributes?._photo_pipeline && item.attributes._photo_pipeline.status !== 'complete' ? <Text accessibilityRole="alert" style={[s.sub,{color:Colors.warning}]}>Photos need retry · open this saved item</Text> : null}
       <View style={s.priceRow}><Text style={[s.status, { color }]}>{tab === 'live' ? 'Live on eBay' : TABS.find(t => t.id === tab)?.label}</Text>
         {Number(price) > 0 ? <Text style={[s.price, { color }]}>£{Number(price).toFixed(2)}</Text> : null}
       </View>
@@ -79,7 +80,7 @@ export default function MasterInventoryScreen() {
   const effectiveSearch = searchScope === state.scope ? search : '';
   const effectiveFilter = searchScope === state.scope ? filter : '';
   const filters = FILTERS[id ?? ''] ?? [[`All ${config.terms.items}`, '']]; const banner = BANNERS[id ?? ''];
-  const counts = { stock: state.views.stock.length, draft: state.views.draft.length, live: state.views.live.length, sold: state.views.sold.length };
+  const counts = state.counts;
   const data = useMemo(() => (showAllCoins ? state.allItems : state.views[state.activeTab]).filter((item: InventoryViewItem) => {
     const haystack = `${item.canonical_title} ${item.catalogueNumber ?? ''} ${item.inventoryId ?? ''} ${item.ruler ?? ''} ${item.denomination ?? ''} ${item.mint ?? ''} ${item.material ?? ''} ${JSON.stringify(item.attributes)}`.toLowerCase();
     return (!effectiveSearch.trim() || haystack.includes(effectiveSearch.trim().toLowerCase())) && (showAllCoins || state.activeTab !== 'stock' || !effectiveFilter || haystack.includes(effectiveFilter));
@@ -143,7 +144,7 @@ export default function MasterInventoryScreen() {
           <View style={s.headerIcon}><MaterialIcons name={config.icon as any} size={22} color={config.color} /></View>
           <View style={s.headerText}>
             <Text numberOfLines={1} adjustsFontSizeToFit style={[s.headerTitle, { color: config.color }]}>{config.shortName} Inventory</Text>
-            <Text style={s.sub}>{state.error || !state.ready || state.loading ? 'Inventory counts not yet verified' : `${state.allItems.length} total · ${counts.stock} stock · ${counts.draft} draft · ${counts.live} live · ${counts.sold} sold`}</Text>
+            <Text style={s.sub}>{state.error || !state.ready || state.loading ? 'Inventory counts not yet verified' : `${state.totalCount} unique items · ${counts.stock} stock · ${counts.draft} draft · ${counts.live} live items · ${counts.sold} sold`}</Text>
           </View>
           <Pressable onPress={() => router.push('/(tabs)/scan' as any)} style={[s.hBtn, { backgroundColor: config.color }]} accessibilityLabel="Add inventory"><MaterialIcons name="add" size={22} color={Colors.background} /></Pressable>
         </View>
@@ -173,9 +174,10 @@ export default function MasterInventoryScreen() {
       {state.activeTab === 'stock' ? <Pressable accessibilityRole="button" accessibilityLabel="Analyse a pallet, job lot or collection manifest" onPress={() => router.push('/lot-opportunity' as any)} style={({ pressed }) => [s.banner, { opacity: pressed ? 0.7 : 1 }]}>
         <MaterialIcons name="account-tree" size={20} color={config.color} /><View style={s.flex}><Text style={[s.bannerTitle, { color: config.color }]}>Buy a lot · split & sell</Text><Text style={s.sub}>Manifest → max bid → unit / bundle economics → drafts</Text></View>
       </Pressable> : null}
+      <Text style={s.info}>{state.ready && !state.error && !state.loading ? `${state.liveListingCount} unique live eBay listings · ${state.unitCount} recorded units. Status metrics are not added to inventory.` : 'Canonical account figures are awaiting verification.'}</Text>
       <Text style={s.info}>{showAllCoins ? `All Coins · ${data.length} shown · Original records from this account only` : state.activeTab === 'draft' ? 'Drafts are saved in SWISH — Submit publishes to eBay' : state.activeTab === 'live' ? 'Live excludes sold, ended and completed records in this niche. Sync checks current eBay availability.' : state.activeTab === 'sold' ? 'Sync pulls orders from your connected eBay account' : `${filters.find(entry => entry[1] === filter)?.[0] ?? 'In Stock'} · ${data.length} items`}</Text>
       {state.error ? <View style={s.syncError}><Text accessibilityRole="alert" style={s.syncErrorText}>{state.error} Inventory is not confirmed empty.</Text><Pressable onPress={() => void state.refresh()} style={({ pressed }) => [s.hBtn, { opacity: pressed ? 0.7 : 1 }]}><Text style={s.chipText}>Retry</Text></Pressable></View> : null}
-      <FlatList style={s.flex} data={data} keyExtractor={item => showAllCoins ? item.id : `${state.activeTab}-${item.id}-${item.listing?.id ?? ''}`} ListHeaderComponent={id === 'coins' ? <View style={s.scopePanel}><InventoryAccountScope total={state.allItems.length} verified={state.ready && !state.loading} error={state.error}/></View> : null} showsVerticalScrollIndicator={false} contentContainerStyle={s.list} refreshing={state.refreshing} onRefresh={state.refresh}
+      <FlatList style={s.flex} data={data} keyExtractor={item => showAllCoins ? item.id : `${state.activeTab}-${item.id}-${item.listing?.id ?? ''}`} ListHeaderComponent={id === 'coins' ? <View style={s.scopePanel}><InventoryAccountScope total={state.totalCount} verified={state.ready && !state.loading} error={state.error}/></View> : null} showsVerticalScrollIndicator={false} contentContainerStyle={s.list} refreshing={state.refreshing} onRefresh={state.refresh}
         ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
         renderItem={({ item }) => {
           const tab = showAllCoins ? itemTabs.get(item.id) ?? 'stock' : state.activeTab;

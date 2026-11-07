@@ -6,6 +6,7 @@ import { encryptCredentials, decryptCredentials } from '../_shared/credentialCry
 import registry from '../_shared/niche-modules.json' with {type:'json'};
 import { corsHeaders } from '../_shared/cors.ts';
 import { parseLiveContent } from '../_shared/ebayLiveContent.ts';
+import { parseEbayListingStatus } from '../_shared/listingStatus.ts';
 import { buildSellingRequest, sellingSectionXml, sellingPagination, tradingDiagnostic, type SellingSection } from '../_shared/ebaySellingRequest.ts';
 const TRADING_API='https://api.ebay.com/ws/api.dll';
 const TOKEN_URL='https://api.ebay.com/identity/v1/oauth2/token';
@@ -71,7 +72,9 @@ async function getItemObservation(id:string,token:string,clientId:string):Promis
  const selling=tag(body,'SellingStatus');const state=tag(selling,'ListingStatus').toLowerCase();
  const quantity=Number(tag(body,'Quantity'));const sold=Number(tag(selling,'QuantitySold'));
  if(!['active','completed','ended'].includes(state)||!tag(selling,'QuantitySold')||!Number.isInteger(quantity)||quantity<1||!Number.isInteger(sold)||sold<0)throw new Error('GetItem availability incomplete; statuses preserved');
- const status=state==='active'&&sold<quantity?'active':sold>0?'sold':'ended';
+ // Reuse the status endpoint's quantity policy: a partially sold ended listing
+ // still has canonical units and must not mark the whole item sold.
+ const status=parseEbayListingStatus(xml,id).status;
  const specifics=[...tag(body,'ItemSpecifics').matchAll(/<NameValueList(?:\s[^>]*)?>([\s\S]*?)<\/NameValueList>/g)].map(match=>({name:decode(tag(match[1],'Name')),value:decode(tag(match[1],'Value'))})).filter(row=>row.name&&row.value);
  const photos=[...new Set([...body.matchAll(/<PictureURL>\s*([^<]+)\s*<\/PictureURL>/g)].map(match=>decode(match[1]).trim().replace(/^http:/,'https:')))];
  const content=parseLiveContent(xml,id);

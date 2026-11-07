@@ -77,7 +77,10 @@ async function persist(tenantId: string, itemId: string, source: CapturedImage[]
     const row = await readRow(tenantId, itemId);
     if (!originals.length) throw new Error('Capture original photographs before saving photo references.');
     await commit(tenantId, itemId, [], originals.map(image => ({ slotId: image.slotId, slotLabel: image.slotLabel, ...(image.originalStorageUri && row.media?.includes(image.originalStorageUri) ? { url: image.originalStorageUri } : {}) })), []);
-    for (let index = 0; index < originals.length; index++) {
+    // Two independent immutable uploads at a time: bound native memory while hiding network latency.
+    let nextIndex = 0;
+    const uploadWorker = async () => { for (;;) {
+      const index = nextIndex++; if (index >= originals.length) return;
       const image = originals[index];
       try {
         let saved: { url: string; hash?: string };
@@ -96,7 +99,8 @@ async function persist(tenantId: string, itemId: string, source: CapturedImage[]
         originals[index] = { ...image, originalStorageUri: undefined, originalByteHash: undefined };
         errors.push(`${image.slotLabel}: ${cause instanceof Error ? cause.message : 'Original upload failed.'}`);
       }
-    }
+    } };
+    await Promise.all(Array.from({length:Math.min(2,originals.length)},()=>uploadWorker()));
     const assets = originals.filter(image => image.originalStorageUri).map(image => ({ slotId: image.slotId, slotLabel: image.slotLabel, url: image.originalStorageUri!, ...(image.originalByteHash ? { hash: image.originalByteHash } : {}) }));
     const expected = originals.map(image => ({ slotId: image.slotId, slotLabel: image.slotLabel, ...(image.originalStorageUri ? { url: image.originalStorageUri } : {}) }));
     await commit(tenantId, itemId, assets, expected, originals);

@@ -51,6 +51,24 @@ describe('Read governance and actual concurrency',()=>{
     release({data:'old-private-data',error:null});
     expect((await pending).message).toMatch(/session changed/);
   });
+  test('queue rejects replacement login before invoking the queued operation',async()=>{
+    const releases:Array<(value:unknown)=>void>=[];
+    const blockers=[0,1].map(i=>backendRead(`held-${i}`,()=>new Promise(resolve=>{releases.push(resolve);})).catch(error=>error));
+    await new Promise(resolve=>setTimeout(resolve,0));
+    expect(releases).toHaveLength(2);
+    const op=jest.fn().mockResolvedValue({data:'should-not-run',error:null});
+    const queued=backendRead('queued-private-read',op).catch(error=>error);
+    await new Promise(resolve=>setTimeout(resolve,0));
+    client.auth.getSession.mockResolvedValue({data:{session:{access_token:'new-login'}},error:null});
+    releases.forEach(release=>release({data:null,error:null}));
+    await Promise.all(blockers);
+    expect((await queued).message).toMatch(/session changed before backend dispatch/);
+    expect(op).not.toHaveBeenCalled();
+  });
+  test('a governed read captures scope once, then checks at dispatch and completion',async()=>{
+    await backendRead('scope-capture-count',()=>Promise.resolve({data:true,error:null}));
+    expect(client.auth.getSession).toHaveBeenCalledTimes(3);
+  });
   test('orchestration sharing does not cache earlier successful grants',async()=>{
     const op=jest.fn().mockResolvedValue(true);
     await shareBackendRequest('grant',op);await shareBackendRequest('grant',op);

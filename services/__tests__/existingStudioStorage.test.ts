@@ -2,8 +2,9 @@ jest.mock('@/template',()=>({getSupabaseClient:jest.fn()}));
 import { getSupabaseClient } from '@/template';
 import { saveExistingStudioImage } from '../smartStudioStorageService';
 import { SMART_STUDIO_VERSION,type StudioResult } from '../../shared/smartStudio';
+import { backgroundEraseQuality } from './fixtures/backgroundEraseFixture';
 const original='https://storage.test/item/originals/front.jpg';
-const studio:StudioResult={version:SMART_STUDIO_VERSION,status:'ready',originalUri:original,enhancedUri:'https://storage.test/studio/presentation.png',maskUri:'https://storage.test/studio/mask.png',confidence:0.91,warnings:[],quality:{sourcePixelsOnly:true,completeness:'complete',boundary:'checked',detailCheck:'source pixels',background:'neutral'}};
+const studio:StudioResult={version:SMART_STUDIO_VERSION,status:'ready',originalUri:original,enhancedUri:'https://storage.test/studio/presentation.png',maskUri:'https://storage.test/studio/mask.png',confidence:0.91,warnings:[],quality:backgroundEraseQuality};
 const base={id:'item',tenant_id:'tenant',specialist_id:'vinyl_records',canonical_title:'March of the Mods',media:[original,'https://storage.test/rear.jpg'],attributes:{artist:'Various',ebay_listing_media:[original],_smart_studio_images:{rear:{...studio,originalUri:'https://storage.test/rear.jpg'}}},updated_at:'v1'};
 function query(result:any){const q:any={};for(const method of ['select','eq','in','update','maybeSingle'])q[method]=jest.fn(()=>q);q.abortSignal=jest.fn(()=>Promise.resolve(result));return q;}
 const options=()=>({tenantId:'tenant',nicheId:'tunes_flip',itemId:'item',slotId:'existing_hash',originalUri:original,studio,signal:new AbortController().signal});
@@ -16,5 +17,5 @@ test('concurrent version change fails without replaying the write',async()=>{con
 test('removed original prevents all metadata writes',async()=>{const {from}=setup([{...base,media:[]}]);expect((await saveExistingStudioImage(options())).error).toContain('no longer attached');expect(from).toHaveBeenCalledTimes(1);});
 test('altered readback association is rejected',async()=>{setup([base,saved(),{...saved(),attributes:{_smart_studio_images:{existing_hash:{...studio,originalUri:'https://other.test/photo'}}}}]);expect((await saveExistingStudioImage(options())).error).toContain('readback');});
 test('original order must match the metadata write response',async()=>{setup([base,{...saved(),media:[...base.media].reverse()}]);expect((await saveExistingStudioImage(options())).error).toContain('photo order');});
-test('unprotected generated product pixels cannot be linked',async()=>{const {from}=setup([]);const result=await saveExistingStudioImage({...options(),studio:{...studio,quality:{...studio.quality,sourcePixelsOnly:false}}});expect(result.error).toContain('provenance');expect(from).not.toHaveBeenCalled();});
+test('unprotected generated product pixels cannot be linked',async()=>{const {from}=setup([]);const result=await saveExistingStudioImage({...options(),studio:{...studio,quality:{...studio.quality,method:'ai_cutout'}}});expect(result.error).toContain('provenance');expect(from).not.toHaveBeenCalled();});
 test('cancelled save never writes to inventory',async()=>{const {from}=setup([]);const controller=new AbortController();controller.abort();expect((await saveExistingStudioImage({...options(),signal:controller.signal})).error).toContain('cancelled');expect(from).not.toHaveBeenCalled();});
