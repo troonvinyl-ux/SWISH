@@ -1,5 +1,5 @@
 import { useContext, useEffect, useRef, useCallback, useMemo, useState } from 'react';
-import { Platform } from 'react-native';
+import { Platform, Linking } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useAuth } from '@/template';
 import { useApp } from './useApp';
@@ -9,7 +9,7 @@ import { NICHE_MODULES, NICHES } from '@/constants/niches';
 import type { SpecialistId } from '@/constants/specialists';
 import { getSpecialistProfile } from '@/shared/specialistIntelligence';
 import { getQuickListOpenedAt, recordQuickTiming, retainQuickTiming } from '@/services/quickListTelemetryService';
-import { lookupQuickBarcode, warmQuickList, identifyQuickPhotos, createQuickInventory, uploadQuickPhotos, quickRequirements, prepareQuickDraft, saveQuickReview, publishQuickDraft, confirmQuickLive, readQuickAutoPublish, saveQuickAutoPublish, retainQuickRecovery, readQuickRecovery, linkQuickCutouts } from '@/services/quickListService';
+import { lookupQuickBarcode, warmQuickList, identifyQuickPhotos, createQuickInventory, uploadQuickPhotos, quickRequirements, prepareQuickDraft, saveQuickReview, publishQuickDraft, confirmQuickLive, readQuickAutoPublish, saveQuickAutoPublish, retainQuickRecovery, readQuickRecovery } from '@/services/quickListService';
 import { prepareCapturedImages } from '@/services/sharedImagePreparationService';
 import { retainCaptureImage } from '@/services/captureDraftService';
 import type { CapturedImage } from '@/services/aiIdentificationService';
@@ -27,7 +27,10 @@ export function useQuickList(nicheId:QuickListNiche){
  const scopeRef=useRef(scope);scopeRef.current=scope;const current=useRef(visibleState);current.current=visibleState;
  const operation=useRef(false),serial=useRef(0),barcodeSerial=useRef(0),mounted=useRef(true),timing=useRef<QuickTiming|null>(null),editedFields=useRef(new Set<string>());
  const studioFlight=useRef<{key:string;promise:Promise<CapturedImage[]>}|null>(null);
+ const photoStudioFlights=useRef(new Map<string,Promise<CapturedImage>>());
+ const photoStudioQueue=useRef<Promise<void>>(Promise.resolve());
  const [recoveryAvailable,setRecoveryAvailable]=useState(false),[clock,setClock]=useState(Date.now());
+ const [barcodeLookup,setBarcodeLookup]=useState({code:'',message:''});
  const patch=useCallback((value:Partial<QuickListState>)=>{if(!scope||scopeRef.current!==scope||current.current.scope!==scope)return;const id=current.current.sessionId;current.current={...current.current,...value};setState(previous=>previous.scope===scope&&previous.sessionId===id?{...previous,...value}:previous);},[scope,setState]);
  const validFor=useCallback((version:number)=>mounted.current&&version===serial.current&&scopeRef.current===scope&&current.current.scope===scope,[scope]);
  const checkpoint=useCallback(()=>{const row=timing.current;if(!tenant||!row)return;void retainQuickTiming(scope,row).catch(()=>{});void recordQuickTiming(tenant.id,row);},[tenant?.id,scope]);
@@ -40,11 +43,26 @@ export function useQuickList(nicheId:QuickListNiche){
  const trackEdit=useCallback((key:string)=>{if(editedFields.current.has(key))return;editedFields.current.add(key);action(true);},[action]);
  const captureStart=useCallback(()=>{stamp('T2');},[stamp]);
  const fail=useCallback((name:string,message:string,started:number)=>{if(timing.current){stamp(undefined,{failures:[...(timing.current.failures??[]),{operation:name,at:Date.now(),elapsedMs:Math.max(0,Date.now()-started),message}],reasons:[...new Set([...(timing.current.reasons??[]),message])]});checkpoint();}},[stamp,checkpoint]);
+ // Start cleanup as each photo is retained. A serial queue bounds memory and paid requests.
+ const preparePhotoStudio=useCallback((image:CapturedImage):Promise<CapturedImage>=>{
+  if(image.studio?.originalUri===image.uri)return Promise.resolve(image);
+  const key=`${scope}:${image.slotId}:${image.uri}`,existing=photoStudioFlights.current.get(key);
+  if(existing)return existing;
+  const version=serial.current;
+  const work=photoStudioQueue.current.catch(()=>{}).then(async()=>{
+   if(!tenant||!validFor(version))return image;
+   const prepared=await prepareCapturedImages([image],{tenantId:tenant.id,nicheId});
+   // Retain the result even if the seller has moved on; it is never applied to another scan.
+   return Object.assign(image,prepared[0]??image);
+  });
+  photoStudioFlights.current.set(key,work);photoStudioQueue.current=work.then(()=>{},()=>{});
+  return work;
+ },[scope,tenant?.id,nicheId,validFor]);
  const start=useCallback(async()=>{
   if(!scope||scopeRef.current!==scope)return;if(timing.current&&timing.current.outcome!=='live'){stamp(undefined,{outcome:'abandoned',endedAt:Date.now()});checkpoint();}
-  serial.current++;barcodeSerial.current++;operation.current=false;studioFlight.current=null;editedFields.current.clear();const id=`quick-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;
+  serial.current++;barcodeSerial.current++;setBarcodeLookup({code:'',message:''});operation.current=false;studioFlight.current=null;photoStudioFlights.current.clear();editedFields.current.clear();const id=`quick-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;
   timing.current={id,nicheId,timestamps:{T0:getQuickListOpenedAt(),T1:Date.now()},actions:1,manualInterventions:0,failures:[],barcodeAttempted:false,barcodeMatched:false,aiAttempted:false,aiMatched:false,publicationAttempted:false,outcome:'running',eligible:false,reasons:[],operations:{},platform:Platform.OS,clock:'expo_js_launch_or_foreground'};
-  const fresh={...emptyQuickList(),scope,sessionId:id,specialistId:NICHE_MODULES[nicheId].defaultSpecialist,visual:true,timing:timing.current};current.current=fresh;setState(fresh);if(nicheId==='tunes_flip')tunes.reset();checkpoint();const version=serial.current;
+  const fresh={...emptyQuickList(),scope,sessionId:id,specialistId:NICHE_MODULES[nicheId].defaultSpecialist,visual:!quickStartsWithBarcode(nicheId),timing:timing.current};current.current=fresh;setState(fresh);if(nicheId==='tunes_flip')tunes.reset();checkpoint();const version=serial.current;
   try{const [auto,error]=await Promise.all([readQuickAutoPublish(scope).catch(()=>false),warmQuickList(tenant!.id)]);if(validFor(version))patch({autoPublish:auto,connectionError:error??''});}
   catch{if(validFor(version))patch({connectionError:'eBay connection could not be checked. Retry before publishing.'});}
  },[scope,nicheId,tenant?.id,setState,patch,stamp,checkpoint,validFor,tunes.reset]);
@@ -62,18 +80,39 @@ export function useQuickList(nicheId:QuickListNiche){
  const missing=quickMissingPhotos(slots,visibleState.images),nextSlot=slots.find(slot=>slot.id===visibleState.photoSlotId)??missing[0]??slots.find(slot=>!visibleState.images.some(image=>image.slotId===slot.id)),captureProfile=getSpecialistProfile(nicheId);
  const changeCapture=useCallback((specialistId:string,mode='item')=>{if(operation.current||current.current.images.length||current.current.itemId||!NICHE_MODULES[nicheId].specialists.includes(specialistId))return;action(true);patch({specialistId,mode,photoSlotId:'',result:null,reviewed:false});},[nicheId,action,patch]);
  const barcode=useCallback(async(value:string,type:string)=>{
-  if(!scope||!tenant||!quickBarcodeSupported(nicheId)||current.current.barcodeBusy||current.current.itemId||operation.current)return;const version=serial.current,barcodeVersion=++barcodeSerial.current,started=Date.now();captureStart();stamp(undefined,{barcodeAttempted:true});patch({barcodeBusy:true,error:'',visual:false});
-  try{const response=await lookupQuickBarcode(tenant.id,value,type);if(!validFor(version)||barcodeVersion!==barcodeSerial.current)return;const products=response.products.filter(specificBarcodeLead);patch({barcodeBusy:false,leads:products.length>1?products:[],lead:products.length===1?products[0]!:null,visual:products.length===0,error:''});if(response.error)fail('barcode',response.error,started);}
-  catch{if(validFor(version)&&barcodeVersion===barcodeSerial.current){patch({barcodeBusy:false,visual:true,error:''});fail('barcode','Barcode lookup unavailable; original-photo identification remains available.',started);}}
+  if(!scope||!tenant||!current.current.sessionId||current.current.scope!==scope||!quickBarcodeSupported(nicheId)||current.current.barcodeBusy||current.current.itemId||current.current.draft||current.current.processing||operation.current)return;const version=serial.current,barcodeVersion=++barcodeSerial.current,started=Date.now();captureStart();stamp(undefined,{barcodeAttempted:true});setBarcodeLookup({code:value.trim().slice(0,32),message:''});patch({barcodeBusy:true,error:'',visual:false});
+  try{const response=await lookupQuickBarcode(tenant.id,value,type);if(!validFor(version)||barcodeVersion!==barcodeSerial.current)return;const products=response.products;setBarcodeLookup({code:response.gtin||value.trim().slice(0,32),message:response.message||'No barcode match found. Take photos or scan another barcode.'});patch({barcodeBusy:false,leads:products.length>1?products:[],lead:products.length===1?products[0]!:null,visual:false,error:response.error??''});if(response.error)fail('barcode',response.error,started);}
+  catch{if(validFor(version)&&barcodeVersion===barcodeSerial.current){setBarcodeLookup({code:value.trim().slice(0,32),message:'AI barcode lookup unavailable.'});patch({barcodeBusy:false,visual:false,error:'Barcode lookup unavailable. Take photos or try scanning again.'});fail('barcode','Barcode lookup unavailable; original-photo identification remains available.',started);}}
  },[scope,nicheId,tenant?.id,patch,stamp,captureStart,validFor,fail]);
  const selectLead=useCallback((lead:ProductLead)=>{if(!specificBarcodeLead(lead))return;action(true);patch({lead,leads:[],visual:false,reviewed:false,error:''});},[action,patch]);
- const useVisual=useCallback(()=>{barcodeSerial.current++;action(true);patch({barcodeBusy:false,visual:true,leads:[],lead:null,error:''});},[action,patch]);
+ const openBarcodeSource=useCallback(async()=>{
+  if(!scope||current.current.scope!==scope||scopeRef.current!==scope)return;
+  const lead=current.current.lead,url=lead?.sourceUrls?.[0]??lead?.url;
+  if(!url||!/^https:\/\//i.test(url)){patch({error:'No source link is available for this barcode result.'});return;}
+  try{await Linking.openURL(url);}catch{if(scopeRef.current===scope)patch({error:'The barcode source could not be opened.'});}
+ },[scope,patch]);
+ const useBarcode=useCallback(()=>{
+  if(!scope||!quickBarcodeSupported(nicheId)||operation.current||current.current.barcodeBusy||current.current.itemId||current.current.draft)return;
+  barcodeSerial.current++;setBarcodeLookup({code:'',message:''});action();patch({barcodeBusy:false,visual:false,leads:[],lead:null,error:''});
+ },[scope,nicheId,action,patch]);
+ const useVisual=useCallback(()=>{
+  if(operation.current||current.current.itemId||current.current.draft)return;
+  // Keep a selected catalogue lead for later photo corroboration; switching modes never saves or publishes.
+  barcodeSerial.current++;action();patch({barcodeBusy:false,visual:true,leads:[],error:''});
+ },[action,patch]);
  const addPhoto=useCallback(async(photo:{uri:string;width?:number;height?:number;photoQuality?:CapturedImage['photoQuality']})=>{
   if(!scope||!tenant||operation.current||current.current.itemId||current.current.draft||current.current.images.length>=8||!nextSlot)return;action();captureStart();const version=serial.current;operation.current=true;const started=Date.now();patch({phase:'Retaining original photograph'});
-  try{const image=await retainCaptureImage({...photo,slotId:nextSlot.id,slotLabel:nextSlot.label});if(!validFor(version))return;const images=[...current.current.images.filter(entry=>entry.slotId!==image.slotId),image],next={...current.current,images,photoSlotId:'',result:null,reviewed:false,error:''};await retainQuickRecovery(scope,{images,sessionId:next.sessionId,state:next});if(validFor(version))patch(next);}
+  try{const image=await retainCaptureImage({...photo,slotId:nextSlot.id,slotLabel:nextSlot.label});if(!validFor(version))return;const images=[...current.current.images.filter(entry=>entry.slotId!==image.slotId),image],next={...current.current,images,photoSlotId:'',result:null,reviewed:false,error:''};await retainQuickRecovery(scope,{images,sessionId:next.sessionId,state:next});if(validFor(version)){
+    patch(next);
+    void preparePhotoStudio(image).then(prepared=>{
+     if(!validFor(version)||current.current.processing||current.current.draft||current.current.itemId)return;
+     const latest=current.current.images;
+     if(latest.some(entry=>entry.slotId===prepared.slotId&&entry.uri===prepared.uri))patch({images:latest.map(entry=>entry.slotId===prepared.slotId&&entry.uri===prepared.uri?prepared:entry)});
+    }).catch(()=>{});
+   }} 
   catch(cause){if(validFor(version)){const message=cause instanceof Error?cause.message:'Original could not be retained. Retry before leaving.';patch({error:message});fail('capture',message,started);}}
   finally{if(validFor(version)){operation.current=false;patch({phase:''});}}
- },[scope,tenant?.id,nextSlot,action,captureStart,patch,validFor,fail]);
+ },[scope,tenant?.id,nextSlot,action,captureStart,patch,validFor,fail,preparePhotoStudio]);
  const removePhoto=useCallback((slotId:string)=>{if(operation.current||current.current.itemId)return;action(true);patch({images:current.current.images.filter(image=>image.slotId!==slotId),result:null,reviewed:false,error:'',photoSlotId:slotId});},[action,patch]);
  const build=useCallback(async()=>{
   const before=current.current,required=quickMissingPhotos(quickCaptureSlots(nicheId,before.specialistId,before.mode,before.measurements.observed_disc_count),before.images);
@@ -81,9 +120,9 @@ export function useQuickList(nicheId:QuickListNiche){
   if(nicheId==='tunes_flip'&&before.mode==='cd_box_set'&&!musicDiscCount(before.measurements.observed_disc_count)){patch({error:'Enter the number of discs physically present before preparing this box-set draft.'});return;}
   operation.current=true;const version=serial.current,started=Date.now();patch({processing:true,phase:before.result?'Reusing identification · retrying draft':'Identifying original specialist evidence',error:''});let itemId=before.itemId,retainedResult=before.result,step='identification';
   try{
-   // Processing and identification use the same originals concurrently; Next starts both automatically.
+   // Cleanup started at capture is reused; identification still uses the untouched originals.
    const studioKey=`${before.sessionId}:${before.images.map(image=>image.uri).join('|')}`;
-   if(studioFlight.current?.key!==studioKey)studioFlight.current={key:studioKey,promise:prepareCapturedImages(before.images,{tenantId:tenant.id,nicheId})};
+   if(studioFlight.current?.key!==studioKey)studioFlight.current={key:studioKey,promise:Promise.all(before.images.map(preparePhotoStudio))};
    const optionalStudio=studioFlight.current.promise;
    if(!before.result)stamp(undefined,{aiAttempted:true});const identified=before.result?{result:before.result,error:null}:await identifyQuickPhotos(tenant.id,nicheId,before.images,before.lead,before.measurements,{specialistId:before.specialistId as SpecialistId,mode:before.mode,allowPhotoWarnings:before.allowPhotoWarnings});
    if(!validFor(version))return;if(identified.error||!identified.result)throw new Error(identified.error??'Identification did not complete. Originals are retained.');
@@ -94,12 +133,11 @@ export function useQuickList(nicheId:QuickListNiche){
    step='inventory';const quantity=Number(before.measurements._quantity??'1'),item=before.itemId?{id:before.itemId}:await createQuickInventory(tenant.id,result,before.sessionId,quantity);itemId=item.id;if(!validFor(version))return;patch({itemId:item.id,phase:'Saving originals · researching price · preparing draft'});triggerInventoryReload();
    await retainQuickRecovery(scope,{images:before.images,itemId:item.id,sessionId:before.sessionId,state:{...before,result,itemId:item.id}});if(!validFor(version))return;
    step='draft';const photos=(async()=>{
-    const uploaded=await uploadQuickPhotos(tenant.id,item.id,before.images);
     const prepared=await optionalStudio;
-    const linked=prepared.map(image=>{const original=uploaded.images.find(saved=>saved.slotId===image.slotId);return {...image,originalStorageUri:original?.originalStorageUri,originalByteHash:original?.originalByteHash};});
-    const warning=await linkQuickCutouts(tenant.id,item.id,linked);
-    if(warning&&linked.some(image=>image.studio?.enhancedUri))throw new Error('Processed photos could not be saved. Retry this saved item.');
-    return {...uploaded,images:linked};
+    if(!validFor(version))throw new Error('Scan changed before photo saving. The original photos are retained.');
+    patch({images:prepared});
+    // One persistence transaction links the bounded archive copies and already-processed photos.
+    return uploadQuickPhotos(tenant.id,item.id,prepared);
    })();void photos.catch(()=>{});const draft=await prepareQuickDraft(tenant.id,nicheId,item.id,result,photos,req,()=>{if(validFor(version)){stamp('T4');checkpoint();}},before.images[0],`${scope}:${before.sessionId}`,quantity);const uploaded=await photos;if(!validFor(version))return;
    const next={...current.current,result,itemId:item.id,images:uploaded.images,draft,title:draft.generated.title,description:draft.generated.description,price:draft.generated.recommended_price>0?String(draft.generated.recommended_price):'',conditionId:automaticCondition(draft.requirements.conditions,result.condition,draft.generated.condition_id),conditionNotes:result.conditionNotes,specifics:draft.specifics,phase:'',error:''};
    const initialSave=await saveQuickReview(tenant.id,nicheId,draft,{title:next.title,description:next.description,price:next.price||'0',conditionId:next.conditionId,conditionNotes:next.conditionNotes,specifics:next.specifics},'draft');
@@ -107,7 +145,7 @@ export function useQuickList(nicheId:QuickListNiche){
    await retainQuickRecovery(scope,{images:next.images,itemId:item.id,listingId:draft.listing.id,sessionId:before.sessionId,state:next});if(!validFor(version))return;patch(next);stamp('TD',{operations:{...timing.current?.operations,draft:Date.now()-started}});checkpoint();if(draft.warnings?.length)fail('valuation',draft.warnings.join(' '),started);
   }catch(cause){if(validFor(version)){const message=cause instanceof Error?cause.message:'Quick List could not prepare the draft.',snapshot={...current.current,images:before.images,itemId,result:retainedResult,error:message};await retainQuickRecovery(scope,{images:before.images,itemId:itemId||undefined,sessionId:before.sessionId,state:snapshot}).catch(()=>{});if(validFor(version)){patch(snapshot);triggerInventoryReload();fail(step,message,started);}}}
   finally{if(validFor(version)){operation.current=false;patch({processing:false,phase:''});}}
- },[tenant?.id,nicheId,scope,patch,stamp,checkpoint,validFor,fail,triggerInventoryReload,tunes.ready,tunes.state.confirmed,tunes.state.release]);
+ },[tenant?.id,nicheId,scope,patch,stamp,checkpoint,validFor,fail,triggerInventoryReload,tunes.ready,tunes.state.confirmed,tunes.state.release,preparePhotoStudio]);
  // Next is the sole preparation action. No automatic transition while the seller is taking photographs.
  const edit=useCallback((key:'title'|'description'|'price'|'conditionNotes'|'conditionId',value:string)=>{if(operation.current)return;trackEdit(key);patch({[key]:value,reviewed:false});},[trackEdit,patch]);
  const setSpecific=useCallback((name:string,value:string)=>{if(operation.current)return;trackEdit(`specific:${name}`);patch({specifics:current.current.specifics.map(row=>row.name===name?{...row,value}:row),reviewed:false});},[trackEdit,patch]);
@@ -150,14 +188,14 @@ export function useQuickList(nicheId:QuickListNiche){
  const recovery=useCallback(()=>readQuickRecovery(scope),[scope]);
  const resume=useCallback(async()=>{
   if(!scope||operation.current||current.current.processing)return;const version=++serial.current;operation.current=true;
-  try{const saved=await readQuickRecovery(scope);if(!saved||!validFor(version))return;timing.current=null;studioFlight.current=null;editedFields.current.clear();const restored={...emptyQuickList(),...(saved.state??{}),scope,sessionId:saved.sessionId,specialistId:saved.state?.specialistId||NICHE_MODULES[nicheId].defaultSpecialist,images:saved.images,itemId:saved.itemId??'',visual:saved.state?.visual??true,processing:false,barcodeBusy:false,reviewed:false,autoPublish:false,timing:null,error:'Recovered scan. Review photos and retry on the same saved item.'};current.current=restored;setState(restored);setRecoveryAvailable(false);}
+  try{const saved=await readQuickRecovery(scope);if(!saved||!validFor(version))return;setBarcodeLookup({code:'',message:''});timing.current=null;studioFlight.current=null;photoStudioFlights.current.clear();editedFields.current.clear();const restored={...emptyQuickList(),...(saved.state??{}),scope,sessionId:saved.sessionId,specialistId:saved.state?.specialistId||NICHE_MODULES[nicheId].defaultSpecialist,images:saved.images,itemId:saved.itemId??'',visual:saved.state?.visual??true,processing:false,barcodeBusy:false,reviewed:false,autoPublish:false,timing:null,error:'Recovered scan. Review photos and retry on the same saved item.'};current.current=restored;setState(restored);setRecoveryAvailable(false);}
   catch(cause){if(scopeRef.current===scope)patch({error:cause instanceof Error?cause.message:'Retained scan could not be reopened.'});}finally{if(version===serial.current)operation.current=false;}
  },[scope,nicheId,patch,setState,validFor]);
  const retryPhotos=useCallback(async()=>{
   const before=current.current;if(!tenant||!before.itemId||operation.current)return;const version=serial.current,started=Date.now();action(true);operation.current=true;patch({processing:true,error:'',phase:'Retrying originals on the saved canonical item'});
-  try{const saved=await uploadQuickPhotos(tenant.id,before.itemId,before.images);if(validFor(version)){patch({images:saved.images,error:'',reviewed:false});triggerInventoryReload();}}catch(cause){if(validFor(version)){const message=cause instanceof Error?cause.message:'Retry original photos on the saved item.';patch({error:message});fail('photo_retry',message,started);}}finally{if(validFor(version)){operation.current=false;patch({processing:false,phase:''});}}
- },[scope,tenant?.id,action,patch,validFor,fail,triggerInventoryReload]);
+  try{const prepared=await Promise.all(before.images.map(preparePhotoStudio));if(!validFor(version))return;const saved=await uploadQuickPhotos(tenant.id,before.itemId,prepared);if(validFor(version)){patch({images:saved.images,error:'',reviewed:false});triggerInventoryReload();}}catch(cause){if(validFor(version)){const message=cause instanceof Error?cause.message:'Retry original photos on the saved item.';patch({error:message});fail('photo_retry',message,started);}}finally{if(validFor(version)){operation.current=false;patch({processing:false,phase:''});}}
+ },[scope,tenant?.id,action,patch,validFor,fail,triggerInventoryReload,preparePhotoStudio]);
  const answerEvidence=useCallback((key:string,value:string)=>{if(operation.current||current.current.liveId)return;trackEdit(`evidence:${key}`);patch({measurements:{...current.current.measurements,[key]:value},reviewed:false});},[trackEdit,patch]);
  const elapsedMs=visibleState.timing?.timestamps.T0!=null?Math.max(0,(visibleState.timing.timestamps.T7??clock)-visibleState.timing.timestamps.T0):null;
- return {state:visibleState,scope,config:NICHES[nicheId],slots,nextSlot,missing,captureProfile,barcodeSupported:quickBarcodeSupported(nicheId),elapsedMs,answerEvidence,captureStart,changeCapture,removePhoto,addPhoto,barcode,selectLead,useVisual,start,build,edit,setSpecific,confirm,publish:()=>{action();void publish();},checkLive,toggleAuto,chooseCategory,action,patch,recovery,resume,recoveryAvailable,retryPhotos};
+ return {state:visibleState,scope,barcodeLookup,config:NICHES[nicheId],slots,nextSlot,missing,captureProfile,barcodeSupported:quickBarcodeSupported(nicheId),elapsedMs,answerEvidence,captureStart,changeCapture,removePhoto,addPhoto,barcode,selectLead,openBarcodeSource,useBarcode,useVisual,start,build,edit,setSpecific,confirm,publish:()=>{action();void publish();},checkLive,toggleAuto,chooseCategory,action,patch,recovery,resume,recoveryAvailable,retryPhotos};
 }

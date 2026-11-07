@@ -3,12 +3,14 @@ jest.mock('@/template',()=>({getSupabaseClient:jest.fn()}));
 jest.mock('react-native',()=>({Platform:{OS:'android'}}));
 jest.mock('expo-file-system',()=>({readAsStringAsync:jest.fn(),EncodingType:{Base64:'base64'}}));
 jest.mock('expo-image-picker',()=>({}));
-jest.mock('expo-image-manipulator',()=>({}));
+jest.mock('expo-image-manipulator',()=>({manipulateAsync:jest.fn(),SaveFormat:{JPEG:'jpeg'}}));
 jest.mock('expo-crypto',()=>({CryptoDigestAlgorithm:{SHA256:'SHA256'},digestStringAsync:jest.fn(async(_algorithm:string,value:string)=>require('node:crypto').createHash('sha256').update(value).digest('hex'))}));
 jest.mock('@/services/sharedImagePreparationService',()=>({prepareCapturedImages:jest.fn(async images=>images)}));
 import {getSupabaseClient} from '@/template';
 import {readAsStringAsync} from 'expo-file-system';
 import {encode} from 'base64-arraybuffer';
+import {manipulateAsync} from 'expo-image-manipulator';
+import {ORIGINAL_UPLOAD_LIMIT_BYTES} from '../originalImageService';
 import {persistCapturedItemPhotos,linkPersistedItemPhotos} from '../photoPersistenceService';
 import {NICHE_MODULES,PRODUCTION_NICHE_IDS} from '@/constants/niches';
 import {preferredListingPhotos,availableListingPhotos,SMART_STUDIO_VERSION} from '@/shared/smartStudio';
@@ -77,6 +79,20 @@ test('optional processed images are linked by original role and become available
  const saved=await persistCapturedItemPhotos('tenant','item',images);expect(saved.complete).toBe(true);
  expect(db.row().attributes._smart_studio_images.front.originalUri).toBe(saved.urls[0]);
  expect(availableListingPhotos(db.row().media,db.row().attributes)).toEqual(['https://storage.test/processed/front.png','https://storage.test/processed/back.png']);expect(db.row().media).toEqual(saved.urls);expect(db.row().attributes._photo_assets).toHaveLength(2);
+});
+test('an oversized condition photo and successful cutout both carry into the same draft-ready item',async()=>{
+ const db=setup('tech'),images=photos().slice(0,2),large=new Uint8Array(ORIGINAL_UPLOAD_LIMIT_BYTES+1);large.set([255,216]);
+ (readAsStringAsync as jest.Mock).mockResolvedValue(encode(large.buffer));
+ (manipulateAsync as jest.Mock).mockResolvedValue({uri:'file://copy',width:2048,height:1536,base64:encode(bytes.buffer)});
+ (prepareCapturedImages as jest.Mock).mockImplementation(async captures=>captures.map((image:any)=>({...image,studio:{version:SMART_STUDIO_VERSION,status:'ready',originalUri:image.uri,enhancedUri:`https://storage.test/processed/${image.slotId}.png`,confidence:0,warnings:[],quality:{method:'backgrounderase',provider:'BackgroundErase',sourcePixelsOnly:false,completeness:'not_assessed',boundary:'provider',detailCheck:'PNG checked',background:'transparent',checks:{validPng:true,dimensionsUnchanged:true,foregroundPresent:true,transparencyPresent:true}}}})));
+ const saved=await persistCapturedItemPhotos('tenant','item',images);
+ expect(saved.complete).toBe(true);expect(saved.errors).toEqual([]);
+ expect(images[0].uri).toBe('file://retained/front.jpg');expect(images[0].uploadCopy?.dpi).toBe(72);
+ expect(db.row().attributes._photo_assets[0].uploadCopy.kind).toBe('compressed_capture_copy');
+ expect(db.row().attributes._photo_assets[0].uploadCopy.uri).toBeUndefined();
+ expect(db.row().attributes._photo_pipeline.status).toBe('complete');
+ expect(availableListingPhotos(db.row().media,db.row().attributes)).toEqual(['https://storage.test/processed/front.png','https://storage.test/processed/back.png']);
+ expect(photoPersistenceIssue(db.row().media,db.row().attributes)).toBeNull();
 });
 test('wrong tenant stops before upload and local URLs cannot be linked as persisted media',async()=>{
  const db=setup();expect((await persistCapturedItemPhotos('other','item',photos())).complete).toBe(false);expect(db.storage.upload).not.toHaveBeenCalled();

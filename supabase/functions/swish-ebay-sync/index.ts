@@ -7,6 +7,7 @@ import registry from '../_shared/niche-modules.json' with {type:'json'};
 import { corsHeaders } from '../_shared/cors.ts';
 import { parseLiveContent } from '../_shared/ebayLiveContent.ts';
 import { parseEbayListingStatus } from '../_shared/listingStatus.ts';
+import { readListingTraffic, type ListingTraffic } from '../_shared/ebayTraffic.ts';
 import { mapSyncReads, syncPatchChanged } from '../_shared/syncConcurrency.ts';
 import { buildSellingRequest, sellingSectionXml, sellingPagination, tradingDiagnostic, type SellingSection } from '../_shared/ebaySellingRequest.ts';
 const TRADING_API='https://api.ebay.com/ws/api.dll';
@@ -47,7 +48,7 @@ async function getValidToken(client:ReturnType<typeof adminClient>,tenantId:stri
   if(saved.error||!saved.data)throw new Error('RETRY: Connector changed while refreshing. Retry without reconnecting.');
   creds=updated;
  }
- return {token:String(creds.accessToken),clientId:String(creds.clientId)};
+ return {token:String(creds.accessToken),clientId:String(creds.clientId),hasAnalyticsScope:creds.hasAnalyticsScope===true};
 }
 async function trading(xml:string,call:string,token:string,clientId:string){
  const response=await fetch(TRADING_API,{method:'POST',headers:{'X-EBAY-API-SITEID':'3','X-EBAY-API-COMPATIBILITY-LEVEL':'967','X-EBAY-API-CALL-NAME':call,'X-EBAY-API-APP-NAME':clientId,'X-EBAY-API-IAF-TOKEN':token,'Content-Type':'text/xml;charset=utf-8'},body:xml,signal:AbortSignal.timeout(20000)});
@@ -64,7 +65,7 @@ async function fetchSellingPage(token:string,clientId:string,section:SellingSect
  if(!ids.length&&page<pagination.pages)throw new Error('Incomplete selling page; statuses preserved');
  return {ids,pages:pagination.pages};
 }
-interface Observation{externalId:string;title:string;description:string;status:'active'|'sold'|'ended';quantity:number;sold:number;price:number;shipping:number;categoryId:string;categoryName:string;condition:string;conditionNotes:string;conditionId:string;sku:string;watchers:number;views:number;photos:string[];specifics:Array<{name:string;value:string}>;endedAt:string|null}
+interface Observation{externalId:string;title:string;description:string;status:'active'|'sold'|'ended';quantity:number;sold:number;price:number;shipping:number;categoryId:string;categoryName:string;condition:string;conditionNotes:string;conditionId:string;sku:string;watchers:number;views:number|null;traffic?:ListingTraffic;photos:string[];specifics:Array<{name:string;value:string}>;endedAt:string|null}
 async function getItemObservation(id:string,token:string,clientId:string):Promise<Observation>{
  if(!/^\d+$/.test(id))throw new Error('GetItem external identity invalid');
  const xml=await trading(`<?xml version="1.0" encoding="utf-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${id}</ItemID><IncludeItemSpecifics>true</IncludeItemSpecifics><IncludeWatchCount>true</IncludeWatchCount><DetailLevel>ReturnAll</DetailLevel></GetItemRequest>`,'GetItem',token,clientId);
@@ -82,11 +83,12 @@ async function getItemObservation(id:string,token:string,clientId:string):Promis
  const category=tag(body,'PrimaryCategory');const price=content.sellerPrice;const title=content.title;
  if(!title||!Number.isFinite(price)||price<0)throw new Error('GetItem listing data invalid');
  const end=tag(tag(body,'ListingDetails'),'EndTime');
- return {externalId:id,title,description:content.description,status,quantity,sold,price,shipping:Number(tag(body,'ShippingServiceCost')||0),categoryId:tag(category,'CategoryID'),categoryName:decode(tag(category,'CategoryName')),condition:decode(tag(body,'ConditionDisplayName')),conditionNotes:decode(tag(body,'ConditionDescription')),conditionId:tag(body,'ConditionID'),sku:decode(tag(body,'SKU')),watchers:Number(tag(body,'WatchCount')||0),views:Number(tag(body,'HitCount')||0),photos,specifics,endedAt:end&&Number.isFinite(Date.parse(end))&&Date.parse(end)<=Date.now()?end:null};
+ return {externalId:id,title,description:content.description,status,quantity,sold,price,shipping:Number(tag(body,'ShippingServiceCost')||0),categoryId:tag(category,'CategoryID'),categoryName:decode(tag(category,'CategoryName')),condition:decode(tag(body,'ConditionDisplayName')),conditionNotes:decode(tag(body,'ConditionDescription')),conditionId:tag(body,'ConditionID'),sku:decode(tag(body,'SKU')),watchers:Number(tag(body,'WatchCount')||0),views:/^\d+$/.test(tag(body,'HitCount'))?Number(tag(body,'HitCount')):null,photos,specifics,endedAt:end&&Number.isFinite(Date.parse(end))&&Date.parse(end)<=Date.now()?end:null};
 }
 async function syncItemToSwish(client:ReturnType<typeof adminClient>,tenantId:string,listing:any,item:any,ebay:Observation){
  const previous=item.attributes&&typeof item.attributes==='object'?item.attributes:{};
  const attrs={...previous,_ebay_item_id:ebay.externalId,_ebay_title:ebay.title,_ebay_img_count:ebay.photos.length};
+ if(ebay.traffic)attrs._ebay_engagement={...previous._ebay_engagement,viewsSource:'seller_analytics',viewsPeriodDays:30,viewsStartDate:ebay.traffic.startDate,viewsEndDate:ebay.traffic.endDate,viewsUpdatedAt:ebay.traffic.lastUpdatedDate};
  if(ebay.specifics.length)attrs.ebay_item_specifics=ebay.specifics;
  if(ebay.categoryId)attrs.ebay_category_id=ebay.categoryId;
  if(ebay.categoryName)attrs.ebay_category_name=ebay.categoryName;
@@ -108,7 +110,7 @@ async function syncItemToSwish(client:ReturnType<typeof adminClient>,tenantId:st
   const saved=await client.from('items').update(patch).eq('id',item.id).eq('tenant_id',tenantId).eq('updated_at',item.updated_at).select('id').abortSignal(AbortSignal.timeout(10000)).maybeSingle();
   if(saved.error||!saved.data)throw new Error('SWISH item metadata save not confirmed; reload before retrying');
  }else skippedWrites++;
- const listingPatch={title:ebay.title,...(ebay.description?{description:ebay.description}:{}),price:ebay.price,shipping_cost:ebay.shipping,watchers:ebay.watchers,views:ebay.views,...(ebay.categoryId?{category_id:ebay.categoryId}:{})};
+ const listingPatch={title:ebay.title,...(ebay.description?{description:ebay.description}:{}),price:ebay.price,shipping_cost:ebay.shipping,watchers:ebay.watchers,...(ebay.views!==null?{views:ebay.views}:{}),...(ebay.categoryId?{category_id:ebay.categoryId}:{})};
  if(syncPatchChanged(listing,listingPatch)){
   const listingSaved=await client.from('listings').update(listingPatch).eq('id',listing.id).eq('tenant_id',tenantId).eq('external_listing_id',ebay.externalId).eq('updated_at',listing.updated_at).select('id').abortSignal(AbortSignal.timeout(10000)).maybeSingle();
   if(listingSaved.error||!listingSaved.data)throw new Error('SWISH listing metadata save not confirmed');
@@ -135,7 +137,7 @@ serveModule(async(req:Request)=>{
  if(lease.error)return json({success:false,error:'SWISH sync overlap check unavailable; no eBay request started'},503);
  if(lease.data?.replay)return json({...lease.data.result,replayed:true,syncRequestId:runId});
  if(lease.data?.acquired!==true)return json({success:false,duplicatePrevented:true,syncRequestId:runId,retryAfterMs:lease.data?.retryAfterMs??3000,error:'Another sync is running or this request already finished. Reload before starting another operation.'},409);
- const metrics:Record<string,number>={tokenMs:0,scopedReadMs:0,sellingMs:0,observationMs:0,reconciliationMs:0,getItemCalls:0,sellingPageCalls:0,metadataWritesSkipped:0};
+ const metrics:Record<string,number>={tokenMs:0,scopedReadMs:0,sellingMs:0,observationMs:0,reconciliationMs:0,getItemCalls:0,sellingPageCalls:0,metadataWritesSkipped:0,trafficMs:0};
  const finishResponse=async(payload:Record<string,unknown>,httpStatus=200)=>{
   const response={...payload,syncRequestId:runId,performance:{...metrics,totalMs:Date.now()-started}};
   const saved=await client.from('ebay_sync_log').update({status:payload.success===true?'completed':'failed',completed_at:new Date().toISOString(),records_fetched:Number(payload.processed??0),records_updated:Number(payload.updated??0),error_message:typeof payload.error==='string'?payload.error:null,metadata:{nicheId,mode,leaseSeconds:180,result:response}}).eq('id',runId).eq('tenant_id',tenantId).eq('status','running').select('id').abortSignal(AbortSignal.timeout(2000)).maybeSingle();
@@ -144,7 +146,7 @@ serveModule(async(req:Request)=>{
  };
  try{
   let stageStart=Date.now();
-  const {token,clientId}=await getValidToken(client,tenantId);metrics.tokenMs=Date.now()-stageStart;
+  const {token,clientId,hasAnalyticsScope}=await getValidToken(client,tenantId);metrics.tokenMs=Date.now()-stageStart;
   if(mode==='refresh_token_only')return await finishResponse({success:true,message:'Existing eBay token is valid'});
   const specialists=[...products[nicheId].specialists,...products[nicheId].legacySpecialists];
   stageStart=Date.now();
@@ -181,6 +183,15 @@ serveModule(async(req:Request)=>{
    observations.set(id,await getItemObservation(id,token,clientId));
   });
   metrics.observationMs=Date.now()-stageStart;
+  // One bounded Analytics batch per explicit sync, not one request per rendered inventory card.
+  // Only request it when enough of the existing sync deadline remains.
+  stageStart=Date.now();
+  if(hasAnalyticsScope&&Date.now()-started<60000){
+   const liveIds=[...observations.values()].filter(row=>row.status==='active').map(row=>row.externalId);
+   const traffic=await readListingTraffic(token,liveIds.slice(0,200),hasAnalyticsScope);
+   for(const [id,value]of traffic){const observation=observations.get(id);if(observation){observation.views=value.views;observation.traffic=value;}}
+  }
+  metrics.trafficMs=Date.now()-stageStart;
   let updated=0,imagesFetched=0,titlesFixed=0;const failed:string[]=[];const touchedItems=new Set<string>();
   stageStart=Date.now();
   for(const listing of listings){

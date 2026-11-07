@@ -31,7 +31,7 @@ describe('Shared eBay revision feedback and scope safety',()=>{
   expect(hook).toContain('scopeRef.current !== scope');
   expect(hook).toContain('previous.scope === scope');
   const editor=source('hooks/useListingEditor.ts');
-  expect(editor).toContain('actionLock.current = true');
+  expect(editor).toMatch(/actionLock\.current\s*=\s*true/);
   expect(editor).toContain('persistState(snapshot)');
   expect(editor).toContain('triggerInventoryReload()');
  });
