@@ -1270,7 +1270,7 @@ export default function CreateListingScreen() {
     );
   }
 
-  const primaryImage = (item.media ?? []).find(u => u.startsWith('https://')) ?? (item.media ?? [])[0] ?? null;
+  const primaryImage = preferredListingPhotos(item.media ?? [],item.attributes)[0] ?? null;
   const allAnalysisDone = swishAnalysisDone && (ebaySearchDone || (!ebaySearchRunning && !primaryImage));
   const hasExistingListing = existingListings.length > 0;
   const coinPublishBlocked = COIN_LISTING_SPECIALISTS.has(String(item.specialistId ?? '').toLowerCase()) && Number(item.identificationConfidence ?? 0) < 0.95;
@@ -1333,7 +1333,7 @@ export default function CreateListingScreen() {
               <MaterialIcons name="photo-library" size={13} color={Colors.primary} />
             </View>
             <Text style={[s.cardTitle, { color: Colors.primary }]}>PHOTOS</Text>
-            <Text style={s.cardMeta}>{item.media?.length ?? 0} images</Text>
+            <Text style={s.cardMeta}>{preferredListingPhotos(item.media ?? [],item.attributes).length} displayed images</Text>
           </View>
           {primaryImage ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.photoStrip}>

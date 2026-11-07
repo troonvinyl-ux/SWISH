@@ -1,4 +1,5 @@
 import { memo, useCallback } from 'react';
+import { preferredStudioImage } from '@/shared/smartStudio';
 import { View, Text, FlatList, Pressable, Modal, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -94,7 +95,7 @@ export const SharedNicheDashboard = memo(function SharedNicheDashboard({ nicheId
             renderItem={({ item }) => (
               <Pressable accessibilityRole="button" accessibilityLabel={`Select ${item.canonicalTitle}`}
                 onPress={() => dashboard.select(item.id)} style={({ pressed }) => [s.item, pressed ? s.pressed : null]}>
-                {item.media?.[0] ? <Image source={{ uri: item.media[0] }} contentFit="cover" transition={200} style={s.thumbnail} /> :
+                {preferredStudioImage(item.media,item.attributes) ? <Image source={{ uri: preferredStudioImage(item.media,item.attributes) }} contentFit="cover" transition={200} style={s.thumbnail} /> :
                   <View style={[s.thumbnail, s.icon]}><MaterialIcons name={content.icon as any} size={24} color={content.accent} /></View>}
                 <View style={s.copy}><Text style={s.tileTitle}>{item.canonicalTitle}</Text><Text style={s.body}>{item.condition || 'Unassessed'} · {item.status}</Text></View>
                 <MaterialIcons name="chevron-right" size={24} color={content.accent} />

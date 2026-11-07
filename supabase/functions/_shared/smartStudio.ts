@@ -186,12 +186,56 @@ export function studioForOriginal(original: string, attributes: Record<string,an
  const entries = attributes?._smart_studio_images;
  return entries && typeof entries === 'object' ? Object.values(entries).find((entry:any) => entry?.originalUri === original && entry.status === 'ready' && studioImageIsUsable(entry)) as StudioResult | undefined : undefined;
 }
+/** Presentation never mutates canonical original references or evidence metadata. */
+export function processedItemPhotos(media: readonly string[], attributes: Record<string,any>): string[] {
+ const entries = attributes?._smart_studio_images;
+ if (!entries || typeof entries !== 'object' || Array.isArray(entries)) return [];
+ const accepted = Object.values(entries).filter((entry:any) => entry?.status === 'ready' && studioImageIsUsable(entry) && (media.includes(entry.originalUri) || media.includes(entry.enhancedUri))) as StudioResult[];
+ return [...new Set(media.flatMap(uri => accepted.filter(entry => entry.originalUri === uri || entry.enhancedUri === uri).map(entry => entry.enhancedUri!)))];
+}
+export function originalForStudioImage(uri: string, attributes: Record<string,any>): string {
+ const entries = attributes?._smart_studio_images;
+ const match = entries && typeof entries === 'object' && !Array.isArray(entries) ? Object.values(entries).find((entry:any) => entry?.enhancedUri === uri && entry.status === 'ready' && studioImageIsUsable(entry)) as StudioResult | undefined : undefined;
+ return match?.originalUri ?? uri;
+}
 export function preferredStudioImage(media:readonly string[],attributes:Record<string,any>):string|undefined {
- const original=media[0];return original ? studioForOriginal(original,attributes)?.enhancedUri ?? original : undefined;
+ return preferredListingPhotos(media,attributes)[0];
 }
 export function preferredListingPhotos(media: readonly string[], attributes: Record<string,any>): string[] {
- return [...new Set(media.map(uri => studioForOriginal(uri,attributes)?.enhancedUri ?? uri))];
+ const processed = processedItemPhotos(media,attributes);
+ if (processed.length) return processed; // Item-wide policy: never mix originals with processed views.
+ const entries = attributes?._smart_studio_images;
+ const derivatives = new Set(entries && typeof entries === 'object' ? Object.values(entries).flatMap((entry:any) => [entry?.enhancedUri,entry?.maskUri]) : []);
+ return [...new Set(media.filter(uri => typeof uri === 'string' && uri.length > 0 && !derivatives.has(uri) && !/\/(?:studio|references)\//i.test(uri.split('?')[0])))];
 }
 export function availableListingPhotos(media: readonly string[], attributes: Record<string,any>): string[] {
- return [...new Set([...preferredListingPhotos(media,attributes),...media])];
+ return preferredListingPhotos(media,attributes);
+}
+/** Upgrade legacy original selections; preserve an intentionally empty selection and reject foreign URLs at validation. */
+export function selectedListingPhotos(media: readonly string[], attributes: Record<string,any>, selection: unknown = attributes?.ebay_listing_media): string[] {
+ if (!Array.isArray(selection)) return preferredListingPhotos(media,attributes);
+ if (!processedItemPhotos(media,attributes).length) return [...selection];
+ const allowed = preferredListingPhotos(media,attributes);
+ const next = [...new Set(selection.flatMap(uri => {
+  if (typeof uri !== 'string') return [uri]; // Keep malformed entries so validators fail closed.
+  const clean = studioForOriginal(uri,attributes)?.enhancedUri ?? uri;
+  if (allowed.includes(clean)) return [clean];
+  return media.includes(uri) ? [] : [uri];
+ }))] as string[];
+ return selection.length && !next.length ? allowed : next;
+}
+/** Original persistence alone does not prove all captured views are present in a processed-only listing. */
+export function processedListingPhotoIssue(media: readonly string[], attributes: Record<string,any>, selected: readonly string[]): string | null {
+ if (!processedItemPhotos(media,attributes).length) return null;
+ const expected = attributes?._photo_pipeline?.expected;
+ if (Array.isArray(expected) && expected.some(entry => !entry?.url || !studioForOriginal(entry.url,attributes)?.enhancedUri || !selected.includes(studioForOriginal(entry.url,attributes)!.enhancedUri!))) return 'Process and select every captured evidence view before publishing. Originals remain archived; they are not added to the processed-only listing.';
+ return null;
+}
+export interface CapturedPresentationPhoto { uri: string; originalStorageUri?: string; studio?: StudioResult }
+export function capturedPresentationUri(photo: CapturedPresentationPhoto): string {
+ return photo.studio?.status === 'ready' && studioImageIsUsable(photo.studio) ? photo.studio.enhancedUri! : photo.originalStorageUri ?? photo.uri;
+}
+export function visibleCapturedPhotos<T extends CapturedPresentationPhoto>(photos: readonly T[]): T[] {
+ const processed = photos.filter(photo => photo.studio?.status === 'ready' && studioImageIsUsable(photo.studio));
+ return processed.length ? processed : [...photos];
 }

@@ -2,20 +2,22 @@
 import { getSupabaseClient } from '@/template';
 import { backendRead, shareBackendRequest } from './backendRequestService';
 import { mapItem } from './itemService';
+import { preferredListingPhotos } from '@/shared/smartStudio';
 import { getProductionNicheSpecialistIds } from './nicheRouting';
 import type { InventoryTab,InventoryViewItem } from './inventoryViewService';
 import type { ListingWithItem } from './listingService';
+import { readCanonicalInventoryCounts } from './canonicalInventoryService';
 const tabs:InventoryTab[]=['stock','draft','live','sold'];
-function mapProjectedInventory(row:any):InventoryViewItem {
+export function mapProjectedInventory(row:any):InventoryViewItem {
   const item=mapItem(row.item ?? {}), raw=row.listing;
   const listing=raw ? {
     ...raw,id:raw.id,itemId:raw.item_id,tenantId:raw.tenant_id,marketplaceId:raw.marketplace_id,
     title:raw.title,description:raw.description ?? '',price:Number(raw.price ?? 0),status:raw.status,
-    externalListingId:raw.external_listing_id ?? undefined,publishedAt:raw.published_at ?? undefined,
+    externalListingId:raw.external_listing_id ?? undefined,publishedAt:raw.published_at ?? undefined,endedAt:raw.ended_at ?? undefined,
     floorPrice:Number(raw.floor_price ?? 0),ceilingPrice:Number(raw.ceiling_price ?? 0),shippingCost:Number(raw.shipping_cost ?? 0),
     views:Number(raw.views ?? 0),watchers:Number(raw.watchers ?? 0),createdAt:raw.created_at,updatedAt:raw.updated_at,
     itemTitle:item.canonicalTitle,itemSpecialistId:item.specialistId,itemStatus:item.status,itemSoldAt:item.soldAt,
-    itemQuantity:item.quantity,itemMedia:item.media,
+    itemQuantity:item.quantity,itemMedia:preferredListingPhotos(item.media,item.attributes),
   } as ListingWithItem : undefined;
   return { ...item,id:row.item_id ?? item.id,canonical_title:item.canonicalTitle,specialist_id:row.specialist_id ?? item.specialistId,media:item.media,attributes:item.attributes,listing };
 }
@@ -42,12 +44,8 @@ export async function loadInventoryCounts(tenantId:string,nicheId:string):Promis
   const specialists=getProductionNicheSpecialistIds(nicheId);
   if(!tenantId.trim() || !specialists.length) return { counts,error:'A valid account and niche are required.' };
   try {
-    const { data }=await backendRead(`tab-counts:${tenantId}:${nicheId}`, signal => getSupabaseClient().rpc('swish_inventory_tab_counts',{p_tenant_id:tenantId,p_niche_id:nicheId}).abortSignal(signal));
-    for(const tab of tabs) {
-      const count=Number(data?.[tab]);
-      if(!Number.isSafeInteger(count)||count<0) throw new Error('Invalid inventory aggregate response');
-      counts[tab]=count;
-    }
+    const canonical=await readCanonicalInventoryCounts(tenantId,nicheId);
+    for(const tab of tabs) counts[tab]=canonical[tab];
     return { counts,error:null };
   } catch(cause) { return { counts,error:cause instanceof Error ? cause.message : 'Inventory counts unavailable' }; }
 }

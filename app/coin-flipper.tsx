@@ -28,6 +28,7 @@ import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import type { SpecialistId } from '@/constants/specialists';
 import { Image } from 'expo-image';
+import { visibleCapturedPhotos, capturedPresentationUri } from '@/shared/smartStudio';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -526,6 +527,8 @@ function CaptureTab({
   const imageProcessing = hasRequired && !imagePipelineReady;
   const canIdentify = hasRequired && imagePipelineReady;
   const accentColor = selectedSpecialist.color;
+  const visibleImages = visibleCapturedPhotos(capturedImages);
+  const displayedSide = visibleImages.find(image => image.slotId === activeSide);
 
   // Move directly from the first face to the reverse capture slot.
   useEffect(() => {
@@ -754,8 +757,8 @@ function CaptureTab({
               accessibilityLabel={capturedImages.some(i => i.slotId === activeSide) ? `Retake ${activeSide} photo` : `Photograph ${activeSide}`}
               style={({ pressed }) => [ct.heroCapture, pressed && { opacity: 0.88 }]}
             >
-              {capturedImages.find(i => i.slotId === activeSide) ? (
-                <Image source={{ uri: capturedImages.find(i => i.slotId === activeSide)!.enhancedUri ?? capturedImages.find(i => i.slotId === activeSide)!.uri }} style={ct.heroCaptureImage} contentFit="contain" />
+              {displayedSide ? (
+                <Image source={{ uri: capturedPresentationUri(displayedSide) }} style={ct.heroCaptureImage} contentFit="contain" />
               ) : (
                 <>
                   <View style={ct.framingGuide}>
@@ -831,7 +834,7 @@ function CaptureTab({
                   </Pressable>
                 )}
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md }}>
-                  <Pressable onPress={() => { onRestoreImage(activeSide); setCaptureToolNotice(null); }} accessibilityRole="button" style={[ct.toolButton, { alignSelf: 'flex-start', paddingHorizontal: Spacing.md }]}><Text style={ct.toolLabel}>Restore original</Text></Pressable>
+                  <Text style={ct.advancedHint}>Original kept privately for future reference.</Text>
                   <Pressable onPress={() => setCaptureToolNotice(null)} accessibilityRole="button" style={[ct.toolButton, { alignSelf: 'flex-start', paddingHorizontal: Spacing.md }]}><Text style={ct.toolLabel}>Close</Text></Pressable>
                 </View>
               </View>
@@ -1083,7 +1086,7 @@ function IdentifyTab({ result, capturedImages, onSave, saving, savedItemId, uplo
       {capturedImages.length > 0 ? (
         <View style={{ gap: Spacing.sm }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm }}>
-            {capturedImages.filter(img => img.slotId === 'obverse' || img.slotId === 'reverse').map(img => (
+            {visibleCapturedPhotos(capturedImages).filter(img => img.slotId === 'obverse' || img.slotId === 'reverse').map(img => (
               <View key={img.slotId} style={{ width: 156, gap: 5 }}>
                 {img.enhancedUri ? (
                   <Image source={{ uri: img.enhancedUri }} style={[idS.thumb, { width: 156, height: 156, borderColor: CF.gold, borderWidth: 1 }]} contentFit="contain" />
@@ -1093,7 +1096,7 @@ function IdentifyTab({ result, capturedImages, onSave, saving, savedItemId, uplo
                     <Text style={{ color: CF.textSub, fontSize: 9, marginTop: 5 }}>Cropping & enhancing…</Text>
                   </View>
                 ) : (
-                  <Image source={{ uri: img.uri }} style={[idS.thumb, { width: 156, height: 156 }]} contentFit="contain" />
+                  <Image source={{ uri: capturedPresentationUri(img) }} style={[idS.thumb, { width: 156, height: 156 }]} contentFit="contain" />
                 )}
                 <Text style={{ color: CF.gold, fontSize: 10, fontWeight: Typography.weight.bold, textAlign: 'center' }} numberOfLines={1}>{img.slotLabel || img.slotId}</Text>
                 <Pressable onPress={() => onProcessImage('enhance', img.slotId).catch(error => Alert.alert('Image enhancement', error?.message ?? 'Could not enhance this photo.'))} style={idS.photoToolBtn} accessibilityRole="button" accessibilityLabel={`Reprocess ${img.slotLabel || img.slotId} photo`}>

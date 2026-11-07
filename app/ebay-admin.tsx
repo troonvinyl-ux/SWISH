@@ -27,6 +27,7 @@ import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { ItemImage } from '@/components';
+import { preferredListingPhotos } from '@/shared/smartStudio';
 import { getSupabaseClient } from '@/template';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
@@ -297,7 +298,7 @@ function CreateListingModal({
       const q = itemSearch.trim();
       let query = supabase
         .from('items')
-        .select('id, inventory_id, canonical_title, status, media, expected_selling_price, catalogue_number, folder_number, condition')
+        .select('id, inventory_id, canonical_title, status, media, attributes, expected_selling_price, catalogue_number, folder_number, condition')
         .eq('tenant_id', tenantId)
         .not('status', 'in', '("sold","disposed")')
         .order('updated_at', { ascending: false })
@@ -313,7 +314,7 @@ function CreateListingModal({
         inventoryId: r.inventory_id ?? undefined,
         canonicalTitle: r.canonical_title,
         status: r.status,
-        media: r.media ?? [],
+        media: preferredListingPhotos(r.media ?? [],r.attributes ?? {}),
         expectedSellingPrice: Number(r.expected_selling_price ?? 0),
         catalogueNumber: r.catalogue_number ?? undefined,
         folderNumber: r.folder_number ?? undefined,
@@ -1500,7 +1501,7 @@ export default function EbayAdminScreen() {
 
     const { data, error } = await supabase
       .from('listings')
-      .select(`*, items!inner(id, canonical_title, specialist_id, status, condition, inventory_id, catalogue_number, folder_number, pocket_position, storage_location, media, ruler, denomination, country_of_origin)`)
+      .select(`*, items!inner(id, canonical_title, specialist_id, status, condition, inventory_id, catalogue_number, folder_number, pocket_position, storage_location, media, attributes, ruler, denomination, country_of_origin)`)
       .eq('tenant_id', tenant.id)
       .eq('marketplace_id', 'ebay')
       .in('items.specialist_id', specialistIds)
@@ -1528,7 +1529,7 @@ export default function EbayAdminScreen() {
       pocketPosition: r.items?.pocket_position ?? undefined,
       storageLocation: r.items?.storage_location ?? undefined,
       itemTitle: r.items?.canonical_title ?? r.title,
-      itemMedia: r.items?.media ?? [],
+      itemMedia: preferredListingPhotos(r.items?.media ?? [],r.items?.attributes ?? {}),
       itemStatus: r.items?.status ?? '',
       condition: r.items?.condition ?? undefined,
       ruler: r.items?.ruler ?? undefined,

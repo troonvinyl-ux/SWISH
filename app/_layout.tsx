@@ -7,7 +7,9 @@ import { TunesProvider } from '@/contexts/TunesContext';
 import { ManifestOpportunityProvider } from '@/contexts/ManifestOpportunityContext';
 import { WatchedLotsProvider } from '@/contexts/WatchedLotsContext';
 import { QuickListProvider } from '@/contexts/QuickListContext';
+import { EbayMessagesProvider } from '@/contexts/EbayMessagesContext';
 import { markQuickListAppOpened } from '@/services/quickListTelemetryService';
+import { setAppVisible } from '@/services/appVisibilityService';
 import { AppState } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { NicheRouteBoundary } from '@/components/layout/NicheRouteBoundary';
@@ -76,11 +78,15 @@ export default function RootLayout() {
   // render while icon fonts finish loading; missing glyphs are preferable to a
   // failed/blank app launch.
   useEffect(() => {
-    const foreground=AppState.addEventListener('change',state=>{if(state==='active')markQuickListAppOpened();});
+    const browserVisible=()=>Platform.OS!=='web'||typeof document==='undefined'||!document.hidden;
+    const updateVisible=()=>setAppVisible(browserVisible()&&AppState.currentState!=='background'&&AppState.currentState!=='inactive');
+    updateVisible();
+    const foreground=AppState.addEventListener('change',state=>{setAppVisible(state==='active'&&browserVisible());if(state==='active')markQuickListAppOpened();});
+    if(Platform.OS==='web'&&typeof document!=='undefined')document.addEventListener('visibilitychange',updateVisible);
     SplashScreen.hideAsync().catch(() => {
       // The splash screen may already have been hidden by the host runtime.
     });
-    return()=>foreground.remove();
+    return()=>{foreground.remove();if(Platform.OS==='web'&&typeof document!=='undefined')document.removeEventListener('visibilitychange',updateVisible);};
   }, []);
 
   return (
@@ -92,6 +98,7 @@ export default function RootLayout() {
             <ManifestOpportunityProvider>
             <WatchedLotsProvider>
             <QuickListProvider>
+            <EbayMessagesProvider>
             <TVBackHandlerProvider>
               <NicheRouteBoundary>
               <Stack screenOptions={{ headerShown: false }}>
@@ -167,6 +174,7 @@ export default function RootLayout() {
               </Stack>
               </NicheRouteBoundary>
             </TVBackHandlerProvider>
+            </EbayMessagesProvider>
             </QuickListProvider>
             </WatchedLotsProvider>
             </ManifestOpportunityProvider>

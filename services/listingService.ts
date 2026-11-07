@@ -2,6 +2,7 @@
 // Generates, previews, saves, and retrieves marketplace listings.
 
 import { getSupabaseClient } from '@/template';
+import { preferredListingPhotos } from '@/shared/smartStudio';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { getBusinessConfig } from '@/services/businessConfigService';
 import { isLiveListing } from '@/services/listingLifecycle';
@@ -10,6 +11,7 @@ import { resolveProductionNiche } from '@/services/nicheRouting';
 import { backendRead, shareBackendRequest } from './backendRequestService';
 import { readListingPublication, type ListingPublication } from './listingPublicationService';
 import { readCanonicalInventoryCounts } from './canonicalInventoryService';
+import {recordPerformance,recordPrevention} from './performanceMonitoringService';
 
 export interface GeneratedListing {
   title: string;
@@ -250,54 +252,39 @@ export async function updateListingShipping(
 // Calls eBay EndFixedPriceItem if there is an external listing ID,
 // then marks the listing as ended in the DB.
 
-export async function endListing(
-  listingId: string,
-  itemId: string,
-  tenantId?: string,
-  externalListingId?: string,
-): Promise<{ error: string | null }> {
-  const supabase = getSupabaseClient();
-
-  // If we have an eBay listing ID and tenant, end it on eBay first
-  if (tenantId && externalListingId) {
-    const { data, error: fnErr } = await supabase.functions.invoke('swish-ebay-list', {
-      body: {
-        route: 'end',
-        tenantId,
-        listingId,
-        itemId,
-        externalListingId,
-      },
-    });
-    if (fnErr) {
-      let msg = fnErr.message;
-      if (fnErr instanceof FunctionsHttpError) {
-        try {
-          const t = await fnErr.context?.text();
-          if (t) { try { const p = JSON.parse(t); msg = p.error ?? t; } catch { msg = t; } }
-        } catch {}
-      }
-      return { error: msg };
+const endingsInFlight = new Map<string, Promise<{ error: string | null }>>();
+export function endListing(listingId: string, itemId: string, tenantId?: string, externalListingId?: string): Promise<{ error: string | null }> {
+  const key = `${tenantId}:${listingId}`;
+  const existing = endingsInFlight.get(key);
+  if (existing) return existing;
+  const task = performListingEnd(listingId, itemId, tenantId, externalListingId)
+    .catch(() => ({ error: 'End outcome is unconfirmed. Check the saved listing before retrying; inventory was retained.' }))
+    .finally(() => endingsInFlight.delete(key));
+  endingsInFlight.set(key, task);
+  return task;
+}
+async function performListingEnd(listingId: string, itemId: string, tenantId?: string, externalListingId?: string): Promise<{ error: string | null }> {
+  if (!tenantId?.trim() || !listingId?.trim() || !itemId?.trim()) return { error: 'A saved listing and verified account are required.' };
+  const initial = await readListingPublication(tenantId, listingId);
+  const saved = initial.publication;
+  if (initial.error || !saved) return { error: initial.error ?? 'Listing status unavailable.' };
+  if (saved.itemId !== itemId || (externalListingId && externalListingId.trim() !== saved.externalListingId)) return { error: 'Listing identity does not match this inventory item.' };
+  if (saved.claimPending) return { error: 'Publication outcome is pending. Sync eBay before ending or deleting.' };
+  if (!saved.recorded) return { error: 'This listing has no confirmed eBay ID. Use Delete draft for an unpublished listing.' };
+  const { data, error } = await getSupabaseClient().functions.invoke('swish-ebay-list', {
+    body: { route: 'end', tenantId, nicheId: saved.nicheId, listingId, itemId, externalListingId: saved.externalListingId },
+  });
+  if (error) {
+    let message = 'eBay end was not confirmed. Inventory is retained; check status before retrying.';
+    if (error instanceof FunctionsHttpError) {
+      try { const payload = JSON.parse(await error.context.text()); if (typeof payload?.error === 'string') message = payload.error; } catch { /* Do not display gateway HTML or credentials. */ }
     }
-    if (!data?.success) {
-      return { error: data?.error ?? 'eBay could not end the listing' };
-    }
-    // Edge function already updated the DB rows
-    return { error: null };
+    return { error: message };
   }
-
-  // No eBay listing — just update DB
-  const [listingResult, itemResult] = await Promise.all([
-    supabase
-      .from('listings')
-      .update({ status: 'ended', ended_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq('id', listingId),
-    supabase
-      .from('items')
-      .update({ status: 'identified', updated_at: new Date().toISOString() })
-      .eq('id', itemId),
-  ]);
-  return { error: listingResult.error?.message ?? itemResult.error?.message ?? null };
+  if (data?.success !== true || data?.confirmed !== true || data?.externalListingId !== saved.externalListingId) return { error: data?.error ?? data?.warning ?? 'eBay end and SWISH reconciliation are not confirmed. Inventory was retained.' };
+  const reopened = await readListingPublication(tenantId, listingId);
+  if (reopened.error || !reopened.publication || reopened.publication.externalListingId !== saved.externalListingId || reopened.publication.status !== 'ended' || !reopened.publication.endedAt) return { error: reopened.error ?? 'eBay was checked, but the saved end status needs reconciliation. Inventory was retained.' };
+  return { error: null };
 }
 
 // Get all listings across items (for the Listings management screen)
@@ -331,7 +318,7 @@ export async function getAllListings(
 
   let query = supabase
     .from('listings')
-    .select('*, items!inner(canonical_title, specialist_id, acquired_cost, media, status, sold_at, sold_price, quantity)')
+    .select('*, items!inner(canonical_title, specialist_id, acquired_cost, media, attributes, status, sold_at, sold_price, quantity)')
     .eq('tenant_id', tenantId)
     .eq('items.tenant_id', tenantId)
     .order('updated_at', { ascending: false })
@@ -364,7 +351,7 @@ export async function getAllListings(
     itemSoldPrice: row.items?.sold_price == null ? undefined : Number(row.items.sold_price),
     itemQuantity: row.items?.quantity ?? 1,
     itemAcquiredCost: Number(row.items?.acquired_cost ?? 0),
-    itemMedia: [...new Set([...(Array.isArray(row.items?.media) ? row.items.media : []), ...(Array.isArray(row.images) ? row.images : []), row.image_url].filter((url: unknown) => typeof url === 'string' && url.length > 0))] as string[],
+    itemMedia: preferredListingPhotos([...new Set([...(Array.isArray(row.items?.media) ? row.items.media : []), ...(Array.isArray(row.images) ? row.images : []), row.image_url].filter((url: unknown) => typeof url === 'string' && url.length > 0))] as string[],row.items?.attributes ?? {}),
     categoryId: row.category_id ?? undefined,
   }));
 
@@ -515,28 +502,18 @@ export async function deleteListing(
     status?: string;
   },
 ): Promise<{ error: string | null }> {
-  const supabase = getSupabaseClient();
-
-  // If the listing is active on eBay, end it first
-  if (options?.externalListingId && options?.status === 'active') {
-    const endResult = await endListing(
-      listingId,
-      options.itemId ?? '',
-      tenantId,
-      options.externalListingId,
-    );
-    if (endResult.error) return { error: `eBay end failed: ${endResult.error}` };
-  }
-
-  // Delete from SWISH DB
-  const { error } = await supabase
-    .from('listings')
-    .delete()
-    .eq('id', listingId)
-    .eq('tenant_id', tenantId); // RLS guard
-
-  if (error) return { error: error.message };
-  return { error: null };
+  if (!tenantId?.trim() || !listingId?.trim()) return { error: 'A saved draft and verified account are required.' };
+  try {
+    const initial = await readListingPublication(tenantId, listingId);
+    const saved = initial.publication;
+    if (initial.error || !saved) return { error: initial.error ?? 'Draft could not be verified.' };
+    // Never combine a seller end with inventory deletion. Ignore stale caller status hints.
+    if (saved.externalListingId || saved.publishedAt || options?.externalListingId || saved.claimPending || !['draft','pending','failed'].includes(saved.status)) return { error: 'End the eBay listing first, then return to inventory to delete the item.' };
+    const { error, count } = await getSupabaseClient().from('listings').delete({ count: 'exact' })
+      .eq('id', listingId).eq('tenant_id', tenantId).is('external_listing_id', null).is('publish_claim_id', null);
+    if (error) return { error: error.message };
+    return { error: count === 1 ? null : 'Draft deletion was not confirmed. Refresh before retrying.' };
+  } catch { return { error: 'Draft deletion was not confirmed. Refresh before retrying.' }; }
 }
 
 // Collapse duplicate taps/callers to one publish operation for the saved draft.
@@ -547,9 +524,11 @@ export function submitListingToMarketplace(
 ): Promise<SubmitResult> {
   const key = `${tenantId}:${listingId}`;
   const existing = submissionsInFlight.get(key);
-  if (existing) return existing;
+  if (existing) {recordPrevention('publication_flight');return existing;}
+  const started=Date.now();
   const pending = performListingSubmission(tenantId, listingId, onStep, auctionParams)
     .catch((): SubmitResult => ({ success: false, step: 'failed', error: 'Listing checks could not be completed. Reopen the saved draft.' }))
+    .then(result=>{recordPerformance('publication',Date.now()-started,result.success?'success':'failure');return result;})
     .finally(() => submissionsInFlight.delete(key));
   submissionsInFlight.set(key, pending);
   return pending;

@@ -76,7 +76,7 @@ test('optional processed images are linked by original role and become available
  (prepareCapturedImages as jest.Mock).mockImplementation(async captures=>captures.map((image:any)=>({...image,studio:{version:SMART_STUDIO_VERSION,status:'ready',originalUri:image.uri,enhancedUri:`https://storage.test/processed/${image.slotId}.png`,confidence:1,warnings:[],quality:{method:'backgrounderase',provider:'BackgroundErase',sourcePixelsOnly:true,completeness:'reviewed',boundary:'reviewed',detailCheck:'unchanged',background:'transparent',checks:{validPng:true,dimensionsUnchanged:true,foregroundPresent:true,transparencyPresent:true}}}})));
  const saved=await persistCapturedItemPhotos('tenant','item',images);expect(saved.complete).toBe(true);
  expect(db.row().attributes._smart_studio_images.front.originalUri).toBe(saved.urls[0]);
- expect(availableListingPhotos(db.row().media,db.row().attributes)).toHaveLength(4);expect(db.row().media).toEqual(saved.urls);
+ expect(availableListingPhotos(db.row().media,db.row().attributes)).toEqual(['https://storage.test/processed/front.png','https://storage.test/processed/back.png']);expect(db.row().media).toEqual(saved.urls);expect(db.row().attributes._photo_assets).toHaveLength(2);
 });
 test('wrong tenant stops before upload and local URLs cannot be linked as persisted media',async()=>{
  const db=setup();expect((await persistCapturedItemPhotos('other','item',photos())).complete).toBe(false);expect(db.storage.upload).not.toHaveBeenCalled();

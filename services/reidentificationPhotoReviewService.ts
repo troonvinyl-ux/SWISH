@@ -1,6 +1,7 @@
 // Advisory pixel warnings do not certify identity or change inventory/listing evidence.
 import type { PhotoQuality } from './imageQualityMetrics';
-export interface PhotoReviewSource { uri: string; slotLabel: string }
+import type { CapturedPresentationPhoto } from '@/shared/smartStudio';
+export interface PhotoReviewSource extends CapturedPresentationPhoto { slotLabel: string }
 export interface PhotoWarningReview extends PhotoReviewSource { photoQuality: PhotoQuality }
 export type PhotoReviewAction = 'identify' | 'refine';
 
