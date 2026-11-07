@@ -1,0 +1,10 @@
+import { memo } from 'react';
+import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { Colors, Spacing, Radius, Typography } from '@/constants/theme';
+interface RecommendedPriceActionProps {price:number;currentPrice:number;pending:boolean;busy:boolean;accent:string;onApply:()=>void;onCheck:()=>void}
+export const RecommendedPriceAction=memo(function RecommendedPriceAction({price,currentPrice,pending,busy,accent,onApply,onCheck}:RecommendedPriceActionProps){
+ if(!pending&&(!Number.isFinite(price)||price<=0||Math.round(price*100)===Math.round(currentPrice*100)))return null;
+ return <View style={s.card}><View style={s.copy}><Text style={s.label}>{pending?'Price change needs checking':'Recommended new price'}</Text>{!pending?<Text style={[s.price,{color:accent}]}>£{price.toFixed(2)}</Text>:<Text style={s.label}>Check before sending another change.</Text>}</View><Pressable disabled={busy} accessibilityRole="button" accessibilityLabel={pending?'Check price revision status':`Apply recommended price £${price.toFixed(2)} on eBay`} onPress={pending?onCheck:onApply} style={({pressed})=>[s.action,{backgroundColor:accent},pressed||busy?s.pressed:null]}>{busy?<ActivityIndicator color={Colors.textInverse}/>:<><MaterialIcons name={pending?'sync':'price-change'} size={20} color={Colors.textInverse}/><Text style={s.button}>{pending?'Check status':'Apply on eBay'}</Text></>}</Pressable></View>;
+});
+const s=StyleSheet.create({card:{padding:Spacing.base,gap:Spacing.base,flexDirection:'row',alignItems:'center',flexWrap:'wrap',backgroundColor:Colors.surface,borderRadius:Radius.lg},copy:{flexGrow:1,gap:Spacing.xs},label:{fontSize:Typography.size.base,lineHeight:26,color:Colors.textSecondary},price:{fontSize:Typography.size.xl,fontWeight:Typography.weight.bold},action:{minHeight:48,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:Spacing.sm,borderRadius:Radius.md,paddingHorizontal:Spacing.base},button:{color:Colors.textInverse,fontSize:Typography.size.base,fontWeight:Typography.weight.semibold},pressed:{opacity:0.6}});

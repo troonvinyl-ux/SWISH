@@ -1,0 +1,28 @@
+name: Inventory refresh and price-only revision checks
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['app/**','components/**','hooks/**','services/**','shared/**','supabase/functions/**','supabase/tests/**','.github/workflows/inventory-refresh-reprice-verification.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@v4
+        with: { version: 9.15.9 }
+      - uses: actions/setup-node@v6
+        with: { node-version: 22 }
+      - uses: denoland/setup-deno@v2
+        with: { deno-version: v2.x }
+      - run: bash scripts/install-dependencies.sh
+      - run: npx --no-install tsc --noEmit
+      - name: Ordering, price-only action and original-photo regressions
+        run: npx --no-install jest --config jest.config.ci.js --runInBand services/__tests__/inventoryRefreshAndOrdering.test.ts services/__tests__/listingPriceRevision.test.ts services/__tests__/existingStudioStorage.test.ts services/__tests__/smartStudioIntegration.test.ts services/__tests__/ebayRevisionReadback.test.ts services/__tests__/ebayRevisionUi.test.ts services/__tests__/sharedItemOverviewPhotos.test.ts services/__tests__/backendPerformance.test.ts services/__tests__/premiumNicheParity.test.ts
+      - run: deno test supabase/tests/ebay_traffic.test.ts
+      - run: deno check supabase/functions/swish-ebay-list/index.ts supabase/functions/swish-ebay-sync/index.ts
+      - run: node scripts/validate-edge-deployment.mjs
+# Pure/mocked tests and type checks only; no credentials, deployment or live seller mutations.

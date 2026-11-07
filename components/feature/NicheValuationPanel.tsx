@@ -246,7 +246,7 @@ export default function NicheValuationPanel({
       const guarded = applyValuationGuardrails(r, { identificationConfidence, specialistId: config.specialistId });
       setGuardrailResult(guarded);
       if (applyToItem) setApplied(true);
-      setExpanded(true);
+
     }
   }, [tenantId, itemId, title, config.specialistId, attributes, condition, identificationConfidence, identificationTier, numistaTypeId, numistaMatchScore, numistaMatchTier, applyToItem, imageUrls]);
 
@@ -259,7 +259,7 @@ export default function NicheValuationPanel({
       setResult(initialResult);
       const guarded = applyValuationGuardrails(initialResult, { identificationConfidence, specialistId: config.specialistId });
       setGuardrailResult(guarded);
-      setExpanded(true);
+
       if (applyToItem) setApplied(true);
     }
   }, [initialResult]);
@@ -286,7 +286,7 @@ export default function NicheValuationPanel({
             <MaterialIcons name={config.evidenceIcon as any} size={16} color={accent} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[s.headerTitle, { color: accent }]}>Live Market Value</Text>
+            <Text style={[s.headerTitle, { color: accent }]}>Market value</Text>
             <Text style={s.headerSub}>{config.evidenceLabel}</Text>
           </View>
         </View>
@@ -307,7 +307,7 @@ export default function NicheValuationPanel({
           style={({ pressed }) => [s.fetchBtn, { backgroundColor: accent }, pressed && { opacity: 0.85 }]}
         >
           <MaterialIcons name="travel-explore" size={16} color="#000" />
-          <Text style={s.fetchBtnText}>Get Live Market Value</Text>
+          <Text style={s.fetchBtnText}>Get Market value</Text>
         </Pressable>
       </View>
     );
@@ -330,9 +330,9 @@ export default function NicheValuationPanel({
           <ActivityIndicator size="small" color={accent} />
           <View style={{ flex: 1 }}>
             <Text style={[s.loadingText, { color: accent }]}>
-              Analysing images with Gemini Vision + eBay sold listings…
+              Researching market value…
             </Text>
-            <Text style={s.loadingSub}>Image-first search: AI identifies item, then searches eBay for comparable sold prices</Text>
+
           </View>
         </View>
       </View>
@@ -354,7 +354,7 @@ export default function NicheValuationPanel({
             <MaterialIcons name={config.evidenceIcon as any} size={16} color={accent} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[s.headerTitle, { color: accent }]}>Live Market Value</Text>
+            <Text style={[s.headerTitle, { color: accent }]}>Market value</Text>
             <Text style={s.headerSub}>{config.evidenceLabel}</Text>
           </View>
           <Pressable onPress={handleFetch} hitSlop={8} style={s.refreshBtn}>
@@ -432,7 +432,7 @@ export default function NicheValuationPanel({
           <MaterialIcons name={config.evidenceIcon as any} size={16} color={accent} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[s.headerTitle, { color: accent }]}>Live Market Value</Text>
+          <Text style={[s.headerTitle, { color: accent }]}>Market value</Text>
           <Text style={s.headerSub}>
             {hasTeapeakSold ? `Terapeak: ${teapeakData.soldQuantity} verified sold · EBAY_GB` : isAIEstimate ? 'AI estimate (Gemini Vision) · no eBay sold data' : config.evidenceLabel}
           </Text>
@@ -447,7 +447,7 @@ export default function NicheValuationPanel({
           <Pressable onPress={handleFetch} hitSlop={8} style={s.refreshBtn}>
             <MaterialIcons name="refresh" size={13} color={Colors.textTertiary} />
           </Pressable>
-          <MaterialIcons name={expanded ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} size={18} color={Colors.textTertiary} />
+          <Text style={s.headerSub}>{expanded?'Hide details':'More details'}</Text><MaterialIcons name={expanded ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} size={18} color={Colors.textTertiary} />
         </View>
       </Pressable>
 
@@ -466,23 +466,19 @@ export default function NicheValuationPanel({
         <View style={[s.priceHero, { backgroundColor: accentDim, borderColor: accent + '25' }]}>
           <View style={s.priceRow}>
             <View style={s.priceBlock}>
-              <Text style={s.priceTinyLabel}>LOW</Text>
-              <Text style={s.priceSmall}>£{(v!.valuationLow ?? 0).toFixed(0)}</Text>
+                <Text style={s.priceTinyLabel}>ESTIMATE</Text>
             </View>
             <View style={[s.priceBlock, s.priceMidBlock]}>
-              <Text style={s.priceTinyLabel}>{isAIEstimate ? 'AI ESTIMATE' : 'FAIR MARKET VALUE'}</Text>
+              <Text style={s.priceTinyLabel}>'MARKET VALUE'</Text>
               <Text style={[s.priceBig, { color: accent }]}>£{(v!.valuationMid ?? 0).toFixed(2)}</Text>
               <View style={[s.confidencePill, { backgroundColor: confColor + '20', borderColor: confColor + '40' }]}>
                 <Text style={[s.confidenceText, { color: confColor }]}>{(v!.valuationConfidence ?? 'unknown').replace(/_/g, ' ').toUpperCase()}</Text>
               </View>
             </View>
-            <View style={s.priceBlock}>
-              <Text style={s.priceTinyLabel}>HIGH</Text>
-              <Text style={s.priceSmall}>£{(v!.valuationHigh ?? 0).toFixed(0)}</Text>
-            </View>
+
           </View>
 
-          {v!.recommendedListingPrice && v!.recommendedListingPrice > 0 ? (
+          {expanded && v!.recommendedListingPrice && v!.recommendedListingPrice > 0 ? (
             <View style={s.recommendRow}>
               <MaterialIcons name={v!.recommendedListingFormat === 'Auction' ? 'gavel' : 'sell'} size={12} color={accent} />
               <Text style={[s.recommendText, { color: accent }]}>
@@ -507,7 +503,7 @@ export default function NicheValuationPanel({
       ) : null}
 
       {/* Evidence chips */}
-      <View style={s.evidenceRow}>
+      {expanded?<View style={s.evidenceRow}>
         {hasTeapeakSold ? (
           <View style={[s.evidenceChip, { backgroundColor: Colors.successDim, borderColor: Colors.success + '50' }]}>
             <MaterialIcons name="verified" size={10} color={Colors.success} />
@@ -549,7 +545,7 @@ export default function NicheValuationPanel({
             <Text style={s.evidenceChipText}>{Math.round(v.saleProb30d * 100)}% / 30d</Text>
           </View>
         ) : null}
-      </View>
+      </View>:null}
 
       {/* Expanded detail */}
       {expanded ? (

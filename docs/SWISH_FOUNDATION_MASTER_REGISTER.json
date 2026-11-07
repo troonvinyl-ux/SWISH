@@ -30,6 +30,20 @@
     },
     "executionLimitations": ["No terminal, CI dispatch, Git write/merge or installed-device tool in this editor", "No current-source TypeScript/Jest/lint/native build pass claimed", "Existing safe Edge runner must be exercised with an actual owner JWT after deployment"]
   },
+  "productionAcceptanceReview": {
+    "reviewedOn": "2026-11-07",
+    "auditedSourceSha": "aed7a1f5498666ee81fc6dcb2971c453cda51cd4",
+    "releaseDecision": "BLOCKED",
+    "productionReady": false,
+    "scope": "All twelve canonical niches; current review supersedes dated completion claims without changing historical task evidence",
+    "report": "docs/SWISH_PRODUCTION_ACCEPTANCE.md",
+    "evidence": "docs/SWISH_PRODUCTION_ACCEPTANCE_EVIDENCE.json",
+    "workflow": ".github/workflows/production-acceptance-gate.yml",
+    "executed": ["Live administrative inventory/media/report SELECTs", "No-session count/report/export RPC rejection", "Current-main GitHub job and annotation retrieval"],
+    "notExecuted": ["Current changed-source TypeScript/lint/Jest/Deno", "All-niche device journeys", "Approved live seller operations", "Native/web builds and hosted deployment", "Two-subscriber JWT isolation"],
+    "sourceControl": "Current public main and open PR #170 observed; no branch, PR, merge, reset or deployment performed by this editor",
+    "originalTasksPromoted": false
+  },
   "tunesFlipExtension": {
     "status": "IMPLEMENTED",
     "verificationStatus": "BLOCKED",
@@ -418,6 +432,9 @@
     "sourceSecurityRepairStatus": "MERGED; internal secret is additional to user JWT and tenant membership; deployment parity remains BLOCKED."
   },
   "knownReleaseRisks": [
+    "CURRENT 2026-11-07 productionAcceptanceReview: BLOCKED. Actual SQL found 70 duplicate order-line groups, one duplicate item/eBay identity group, five active/live rows with ended_at, one sold item with an active/live row, five items missing media and two stored original objects absent from item.media. No historical records were changed.",
+    "Current-main premium-parity job 42397270420 failed dependency installation. Later wrapper steps marked success do not establish successful Jest/TypeScript checks; eight annotations and missing artifacts were observed. Changed-source full test/build execution is still required.",
+    "Current report SELECT agrees with 751 classified canonical items across twelve modules; 12 unclassified items remain separate. Zero readiness assessments, 253 flagged items and zero capture-to-live event samples prevent operational certification.",
     "Tunes Flip extends the unified registry to twelve. Music source integration is implemented; billing constraint, Discogs commercial-use permission, live JWT/provider and native acceptance remain blocked. No original S1-S7 task promoted.",
     "CURRENT 2026-11-04: completionProgramme is the authoritative current execution snapshot; prior VERIFIED evidence applies only to its dated historical source, not this changed 11-product baseline.",
     "All eleven releases remain BLOCKED: no current native artifact, full automated pass, hosted parity, approved seller action or installed-device acceptance was executed by this editor.",

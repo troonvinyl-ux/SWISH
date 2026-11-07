@@ -48,9 +48,9 @@ export function getNicheDashboardContent(nicheId: ProductionNicheId, fixedBuild 
   const experience = getNicheHomeExperience(nicheId);
   const allowed = (route: string) => fixedBuild ? isRouteAllowedForBuild(route, nicheId) : isRouteAllowedForModule(route, nicheId);
   const actions: NicheDashboardAction[] = [
-    { id: 'identify', title: niche.terms.scan, detail: 'Capture · review · save', icon: 'photo-camera', route: nicheToScannerRoute(nicheId) },
+    { id: 'identify', title: niche.terms.scan, detail: 'Photos · Next · List or save', icon: 'photo-camera', route: nicheToScannerRoute(nicheId) },
     { id: 'inventory', title: 'My Inventory', detail: `Private ${niche.shortName} stock`, icon: 'inventory-2', route: '/(tabs)/inventory' },
-    { id: 'listing', title: 'Create Listing', detail: 'Category & eBay specifics', icon: 'sell', purpose: 'listing' },
+    { id: 'listing', title: 'List Stock', detail: 'Ready-filled listing · List or save', icon: 'sell', purpose: 'listing' },
     { id: 'valuation', title: 'Market Value', detail: 'Comparisons & confidence', icon: 'query-stats', purpose: 'valuation' },
     { id: 'sync', title: 'eBay Sync', detail: 'Review imports & updates', icon: 'sync', route: '/ebay-hub' },
     { id: 'specialist', title: 'Specialist Tools', detail: `${niche.shortName} evidence & checks`, icon: 'fact-check', route: '/specialist-workspace' },
