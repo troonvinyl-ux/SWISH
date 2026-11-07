@@ -1,0 +1,49 @@
+{
+  "auditDate": "2026-11-07",
+  "repository": "troonvinyl-ux/SWISH",
+  "observedUpstreamMainSha": "57454aa7c3377d245b04f995e81326b4d160b4f1",
+  "localCheckoutSha": null,
+  "latestMainCheckoutVerified": false,
+  "commitsCreated": 0,
+  "pullRequestCreated": false,
+  "status": "implementation_delivered_pending_execution",
+  "implementedChangeIds": ["O1", "O2", "O3", "O4", "O5", "O6", "O7", "O8"],
+  "databaseUserRecordsChangedByAudit": 0,
+  "databaseSchemaChanges": 0,
+  "paidProviderTestsPerformed": 0,
+  "liveSellerWritesPerformed": 0,
+  "observedReadOnlyResults": {
+    "publicBaseTables": 54,
+    "tablesWithRlsEnabled": 54,
+    "originalPhotoBucketMaximumBytes": 5242880,
+    "quickListTimingEvents": 0,
+    "quickListLiveConfirmationEvents": 0,
+    "lastSevenDaysReturnedEdgeLogGroups": [
+      { "functionName": "swish-ebay-list", "statusCode": 200, "recordCount": 83 }
+    ]
+  },
+  "verification": {
+    "sourceReview": "performed_risk_based_not_exhaustive",
+    "readOnlyDatabaseDiagnostics": "performed",
+    "newAndUpdatedJestRegressions": "authored_not_run",
+    "fullTypeScript": "not_run",
+    "fullJest": "not_run",
+    "edgeTypechecksAndFixtures": "not_run",
+    "webExport": "not_run",
+    "twelveBrandedExports": "not_run",
+    "androidBuild": "not_run",
+    "iosBuild": "not_run",
+    "deviceScopeRaceTests": "not_run",
+    "dependencyInventory": "file_tool_rejected_package_json_read"
+  },
+  "performance": {
+    "baselineMedianMs": null,
+    "candidateMedianMs": null,
+    "candidateP90Ms": null,
+    "eligibleWithin60Percent": null,
+    "targetAchieved": false,
+    "reason": "No matched end-to-end timing and server live-confirmation evidence; structural improvements are not latency measurements."
+  },
+  "reportPath": "docs/SWISH_MASTER_PRODUCTION_OPTIMISATION_AUDIT.md",
+  "workflowPath": ".github/workflows/production-optimisation-audit.yml"
+}

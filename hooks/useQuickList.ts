@@ -18,6 +18,7 @@ import { musicCaptureResult, musicDiscCount } from '@/services/musicCaptureServi
 import { isFreshMusicRelease } from '@/shared/musicRelease';
 import type { QuickListNiche, ProductLead, QuickStage, QuickTiming } from '@/shared/quickList';
 import { invokeListingOperation } from '@/services/listingEditorService';
+import { automaticCondition, automaticSpecifics } from '@/services/listingAutofillService';
 export function useQuickList(nicheId:QuickListNiche){
  const context=useContext(QuickListContext);if(!context)throw new Error('Quick List provider is required.');const {state,setState}=context;
  const app=useApp(),{tenant,triggerInventoryReload}=app,{user}=useAuth();const tunes=useTunesCatalogue();
@@ -43,7 +44,7 @@ export function useQuickList(nicheId:QuickListNiche){
   if(!scope||scopeRef.current!==scope)return;if(timing.current&&timing.current.outcome!=='live'){stamp(undefined,{outcome:'abandoned',endedAt:Date.now()});checkpoint();}
   serial.current++;barcodeSerial.current++;operation.current=false;studioFlight.current=null;editedFields.current.clear();const id=`quick-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;
   timing.current={id,nicheId,timestamps:{T0:getQuickListOpenedAt(),T1:Date.now()},actions:1,manualInterventions:0,failures:[],barcodeAttempted:false,barcodeMatched:false,aiAttempted:false,aiMatched:false,publicationAttempted:false,outcome:'running',eligible:false,reasons:[],operations:{},platform:Platform.OS,clock:'expo_js_launch_or_foreground'};
-  const fresh={...emptyQuickList(),scope,sessionId:id,specialistId:NICHE_MODULES[nicheId].defaultSpecialist,visual:!quickStartsWithBarcode(nicheId),timing:timing.current};current.current=fresh;setState(fresh);if(nicheId==='tunes_flip')tunes.reset();checkpoint();const version=serial.current;
+  const fresh={...emptyQuickList(),scope,sessionId:id,specialistId:NICHE_MODULES[nicheId].defaultSpecialist,visual:true,timing:timing.current};current.current=fresh;setState(fresh);if(nicheId==='tunes_flip')tunes.reset();checkpoint();const version=serial.current;
   try{const [auto,error]=await Promise.all([readQuickAutoPublish(scope).catch(()=>false),warmQuickList(tenant!.id)]);if(validFor(version))patch({autoPublish:auto,connectionError:error??''});}
   catch{if(validFor(version))patch({connectionError:'eBay connection could not be checked. Retry before publishing.'});}
  },[scope,nicheId,tenant?.id,setState,patch,stamp,checkpoint,validFor,tunes.reset]);
@@ -76,31 +77,38 @@ export function useQuickList(nicheId:QuickListNiche){
  const removePhoto=useCallback((slotId:string)=>{if(operation.current||current.current.itemId)return;action(true);patch({images:current.current.images.filter(image=>image.slotId!==slotId),result:null,reviewed:false,error:'',photoSlotId:slotId});},[action,patch]);
  const build=useCallback(async()=>{
   const before=current.current,required=quickMissingPhotos(quickCaptureSlots(nicheId,before.specialistId,before.mode,before.measurements.observed_disc_count),before.images);
-  if(!scope||before.scope!==scope||!tenant||operation.current||before.draft||before.liveId||required.length||before.images.length<2||before.barcodeBusy||(!before.visual&&!before.lead))return;
+  if(!scope||before.scope!==scope||!tenant||operation.current||before.draft||before.liveId||required.length||!before.images.length||before.barcodeBusy)return;
   if(nicheId==='tunes_flip'&&before.mode==='cd_box_set'&&!musicDiscCount(before.measurements.observed_disc_count)){patch({error:'Enter the number of discs physically present before preparing this box-set draft.'});return;}
   operation.current=true;const version=serial.current,started=Date.now();patch({processing:true,phase:before.result?'Reusing identification · retrying draft':'Identifying original specialist evidence',error:''});let itemId=before.itemId,retainedResult=before.result,step='identification';
   try{
+   // Processing and identification use the same originals concurrently; Next starts both automatically.
+   const studioKey=`${before.sessionId}:${before.images.map(image=>image.uri).join('|')}`;
+   if(studioFlight.current?.key!==studioKey)studioFlight.current={key:studioKey,promise:prepareCapturedImages(before.images,{tenantId:tenant.id,nicheId})};
+   const optionalStudio=studioFlight.current.promise;
    if(!before.result)stamp(undefined,{aiAttempted:true});const identified=before.result?{result:before.result,error:null}:await identifyQuickPhotos(tenant.id,nicheId,before.images,before.lead,before.measurements,{specialistId:before.specialistId as SpecialistId,mode:before.mode,allowPhotoWarnings:before.allowPhotoWarnings});
    if(!validFor(version))return;if(identified.error||!identified.result)throw new Error(identified.error??'Identification did not complete. Originals are retained.');
    const music=nicheId==='tunes_flip'?musicCaptureResult(identified.result,tunes.ready&&tunes.state.confirmed&&isFreshMusicRelease(tunes.state.release)?tunes.state.release:null,before.measurements):null;
    const result=enrichQuickIdentification(music??identified.result,nicheId,before.lead,before.measurements);retainedResult=result;patch({result});if(!before.result)stamp('T3',{aiMatched:result.confidence>=0.7,barcodeMatched:barcodeAgreesWithPhotos(before.lead,result),operations:{...timing.current?.operations,identification:Date.now()-started}});checkpoint();
    await retainQuickRecovery(scope,{images:before.images,itemId:itemId||undefined,sessionId:before.sessionId,state:{...before,result}});if(!validFor(version))return;
-   // Optional cleanup starts after identification quality checks and never blocks draft/review/publication.
-   const studioKey=`${before.sessionId}:${before.images.map(image=>image.uri).join('|')}`;if(studioFlight.current?.key!==studioKey)studioFlight.current={key:studioKey,promise:prepareCapturedImages(before.images,{tenantId:tenant.id,nicheId})};const optionalStudio=studioFlight.current.promise;
    const selected=before.categoryId?{...(before.lead??{}),categoryId:before.categoryId,categoryName:before.categoryName} as ProductLead:barcodeAgreesWithPhotos(before.lead,result)?before.lead:null;const req=quickRequirements(tenant.id,result.canonicalTitle,selected,nicheId);void req.catch(()=>{});
    step='inventory';const quantity=Number(before.measurements._quantity??'1'),item=before.itemId?{id:before.itemId}:await createQuickInventory(tenant.id,result,before.sessionId,quantity);itemId=item.id;if(!validFor(version))return;patch({itemId:item.id,phase:'Saving originals · researching price · preparing draft'});triggerInventoryReload();
    await retainQuickRecovery(scope,{images:before.images,itemId:item.id,sessionId:before.sessionId,state:{...before,result,itemId:item.id}});if(!validFor(version))return;
-   step='draft';const photos=uploadQuickPhotos(tenant.id,item.id,before.images);void photos.catch(()=>{});const draft=await prepareQuickDraft(tenant.id,nicheId,item.id,result,photos,req,()=>{if(validFor(version)){stamp('T4');checkpoint();}},before.images[0],`${scope}:${before.sessionId}`,quantity);const uploaded=await photos;if(!validFor(version))return;
-   const next={...current.current,result,itemId:item.id,images:uploaded.images,draft,title:draft.generated.title,description:draft.generated.description,price:draft.generated.recommended_price>0?String(draft.generated.recommended_price):'',conditionNotes:result.conditionNotes,specifics:draft.specifics,phase:'',error:''};
+   step='draft';const photos=(async()=>{
+    const uploaded=await uploadQuickPhotos(tenant.id,item.id,before.images);
+    const prepared=await optionalStudio;
+    const linked=prepared.map(image=>{const original=uploaded.images.find(saved=>saved.slotId===image.slotId);return {...image,originalStorageUri:original?.originalStorageUri,originalByteHash:original?.originalByteHash};});
+    const warning=await linkQuickCutouts(tenant.id,item.id,linked);
+    if(warning&&linked.some(image=>image.studio?.enhancedUri))throw new Error('Processed photos could not be saved. Retry this saved item.');
+    return {...uploaded,images:linked};
+   })();void photos.catch(()=>{});const draft=await prepareQuickDraft(tenant.id,nicheId,item.id,result,photos,req,()=>{if(validFor(version)){stamp('T4');checkpoint();}},before.images[0],`${scope}:${before.sessionId}`,quantity);const uploaded=await photos;if(!validFor(version))return;
+   const next={...current.current,result,itemId:item.id,images:uploaded.images,draft,title:draft.generated.title,description:draft.generated.description,price:draft.generated.recommended_price>0?String(draft.generated.recommended_price):'',conditionId:automaticCondition(draft.requirements.conditions,result.condition,draft.generated.condition_id),conditionNotes:result.conditionNotes,specifics:draft.specifics,phase:'',error:''};
+   const initialSave=await saveQuickReview(tenant.id,nicheId,draft,{title:next.title,description:next.description,price:next.price||'0',conditionId:next.conditionId,conditionNotes:next.conditionNotes,specifics:next.specifics},'draft');
+   if(initialSave.error)throw new Error(initialSave.error);
    await retainQuickRecovery(scope,{images:next.images,itemId:item.id,listingId:draft.listing.id,sessionId:before.sessionId,state:next});if(!validFor(version))return;patch(next);stamp('TD',{operations:{...timing.current?.operations,draft:Date.now()-started}});checkpoint();if(draft.warnings?.length)fail('valuation',draft.warnings.join(' '),started);
-   void optionalStudio.then(async prepared=>{
-    const linked=prepared.map(image=>{const original=uploaded.images.find(saved=>saved.slotId===image.slotId);return {...image,originalStorageUri:original?.originalStorageUri,originalByteHash:original?.originalByteHash};});const warning=await linkQuickCutouts(tenant.id,item.id,linked);
-    if(validFor(version)&&current.current.itemId===item.id){patch({images:linked,studioWarning:warning??''});if(warning)fail('optional_image_cleanup',warning,started);}
-   }).catch(()=>{if(validFor(version))patch({studioWarning:'Optional cleanup could not be linked. Originals remain saved and available.'});});
   }catch(cause){if(validFor(version)){const message=cause instanceof Error?cause.message:'Quick List could not prepare the draft.',snapshot={...current.current,images:before.images,itemId,result:retainedResult,error:message};await retainQuickRecovery(scope,{images:before.images,itemId:itemId||undefined,sessionId:before.sessionId,state:snapshot}).catch(()=>{});if(validFor(version)){patch(snapshot);triggerInventoryReload();fail(step,message,started);}}}
   finally{if(validFor(version)){operation.current=false;patch({processing:false,phase:''});}}
  },[tenant?.id,nicheId,scope,patch,stamp,checkpoint,validFor,fail,triggerInventoryReload,tunes.ready,tunes.state.confirmed,tunes.state.release]);
- useEffect(()=>{if(visibleState.images.length>=2&&!missing.length&&!visibleState.processing&&!visibleState.draft&&!visibleState.error&&(visibleState.visual||visibleState.lead))void build();},[visibleState.images,missing.length,visibleState.processing,visibleState.draft,visibleState.visual,visibleState.lead,visibleState.error,build]);
+ // Next is the sole preparation action. No automatic transition while the seller is taking photographs.
  const edit=useCallback((key:'title'|'description'|'price'|'conditionNotes'|'conditionId',value:string)=>{if(operation.current)return;trackEdit(key);patch({[key]:value,reviewed:false});},[trackEdit,patch]);
  const setSpecific=useCallback((name:string,value:string)=>{if(operation.current)return;trackEdit(`specific:${name}`);patch({specifics:current.current.specifics.map(row=>row.name===name?{...row,value}:row),reviewed:false});},[trackEdit,patch]);
  const publish=useCallback(async(approved=false)=>{
@@ -115,15 +123,15 @@ export function useQuickList(nicheId:QuickListNiche){
   // Reuse the still-fresh explicitly confirmed release; do not ask for the same catalogue data twice.
   const release=tunes.ready&&tunes.state.confirmed&&isFreshMusicRelease(tunes.state.release)?tunes.state.release:null;
   const music=nicheId==='tunes_flip'?musicCaptureResult(before.result,release,before.measurements):null,reviewedResult=enrichQuickIdentification(music??before.result,nicheId,before.lead,before.measurements);
-  const issue=quickReviewIssue(nicheId,reviewedResult,slots,before.images);if(issue){patch({error:issue});fail('evidence_review',issue,Date.now());return;}operation.current=true;const version=serial.current,started=Date.now();patch({processing:true,phase:'Saving explicit seller approval'});
+  const issue=publishAfterReview?quickReviewIssue(nicheId,reviewedResult,slots,before.images):null;if(issue){patch({error:issue});fail('evidence_review',issue,Date.now());return;}operation.current=true;const version=serial.current,started=Date.now();patch({processing:true,phase:'Saving explicit seller approval'});
   try{
-   if(before.connectionError){const error=await warmQuickList(tenant.id);if(!validFor(version))return;patch({connectionError:error??''});if(error)throw new Error(error);}
-   const saved=await saveQuickReview(tenant.id,nicheId,before.draft,{title:before.title,description:before.description,price:before.price,conditionId:before.conditionId,conditionNotes:before.conditionNotes,specifics:before.specifics,reviewedResult});if(!validFor(version))return;if(saved.error)throw new Error(saved.error);patch({reviewed:true});stamp('T5',{eligible:true});checkpoint();
+   if(publishAfterReview&&before.connectionError){const error=await warmQuickList(tenant.id);if(!validFor(version))return;patch({connectionError:error??''});if(error)throw new Error(error);}
+   const saved=await saveQuickReview(tenant.id,nicheId,before.draft,{title:before.title,description:before.description,price:before.price,conditionId:before.conditionId,conditionNotes:before.conditionNotes,specifics:before.specifics,reviewedResult},publishAfterReview?'publish':'draft');if(!validFor(version))return;if(saved.error)throw new Error(saved.error);patch({reviewed:publishAfterReview,savedForLater:!publishAfterReview});if(publishAfterReview)stamp('T5',{eligible:true});triggerInventoryReload();checkpoint();
    // Save-only is supported. The Approve & Publish button approves exactly this reviewed draft.
    if(!validFor(version))return;if(publishAfterReview){operation.current=false;await publish(true);}
   }catch(cause){if(validFor(version)){const message=cause instanceof Error?cause.message:'Review save could not be confirmed. Nothing was published.';patch({reviewed:false,error:message});fail('review',message,started);}}
   finally{if(validFor(version)){operation.current=false;patch({processing:false,phase:''});}}
- },[tenant?.id,nicheId,scope,slots,action,patch,stamp,checkpoint,publish,validFor,fail,tunes.ready,tunes.state.confirmed,tunes.state.release]);
+ },[tenant?.id,nicheId,scope,slots,action,patch,stamp,checkpoint,publish,validFor,fail,tunes.ready,tunes.state.confirmed,tunes.state.release,triggerInventoryReload]);
  const checkLive=useCallback(async()=>{
   const before=current.current;if(!tenant||!before.draft||operation.current)return;action(true);operation.current=true;const version=serial.current,started=Date.now();patch({processing:true,phase:'Checking the existing listing · no resubmission'});
   try{const row=await invokeListingOperation({route:'inspect_live',tenantId:tenant.id,listingId:before.draft.listing.id});if(!validFor(version))return;const id=row.data?.live?.externalListingId;if(!id)throw new Error(row.error??'Existing listing has no confirmed external ID. Synchronise eBay; do not resubmit.');const checked=await confirmQuickLive(tenant.id,before.draft,before.sessionId,id);if(!validFor(version))return;if(checked.live){stamp('T7',{outcome:'live',externalListingId:id,endedAt:Date.now()});patch({liveId:id,unconfirmed:false,error:''});triggerInventoryReload();checkpoint();}else throw new Error(checked.error??'Live status unavailable.');}
@@ -131,7 +139,14 @@ export function useQuickList(nicheId:QuickListNiche){
   finally{if(validFor(version)){operation.current=false;patch({processing:false,phase:''});}}
  },[tenant?.id,scope,action,patch,stamp,checkpoint,validFor,fail,triggerInventoryReload]);
  const toggleAuto=useCallback(async()=>{action();const value=!current.current.autoPublish;try{await saveQuickAutoPublish(scope,value);patch({autoPublish:value});}catch{patch({error:'Auto-publish preference could not be stored; publication remains manual.'});}},[scope,action,patch]);
- const chooseCategory=useCallback((id:string,name:string)=>{action(true);patch({categoryId:id,categoryName:name,error:''});},[action,patch]);
+ const chooseCategory=useCallback(async(id:string,name:string)=>{
+  if(operation.current||!tenant)return;action(true);const before=current.current;patch({categoryId:id,categoryName:name,error:''});
+  if(!before.draft||!before.result)return;
+  operation.current=true;const version=serial.current;patch({processing:true});
+  try{const requirements=await quickRequirements(tenant.id,before.title,{categoryId:id,categoryName:name} as ProductLead,nicheId);if(!validFor(version))return;const specifics=automaticSpecifics(nicheId,before.result,before.draft.generated,requirements.aspects);patch({draft:{...before.draft,requirements,specifics},specifics,conditionId:automaticCondition(requirements.conditions,before.result.condition,before.draft.generated.condition_id),reviewed:false});}
+  catch(cause){if(validFor(version))patch({error:cause instanceof Error?cause.message:'Category unavailable.'});}
+  finally{if(validFor(version)){operation.current=false;patch({processing:false});}}
+ },[tenant?.id,nicheId,action,patch,validFor]);
  const recovery=useCallback(()=>readQuickRecovery(scope),[scope]);
  const resume=useCallback(async()=>{
   if(!scope||operation.current||current.current.processing)return;const version=++serial.current;operation.current=true;

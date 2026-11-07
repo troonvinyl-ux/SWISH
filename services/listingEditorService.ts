@@ -1,4 +1,4 @@
-import { availableListingPhotos, preferredListingPhotos } from '@/shared/smartStudio';
+import { availableListingPhotos, selectedListingPhotos, processedListingPhotoIssue } from '@/shared/smartStudio';
 import { recordCommandPreflight } from './commandPreflightEvidenceService';
 import { evaluateSpecialistSafety } from '@/shared/specialistIntelligence';
 import { photoPersistenceIssue } from '@/shared/photoPersistence';
@@ -162,8 +162,10 @@ export async function checkAntiqueListing(tenantId: string, listingId: string, n
     if (missing) return finish({ ready: false, error: missing, conditionPolicy, conditionId, categoryId },'specifics');
     const originalMedia = item.media ?? [];
     const allowedMedia = availableListingPhotos(originalMedia, attributes);
-    const media = Array.isArray(attributes.ebay_listing_media) ? attributes.ebay_listing_media : preferredListingPhotos(originalMedia, attributes);
-    if (media.some((url: string) => !allowedMedia.includes(url))) return { ready: false, error: 'Select original or accepted clean photos linked to this inventory item.' };
+    const media = selectedListingPhotos(originalMedia, attributes);
+    if (media.some((url: string) => !allowedMedia.includes(url))) return { ready: false, error: 'Select displayed photos linked to this inventory item.' };
+    const processedIssue = processedListingPhotoIssue(originalMedia, attributes, media);
+    if (processedIssue) return finish({ ready: false, error: processedIssue }, 'photos');
     const options = attributes.ebay_listing_options ?? {};
     const price = options.listingType === 'Chinese' ? Number(options.startPrice) : Number(row.price);
     const basic = validateAntiqueListingBasics({ title: row.title, description: row.description, price, quantity: Number(item.quantity ?? 1), media });

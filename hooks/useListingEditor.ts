@@ -1,10 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { availableListingPhotos, preferredListingPhotos } from '@/shared/smartStudio';
+import { availableListingPhotos, preferredListingPhotos, selectedListingPhotos, processedListingPhotoIssue } from '@/shared/smartStudio';
 import { moveMainImageFirst } from '@/services/itemPhotoService';
 import { recoverCapturedItemPhotos } from '@/services/capturedPhotoRecoveryService';
 import { reviseSavedListing, inspectLiveListing } from '@/services/ebayRevisionService';
 import type { LiveListingContent } from '@/shared/ebayRevisionContract';
 import { useApp } from './useApp';
+import { useAuth } from '@/template';
+import { automaticCondition, automaticSpecifics, inventoryIdentification } from '@/services/listingAutofillService';
+import { existingOriginalPhotos, processExistingItemPhoto } from '@/services/existingImageStudioService';
+import { getItem } from '@/services/itemService';
+import { submitListingToMarketplace } from '@/services/listingService';
 import { isProductionNiche } from '@/constants/niches';
 import { getSpecialistProfile, mappedSpecialistSpecifics } from '@/shared/specialistIntelligence';
 import { loadListingEditor, saveListingEditor, invokeListingOperation, type EditorSave } from '@/services/listingEditorService';
@@ -18,6 +23,9 @@ interface Aspect { name: string; required: boolean; values: string[]; mode?: str
 export function useListingEditor(listingId: string) {
   const { tenant, fixedNicheId, activeNicheId, triggerInventoryReload } = useApp();
   const nicheId = fixedNicheId ?? activeNicheId;
+  const {user}=useAuth();
+  const [unconfirmed,setUnconfirmed]=useState(false);
+  const [publishedId,setPublishedId]=useState('');
   // Legacy name retained to reuse the proven full editor contract for all niches.
   const antique = isProductionNiche(nicheId);
   const scope = `${tenant?.id}:${nicheId}:${listingId}`;
@@ -55,6 +63,7 @@ export function useListingEditor(listingId: string) {
         if (currentScope.current !== scope || request !== categoryRequest.current) return;
         if (response.error || response.data?.success !== true || !response.data?.policy) { setError(response.error ?? 'eBay condition requirements unavailable. Retry category lookup.'); return; }
         setConditionPolicy(response.data.policy);
+        setState(previous=>previous&&previous.categoryId===categoryId&&!previous.conditionId?{...previous,conditionId:automaticCondition(response.data.policy,previous.condition)}:previous);
       }
       setRequirementsReady(true);
     } catch (cause) { if (currentScope.current === scope && request === categoryRequest.current) setError(cause instanceof Error ? cause.message : 'Category requirements failed.'); }
@@ -67,6 +76,17 @@ export function useListingEditor(listingId: string) {
       if (currentScope.current !== scope) return;
       if (result.error || !result.data) { setError(result.error); return; }
       const initialItem = (result.data as any).items;
+      setUnconfirmed(Boolean((result.data as any).publish_claim_id));setPublishedId('');
+      // Saved drafts use the same automatic photo processing as capture; live edits are never silently sent to eBay.
+      if(user&&!(result.data as any).external_listing_id&&initialItem?.id){
+        const savedItem=await getItem(initialItem.id);
+        if(savedItem.item&&!savedItem.error&&savedItem.item.tenantId===tenant.id){
+          for(const originalUri of existingOriginalPhotos(savedItem.item))await processExistingItemPhoto({tenantId:tenant.id,nicheId,itemId:initialItem.id,userId:user.id,originalUri});
+          if(currentScope.current!==scope)return;
+          result=await loadListingEditor(tenant.id,listingId,nicheId);
+          if(result.error||!result.data){setError(result.error??'Draft unavailable.');return;}
+        }
+      }
       let recoveredPhotos = false;
       if (initialItem?.id && (!(initialItem.media ?? []).length || (initialItem.attributes?._photo_pipeline && initialItem.attributes._photo_pipeline.status !== 'complete'))) {
         const recovered = await recoverCapturedItemPhotos(tenant.id, initialItem.id, nicheId);
@@ -95,13 +115,13 @@ export function useListingEditor(listingId: string) {
       // Seed recovered photos only when the draft had no original photos to select.
       // An intentionally empty selection on an otherwise populated item is preserved.
       const seedRecovered = recoveredPhotos && Array.isArray(attrs.ebay_listing_media) && !attrs.ebay_listing_media.length && !row.external_listing_id;
-      const media = antique && Array.isArray(attrs.ebay_listing_media) && !seedRecovered ? attrs.ebay_listing_media.filter((url: string) => availableMedia.includes(url)) : preferredListingPhotos(originals, attrs);
+      const media = antique && Array.isArray(attrs.ebay_listing_media) && !seedRecovered ? selectedListingPhotos(originals, attrs).filter((url: string) => availableMedia.includes(url)) : preferredListingPhotos(originals, attrs);
       setState({ tenantId: tenant.id, listingId: row.id, nicheId, itemAttributes: attrs, itemId: item.id, externalListingId: row.external_listing_id ?? '', status: row.status, title: row.title ?? '', description: row.description ?? '', price: String(row.price ?? 0), shippingCost: String(row.shipping_cost ?? 0), floorPrice: String(row.floor_price ?? 0), ceilingPrice: String(row.ceiling_price ?? 0), categoryId, categoryName: String(attrs.ebay_category_name ?? categoryId), condition: item.condition ?? '', conditionDescription: antique ? item.condition_notes || item.condition_grade || '' : item.condition_grade ?? '', conditionId: String(attrs.ebay_condition_id ?? ''), quantity: String(item.quantity ?? 1), sku: item.sku ?? '', itemSpecifics: specifics, media, availableMedia, specialistId: item.specialist_id ?? '', inventoryId: item.inventory_id ?? '', valuationMid: Number(item.valuation_mid ?? 0), itemTitle: item.canonical_title ?? '', subtitle: '', listingType: options.listingType ?? 'FixedPriceItem', auctionDays: Number(options.auctionDays ?? 7), startPrice: String(options.startPrice ?? row.price ?? 0), reservePrice: String(options.reservePrice ?? ''), bestOfferEnabled: options.bestOfferEnabled === true, dispatchDays: Number(options.dispatchDays ?? 3) });
-      setLoadedScope(scope); setDirty(seedRecovered); setAspects([]);
+      setLoadedScope(scope); setDirty(seedRecovered || (Array.isArray(attrs.ebay_listing_media) && JSON.stringify(media) !== JSON.stringify(attrs.ebay_listing_media))); setAspects([]);
       if (categoryId) await requirements(categoryId);
     } catch { if (currentScope.current === scope) setError('Listing could not load. Reload before making changes.'); }
     finally { if (currentScope.current === scope) setLoading(false); }
-  }, [tenant?.id, listingId, nicheId, scope, antique, requirements, triggerInventoryReload]);
+  }, [tenant?.id, listingId, nicheId, scope, antique, requirements, triggerInventoryReload, user?.id]);
   useEffect(() => { void load(); return () => { categoryRequest.current++; }; }, [load]);
   const update = <K extends keyof ListingEditorState>(key: K, value: ListingEditorState[K]) => { setState(previous => previous ? { ...previous, [key]: value } : null); setDirty(true); };
   const setMainPhoto = useCallback((uri: string) => {
@@ -182,5 +202,22 @@ export function useListingEditor(listingId: string) {
     } catch { if (currentScope.current === scope) setError('Generation failed. Your saved content is unchanged.'); }
     finally { if (currentScope.current === scope) setBusy(false); }
   };
-  return { data: loadedScope === scope ? state : null, live: loadedScope === scope ? live : null, checkLive, loading, busy, dirty, error, aspects, categories, categorySource, conditionPolicy: loadedScope === scope ? conditionPolicy : null, requirementsReady, update, setMainPhoto, save, revise, generate, categoriesLookup, chooseCategory, reload: load, retryRequirements: () => { if (state?.categoryId) void requirements(state.categoryId); } };
+  const submit=async()=>{
+    if(!state||state.externalListingId||unconfirmed||publishedId||busy||actionLock.current||loadedScope!==scope)return;
+    actionLock.current=true;setBusy(true);setError(null);
+    try{
+      if(!await persistState(state))return;
+      const result=await submitListingToMarketplace(state.tenantId,state.listingId,undefined,{listingType:state.listingType,auctionDays:state.auctionDays,startPrice:state.listingType==='Chinese'?Number(state.startPrice):undefined,reservePrice:Number(state.reservePrice)||undefined});
+      if(currentScope.current!==scope)return;
+      if(result.success&&result.externalListingId){setPublishedId(result.externalListingId);triggerInventoryReload();}
+      else {setUnconfirmed(Boolean(result.publicationUnconfirmed||result.accepted));setError(result.error??'Listing was not confirmed.');}
+    }catch{if(currentScope.current===scope){setUnconfirmed(true);setError('Publication needs checking. Do not submit again.');}}
+    finally{actionLock.current=false;if(currentScope.current===scope)setBusy(false);}
+  };
+  const syncPublication=async()=>{
+    if(!state||busy||actionLock.current)return;actionLock.current=true;setBusy(true);setError(null);
+    try{const checked=await invokeListingOperation({route:'inspect_live',tenantId:state.tenantId,listingId:state.listingId});if(currentScope.current!==scope)return;if(checked.data?.live?.externalListingId&&checked.data.live.listingStatus==='Active'){setPublishedId(checked.data.live.externalListingId);triggerInventoryReload();}else setError(checked.error??'The existing listing is not confirmed live yet. Synchronise eBay; resubmission remains blocked.');}
+    finally{actionLock.current=false;if(currentScope.current===scope)setBusy(false);}
+  };
+  return { submit,syncPublication,unconfirmed,publishedId,data: loadedScope === scope ? state : null, live: loadedScope === scope ? live : null, checkLive, loading, busy, dirty, error, aspects, categories, categorySource, conditionPolicy: loadedScope === scope ? conditionPolicy : null, requirementsReady, update, setMainPhoto, save, revise, generate, categoriesLookup, chooseCategory, reload: load, retryRequirements: () => { if (state?.categoryId) void requirements(state.categoryId); } };
 }

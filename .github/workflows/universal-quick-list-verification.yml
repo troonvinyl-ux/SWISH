@@ -24,7 +24,7 @@ jobs:
         run: npx tsc --noEmit > verification-output/typescript.txt 2>&1
       - name: Universal policy, canonical photos and publication guards (mocked)
         if: ${{ !cancelled() }}
-        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/universalQuickList.test.ts services/__tests__/quickListPreparation.test.ts services/__tests__/quickListContracts.test.ts services/__tests__/quickListLiveEvidence.test.ts services/__tests__/quickListSpecialistScope.test.ts services/__tests__/photoCarryForwardIntegration.test.ts services/__tests__/photoPipelineBoundary.test.ts --json --outputFile=verification-output/universal-quick-list.json
+        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/listingAutofill.test.ts services/__tests__/shortListingFlow.test.ts services/__tests__/universalQuickList.test.ts services/__tests__/quickListPreparation.test.ts services/__tests__/quickListContracts.test.ts services/__tests__/quickListLiveEvidence.test.ts services/__tests__/quickListSpecialistScope.test.ts services/__tests__/photoCarryForwardIntegration.test.ts services/__tests__/photoPipelineBoundary.test.ts --json --outputFile=verification-output/universal-quick-list.json
       - name: Edge dependency validation
         if: ${{ !cancelled() }}
         run: node scripts/validate-edge-deployment.mjs
