@@ -1,0 +1,32 @@
+name: SWISH two-step listing removal regressions
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['app/(tabs)/inventory.tsx','app/stock-listing/**','hooks/useInventoryRemoval.ts','hooks/useMasterInventory.ts','services/itemService.ts','services/listingService.ts','services/__tests__/inventoryRemoval.test.ts','supabase/functions/_shared/ebayEndPolicy.ts','supabase/functions/swish-ebay-list/**','supabase/migrations/20261118_user_listing_removal.sql','supabase/tests/ebay_end_policy.test.ts','.github/workflows/listing-removal-verification.yml']
+  pull_request:
+    paths: ['app/**','components/**','hooks/**','services/**','supabase/**','.github/workflows/listing-removal-verification.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@v4
+        with: { version: 9.15.9 }
+      - uses: actions/setup-node@v6
+        with: { node-version: 22 }
+      - uses: denoland/setup-deno@v2
+        with: { deno-version: v2.x }
+      - run: bash scripts/install-dependencies.sh
+      - run: npx --no-install tsc --noEmit
+      - name: Shared service and existing publication/isolation regressions (mocked)
+        run: npx --no-install jest --config jest.config.ci.js --runInBand services/__tests__/inventoryRemoval.test.ts services/__tests__/listingPublication.test.ts services/__tests__/nicheIsolation.test.ts
+      - name: Seller end protocol tests (injected transport; no live requests)
+        run: deno test supabase/tests/ebay_end_policy.test.ts
+      - run: deno check supabase/functions/swish-ebay-list/index.ts
+      - run: node scripts/validate-edge-deployment.mjs
+# No provider keys, authenticated fixtures, inventory mutations, live eBay calls or deployment.

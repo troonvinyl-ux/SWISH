@@ -34,7 +34,7 @@ test('unavailable valuation produces no invented positive price or false complet
  (getItem as jest.Mock).mockResolvedValue({item:{tenantId:'tenant',specialistId:'collectibles',media:['https://stored/front','https://stored/back'],attributes:{}},error:null});
  (saveListing as jest.Mock).mockResolvedValue({listing:{id:'draft',shippingCost:0},error:null});const stamp=jest.fn();
  const draft=await prepareQuickDraft('tenant','collectibles','canonical',result,Promise.resolve({urls:['https://stored/front','https://stored/back'],images:[]}),Promise.resolve(requirements),stamp,undefined,'session-one');
- expect(draft.generated.recommended_price).toBe(0);expect(draft.market).toBeNull();expect(draft.warnings?.[0]).toContain('No market evidence');expect(stamp).not.toHaveBeenCalled();expect(saveListing).toHaveBeenCalledWith('tenant','canonical',expect.any(Object),'ebay','100');
+ expect(draft.generated.recommended_price).toBe(0);expect(draft.market).toBeNull();expect(draft.warnings?.[0]).toContain('Market value unavailable');expect(stamp).not.toHaveBeenCalled();expect(saveListing).toHaveBeenCalledWith('tenant','canonical',expect.any(Object),'ebay','100');
 });
 test('unlinked originals block draft creation on the existing canonical item',async()=>{
  (generateListing as jest.Mock).mockResolvedValue({listing:{title:'Product',description:'Evidence'},error:null});(getMarketValue as jest.Mock).mockResolvedValue({result:null,error:'Unavailable'});(getItem as jest.Mock).mockResolvedValue({item:{tenantId:'tenant',specialistId:'collectibles',media:['https://stored/front'],attributes:{}},error:null});

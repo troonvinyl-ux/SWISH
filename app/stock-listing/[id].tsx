@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { preferredListingPhotos, studioForOriginal, visibleCapturedPhotos, capturedPresentationUri } from '@/shared/smartStudio';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
@@ -36,6 +37,8 @@ import Animated, {
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { useInventoryPhotoRecovery } from '@/hooks/useInventoryPhotoRecovery';
+import { useInventoryRemoval } from '@/hooks/useInventoryRemoval';
+import { InventoryRemovalPanel } from '@/components/feature/InventoryRemovalPanel';
 import { useReidentificationPhotoReview } from '@/hooks/useReidentificationPhotoReview';
 import { ReidentificationPhotoReview } from '@/components/feature/ReidentificationPhotoReview';
 import { NumistaImageSearchCard } from '@/components/feature/NumistaImageSearchCard';
@@ -803,12 +806,12 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
   const identificationLock = useRef(false);
   useEffect(() => { setError(null); }, [photoReview.evidenceKey]);
 
-  const heroImages = useMemo(() => {
-    if (!useExistingImages && capturedImages.length > 0) return capturedImages.slice(0, 2).map(img => img.uri);
-    const stored = storedUrls.slice(0, 2);
-    const extra = capturedImages.slice(0, Math.max(0, 2 - stored.length)).map(img => img.uri);
-    return [...stored, ...extra].slice(0, 2);
-  }, [storedUrls, capturedImages, useExistingImages]);
+  const presentationSources = useMemo(() => [
+    ...capturedImages,
+    ...(useExistingImages ? storedUrls : []).map((uri,index) => ({ uri, slotLabel: `Stored photo ${index + 1}`, studio: studioForOriginal(uri,item.attributes) })),
+  ],[capturedImages,useExistingImages,storedUrls,item.attributes]);
+  const visiblePhotos = useMemo(() => visibleCapturedPhotos(presentationSources),[presentationSources]);
+  const heroImages = useMemo(() => visiblePhotos.slice(0,2).map(capturedPresentationUri),[visiblePhotos]);
 
   const handleCapture = useCallback(async (slotId: string, slotLabel: string) => {
     const img = await captureFromCamera();
@@ -1067,7 +1070,7 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
           </View>
           {step === 'capture' || step === 'confirm' ? <ReidentificationPhotoReview
             key={photoReview.evidenceKey}
-            photos={reviewSources}
+            photos={presentationSources}
             warnings={photoReview.review?.photos ?? []}
             acknowledged={photoReview.acknowledged}
             disabled={refineLoading || saving || savingFeedback}
@@ -1092,11 +1095,12 @@ function ReIdentifyModal({ visible, item, tenantId, onClose, onComplete }: {
               <View style={reid.photoGrid}>
                 {photoSlots.map((slot, idx) => {
                   const img = capturedImages.find(i => i.slotId === slot.id);
+                  const displayImage = img && visiblePhotos.includes(img) ? img : null;
                   return (
                     <View key={slot.id} style={idx === 0 ? reid.slotLarge : reid.slotSmall}>
                       {img ? (
                         <View style={reid.slotCaptured}>
-                          <Image source={{ uri: img.uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                          {displayImage ? <Image source={{ uri: capturedPresentationUri(displayImage) }} style={StyleSheet.absoluteFill} contentFit="cover" /> : <View style={reid.slotEmpty}><Text style={reid.slotLabel}>Original archived</Text></View>}
                           <View style={reid.capturedBar}><MaterialIcons name="check-circle" size={10} color={Colors.success} /><Text style={reid.capturedLabel} numberOfLines={1}>{slot.label}</Text><Pressable onPress={() => handleCapture(slot.id, slot.label)} hitSlop={6}><MaterialIcons name="refresh" size={12} color="#fff" /></Pressable></View>
                           <Pressable onPress={() => handleRemove(slot.id)} style={reid.removeBtn} hitSlop={6}><MaterialIcons name="close" size={11} color="#fff" /></Pressable>
                         </View>
@@ -1406,7 +1410,7 @@ function MarketValuePanel({
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
-    if (externalResult) { setResult(externalResult); setExpanded(true); }
+    if (externalResult) { setResult(externalResult); }
   }, [externalResult]);
 
   const hasValuation = item.valuationMid > 0;
@@ -1429,7 +1433,7 @@ function MarketValuePanel({
     });
     setLoading(false);
     if (mvErr || !mv) { setError(mvErr ?? 'Market value lookup failed'); return; }
-    setResult(mv); setExpanded(true);
+    setResult(mv);
     const val = mv.valuation;
     const listPrice = val.recommendedListingPrice ?? val.valuationMid;
     const updates: Partial<Item> = {
@@ -1461,13 +1465,13 @@ function MarketValuePanel({
             <Text style={[mv.panelTitle, { color: Colors.gold }]}>MARKET VALUE</Text>
             {hasValuation ? (
               <View style={mv.panelSubRow}>
-                <Text style={mv.panelRange}>£{item.valuationLow.toFixed(0)}–£{item.valuationHigh.toFixed(0)}</Text>
+                <Text style={mv.panelRange}>£{item.valuationMid.toFixed(2)}</Text>
                 <View style={[mv.confBadge, { backgroundColor: confColor + '20', borderColor: confColor + '40' }]}>
                   <Text style={[mv.confBadgeText, { color: confColor }]}>{(item.valuationConfidence as string ?? 'unknown').replace(/_/g, ' ')}</Text>
                 </View>
               </View>
             ) : (
-              <Text style={mv.panelNoData}>Market value not established — tap Re-Value</Text>
+              <Text style={mv.panelNoData}>Market value not available</Text>
             )}
           </View>
         </View>
@@ -1483,9 +1487,7 @@ function MarketValuePanel({
               <Text style={mv.reValueBtnText}>Searching...</Text>
             </View>
           )}
-          {(hasValuation || result) ? (
-            <MaterialIcons name={expanded ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} size={18} color={Colors.textTertiary} />
-          ) : null}
+          {(hasValuation || result) ? <><Text style={mv.panelNoData}>{expanded?'Hide details':'More details'}</Text><MaterialIcons name={expanded ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} size={18} color={Colors.textTertiary} /></> : null}
         </View>
       </Pressable>
 
@@ -1496,15 +1498,7 @@ function MarketValuePanel({
         </View>
       ) : null}
 
-      {!expanded && hasValuation && !result ? (
-        <View style={mv.collapsedSummary}>
-          <View style={mv.valRow}>
-            <View style={mv.valItem}><Text style={mv.valLabel}>LOW</Text><Text style={mv.valValueSm}>£{item.valuationLow.toFixed(2)}</Text></View>
-            <View style={[mv.valItem, mv.valItemMid]}><Text style={mv.valLabel}>MID</Text><Text style={mv.valValueMid}>£{item.valuationMid.toFixed(2)}</Text></View>
-            <View style={mv.valItem}><Text style={mv.valLabel}>HIGH</Text><Text style={mv.valValueSm}>£{item.valuationHigh.toFixed(2)}</Text></View>
-          </View>
-        </View>
-      ) : null}
+
 
       {expanded && result && val ? (
         <View style={mv.expandedContent}>
@@ -1907,6 +1901,9 @@ export default function StockListingScreen() {
   const [generatingListing, setGeneratingListing] = useState(false);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [endingId, setEndingId] = useState<string | null>(null);
+  const removalLock = useRef(false);
+  const onInventoryDeleted = useCallback(() => router.replace({ pathname: '/(tabs)/inventory', params: { tab: 'stock' } } as any), [router]);
+  const inventoryRemoval = useInventoryRemoval(onInventoryDeleted);
 
   // Submit progress modal
   const [progressVisible, setProgressVisible] = useState(false);
@@ -1930,7 +1927,7 @@ export default function StockListingScreen() {
   const smartStudio = useItemSmartStudio(item, onPhotosRecovered);
   const niche = nicheId ? NICHES[nicheId] : NICHES.general;
   const nicheAccent = nicheId === 'antiques' ? Colors.specialistGold : niche.color;
-  const selectedListing = listings.find(row => row.status === 'active' || row.status === 'live') ?? listings.find(row => row.status === 'draft' || row.status === 'pending');
+  const selectedListing = listings.find(row => row.status === 'active' || row.status === 'live') ?? listings.find(row => row.status === 'draft' || row.status === 'pending') ?? listings.find(row => row.status === 'ended' && row.externalListingId);
 
   // SWISH Intelligence expandable state
   const [intelligenceExpanded, setIntelligenceExpanded] = useState(false);
@@ -1969,7 +1966,7 @@ export default function StockListingScreen() {
 
   const handleRunEbayVisualSearch = useCallback(async (targetItem: Item) => {
     if (!tenant || ebayVisualLoading) return;
-    const primaryImage = (targetItem.media ?? []).find(u => u.startsWith('https://')) ?? null;
+    const primaryImage = preferredListingPhotos(targetItem.media ?? [],targetItem.attributes).find(u => u.startsWith('https://')) ?? null;
     if (!primaryImage) return;
     setEbayVisualLoading(true);
     const result = await searchEbayByImage({ tenantId: tenant.id, imageUri: primaryImage, limit: 6 });
@@ -2250,67 +2247,44 @@ export default function StockListingScreen() {
   }, [tenant, showAlert]);
 
   const handleEndListing = useCallback(async (listing: SavedListing) => {
-    if (!item) return;
-    const isLive = listing.status === 'active' && listing.externalListingId;
+    if (!item || !tenant?.id || !ready || removalLock.current) return;
+    const actionScope = scope;
     showAlert(
-      'End Listing',
-      isLive
-        ? `Remove listing #${listing.externalListingId} from eBay and mark as ended in SWISH?`
-        : `Remove this draft listing from SWISH? (No eBay action needed for drafts.)`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: isLive ? 'End on eBay' : 'Remove Draft',
-          style: 'destructive',
-          onPress: async () => {
-            setEndingId(listing.id);
-            const { error } = await endListing(listing.id, item.id, tenant?.id, listing.externalListingId);
-            setEndingId(null);
-            if (error) { showAlert('End Failed', error); return; }
-            setListings(prev => prev.map(l => l.id === listing.id ? { ...l, status: 'ended' } : l));
-            setItem(prev => prev ? { ...prev, status: 'identified' } : prev);
-          },
-        },
-      ],
+      listing.status === 'ended' ? 'Confirm ended on eBay' : 'End on eBay before deleting',
+      `SWISH will check listing #${listing.externalListingId ?? ''} and end it on eBay if still active. Your inventory item and photographs are kept. After confirmation you will return to In Stock, where Delete item requires a separate confirmation.`,
+      [{ text: 'Cancel', style: 'cancel' }, { text: listing.status === 'ended' ? 'Confirm ended' : 'End on eBay', style: 'destructive', onPress: async () => {
+        if (currentScope.current !== actionScope || removalLock.current) return;
+        removalLock.current = true; setEndingId(listing.id);
+        try {
+          const result = await endListing(listing.id, item.id, tenant.id, listing.externalListingId);
+          if (currentScope.current !== actionScope) return;
+          triggerInventoryReload();
+          if (result.error) { showAlert('End not confirmed', result.error); void load(); return; }
+          router.replace({ pathname: '/(tabs)/inventory', params: { tab: 'stock' } } as any);
+        } finally { removalLock.current = false; if (currentScope.current === actionScope) setEndingId(null); }
+      } }],
     );
-  }, [item, tenant?.id, showAlert]);
+  }, [item, tenant?.id, ready, scope, showAlert, triggerInventoryReload, load, router]);
 
   const handleDeleteListing = useCallback((listing: SavedListing) => {
-    if (!item) return;
-    const isLive = listing.status === 'active' && listing.externalListingId;
-    showAlert(
-      'Delete Listing',
-      isLive
-        ? `This will end listing #${listing.externalListingId} on eBay AND permanently delete it from SWISH. This cannot be undone.`
-        : `Permanently delete this draft listing from SWISH? The item will remain in your inventory.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: isLive ? 'End on eBay & Delete' : 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setEndingId(listing.id);
-            const { error } = await deleteListing(
-              listing.id,
-              tenant?.id ?? '',
-              isLive
-                ? {
-                    itemId: listing.itemId,
-                    externalListingId: listing.externalListingId,
-                    status: listing.status,
-                  }
-                : undefined,
-            );
-            setEndingId(null);
-            if (error) { showAlert('Delete Failed', error); return; }
-            setListings(prev => prev.filter(l => l.id !== listing.id));
-            setItem(prev => prev ? { ...prev, status: 'identified' } : prev);
-            showAlert('Deleted', isLive ? 'Listing ended on eBay and removed from SWISH.' : 'Draft listing deleted from SWISH.');
-          },
-        },
-      ],
-    );
-  }, [item, tenant?.id, showAlert]);
+    if (!item || !tenant?.id || !ready || removalLock.current) return;
+    // Published listings are ended first. Never delete the item in this callback.
+    if (listing.externalListingId || listing.publishedAt || ['active','live','ended'].includes(listing.status)) { void handleEndListing(listing); return; }
+    const actionScope = scope;
+    showAlert('Delete draft listing?', 'Delete this unpublished SWISH draft? The inventory item and its photographs remain. No eBay action is requested.', [
+      { text: 'Cancel', style: 'cancel' }, { text: 'Delete draft', style: 'destructive', onPress: async () => {
+        if (currentScope.current !== actionScope || removalLock.current) return;
+        removalLock.current = true; setEndingId(listing.id);
+        try {
+          const result = await deleteListing(listing.id, tenant.id);
+          if (currentScope.current !== actionScope) return;
+          if (result.error) { showAlert('Draft not deleted', result.error); return; }
+          setListings(previous => previous.filter(row => row.id !== listing.id));
+          triggerInventoryReload(); void load();
+        } finally { removalLock.current = false; if (currentScope.current === actionScope) setEndingId(null); }
+      } },
+    ]);
+  }, [item, tenant?.id, ready, scope, showAlert, handleEndListing, triggerInventoryReload, load]);
 
   const handleMarkSold = useCallback(() => {
     if (!item) return;
@@ -2413,7 +2387,7 @@ export default function StockListingScreen() {
   const hasAcquiredCost = (item.acquiredCost ?? 0) > 0;
   const hasLiveLink = activeListings.some(row => Boolean(row.externalListingId));
   const primaryAction: StockListingAction | null = isSold ? null : draftListings.length > 0
-    ? { id: 'review', label: 'Review & submit listing', detail: '', icon: 'fact-check', onPress: () => router.push(`/listing-preflight?listingId=${draftListings[0].id}&itemId=${item.id}` as any), disabled: submittingId !== null }
+    ? { id: 'review', label: 'List or save for later', detail: '', icon: 'fact-check', onPress: () => router.push(`/ebay-listing-editor?id=${draftListings[0].id}` as any), disabled: submittingId !== null }
     : activeListings.length > 0
       ? { id: 'edit', label: 'Edit listing', detail: '', icon: 'edit', onPress: () => router.push(`/ebay-listing-editor?id=${activeListings[0].id}` as any) }
       : { id: 'create', label: 'Create listing', detail: '', icon: 'sell', onPress: () => router.push(`/create-listing?id=${item.id}` as any) };
@@ -2428,7 +2402,7 @@ export default function StockListingScreen() {
     ] : []),
     { id: 'share', label: 'Share for Facebook Marketplace', detail: 'Export item details using the share sheet.', icon: 'share', onPress: () => { void handleExportFacebook(); } },
     ...(!isSold && !activeListings.length && !draftListings.length ? [{ id: 'sold', label: 'Mark as sold', detail: 'Record a sale and retain the inventory history.', icon: 'sell' as const, onPress: handleMarkSold }] : []),
-    ...(selectedListing ? [{ id: 'delete', label: 'Delete listing', detail: 'Confirmation required. This does not delete the inventory item.', icon: 'delete-outline' as const, onPress: () => handleDeleteListing(selectedListing), disabled: endingId !== null, destructive: true }] : []),
+    ...(selectedListing ? [{ id: 'delete', label: selectedListing.status === 'ended' ? 'Confirm ended on eBay' : selectedListing.externalListingId ? 'Delete listing · end on eBay first' : 'Delete draft listing', detail: selectedListing.externalListingId ? 'End and return to inventory. Item deletion is a separate step.' : 'Remove only the draft; inventory and photographs are kept.', icon: 'delete-outline' as const, onPress: () => handleDeleteListing(selectedListing), disabled: endingId !== null || inventoryRemoval.busyId !== null, destructive: true }] : []),
   ];
 
   return (
@@ -2452,11 +2426,12 @@ export default function StockListingScreen() {
       <ScrollView style={s.scroll} contentContainerStyle={s.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
         {/* ── PHOTOS ── */}
-        {photoRecovery.busy ? <View style={s.reviewBanner}><ActivityIndicator color={Colors.gold} /><Text style={s.reviewBannerSub}>Restoring original captured photos from this item’s storage…</Text></View> : null}
+        {photoRecovery.busy ? <View style={s.reviewBanner}><ActivityIndicator color={Colors.gold} /><Text style={s.reviewBannerSub}>Restoring saved photos…</Text></View> : null}
         {photoRecovery.error ? <View style={s.reviewBanner}><MaterialIcons name="error-outline" size={20} color={Colors.warning} /><View style={s.flex}><Text accessibilityRole="alert" style={s.reviewBannerSub}>{photoRecovery.error}</Text><Pressable accessibilityLabel="Retry recovery of this item's captured photos" onPress={() => void photoRecovery.retry()} disabled={photoRecovery.busy} style={({ pressed }) => [s.listingEditBtn, pressed ? { opacity: 0.7 } : null]}><Text style={s.listingEditBtnText}>Retry captured photos</Text></Pressable></View></View> : null}
         <ItemPhotoGallery
           key={scope}
           media={item.media ?? []}
+          attributes={item.attributes}
           accent={nicheAccent}
           tip={niche.captureInstructions[0] ?? 'Photograph the whole item clearly.'}
           saving={mainImage.saving || smartStudio.busy}
@@ -2490,10 +2465,7 @@ export default function StockListingScreen() {
               {endingId === activeListings[0].id ? <ActivityIndicator size="small" color={Colors.danger} style={{ width: 11, height: 11 }} /> : <MaterialIcons name="stop" size={11} color={Colors.danger} />}
               <Text style={s.endBtnText}>End</Text>
             </Pressable>
-            <Pressable onPress={() => handleDeleteListing(activeListings[0])} style={[s.endBtn, { backgroundColor: Colors.dangerDim + '80', borderColor: Colors.danger + '60' }]} hitSlop={4} disabled={endingId === activeListings[0].id}>
-              <MaterialIcons name="delete-outline" size={11} color={Colors.danger} />
-              <Text style={s.endBtnText}>Delete</Text>
-            </Pressable>
+
           </View>
         ) : null}
         {activeListings[0]?.externalListingId ? <EbayListingLiveCheck key={`${scope}:${activeListings[0].id}`} tenantId={tenant.id} listingId={activeListings[0].id} externalListingId={activeListings[0].externalListingId} title={activeListings[0].title} description={activeListings[0].description} price={activeListings[0].price}/> : null}
@@ -2920,6 +2892,7 @@ export default function StockListingScreen() {
           </View>
         </View>
 
+        <InventoryRemovalPanel live={activeListings.length > 0 || isListed} sold={isSold || Boolean(item.soldAt)} busy={inventoryRemoval.busyId === item.id} disabled={endingId !== null || submittingId !== null || saving || generatingListing || smartStudio.busy || photoRecovery.busy} onDelete={() => inventoryRemoval.requestDelete({ id: item.id, title: item.canonicalTitle, specialistId: item.specialistId, tenantId: item.tenantId, status: item.status })} />
         <ManifestInspectionReview key={item.id} itemId={item.id} attributes={item.attributes} onReviewed={attributes=>handleMarketValueUpdated({ attributes })}/>
         <SpecialistItemFields item={item} onUpdated={handleMarketValueUpdated} />
 
@@ -2994,7 +2967,7 @@ export default function StockListingScreen() {
             item.inventoryId ? { label: 'Inventory ID', value: item.inventoryId } : null,
             { label: 'Item ID', value: item.id.slice(0, 18) + '...' },
             { label: 'Created', value: new Date(item.createdAt).toLocaleDateString('en-GB') },
-            { label: 'Photos', value: `${item.media?.length ?? 0} image${(item.media?.length ?? 0) === 1 ? '' : 's'}` },
+            { label: 'Photos', value: `${preferredListingPhotos(item.media,item.attributes).length} displayed · originals archived` },
           ].filter(Boolean).map(row => (
             <View key={row!.label} style={s.metaRow}>
               <Text style={s.metaLabel}>{row!.label}</Text>
@@ -3004,7 +2977,7 @@ export default function StockListingScreen() {
         </View>
       </ScrollView>
 
-      <StockListingToolbar accent={nicheAccent} primary={primaryAction} actions={itemActions} />
+      <StockListingToolbar accent={nicheAccent} primary={primaryAction ? { ...primaryAction, disabled: Boolean(primaryAction.disabled || endingId !== null || inventoryRemoval.busyId !== null) } : null} actions={itemActions.map(action => ({ ...action, disabled: Boolean(action.disabled || endingId !== null || inventoryRemoval.busyId !== null) }))} />
 
       {saving ? (
         <View style={s.savingIndicator}><ActivityIndicator size="small" color={Colors.primary} /><Text style={s.savingText}>Saving...</Text></View>

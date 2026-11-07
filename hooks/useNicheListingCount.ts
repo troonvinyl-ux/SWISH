@@ -27,9 +27,9 @@ export function useNicheListingCount() {
         // A transient refresh preserves the badge. Inventory exposes its actionable read error.
       } finally{busy=false;}
     };
-    void refresh();const timer=setInterval(()=>{void refresh(true);},90_000);
-    const sub=AppState.addEventListener('change',state=>{if(state==='active')void refresh(true);});
-    return()=>{cancelled=true;clearInterval(timer);sub.remove();};
+    // Read on scope entry and explicit successful inventory mutations only; no timer/foreground polling.
+    void refresh();
+    return()=>{cancelled=true;};
   },[tenant?.id,niche,scope,inventoryReloadSignal,accessReady,moduleLoading]);
   return accessReady&&!moduleLoading&&snapshot.scope===scope?snapshot.count:0;
 }

@@ -1,4 +1,5 @@
 import { memo, useState } from 'react';
+import { visibleCapturedPhotos, capturedPresentationUri } from '@/shared/smartStudio';
 import { View, Text, FlatList, Pressable, Modal, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -14,15 +15,17 @@ interface ReidentificationPhotoReviewProps {
 }
 export const ReidentificationPhotoReview = memo(function ReidentificationPhotoReview({ photos, warnings, acknowledged, disabled, onContinue }: ReidentificationPhotoReviewProps) {
   const [viewing, setViewing] = useState<PhotoReviewSource | null>(null);
+  const displayed = visibleCapturedPhotos(photos);
+  const activePhoto = viewing ? displayed.find(photo => photo.uri === viewing.uri) ?? null : null;
   if (!photos.length) return null;
   return <View style={s.panel}>
     <View style={s.heading}><MaterialIcons name="photo-library" size={22} color={Colors.primary}/><Text style={s.title}>Photos used for re-identification</Text></View>
-    <Text style={s.body}>{photos.length} original views · tap a photo to inspect</Text>
+    <Text style={s.body}>{displayed.length} displayed views · originals retained privately for identification</Text>
     <View style={s.rail}>
-      <FlatList horizontal data={photos} keyExtractor={(photo, index) => `${index}:${photo.uri}`} showsHorizontalScrollIndicator={false} contentContainerStyle={s.railContent} renderItem={({ item: photo }) => {
+      <FlatList horizontal data={displayed} keyExtractor={(photo, index) => `${index}:${photo.uri}`} showsHorizontalScrollIndicator={false} contentContainerStyle={s.railContent} renderItem={({ item: photo }) => {
         const flagged = warnings.some(warning => warning.uri === photo.uri && warning.slotLabel === photo.slotLabel);
         return <Pressable accessibilityLabel={`Inspect ${photo.slotLabel}${flagged ? ', lighting or focus warning' : ''}`} onPress={() => setViewing(photo)} style={({ pressed }) => [s.photo, flagged ? s.flagged : null, pressed ? s.pressed : null]}>
-          <Image source={{ uri: photo.uri }} contentFit="contain" transition={200} style={s.thumbnail}/>
+          <Image source={{ uri: capturedPresentationUri(photo) }} contentFit="contain" transition={200} style={s.thumbnail}/>
           <Text style={s.label} numberOfLines={2}>{photo.slotLabel}</Text>
           {flagged ? <View style={s.heading}><MaterialIcons name="warning" size={16} color={Colors.warning}/><Text style={s.warningLabel}>Review quality</Text></View> : null}
         </Pressable>;
@@ -35,10 +38,10 @@ export const ReidentificationPhotoReview = memo(function ReidentificationPhotoRe
       <Text style={s.body}>{acknowledged ? 'Limitations acknowledged for these photos. Identification still needs your review.' : 'Add a clearer view below, or explicitly continue with these limitations. Originals and live listings are unchanged.'}</Text>
       {!acknowledged ? <Pressable disabled={disabled} accessibilityLabel="Continue re-identification with the reviewed photo limitations" onPress={onContinue} style={({ pressed }) => [s.continue, disabled || pressed ? s.pressed : null]}><MaterialIcons name="auto-awesome" size={20} color={Colors.textInverse}/><Text style={s.continueText}>Continue with these photos</Text></Pressable> : null}
     </View> : null}
-    <Modal visible={Boolean(viewing)} animationType="fade" onRequestClose={() => setViewing(null)}>
+    <Modal visible={Boolean(activePhoto)} animationType="fade" onRequestClose={() => setViewing(null)}>
       <SafeAreaView edges={['top', 'bottom']} style={s.viewer}>
-        <View style={s.viewerHeader}><Text style={[s.title, s.flex]}>{viewing?.slotLabel ?? 'Original photograph'}</Text><Pressable accessibilityLabel="Close original photo" onPress={() => setViewing(null)} style={({ pressed }) => [s.close, pressed ? s.pressed : null]}><MaterialIcons name="close" size={24} color={Colors.textPrimary}/></Pressable></View>
-        {viewing ? <Image source={{ uri: viewing.uri }} contentFit="contain" transition={200} style={s.flex}/> : null}
+        <View style={s.viewerHeader}><Text style={[s.title, s.flex]}>{activePhoto?.slotLabel ?? 'Item photograph'}</Text><Pressable accessibilityLabel="Close photo" onPress={() => setViewing(null)} style={({ pressed }) => [s.close, pressed ? s.pressed : null]}><MaterialIcons name="close" size={24} color={Colors.textPrimary}/></Pressable></View>
+        {activePhoto ? <Image source={{ uri: capturedPresentationUri(activePhoto) }} contentFit="contain" transition={200} style={s.flex}/> : null}
       </SafeAreaView>
     </Modal>
   </View>;

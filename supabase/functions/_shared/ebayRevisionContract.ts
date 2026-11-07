@@ -34,6 +34,7 @@ export function verifyRevisionContent(live: LiveListingContent, expected: { exte
 export function revisionFailure(data: any): string | null {
   if (!data?.success) return data?.error ?? 'eBay revision was not confirmed.';
   if (data.verified !== true) return 'eBay acknowledged the request, but live description and price were not verified. Check live eBay details before retrying.';
-  const warnings = [data.warning, ...(Array.isArray(data.warnings) ? data.warnings : [])].filter(Boolean);
-  return warnings.length ? warnings.join('\n') : null;
+  // Successful marketplace notices (including fee waivers) are not revision failures.
+  // Warnings stay in the response for a separate informational presentation.
+  return null;
 }

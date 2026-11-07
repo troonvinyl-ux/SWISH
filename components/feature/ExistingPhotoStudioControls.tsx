@@ -7,24 +7,19 @@ import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 
 interface ExistingPhotoStudioControlsProps {originalUri:string;studio:ItemSmartStudioController;accent:string;disabled?:boolean}
 export const ExistingPhotoStudioControls=memo(function ExistingPhotoStudioControls({originalUri,studio,accent,disabled=false}:ExistingPhotoStudioControlsProps){
- const [showOriginal,setShowOriginal]=useState(false);
  const [previewError,setPreviewError]=useState(false);
  const result=studio.resultFor(originalUri);
- useEffect(()=>{setShowOriginal(false);setPreviewError(false);},[originalUri,result?.enhancedUri]);
+ useEffect(()=>{setPreviewError(false);},[originalUri,result?.enhancedUri]);
  const progress=studio.progress;
  if(!studio.available)return null;
  return <View style={s.panel}>
   <View style={s.row}><MaterialIcons name="auto-fix-high" size={22} color={accent}/><Text style={s.title}>BackgroundErase</Text>{result?<Text style={[s.status,{color:result.status==='ready'?Colors.success:Colors.warning}]}>{result.status==='ready'?'Saved':'Review required'}</Text>:null}</View>
-  <Text style={s.body}>Remove the background without redrawing the product. Valid cutouts carry forward; untouched originals remain available. Each uncached photo uses your provider account.</Text>
+  <Text style={s.body}>Remove the background without redrawing the product. Processed photos carry forward; untouched originals remain archived, not displayed. Each uncached photo uses your provider account.</Text>
   {result?.enhancedUri?<>
-   <View style={s.row}>
-    <Pressable accessibilityRole="button" accessibilityState={{selected:!showOriginal}} onPress={()=>setShowOriginal(false)} style={({pressed})=>[s.segment,!showOriginal?{borderColor:accent}:null,pressed?s.pressed:null]}><Text style={s.buttonText}>Background removed</Text></Pressable>
-    <Pressable accessibilityRole="button" accessibilityState={{selected:showOriginal}} onPress={()=>setShowOriginal(true)} style={({pressed})=>[s.segment,showOriginal?{borderColor:accent}:null,pressed?s.pressed:null]}><Text style={s.buttonText}>Original evidence</Text></Pressable>
-   </View>
-   <Image key={showOriginal?originalUri:result.enhancedUri} source={{uri:showOriginal?originalUri:result.enhancedUri}} contentFit="contain" transition={200} style={s.preview} accessibilityLabel={showOriginal?'Unchanged original photograph':'BackgroundErase cutout of the selected original'} onError={()=>setPreviewError(true)}/>
-   {previewError?<Text accessibilityRole="alert" style={s.warning}>Preview could not load. The original is still available in the gallery above.</Text>:null}
+   <Image key={result.enhancedUri} source={{uri:result.enhancedUri}} contentFit="contain" transition={200} style={s.preview} accessibilityLabel="Processed item photograph" onError={()=>setPreviewError(true)}/>
+   {previewError?<Text accessibilityRole="alert" style={s.warning}>Processed preview could not load. Reopen this item to retry; the archived original has not been substituted.</Text>:null}
    <Text style={s.body}>{result.status==='review'?'Review the product boundary and details; this result is not used automatically as the inventory cover.':'Clean photo saved for inventory and new listing selections. Live listings change only after a confirmed revision.'}</Text>
-   <Text style={s.body}>No generative editing, relighting or restoration. Review fine edges, transparent areas, defects and lettering against the original.</Text>
+   <Text style={s.body}>No generative editing, relighting or restoration. Review fine edges, transparent areas, defects and lettering before publishing.</Text>
   </>:null}
   <View style={s.row}>
    <Pressable accessibilityRole="button" accessibilityLabel="Remove the background of this saved original using BackgroundErase" disabled={disabled||studio.busy||!studio.canProcess(originalUri)||Boolean(result)} onPress={()=>void studio.processPhoto(originalUri)} style={({pressed})=>[s.action,{borderColor:accent},pressed||disabled||studio.busy||Boolean(result)?s.pressed:null]}><MaterialIcons name={result?'check-circle-outline':'auto-fix-high'} size={20} color={accent}/><Text style={[s.buttonText,{color:accent}]}>{result?'Cutout saved for this photo':'Process selected photo'}</Text></Pressable>
