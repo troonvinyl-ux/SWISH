@@ -461,17 +461,20 @@ export async function deleteItem(
   if (!tenantId || tenantId.trim() === '') {
     return { error: 'deleteItem: tenantId is required — operation refused' };
   }
-  const supabase = getSupabaseClient();
-  const { error, count } = await supabase
-    .from('items')
-    .delete({ count: 'exact' })
-    .eq('id', id)
-    .eq('tenant_id', tenantId);
-  if (error) return { error: error.message };
-  // count === 0 means the item either doesn't exist or belongs to another tenant.
-  // Return a descriptive error so callers can surface this rather than silently succeeding.
-  if (count === 0) return { error: 'Item not found or does not belong to this account' };
-  return { error: null };
+  if (!id?.trim()) return { error: 'A saved inventory item is required.' };
+  try {
+    const supabase = getSupabaseClient();
+    // Fresh server-side check sees every listing/order, not just the currently visible card.
+    const check = await supabase.rpc('swish_inventory_delete_issue', { p_tenant_id: tenantId, p_item_id: id });
+    if (check.error) return { error: check.error.message };
+    if (typeof check.data === 'string' && check.data) return { error: check.data };
+    if (check.data !== null) return { error: 'Deletion eligibility could not be verified. Nothing was deleted.' };
+    // The BEFORE DELETE guard repeats the check under the parent row lock.
+    const { error, count } = await supabase.from('items').delete({ count: 'exact' }).eq('id', id).eq('tenant_id', tenantId);
+    if (error) return { error: error.message };
+    if (count !== 1) return { error: 'Deletion was not confirmed. Refresh inventory before retrying.' };
+    return { error: null };
+  } catch { return { error: 'Deletion could not be confirmed. Refresh inventory before retrying; no automatic retry was sent.' }; }
 }
 
 // Update an item

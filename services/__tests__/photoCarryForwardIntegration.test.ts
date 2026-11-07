@@ -50,6 +50,13 @@ test.each(PRODUCTION_NICHE_IDS)('%s keeps all roles on the same canonical item a
  const resumed=JSON.parse(JSON.stringify(images));expect((await persistCapturedItemPhotos('tenant','item',resumed)).complete).toBe(true);
  expect(db.storage.upload).toHaveBeenCalledTimes(5);expect(db.row().media).toEqual(saved.urls);
 });
+test('fresh photo persistence uses three database requests and retains exact byte verification',async()=>{
+ const db=setup();const saved=await persistCapturedItemPhotos('tenant','item',photos().slice(0,2),{processImages:false});
+ expect(saved.complete).toBe(true);expect(db.from).toHaveBeenCalledTimes(3);
+ expect(db.storage.upload).toHaveBeenCalledTimes(2);expect(db.storage.download).toHaveBeenCalledTimes(2);
+ const before=db.from.mock.calls.length;await linkPersistedItemPhotos('tenant','item',saved.urls);
+ expect(db.from.mock.calls.length-before).toBe(1);
+});
 test('failed back upload keeps front linked, roles correct, identity retained and publication blocked',async()=>{
  const db=setup();let fail=true;const actual=db.storage.upload.getMockImplementation()!;
  db.storage.upload.mockImplementation(async(path,data)=>path.includes('/back_')&&fail?{error:{message:'Network failure'}}:actual(path,data));

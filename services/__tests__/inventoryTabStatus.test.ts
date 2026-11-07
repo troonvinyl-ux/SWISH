@@ -37,7 +37,7 @@ describe('Every niche queries only its own tab at the server',()=>{
   for(const name of ['from','select','eq','in','order'])client[name].mockReturnValue(client);
   client.range.mockReturnValue(client);
   client.abortSignal.mockResolvedValue({data:[],error:null});
-  client.rpc.mockReturnValue({abortSignal:jest.fn().mockResolvedValue({data:{stock:3,draft:3,live:3,sold:3},error:null})});
+  client.rpc.mockReturnValue({abortSignal:jest.fn().mockResolvedValue({data:{total:12,units:12,stock:3,draft:3,live:3,sold:3,archived:0,live_listings:3},error:null})});
  });
  test.each(PRODUCTION_NICHE_IDS)('%s applies the same isolation to all four tabs',async niche=>{
   const allowed=getProductionNicheSpecialistIds(niche);

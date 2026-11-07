@@ -31,10 +31,13 @@
 //   get_category_suggestions— search only live/cached eBay leaf categories
 
 import { availableListingPhotos, preferredListingPhotos, studioImageIsUsable, type StudioResult } from '../_shared/smartStudio.ts';
+import { photoPersistenceIssue } from '../_shared/photoPersistence.ts';
 import { readStudioMetadata } from '../_shared/smartStudioEngine.ts';
 import { serveModule } from '../_shared/moduleScope.ts';
 import { descriptionXml, verifyRevisionContent } from '../_shared/ebayRevisionContract.ts';
 import { parseLiveContent } from '../_shared/ebayLiveContent.ts';
+import { parseEbayListingStatus } from '../_shared/listingStatus.ts';
+import { confirmSellerListingEnd } from '../_shared/ebayEndPolicy.ts';
 import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
@@ -1372,7 +1375,7 @@ async function handleRequest(req: Request): Promise<Response> {
   if (['publish', 'revise', 'end', 'revise_sku', 'inspect_live'].includes(route)) {
     if (!body.listingId || !auth.userId) return jsonResponse({ error: 'Authenticated saved listing required.' }, 400);
     const { data: resource, error: resourceError } = await supabase.from('listings')
-      .select('item_id, items!inner(tenant_id,specialist_id,attributes)')
+      .select('item_id, items!inner(tenant_id,specialist_id,attributes,media)')
       .eq('id', body.listingId).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle();
     const ownedItem = (resource as any)?.items;
     const niche = specialistNiche(String(ownedItem?.specialist_id ?? ''));
@@ -1382,6 +1385,8 @@ async function handleRequest(req: Request): Promise<Response> {
     try { await requirePaidNiche(supabase, { id: auth.userId, email: auth.userEmail }, tenantId, niche); }
     catch (error) { const denied = nicheAccessResponse(error); if (denied) return denied; throw error; }
     if (route === 'publish' || route === 'revise') {
+      const photoIssue = photoPersistenceIssue(ownedItem.media ?? [], ownedItem.attributes ?? {});
+      if(photoIssue)return jsonResponse({error:photoIssue,code:'PHOTO_PERSISTENCE_REQUIRED'},422);
       const safety = evaluateSpecialistSafety(niche, ownedItem.attributes ?? {});
       if (safety.blocked) return jsonResponse({ error: safety.reasons.join(' '), code: 'SPECIALIST_SAFETY_REVIEW_REQUIRED' }, 422);
     }
@@ -1975,6 +1980,8 @@ async function handleRequest(req: Request): Promise<Response> {
 
     const savedItemId = String(ownedListing.item_id ?? '').trim();
     if (!savedItemId) return jsonResponse({ error: 'The saved listing has no linked inventory item.' }, 400);
+    if (body.itemId && body.itemId !== savedItemId) return jsonResponse({ error: 'Inventory identity does not match the saved listing.' }, 403);
+    if (!/^\d+$/.test(savedExternalListingId)) return jsonResponse({ error: 'Saved eBay listing identity is invalid.' }, 400);
     const { data: ownedItem, error: ownedItemError } = await supabase
       .from('items')
       .select('id')
@@ -1987,67 +1994,51 @@ async function handleRequest(req: Request): Promise<Response> {
 
     const creds = await getEbayCredentials(supabase, tenantId, true);
     if ('error' in creds) return jsonResponse({ error: creds.error }, 400);
-    const endXml = `<?xml version="1.0" encoding="utf-8"?>
-<EndFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-  <RequesterCredentials><eBayAuthToken>${creds.accessToken}</eBayAuthToken></RequesterCredentials>
-  <ItemID>${xmlEscape(savedExternalListingId)}</ItemID>
-  <EndingReason>NotAvailable</EndingReason>
-</EndFixedPriceItemRequest>`;
-    const { xml: endResp, ok: endOk } = await callEbayTradingApi(endXml, 'EndFixedPriceItem', creds.clientId);
-    if (!endOk) {
-      const errors = parseErrors(endResp);
-      return jsonResponse({ success: false, error: friendlyError(errors, 'Failed to end eBay listing') });
+    let listingType = 'FixedPriceItem';
+    let observation;
+    try {
+      observation = await confirmSellerListingEnd(savedExternalListingId, {
+        read: async () => {
+          const getXml = `<?xml version="1.0" encoding="utf-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials><eBayAuthToken>${xmlEscape(creds.accessToken)}</eBayAuthToken></RequesterCredentials><ItemID>${savedExternalListingId}</ItemID><DetailLevel>ReturnAll</DetailLevel></GetItemRequest>`;
+          const result = await callEbayTradingApi(getXml, 'GetItem', creds.clientId);
+          if (!result.ok) throw new Error(friendlyError(parseErrors(result.xml), 'Seller eBay status could not be checked. Inventory was retained.'));
+          listingType = result.xml.match(/<ListingType>([^<]+)<\/ListingType>/)?.[1] ?? '';
+          return parseEbayListingStatus(result.xml, savedExternalListingId);
+        },
+        end: async () => {
+          // Auction listings require EndItem, not EndFixedPriceItem.
+          if (!['Chinese','FixedPriceItem','StoresFixedPrice'].includes(listingType)) throw new Error('This eBay listing format needs manual end review in Seller Hub.');
+          const callName = listingType === 'Chinese' ? 'EndItem' : 'EndFixedPriceItem';
+          const endXml = `<?xml version="1.0" encoding="utf-8"?><${callName}Request xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials><eBayAuthToken>${xmlEscape(creds.accessToken)}</eBayAuthToken></RequesterCredentials><ItemID>${savedExternalListingId}</ItemID><EndingReason>NotAvailable</EndingReason></${callName}Request>`;
+          const result = await callEbayTradingApi(endXml, callName, creds.clientId);
+          if (!result.ok) throw new Error(friendlyError(parseErrors(result.xml), 'eBay did not accept the end request. Inventory was retained.'));
+        },
+      });
+    } catch (error) {
+      console.error('[SWISH end] Seller end is not confirmed; inventory and listing references retained.');
+      return jsonResponse({ success: false, confirmed: false, externalListingId: savedExternalListingId, error: error instanceof Error ? error.message : 'End outcome is unconfirmed. Check eBay before retrying.' }, 409);
     }
-
     const now = new Date().toISOString();
-    const { error: listingUpdateError } = await supabase.from('listings')
-      .update({ status: 'ended', ended_at: now, updated_at: now })
-      .eq('id', ownedListing.id)
-      .eq('tenant_id', tenantId);
-    // Prefer the atomic lifecycle command when it exists. Older OnSpace
-    // deployments may not yet expose that RPC; in that specific case retain
-    // the original tenant-scoped update so ending a provider listing does not
-    // become dependent on a database migration. Other RPC failures stay closed.
-    let transitioned = preserveInventoryStatus;
-    let itemUpdateError: any = null;
-    if (!preserveInventoryStatus) {
-      const { data: transitionResult, error: transitionError } = await supabase.rpc('swish_transition_item', {
-        p_tenant_id: tenantId,
-        p_item_id: ownedItem.id,
-        p_status: 'identified',
-        p_notes: `eBay listing ended: ${savedExternalListingId}`,
-        p_marketplace: 'ebay',
-      });
-      if (!transitionError && transitionResult === true) {
-        transitioned = true;
-      } else if (
-        transitionError &&
-        (transitionError.code === 'PGRST202' ||
-          transitionError.code === '42883' ||
-          /function .*swish_transition_item.*does not exist/i.test(transitionError.message ?? ''))
-      ) {
-        const fallback = await supabase.from('items')
-          .update({ status: 'identified', updated_at: now })
-          .eq('id', ownedItem.id)
-          .eq('tenant_id', tenantId)
-          .select('id')
-          .maybeSingle();
-        itemUpdateError = fallback.error;
-        transitioned = Boolean(fallback.data) && !fallback.error;
-      } else {
-        itemUpdateError = transitionError ?? new Error('Item transition was not confirmed.');
-      }
+    // Partial sales can end remaining stock, but never authorize removal of sale history.
+    if (observation.quantitySold === 0) {
+      const receipt = await supabase.from('swish_listing_end_receipts').upsert({
+        listing_id: ownedListing.id, tenant_id: tenantId, item_id: ownedItem.id,
+        external_listing_id: savedExternalListingId, quantity_sold: 0, confirmed_at: now,
+      }, { onConflict: 'listing_id' });
+      if (receipt.error) return jsonResponse({ success: false, confirmed: false, externalListingId: savedExternalListingId, error: 'eBay ended the listing, but its confirmation could not be saved. Confirm ended on eBay again before deletion.' }, 503);
     }
-
-    if (listingUpdateError || itemUpdateError || transitioned !== true) {
-      console.error(`[SWISH end] eBay listing ended but local state update failed (tenant scoped): listingError=${listingUpdateError?.message ?? 'none'} itemError=${itemUpdateError?.message ?? 'none'}`);
-      return jsonResponse({
-        success: true,
-        externalListingId: savedExternalListingId,
-        warning: 'The eBay listing was ended, but SWISH could not fully update its local status. Run eBay sync to reconcile.',
-      });
-    }
-    return jsonResponse({ success: true, externalListingId: savedExternalListingId, inventoryStatusPreserved: preserveInventoryStatus });
+    const applied = preserveInventoryStatus
+      ? await supabase.from('listings').update({ status: 'ended', ended_at: observation.endedAt ?? now, updated_at: now })
+          .eq('id', ownedListing.id).eq('tenant_id', tenantId).eq('external_listing_id', savedExternalListingId).select('id').single()
+      : await supabase.rpc('swish_apply_ebay_listing_status', {
+          p_tenant_id: tenantId, p_listing_id: ownedListing.id, p_external_id: savedExternalListingId,
+          p_status: 'ended', p_quantity: observation.quantity, p_quantity_sold: observation.quantitySold,
+          p_ended_at: observation.endedAt ?? now,
+        });
+    if (applied.error) return jsonResponse({ success: false, confirmed: false, externalListingId: savedExternalListingId, error: 'eBay end was observed, but SWISH reconciliation failed. Inventory was retained. Confirm ended on eBay again; do not delete yet.' }, 503);
+    return jsonResponse({ success: true, confirmed: true, externalListingId: savedExternalListingId,
+      inventoryStatusPreserved: preserveInventoryStatus, deletionRequiresSeparateConfirmation: true,
+      partialSaleHistoryRetained: observation.quantitySold > 0 });
   }
 
   // Shared read-only live-content inspection and saved-content revision.
@@ -2069,7 +2060,14 @@ async function handleRequest(req: Request): Promise<Response> {
       return parseLiveContent(result.xml, externalListingId);
     };
     if (route === 'inspect_live') {
-      try { return jsonResponse({ success: true, live: await readLive() }); }
+      try {
+        const live=await readLive();
+        if(typeof body.quickListSessionId==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(body.quickListSessionId)&&live.listingStatus==='Active'&&live.availableQuantity>0){
+          const logged=await supabase.from('commercial_events').insert({tenant_id:tenantId,event_type:'quick_list_live_confirmation',entity_type:'quick_list',entity_id:body.quickListSessionId,data:{nicheId:specialistNiche(ownedItem.specialist_id),externalListingId,listingId,checkedAt:live.checkedAt,listingStatus:live.listingStatus},model_version:'quick-list-v1'});
+          if(logged.error)console.warn('[Quick List] Live evidence telemetry could not be stored.');
+        }
+        return jsonResponse({ success: true, live });
+      }
       catch { return jsonResponse({ success: false, error: 'Live eBay description and seller price could not be checked. Saved edits were preserved.' }, 502); }
     }
     // All clients, including older APK push paths, use saved seller-facing copy.
@@ -2260,6 +2258,8 @@ async function handleRequest(req: Request): Promise<Response> {
   console.log(`[SWISH] Direct category passthrough: marketplaceId=EBAY_GB, categoryId=${resolvedCategoryId}, categoryName="${savedCategoryName}". No SWISH leaf validation performed.`);
 
   const attrs: Record<string, any> = item?.attributes ?? {};
+  const photoIssue=photoPersistenceIssue(item?.media??[],attrs);
+  if(photoIssue)return jsonResponse({error:photoIssue,code:'PHOTO_PERSISTENCE_REQUIRED'},422);
   const specialistId: string = item?.specialist_id ?? '';
   const SPEC_BLOCKLIST = new Set([
     'batch_id', 'capture_ref', 'object_type', 'has_alteration', 'has_hole', 'has_countermark',

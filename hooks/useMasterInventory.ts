@@ -8,10 +8,11 @@ import {submitListingToMarketplace,endListing,type SubmitStep,type ListingWithIt
 import {fetchAndStoreEbayImages,itemNeedsImages} from '@/services/ebayImageService';
 import type {Item} from '@/services/itemService';
 import {backendReadsBusy} from '@/services/backendRequestService';
+import {isAppVisible} from '@/services/appVisibilityService';
 import {isBackendUnavailable} from '@/services/backendAvailabilityService';
 import type {CanonicalInventoryCounts} from '@/services/canonicalInventoryService';
 export function useMasterInventory(){
- const {tenant,fixedNicheId,activeNicheId,inventoryReloadSignal,subscriptionLoading,accessReady,moduleLoading,moduleEpoch,accessError,tenantError,moduleError}=useApp();
+ const {tenant,fixedNicheId,activeNicheId,inventoryReloadSignal,subscriptionLoading,accessReady,moduleLoading,moduleEpoch,accessError,tenantError,moduleError,triggerInventoryReload}=useApp();
  const {user}=useAuth(),{showAlert}=useAlert();
  const ready=Boolean(user&&tenant?.id&&accessReady&&!moduleLoading&&!subscriptionLoading);
  const readyRef=useRef(ready);readyRef.current=ready;
@@ -23,6 +24,8 @@ export function useMasterInventory(){
  const [snapshot,setSnapshot]=useState<{scope:string;items:Item[];listings:ListingWithItem[];canonicalCounts?:CanonicalInventoryCounts;error:string|null}>({scope:'',items:[],listings:[],error:null});
  const [loading,setLoading]=useState(false),[refreshing,setRefreshing]=useState(false),[activeTab,setActiveTab]=useState<InventoryTab>('stock');
  const [submitStep,setSubmitStep]=useState<SubmitStep|null>(null),[submitTitle,setSubmitTitle]=useState(''),[syncing,setSyncing]=useState(false);
+ const ending=useRef(false);const [endingItemId,setEndingItemId]=useState<string|null>(null);
+
  const reload=useCallback(async()=>{
   if(!tenant?.id||!ready)return;
   if(pending.current?.scope===scope)return pending.current.promise;
@@ -51,11 +54,16 @@ export function useMasterInventory(){
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;request.current++;pending.current=null;imageTaskRef.current?.cancel();};},[]);
  useFocusEffect(useCallback(()=>{focused.current=true;void reload();return()=>{focused.current=false;imageTaskRef.current?.cancel();imagesStarted.current.delete(scope);};},[reload,scope]));
  useEffect(()=>{
-  const timer=setInterval(()=>{if(focused.current&&AppState.currentState==='active'&&!backendReadsBusy())void reload();},90000);
-  const sub=AppState.addEventListener('change',state=>{if(state==='active'&&focused.current&&!backendReadsBusy())void reload();});
+  const timer=setInterval(()=>{if(focused.current&&isAppVisible()&&AppState.currentState==='active'&&!backendReadsBusy())void reload();},90000);
+  const sub=AppState.addEventListener('change',state=>{if(state==='active'&&focused.current&&isAppVisible()&&!backendReadsBusy())void reload();});
   return()=>{clearInterval(timer);sub.remove();};
  },[reload]);
  useEffect(()=>{if(inventoryReloadSignal>0&&focused.current)void reload();},[inventoryReloadSignal,reload]);
+ const removeDeletedItem=useCallback((itemId:string)=>{
+  request.current++;pending.current=null;
+  setSnapshot(previous=>previous.scope===scope?{...previous,items:previous.items.filter(item=>item.id!==itemId),listings:previous.listings.filter(listing=>listing.itemId!==itemId),canonicalCounts:undefined}:previous);
+  void reload();
+ },[scope,reload]);
  const views=useMemo(()=>ready&&snapshot.scope===scope?buildInventoryViews(snapshot.items,snapshot.listings):{stock:[],draft:[],live:[],sold:[]},[snapshot,scope,ready]);
  const allItems=useMemo(()=>ready&&snapshot.scope===scope?buildAllInventoryRows(snapshot.items,views):[],[snapshot,scope,ready,views]);
  const refresh=useCallback(async()=>{setRefreshing(true);try{await reload();}finally{setRefreshing(false);}},[reload]);
@@ -75,18 +83,24 @@ export function useMasterInventory(){
   finally{if(scopeRef.current===actionScope)setSubmitStep(null);}
  },[tenant?.id,scope,submitStep,showAlert,reload]);
  const end=useCallback((item:InventoryViewItem)=>{
-  if(!tenant||!item.listing)return;
+  if(!tenant||!item.listing||!ready||ending.current)return;
   const listing=item.listing,actionScope=scope;
-  showAlert('End Listing',`Remove "${item.canonical_title.slice(0,40)}" from eBay?`,[{text:'Cancel',style:'cancel'},{text:'End Listing',style:'destructive',onPress:async()=>{
-   const result=await endListing(listing.id,item.id,tenant.id,listing.externalListingId);if(scopeRef.current!==actionScope)return;
-   if(result.error){showAlert('End Failed',result.error);return;}setActiveTab('stock');await reload();
+  showAlert('End listing on eBay?',`End “${item.canonical_title.slice(0,60)}” on eBay? The item and its photographs stay in inventory. After confirmation, use Delete item in In Stock if you also want to remove it from SWISH.`,[{text:'Cancel',style:'cancel'},{text:'End on eBay',style:'destructive',onPress:async()=>{
+   if(!alive.current||!readyRef.current||scopeRef.current!==actionScope||ending.current)return;
+   ending.current=true;setEndingItemId(item.id);
+   try{
+    const result=await endListing(listing.id,item.id,tenant.id,listing.externalListingId);if(!alive.current||scopeRef.current!==actionScope)return;
+    triggerInventoryReload();
+    if(result.error){showAlert('End not confirmed',result.error);await reload();return;}
+    setActiveTab('stock');await reload();
+   }finally{ending.current=false;if(alive.current&&scopeRef.current===actionScope)setEndingItemId(null);}
   }}]);
- },[tenant?.id,scope,showAlert,reload]);
+ },[tenant?.id,scope,ready,showAlert,reload,triggerInventoryReload]);
  const syncSold=useCallback(async()=>{
   if(!tenant||syncing)return;setSyncing(true);
   try{const result=await syncInventoryOrders(tenant.id,nicheId);if(scopeRef.current!==scope)return;
    if(result.error)showAlert('Order Sync Incomplete',result.error);else showAlert('Order Sync Complete',`${result.imported} new orders imported.`);await reload();
   }finally{if(scopeRef.current===scope)setSyncing(false);}
  },[tenant?.id,nicheId,scope,syncing,showAlert,reload]);
- return {nicheId,views,counts,allItems,totalCount,unitCount,liveListingCount,activeTab,setActiveTab,reload,refresh,refreshing,submit,end,syncSold,syncing,submitStep,submitTitle,ready,scope,error:tenantError??accessError??(!ready?moduleError:null)??(snapshot.scope===scope?snapshot.error:null),loading:ready&&(snapshot.scope!==scope||loading)};
+ return {nicheId,views,counts,allItems,totalCount,unitCount,liveListingCount,activeTab,setActiveTab,reload,refresh,refreshing,submit,end,removeDeletedItem,endingItemId,syncSold,syncing,submitStep,submitTitle,ready,scope,error:tenantError??accessError??(!ready?moduleError:null)??(snapshot.scope===scope?snapshot.error:null),loading:ready&&(snapshot.scope!==scope||loading)};
 }

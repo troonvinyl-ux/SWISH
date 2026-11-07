@@ -1,0 +1,127 @@
+name: SWISH production acceptance (no release)
+on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'components/**'
+      - 'hooks/**'
+      - 'services/**'
+      - 'shared/**'
+      - 'supabase/**'
+      - 'scripts/**'
+      - 'niche-modules.json'
+      - '.github/workflows/production-acceptance-gate.yml'
+  workflow_dispatch:
+    inputs:
+      base_sha:
+        description: Reviewed full base SHA for preserving existing assertions
+        type: string
+        required: true
+      build_android:
+        description: Build existing unified signed testing APK (not deployment)
+        type: boolean
+        default: false
+      evidence_file:
+        description: Repository-relative operational evidence manifest for protected review
+        type: string
+        default: ''
+      approved_review:
+        description: Approve resolved current-source operational evidence (no deployment)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: swish-production-acceptance-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  automated:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SWISH_NICHE: ''
+      SWISH_MASTER_ADMIN: '0'
+      SWISH_RELEASE_CHANNEL: preview-unified
+      SWISH_TEST_BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base_sha }}
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Retain evidence even when installation fails
+        run: mkdir -p dist/production-acceptance
+      - name: Credential-free evidence and JWT runner regressions
+        run: node --test scripts/production-acceptance-contract.test.mjs scripts/verify-command-jwt.test.mjs
+      - name: Install committed dependencies without rewriting lockfiles
+        run: bash scripts/install-dependencies.sh > dist/production-acceptance/install.log 2>&1
+      - name: Run independent source, unit, Edge and export gates; keep failures
+        if: ${{ always() }}
+        run: node scripts/run-production-acceptance.mjs
+      - name: Retain actual command results and compiler/test logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: swish-production-acceptance-${{ github.sha }}
+          path: dist/production-acceptance
+          if-no-files-found: error
+          retention-days: 14
+  android:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_android }}
+    needs: automated
+    # Native compilation comes after source gates, before runtime release review.
+    # Original package identity, signing, manifest and certificate verifiers are reused.
+    uses: ./.github/workflows/build-swish-unified.yml
+    with:
+      build_android: true
+      build_ios: false
+    secrets: inherit
+  release_review:
+    needs: [automated, android]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    environment: swish-production-acceptance-review
+    env:
+      SWISH_ACCEPTANCE_EVIDENCE_FILE: ${{ inputs.evidence_file }}
+      SWISH_APPROVED_ACCEPTANCE_REVIEW: ${{ github.event_name == 'workflow_dispatch' && inputs.approved_review && '1' || '0' }}
+      SWISH_AUTOMATED_RESULT: ${{ needs.automated.result }}
+      SWISH_ANDROID_RESULT: ${{ needs.android.result }}
+      SWISH_ANDROID_REQUESTED: ${{ inputs.build_android }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Retrieve current-run source evidence for hash verification
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: swish-production-acceptance-${{ github.sha }}
+          path: dist/production-acceptance
+      - name: Source/runtime evidence gate (missing, skipped or failed stays blocked)
+        if: ${{ always() }}
+        run: node scripts/verify-production-release-gate.mjs
+      - name: Retain blocked or eligible verdict; never publish
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: swish-release-verdict-${{ github.sha }}
+          path: dist/production-acceptance/release-gate.json
+          if-no-files-found: error
+# No main-push trigger, merge, OTA, store upload, deployment, stock write, AI or eBay call.
+# Download failure cannot produce acceptance: every referenced hash and every independent
+# source job must pass. An unrequested APK is not native acceptance; evidence is still required.
+# Require these checks in branch protection and protect the review environment explicitly.
