@@ -8,10 +8,12 @@ do $$ declare u uuid; t uuid; r jsonb; expected bigint; observed bigint; section
  perform set_config('request.jwt.claim.sub',u::text,true);
  perform set_config('request.jwt.claims',jsonb_build_object('sub',u,'role','authenticated')::text,true);
  r:=public.swish_command_snapshot(null,true);
- if r->>'verifiedOwner'<>'true' or jsonb_array_length(r->'modules')<>11 then raise exception 'FAIL: owner registry contract'; end if;
- select count(*) into expected from public.items where public.swish_specialist_niche(specialist_id) in ('coins','motocross','bicycles','clothing','trading_cards','antiques','fossils','beauty','tech','surplus_flip','collectibles');
+ if r->>'verifiedOwner'<>'true' or jsonb_array_length(r->'modules')<>12 then raise exception 'FAIL: owner registry contract'; end if;
+ select count(*) into expected from public.items where public.swish_specialist_niche(specialist_id) in ('coins','motocross','bicycles','clothing','trading_cards','antiques','fossils','beauty','tech','surplus_flip','collectibles','tunes_flip');
  select sum((x->>'inventory')::bigint) into observed from jsonb_array_elements(r->'modules') x;
  if expected<>observed then raise exception 'FAIL: canonical inventory total'; end if;
+ if r->'operations'->>'version' is distinct from 'minority-text-v1' or jsonb_array_length(r->'operations'->'niches')<>12 then raise exception 'FAIL: consolidated operational report';end if;
+ if (r->'operations'->'performance'->>'attempts')::integer=0 and r->'operations'->'performance'->>'publicationSuccessPct' is not null then raise exception 'FAIL: fabricated empty-sample rate';end if;
  foreach section in array array['users','memberships','inventory','audit','incidents','sync','configuration'] loop
   r:=public.swish_command_snapshot(null,true,section);
   if r->>'verifiedOwner'<>'true' or jsonb_array_length(r->'rows')>50 then raise exception 'FAIL: bounded inspector'; end if;

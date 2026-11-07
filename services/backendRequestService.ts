@@ -1,5 +1,6 @@
 import { getSupabaseClient } from '@/template';
 import { isBackendUnavailable } from './backendAvailabilityService';
+import { recordPerformance, recordPrevention } from './performanceMonitoringService';
 
 export type ReadPriority = 'access' | 'foreground' | 'background';
 const priorities: Record<ReadPriority, number> = { access: 0, foreground: 1, background: 2 };
@@ -20,6 +21,8 @@ async function readScope(): Promise<string> {
   // Client identity isolates test doubles; production additionally binds the existing auth session.
   return `${clients.get(client)}:${session?.data.session?.access_token ?? 'no-session'}`;
 }
+/** Private in-memory data partition; never log or persist this session key. Not an access grant. */
+export function backendDataScope(): Promise<string> { return readScope(); }
 function pump() {
   queue.sort((a, b) => a.priority - b.priority);
   while (active < 2 && queue.length) {
@@ -39,7 +42,7 @@ export async function shareBackendRequest<T>(key: string, operation: () => Promi
 async function shareScopedRequest<T>(scope: string, key: string, operation: () => Promise<T>): Promise<T> {
   const scopedKey = `${scope}:${key}`;
   const existing = flights.get(scopedKey);
-  if (existing) return existing as Promise<T>;
+  if (existing) { recordPrevention('read_flight'); return existing as Promise<T>; }
   const request = Promise.resolve().then(operation);
   flights.set(scopedKey, request);
   try { return await request; }
@@ -57,12 +60,14 @@ export async function backendRead<T>(key: string, operation: (signal: AbortSigna
     const failure = failures.get(scopedKey);
     if (failure && Date.now() < failure.until) throw new Error(failure.message);
     return new Promise<T>((resolve, reject) => {
+      const measuredStart = Date.now();
       const controller = new AbortController();
       let finished = false;
       let started = false;
       const settle = (error?: Error, value?: T) => {
         if (finished) return;
         finished = true; clearTimeout(timer);
+        recordPerformance('database_read', Date.now() - measuredStart, error ? 'failure' : 'success');
         if (started) active--;
         else { const index = queue.indexOf(job); if (index >= 0) queue.splice(index, 1); }
         if (error) {

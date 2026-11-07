@@ -30,7 +30,7 @@ describe('ten-niche inventory projection contracts',()=>{
     expect(source).toContain(".eq('tenant_id',tenantId)");
     expect(source).toContain(".eq('inventory_tab',tab)");
     expect(source).toContain(".in('specialist_id',specialists)");
-    expect(source).toContain("rpc('swish_inventory_tab_counts'");
+    expect(read('services/canonicalInventoryService.ts')).toContain("rpc('swish_inventory_tab_counts'");
     const sql=read('supabase/migrations/20261105_inventory_pool_query_repair.sql');
     expect(sql).toContain('security invoker');
     expect(sql).toContain('public.swish_can_access_niche(p_tenant_id,p_niche_id)');
@@ -49,7 +49,7 @@ describe('ten-niche inventory projection contracts',()=>{
   test('main inventory view checks paid access before loading items and listings',()=>{
     const source=read('services/inventoryViewService.ts');
     expect(read('services/itemService.ts')).toContain("rpc('swish_can_access_niche'");
-    expect(source).toContain('listItems(tenantId, { specialistIds: specialists })');
-    expect(source).toContain('getAllListings(tenantId, undefined, specialists)');
+    expect(source).toContain('readCanonicalInventoryCounts(tenantId,canonicalNiche)');
+    expect(source).toContain("from('swish_inventory_canonical_rows')");
   });
 });

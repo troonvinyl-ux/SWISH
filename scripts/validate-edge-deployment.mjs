@@ -23,6 +23,7 @@ export function validateEdgeDeployment(root = process.cwd()) {
   }
 
   const mirrors = [
+    ['shared/photoPersistence.ts', 'supabase/functions/_shared/photoPersistence.ts'],
     ['shared/smartStudio.ts', 'supabase/functions/_shared/smartStudio.ts'],
     ['shared/identificationPolicy.ts', 'supabase/functions/_shared/identificationPolicy.ts'],
     ['shared/musicRelease.ts', 'supabase/functions/_shared/musicRelease.ts'],
@@ -31,6 +32,9 @@ export function validateEdgeDeployment(root = process.cwd()) {
     ['shared/specialistIntelligence.ts', 'supabase/functions/_shared/specialistIntelligence.ts'],
     ['shared/ebayMessagePagination.ts', 'supabase/functions/_shared/ebayMessagePagination.ts'],
     ['shared/ebayRevisionContract.ts', 'supabase/functions/_shared/ebayRevisionContract.ts'],
+    ['shared/ebayImportScope.ts', 'supabase/functions/_shared/ebayImportScope.ts'],
+    ['shared/nichePolicy.ts', 'supabase/functions/_shared/nichePolicy.ts'],
+    ['shared/moduleRequestContract.ts', 'supabase/functions/_shared/moduleRequestContract.ts'],
   ];
   for (const [canonical, deployed] of mirrors) {
     const sourcePath = path.resolve(root, canonical);

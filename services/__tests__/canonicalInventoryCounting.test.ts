@@ -86,5 +86,6 @@ test('database contracts retain canonical tables, paid scope and safe identity l
  for(const token of ['security_invoker=true','swish_can_access_niche','pg_advisory_xact_lock','count(distinct id)','stock_total'])expect(migration).toContain(token);
  for(const token of ['swish_current_module','Current tenant and paid module required','cardinality(v_ids)>1','p_existing_item_id','insert into public.items','insert into public.listings'])expect(intake).toContain(token);
  expect(intake).not.toMatch(/delete from|create table|drop table/i);
- const ui=fs.readFileSync('components/feature/CommandPortfolio.tsx','utf8');for(const label of ['Unique physical items','In stock','Draft items','Live on eBay','Sold items','Outstanding orders','Realised sales'])expect(ui).toContain(label);
+ const ui=fs.readFileSync('components/feature/CommandPortfolio.tsx','utf8');for(const label of ['Unique items','Stock','Drafts','Live eBay','Sold','Outstanding orders','Sales · total'])expect(ui).toContain(label);
+ expect(ui).toContain('separate metrics, not additive totals');expect(ui).toContain('t?.inventory');
 });

@@ -5,7 +5,6 @@
 // to Supabase Storage so thumbnails are permanent across all devices.
 
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Platform } from 'react-native';
 import { inspectPhotoQuality, preflightPhotos, type PhotoQuality } from './photoQualityService';
@@ -19,13 +18,13 @@ import { buildPhotoWarningReview, type PhotoWarningReview } from './reidentifica
 import { SpecialistId } from '@/constants/specialists';
 import { EvidenceSource, ConfidenceTier, DispositionDecision } from '@/constants/config';
 import { createItem, getItem, Item } from '@/services/itemService';
-import { decode } from 'base64-arraybuffer';
 import { prepareCapturedImages } from './sharedImagePreparationService';
-import { uploadUntouchedOriginal } from './originalImageService';
+import { persistCapturedItemPhotos, linkPersistedItemPhotos } from './photoPersistenceService';
 import { linkStudioImages } from './smartStudioStorageService';
-import type { StudioResult } from '@/shared/smartStudio';
-const pendingStudioLinks = new Map<string, CapturedImage[]>();
-import { resolveProductionNiche, getProductionNicheSpecialistIds } from '@/services/nicheRouting';
+import { SMART_STUDIO_VERSION, studioImageIsUsable, type StudioResult } from '@/shared/smartStudio';
+
+import { resolveProductionNiche, getProductionNicheSpecialistIds, canonicalProductionSpecialist } from '@/services/nicheRouting';
+import { getNicheWorkflowPolicy } from '@/shared/nichePolicy';
 import { getSpecialistProfile, normalizeSpecialistAnalysis, recordValue, textList, type SpecialistAnalysis } from '@/shared/specialistIntelligence';
 
 export interface CapturedImage {
@@ -96,6 +95,8 @@ export interface QuotaExceededError {
 export interface AIIdentificationResult {
   numistaImageSearch?: NumistaImageSearchResult | null; // Live search results only; never persisted as catalogue cache.
   specialistAnalysis?: SpecialistAnalysis;
+  faceObservations?: Array<{label:string;legends:string[];features:string[];limitations:string[]}>;
+  numismaticReview?: Record<string,any>;
   canonicalTitle: string;
   specialistId: SpecialistId;
   objectType?: string;               // v4: coin|medal|token|jeton|commemorative_piece|banknote|jewellery|replica_reproduction|unknown
@@ -330,6 +331,7 @@ export async function identifyItemWithAI(
     existingImageUrls?: string[];  // use stored URLs instead of re-uploading
     captureMode?: string;
     allowPhotoWarnings?: boolean; // Explicit user override of advisory checks; never a certification.
+    presentationInParallel?: boolean; // Quick List owns the independent studio flight; identity uses originals only.
   }
 ): Promise<{ result: AIIdentificationResult | null; error: string | null; quotaExceeded?: QuotaExceededError; photoReview?: PhotoWarningReview[] }> {
   try {
@@ -349,7 +351,7 @@ export async function identifyItemWithAI(
     };
     // One shared studio engine for legacy capture callers as well as the premium
     // scanner. A studio failure never triggers/replays identification or changes originals.
-    if (images.length && options?.tenantId && !images.every(image => image.studio)) {
+    if (!options?.presentationInParallel && images.length && options?.tenantId && !images.every(image => image.studio?.version === SMART_STUDIO_VERSION && image.studio.originalUri === image.uri)) {
       const prepared = await prepareCapturedImages(images, { tenantId: options.tenantId, nicheId: resolveProductionNiche(specialistId) ?? undefined });
       prepared.forEach((image,index) => Object.assign(images[index],image));
     }
@@ -444,23 +446,13 @@ export async function identifyItemWithAI(
     // 'curiosities_collectibles' for a bicycle identification request).
     // Rule: if the caller passed a niche-specific specialist and the AI returns
     // a generic specialist, retain the caller's niche specialist.
-    const GENERIC_SPECIALISTS = new Set(['curiosities_collectibles']);
-    const NICHE_SPECIFIC_SPECIALISTS = new Set([
-      'bicycles', 'motocross', 'clothing', 'trainers_sneakers',
-      'coins', 'islamic_silver', 'banknotes', 'gold', 'silver',
-      'pokemon_cards', 'trading_cards', 'stamps', 'vinyl_records',
-      'books', 'retro_games', 'retro_consoles', 'fossils', 'beauty', 'tech', 'surplus_trader', 'collectibles',
-    ]);
+    // Ownership is registry-derived; new specialists cannot fall through a stale hard-coded list.
     const aiSpecialist = id.specialistId as SpecialistId | undefined;
     const callerNiche = resolveProductionNiche(specialistId);
     if (callerNiche && aiSpecialist && !getProductionNicheSpecialistIds(callerNiche).includes(aiSpecialist)) {
       return { result: null, error: 'The returned identification does not match this specialist. Add evidence or request human review; nothing was saved.' };
     }
-    const resolvedSpecialistId: SpecialistId =
-      NICHE_SPECIFIC_SPECIALISTS.has(specialistId) &&
-      (!aiSpecialist || GENERIC_SPECIALISTS.has(aiSpecialist))
-        ? specialistId                            // keep caller's niche specialist
-        : (aiSpecialist ?? specialistId) as SpecialistId; // accept AI's specific value
+    const resolvedSpecialistId = (aiSpecialist ?? specialistId) as SpecialistId;
 
     const requestedNiche = resolveProductionNiche(specialistId);
     if (requestedNiche && !getProductionNicheSpecialistIds(requestedNiche).includes(resolvedSpecialistId)) {
@@ -474,6 +466,8 @@ export async function identifyItemWithAI(
     const specialistAnalysis = profile ? normalizeSpecialistAnalysis(id.specialistAnalysis, profile, Number(id.confidence)) : undefined;
     const result: AIIdentificationResult = {
       numistaImageSearch: data.numistaImageSearch ?? id.numistaImageSearch ?? null,
+      faceObservations: id.faceObservations,
+      numismaticReview: id.numismaticReview ?? id.attributes?._numismatic_review,
       specialistAnalysis,
       canonicalTitle: id.canonicalTitle.trim(),
       specialistId: resolvedSpecialistId,
@@ -539,23 +533,10 @@ export async function uploadItemImages(
   // Legacy normalizeOriginals flag retained for compatibility. It no longer
   // re-encodes documentary originals; callers must opt into conversion separately.
   void normalizeOriginals;
-  const supabase = getSupabaseClient();
-  const urls: string[] = [];
-  const errors: string[] = [];
-  const read = await supabase.from('items').select('tenant_id,specialist_id').eq('id',itemId).maybeSingle();
-  if(read.error || !read.data) return {urls,errors:['Inventory ownership could not be verified for image upload.']};
-  const prepared = await prepareCapturedImages(images,{tenantId:read.data.tenant_id,nicheId:resolveProductionNiche(read.data.specialist_id)??undefined});
-  const linked:CapturedImage[]=[];
-  for (let i = 0; i < prepared.length; i++) {
-    const img = prepared[i];
-    try {
-      const uploaded = await uploadUntouchedOriginal(itemId,img.slotId,img.uri);
-      urls.push(uploaded.url);
-      linked.push({...img,originalStorageUri:uploaded.url,originalByteHash:uploaded.hash});
-    } catch(cause) { errors.push(`Slot ${img.slotLabel}: ${cause instanceof Error ? cause.message : 'Original upload failed.'}`); }
-  }
-  if(linked.length){pendingStudioLinks.set(itemId,linked);if(pendingStudioLinks.size>64)pendingStudioLinks.delete(pendingStudioLinks.keys().next().value!);}
-  return {urls,errors};
+  const read = await getSupabaseClient().from('items').select('tenant_id,specialist_id').eq('id',itemId).maybeSingle();
+  if(read.error || !read.data) return {urls:[],errors:['Inventory ownership could not be verified for image upload.']};
+  const persisted = await persistCapturedItemPhotos(read.data.tenant_id,itemId,images);
+  return {urls:persisted.urls,errors:persisted.errors};
 }
 
 /* Pre-studio upload implementation removed: it re-encoded and upserted originals.
@@ -631,26 +612,7 @@ export async function updateItemMedia(
   permanentUrls: string[],
   expectedUpdatedAt?: string,
 ): Promise<void> {
-  if (!tenantId?.trim() || !itemId?.trim()) throw new Error('Item and tenant are required to save photographs.');
-  if (!Array.isArray(permanentUrls) || permanentUrls.some(url => typeof url !== 'string' || !url.startsWith('https://'))) {
-    throw new Error('Upload original photographs before linking them to inventory.');
-  }
-  const media = [...new Set(permanentUrls)];
-  const supabase = getSupabaseClient();
-  let query = supabase.from('items').update({ media, updated_at: new Date().toISOString() })
-    .eq('id', itemId).eq('tenant_id', tenantId);
-  if (expectedUpdatedAt) query = query.eq('updated_at', expectedUpdatedAt);
-  const { data, error } = await query.select('id').maybeSingle();
-  if (error || !data) {
-    throw new Error(`Photographs were uploaded but could not be linked to inventory: ${error?.message ?? 'Item changed or access was denied. Reload and retry.'}`);
-  }
-  // Do not report success from PATCH alone: re-read the canonical persisted URLs.
-  const readback = await supabase.from('items').select('media').eq('id', itemId).eq('tenant_id', tenantId).maybeSingle();
-  if (readback.error || !readback.data || JSON.stringify(readback.data.media) !== JSON.stringify(media)) {
-    throw new Error('Photo links could not be confirmed after saving. Reload the item before retrying.');
-  }
-  const presentations=pendingStudioLinks.get(itemId);
-  if(presentations){const warning=await linkStudioImages(tenantId,itemId,presentations.filter(image=>media.includes(image.originalStorageUri??'')));if(warning)console.warn('[SWISH] Originals linked; optional studio association requires retry.');else pendingStudioLinks.delete(itemId);}
+  await linkPersistedItemPhotos(tenantId,itemId,permanentUrls,expectedUpdatedAt);
 }
 
 /** Recover already-uploaded original captures for one authorized Antique item.
@@ -706,106 +668,15 @@ export async function saveCoinReferenceImages(
   itemId: string,
   images: CapturedImage[],
 ): Promise<{ urls: Record<string, string>; errors: string[] }> {
-  const supabase = getSupabaseClient();
   const urls: Record<string, string> = {};
   const errors: string[] = [];
-  const studioImages=pendingStudioLinks.get(itemId)??images.filter(image=>image.studio&&image.originalStorageUri);
-  if(studioImages.length){const error=await linkStudioImages(tenantId,itemId,studioImages);if(error)return {urls,errors:[error]};for(const image of studioImages)if(image.studio?.enhancedUri)urls[image.slotId]=image.studio.enhancedUri;pendingStudioLinks.delete(itemId);return {urls,errors};}
-  // Legacy rendered aids are retained for backward compatibility, but never
-  // promoted into the new source-protected inventory thumbnail role.
-  const referenceImages = images.filter(image => Boolean(image.enhancedUri)&&!image.studio);
-  if (referenceImages.length === 0) return { urls, errors };
-
-  // Verify tenant ownership before uploading anything to storage.
-  const { data: item, error: readError } = await supabase
-    .from('items')
-    .select('attributes')
-    .eq('id', itemId)
-    .eq('tenant_id', tenantId)
-    .maybeSingle();
-  if (readError || !item) {
-    return { urls, errors: ['Inventory item could not be verified for rendered references.'] };
-  }
-
-  for (const image of referenceImages) {
-    const source = image.enhancedUri!;
-
-    try {
-      let bytes: Uint8Array;
-      let contentType = 'image/jpeg';
-
-      if (source.startsWith('data:image/')) {
-        const match = source.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/i);
-        if (!match) throw new Error('Unsupported rendered image format.');
-        contentType = match[1].toLowerCase();
-        const binary = atob(match[2]);
-        bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      } else if (/^https:\/\//i.test(source)) {
-        const response = await fetch(source);
-        if (!response.ok) throw new Error('Rendered image download failed.');
-        const receivedType = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
-        if (!receivedType || !/^image\/(?:jpeg|png|webp)$/.test(receivedType)) {
-          throw new Error('Rendered image is not a supported image format.');
-        }
-        contentType = receivedType;
-        bytes = new Uint8Array(await response.arrayBuffer());
-      } else {
-        const base64 = await FileSystem.readAsStringAsync(source, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        const binary = atob(base64);
-        bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      }
-
-      if (bytes.byteLength === 0) throw new Error('Rendered image is empty.');
-      const extension = contentType === 'image/png' ? 'png' : contentType === 'image/webp' ? 'webp' : 'jpg';
-      const safeSlot = image.slotId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40) || 'reference';
-      const fileName = `${itemId}/references/${safeSlot}.${extension}`;
-      const uploadBuffer = new ArrayBuffer(bytes.byteLength);
-      new Uint8Array(uploadBuffer).set(bytes);
-      const uploadBlob = new Blob([uploadBuffer], { type: contentType });
-      const { error: uploadError } = await supabase.storage
-        .from(ITEM_IMAGES_BUCKET)
-        .upload(fileName, Platform.OS === 'web' ? uploadBlob : uploadBuffer, { contentType, upsert: true });
-      if (uploadError) throw new Error('Rendered image upload failed.');
-
-      const { data } = supabase.storage.from(ITEM_IMAGES_BUCKET).getPublicUrl(fileName);
-      if (data?.publicUrl) urls[image.slotId] = data.publicUrl;
-      else errors.push(`Reference image (${safeSlot}) could not be saved.`);
-    } catch {
-      errors.push(`Reference image (${image.slotId}) could not be saved.`);
-    }
-  }
-
-  if (Object.keys(urls).length > 0) {
-    const attributes = item.attributes && typeof item.attributes === 'object' && !Array.isArray(item.attributes)
-      ? item.attributes as Record<string, unknown>
-      : {};
-    const existing = attributes._coin_reference_images &&
-      typeof attributes._coin_reference_images === 'object' &&
-      !Array.isArray(attributes._coin_reference_images)
-      ? attributes._coin_reference_images as Record<string, string>
-      : {};
-    // The legacy key remains the canonical persisted reference map. Shared scanners
-    // read this same map, so no second metadata field or schema migration is needed.
-    const { error: updateError } = await supabase
-      .from('items')
-      .update({
-        attributes: { ...attributes, _coin_reference_images: { ...existing, ...urls } },
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', itemId)
-      .eq('tenant_id', tenantId);
-
-    if (updateError) {
-      errors.push('Rendered references uploaded but could not be linked to this inventory item.');
-      return { urls: {}, errors };
-    }
-  }
-
-  return { urls, errors };
+  const studioImages=images.filter(image=>image.originalStorageUri&&studioImageIsUsable(image.studio));
+  if(!studioImages.length)return {urls,errors};
+  // Legacy generative references are no longer uploaded. Only the shared provider cutout is linked.
+  const failure=await linkStudioImages(tenantId,itemId,studioImages);
+  if(failure)return {urls,errors:[failure]};
+  for(const image of studioImages)if(image.studio?.enhancedUri)urls[image.slotId]=image.studio.enhancedUri;
+  return {urls,errors};
 }
 
 // Backwards-compatible name for older Coin Flipper callers.
@@ -816,6 +687,8 @@ export async function saveIdentifiedItem(
   result: AIIdentificationResult,
   options: {
     acquisitionId?: string;
+    canonicalItemId?: string;
+    captureSessionId?: string;
     mediaUris?: string[];
     acquiredCost?: number;
     quantity?: number;
@@ -839,9 +712,8 @@ export async function saveIdentifiedItem(
   // Canonicalise legacy/model-generated specialist aliases before persistence.
   // Threads Flip's canonical niche ID is 'clothing'; older records may still use
   // 'clothing_specialist' and are handled as a read-only compatibility alias.
-  const canonicalSpecialistId = (result.specialistId as string) === 'clothing_specialist'
-    ? 'clothing'
-    : result.specialistId;
+  const canonicalSpecialistId = canonicalProductionSpecialist(result.specialistId);
+  if (!canonicalSpecialistId) return { item: null, error: 'A registered inventory specialist is required. Nothing was saved.' };
 
   const niche = resolveProductionNiche(canonicalSpecialistId);
   const profile = niche ? getSpecialistProfile(niche) : null;
@@ -852,6 +724,7 @@ export async function saveIdentifiedItem(
     }
   }
   return createItem(tenantId, {
+    id: options.canonicalItemId,
     canonicalTitle: result.canonicalTitle,
     specialistId: canonicalSpecialistId as SpecialistId,
     // Catalogue values are proposed metadata; measured fields only use values
@@ -872,7 +745,7 @@ export async function saveIdentifiedItem(
     // v4: status based on objectType + identificationState + confidence
     status: (result.identificationState === 'observation_only' || result.confidence < 0.30)
       ? 'review_required'
-      : result.confidence >= 0.80 ? 'identified' : 'review_required',
+      : result.confidence >= (getNicheWorkflowPolicy(niche??'')?.inventoryReviewMinimum??1) ? 'identified' : 'review_required',
     dispositionDecision: result.dispositionDecision,
     condition: result.condition,
     conditionGrade: result.conditionGrade,
@@ -889,6 +762,7 @@ export async function saveIdentifiedItem(
     saleProb30d: 0,
     attributes: {
       ...attrs,
+      ...(options.captureSessionId ? { _capture_session_id: options.captureSessionId } : {}),
       _identification_evidence: { supporting: result.evidenceSupporting, contradictory: result.evidenceContradictory, missing: result.missingInformation, candidates: result.candidateIdentification, recordedAt: new Date().toISOString(), source: 'ai_proposal' },
       ...(result.specialistAnalysis ? { _specialist_analysis: result.specialistAnalysis } : {}),
       ...(resolveProductionNiche(canonicalSpecialistId) ? { niche_id: resolveProductionNiche(canonicalSpecialistId) } : {}),

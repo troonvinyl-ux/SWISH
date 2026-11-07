@@ -1,0 +1,40 @@
+name: SWISH backend performance regressions
+on:
+  pull_request:
+    paths: ['services/**','hooks/**','app/_layout.tsx','supabase/**','.github/workflows/backend-performance-verification.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: backend-performance-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9.15.9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: denoland/setup-deno@v2
+        with: { deno-version: v2.x }
+      - run: bash scripts/install-dependencies.sh
+      - run: mkdir -p verification-output && git rev-parse HEAD > verification-output/source-sha.txt
+      - name: TypeScript
+        run: npx tsc --noEmit > verification-output/typescript.txt 2>&1
+      - name: Executable performance and preservation regressions
+        if: ${{ !cancelled() }}
+        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/backendPerformance.test.ts services/__tests__/backendPoolRecovery.test.ts services/__tests__/photoCarryForwardIntegration.test.ts services/__tests__/canonicalInventoryCounting.test.ts services/__tests__/identificationReliability.test.ts services/__tests__/listingPublication.test.ts --json --outputFile=verification-output/jest.json
+      - name: All Edge typechecks and deployment boundaries
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          node scripts/validate-edge-deployment.mjs > verification-output/edge-boundaries.txt 2>&1
+          mapfile -t functions < <(find supabase/functions -mindepth 2 -maxdepth 2 -name index.ts | sort)
+          deno check "${functions[@]}" > verification-output/edge-types.txt 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: backend-performance-evidence, path: verification-output/ }
+# No provider calls, automatic deployment, production writes or device-performance certification.

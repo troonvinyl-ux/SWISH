@@ -78,14 +78,14 @@ describe('Read governance and actual concurrency',()=>{
 describe('Authorization and all eleven canonical inventories',()=>{
   test.each(PRODUCTION_NICHE_IDS)('%s performs one authorization check and scoped paginated item reads',async niche=>{
     const q:any={};for(const method of ['select','eq','in','order','range'])q[method]=jest.fn(()=>q);
-    q.abortSignal=jest.fn().mockResolvedValue({data:[],error:null});client.from.mockReturnValue(q);client.rpc.mockReturnValue(result(true));
+    q.abortSignal=jest.fn().mockResolvedValue({data:[],error:null});client.from.mockReturnValue(q);client.rpc.mockReturnValue(result({total:0,units:0,stock:0,draft:0,live:0,sold:0,archived:0,live_listings:0}));
     const loaded=await loadInventoryView('tenant',niche);
     expect(loaded.error).toBeNull();expect(client.rpc).toHaveBeenCalledTimes(1);
-    expect(client.rpc).toHaveBeenCalledWith('swish_can_access_niche',{p_tenant_id:'tenant',p_niche_id:niche});
+    expect(client.rpc).toHaveBeenCalledWith('swish_inventory_tab_counts',{p_tenant_id:'tenant',p_niche_id:niche});
     expect(q.eq).toHaveBeenCalledWith('tenant_id','tenant');expect(q.in).toHaveBeenCalledWith('specialist_id',getProductionNicheSpecialistIds(niche));
   });
   test('a confirmed denial prevents both records and relationships loading',async()=>{
-    client.rpc.mockReturnValue(result(false));
+    client.rpc.mockReturnValue({abortSignal:jest.fn().mockResolvedValue({data:null,error:{message:'Inventory niche access denied',code:'42501'},status:403})});
     expect((await loadInventoryView('tenant','coins')).error).not.toBeNull();expect(client.from).not.toHaveBeenCalled();
   });
   test.each(['[401] Invalid or expired authentication','[403] Access denied','42501: Inventory niche access denied','Authenticated session changed during backend read.'])('%s is not treated as an outage',message=>expect(isBackendUnavailable(message)).toBe(false));
