@@ -43,13 +43,19 @@ begin
   v_definition := pg_get_functiondef(
     'public.swish_cache_verified_niches(uuid,timestamp with time zone,jsonb)'::regprocedure
   );
-  v_updated := replace(v_definition, 'jsonb_array_length(p_grants)>11',
+  -- Live 2026-11-08 schema probe found the original ten-grant cache, not eleven.
+  -- Support both reviewed legacy bounds; retain every other guard/lock/expiry rule.
+  v_updated := replace(v_definition, 'jsonb_array_length(p_grants)>10',
                                     'jsonb_array_length(p_grants)>12');
+  v_updated := replace(v_updated, 'jsonb_array_length(p_grants) > 10',
+                                'jsonb_array_length(p_grants) > 12');
+  v_updated := replace(v_updated, 'jsonb_array_length(p_grants)>11',
+                                'jsonb_array_length(p_grants)>12');
   v_updated := replace(v_updated, 'jsonb_array_length(p_grants) > 11',
                                     'jsonb_array_length(p_grants) > 12');
   if v_updated = v_definition and position('jsonb_array_length(p_grants)>12' in v_definition) = 0
      and position('jsonb_array_length(p_grants) > 12' in v_definition) = 0 then
-    raise exception 'Entitlement cache limit did not match the reviewed 11-niche definition; inspect before applying';
+    raise exception 'Entitlement cache limit did not match the reviewed 10/11/12-niche definition; inspect before applying';
   end if;
   if v_updated <> v_definition then execute v_updated; end if;
 

@@ -12,19 +12,34 @@ function normalized(value:unknown):unknown {
  return value;
 }
 function sameJson(left:unknown,right:unknown):boolean{return JSON.stringify(normalized(left))===JSON.stringify(normalized(right));}
+/** Compare persisted provenance, not runtime transport/cache fields returned by old clients. */
+export function studioAssociationMatches(actual:unknown,expected:StudioResult):boolean {
+ const saved=actual as StudioResult|undefined;
+ if(!saved||!studioImageIsUsable(saved))return false;
+ return ['version','status','originalUri','enhancedUri','maskUri','sourceHash','cacheKey'].every(key=>
+  (saved[key as keyof StudioResult]??null)===(expected[key as keyof StudioResult]??null))
+  && sameJson(saved.quality,expected.quality);
+}
+function storedStudioResult(result:StudioResult,originalUri:string):StudioResult {
+ // Explicit JSON shape: no cachedAt, cached, enhancedImage or other response-only metadata.
+ return JSON.parse(JSON.stringify({version:result.version,status:result.status,originalUri,
+  enhancedUri:result.enhancedUri,maskUri:result.maskUri,sourceHash:result.sourceHash,cacheKey:result.cacheKey,
+  confidence:result.confidence,warnings:result.warnings,quality:result.quality,
+  ...(result.detection?{detection:result.detection}:{}),...(result.transform?{transform:result.transform}:{})}));
+}
 export async function linkStudioImages(tenantId:string,itemId:string,images:readonly CapturedImage[]):Promise<string|null> {
  const entries=images.filter(image=>studioImageIsUsable(image.studio)&&image.originalStorageUri);
  if(!entries.length)return null;
  const client=getSupabaseClient();const read=await client.from('items').select('attributes,media,updated_at').eq('id',itemId).eq('tenant_id',tenantId).maybeSingle();
  if(read.error||!read.data?.updated_at)return 'Studio image ownership/version could not be verified.';
  const linked:Record<string,StudioResult>={...read.data.attributes?._smart_studio_images};
- for(const image of entries){if(!(read.data.media??[]).includes(image.originalStorageUri))return 'Link original photographs before studio presentations.';linked[image.slotId]={...image.studio!,originalUri:image.originalStorageUri!};}
+ for(const image of entries){if(!(read.data.media??[]).includes(image.originalStorageUri))return 'Link original photographs before studio presentations.';linked[image.slotId]=storedStudioResult(image.studio!,image.originalStorageUri!);}
  if(sameJson(read.data.attributes?._smart_studio_images,linked))return null;
  const attributes={...read.data.attributes,_smart_studio_images:linked};
  const save=await client.from('items').update({attributes}).eq('id',itemId).eq('tenant_id',tenantId).eq('updated_at',read.data.updated_at).select('id').maybeSingle();
  if(save.error||!save.data)return 'Inventory changed while linking studio images. Reload before retrying; originals remain saved.';
  const check=await client.from('items').select('attributes').eq('id',itemId).eq('tenant_id',tenantId).maybeSingle();
- if(check.error||!sameJson(check.data?.attributes?._smart_studio_images,linked))return 'Studio association readback could not be confirmed.';
+ if(check.error||!entries.every(image=>studioAssociationMatches(check.data?.attributes?._smart_studio_images?.[image.slotId],linked[image.slotId])))return 'Studio association readback could not be confirmed.';
  return null;
 }
 
@@ -45,7 +60,9 @@ export async function saveExistingStudioImage(options:{tenantId:string;nicheId:s
   if(!row||row.tenant_id!==tenantId||!specialists.includes(row.specialist_id)||!row.updated_at)throw new Error('Item ownership/version could not be verified.');
   if(!Array.isArray(row.media)||!row.media.includes(originalUri))throw new Error('The original photo is no longer attached to this item. Reload before retrying.');
   const entries=row.attributes?._smart_studio_images;
-  const linked={...(entries&&typeof entries==='object'&&!Array.isArray(entries)?entries:{}),[slotId]:{...studio,originalUri}};
+  const linked={...(entries&&typeof entries==='object'&&!Array.isArray(entries)?entries:{}),[slotId]:storedStudioResult(studio,originalUri)};
+  // Reuse a verified persisted cutout even if a previous client reported a transport-shape mismatch.
+  if(studioAssociationMatches(entries?.[slotId],linked[slotId]))return {item:mapItem(row),error:null};
   // Merge fresh attributes, not the screen snapshot. CAS prevents overwriting newer edits.
   const write=await client.from('items').update({attributes:{...row.attributes,_smart_studio_images:linked}}).eq('id',itemId).eq('tenant_id',tenantId).in('specialist_id',specialists).eq('updated_at',row.updated_at).select('*').maybeSingle().abortSignal(controller.signal);
   if(write.error)throw new Error(write.error.message);check();
@@ -53,7 +70,7 @@ export async function saveExistingStudioImage(options:{tenantId:string;nicheId:s
   if(!sameJson(write.data.media,row.media))throw new Error('Original photo order could not be confirmed after saving. Reload before retrying.');
   const verify=await client.from('items').select('*').eq('id',itemId).eq('tenant_id',tenantId).in('specialist_id',specialists).maybeSingle().abortSignal(controller.signal);
   if(verify.error)throw new Error(verify.error.message);check();
-  if(!verify.data||!verify.data.media?.includes(originalUri)||!sameJson(verify.data.attributes?._smart_studio_images?.[slotId],linked[slotId]))throw new Error('Studio association readback could not be confirmed. Reload before retrying.');
+  if(!verify.data||!verify.data.media?.includes(originalUri)||!studioAssociationMatches(verify.data.attributes?._smart_studio_images?.[slotId],linked[slotId]))throw new Error('Studio association readback could not be confirmed. Reload before retrying.');
   return {item:mapItem(verify.data),error:null};
  }catch(cause){return {item:null,error:cause instanceof Error?cause.message:'Studio association failed; original retained.'};}
  finally{clearTimeout(timer);signal.removeEventListener('abort',cancel);}

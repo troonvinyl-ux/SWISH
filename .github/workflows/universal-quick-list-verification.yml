@@ -2,10 +2,10 @@ name: Universal Quick List regression verification
 on:
   workflow_dispatch:
   pull_request:
-    paths: ['app/**', 'services/**', 'hooks/**', 'components/**', 'shared/**', 'contexts/**', 'constants/**', 'niche-modules.json', '.github/workflows/universal-quick-list-verification.yml']
+    paths: ['app/**', 'services/**', 'hooks/**', 'components/**', 'shared/**', 'contexts/**', 'constants/**', 'niche-modules.json', 'supabase/functions/swish-ebay-browse/**', 'supabase/functions/_shared/quickListBarcode.ts', 'supabase/functions/_shared/aiBarcodeLookup.ts', 'supabase/functions/_shared/nichePolicy.ts', 'supabase/tests/quick_list_barcode.test.ts', 'supabase/tests/ai_barcode_lookup.test.ts', '.github/workflows/universal-quick-list-verification.yml']
   push:
     branches: [main]
-    paths: ['app/**', 'services/**', 'hooks/**', 'components/**', 'shared/**', 'contexts/**']
+    paths: ['app/**', 'services/**', 'hooks/**', 'components/**', 'shared/**', 'contexts/**', 'supabase/functions/swish-ebay-browse/**', 'supabase/functions/_shared/quickListBarcode.ts', 'supabase/functions/_shared/aiBarcodeLookup.ts', 'supabase/functions/_shared/nichePolicy.ts', 'supabase/tests/quick_list_barcode.test.ts', 'supabase/tests/ai_barcode_lookup.test.ts']
 permissions:
   contents: read
 jobs:
@@ -24,7 +24,13 @@ jobs:
         run: npx tsc --noEmit > verification-output/typescript.txt 2>&1
       - name: Universal policy, canonical photos and publication guards (mocked)
         if: ${{ !cancelled() }}
-        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/listingAutofill.test.ts services/__tests__/shortListingFlow.test.ts services/__tests__/universalQuickList.test.ts services/__tests__/quickListPreparation.test.ts services/__tests__/quickListContracts.test.ts services/__tests__/quickListLiveEvidence.test.ts services/__tests__/quickListSpecialistScope.test.ts services/__tests__/photoCarryForwardIntegration.test.ts services/__tests__/photoPipelineBoundary.test.ts --json --outputFile=verification-output/universal-quick-list.json
+        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/listingAutofill.test.ts services/__tests__/shortListingFlow.test.ts services/__tests__/universalQuickList.test.ts services/__tests__/quickListPreparation.test.ts services/__tests__/quickListContracts.test.ts services/__tests__/barcodeLookupData.test.ts services/__tests__/aiBarcodeFlow.test.ts services/__tests__/barcodeScannerVisibility.test.ts services/__tests__/quickListLiveEvidence.test.ts services/__tests__/quickListSpecialistScope.test.ts services/__tests__/photoCarryForwardIntegration.test.ts services/__tests__/photoPipelineBoundary.test.ts services/__tests__/sharedFullscreenCamera.test.ts --json --outputFile=verification-output/universal-quick-list.json
+      - uses: denoland/setup-deno@v2
+        if: ${{ !cancelled() }}
+        with: {deno-version: v2.x}
+      - name: Barcode provider response contracts (mocked, no provider calls)
+        if: ${{ !cancelled() }}
+        run: deno test supabase/tests/quick_list_barcode.test.ts supabase/tests/ai_barcode_lookup.test.ts > verification-output/barcode-provider.txt 2>&1
       - name: Edge dependency validation
         if: ${{ !cancelled() }}
         run: node scripts/validate-edge-deployment.mjs

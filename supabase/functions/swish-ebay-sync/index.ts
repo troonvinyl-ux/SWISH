@@ -1,5 +1,5 @@
-// Shared eBay sync: current GetItem observations, canonical lifecycle command,
-// original media preservation and no write from an incomplete marketplace snapshot.
+// Shared eBay sync: authoritative GetItem observations, bounded Hub batches,
+// canonical lifecycle commands and unchanged inventory on provider restrictions.
 import { serveModule } from '../_shared/moduleScope.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
@@ -9,14 +9,15 @@ import { parseLiveContent } from '../_shared/ebayLiveContent.ts';
 import { parseEbayListingStatus } from '../_shared/listingStatus.ts';
 import { readListingTraffic, type ListingTraffic } from '../_shared/ebayTraffic.ts';
 import { mapSyncReads, syncPatchChanged } from '../_shared/syncConcurrency.ts';
-import { buildSellingRequest, sellingSectionXml, sellingPagination, tradingDiagnostic, type SellingSection } from '../_shared/ebaySellingRequest.ts';
+import { tradingDiagnostic } from '../_shared/ebaySellingRequest.ts';
+import { isRemovedPolicyListing, SYNC_BATCH_SIZE, type SyncListingIssue } from '../_shared/ebaySyncPolicy.ts';
 const TRADING_API='https://api.ebay.com/ws/api.dll';
 const TOKEN_URL='https://api.ebay.com/identity/v1/oauth2/token';
+const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...corsHeaders,'Content-Type':'application/json'}});
 const adminClient=()=>createClient(Deno.env.get('SUPABASE_URL')??'',Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')??'',{auth:{persistSession:false}});
 const tag=(xml:string,name:string)=>xml.match(new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${name}>`,'i'))?.[1]?.replace(/^<!\[CDATA\[([\s\S]*)\]\]>$/,'$1').trim()??'';
 const decode=(value:string)=>value.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'");
-const clean=(value:string)=>decode(value).replace(/<style[^>]*>[\s\S]*?<\/style>/gi,' ').replace(/<script[^>]*>[\s\S]*?<\/script>/gi,' ').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,8000);
 const authError=(xml:string)=>/hardExpired|IAF_INVALID_TOKEN|IAF_EXPIRED|<ErrorCode>(931|932|16110|16111)</i.test(xml);
 function safeFailure(cause:unknown):string{
  const message=cause instanceof Error?cause.message:'';
@@ -57,14 +58,6 @@ async function trading(xml:string,call:string,token:string,clientId:string){
  if(!response.ok||!['Success','Warning'].includes(tag(text,'Ack')))throw new Error(tradingDiagnostic(text,response.status));
  return text;
 }
-async function fetchSellingPage(token:string,clientId:string,section:SellingSection,page:number){
- const xml=await trading(buildSellingRequest(section,page,200),'GetMyeBaySelling',token,clientId);
- const pagination=sellingPagination(xml,section);
- const body=sellingSectionXml(xml,section);
- const ids=[...body.matchAll(/<ItemID>\s*(\d+)\s*<\/ItemID>/g)].map(match=>match[1]);
- if(!ids.length&&page<pagination.pages)throw new Error('Incomplete selling page; statuses preserved');
- return {ids,pages:pagination.pages};
-}
 interface Observation{externalId:string;title:string;description:string;status:'active'|'sold'|'ended';quantity:number;sold:number;price:number;shipping:number;categoryId:string;categoryName:string;condition:string;conditionNotes:string;conditionId:string;sku:string;watchers:number;views:number|null;traffic?:ListingTraffic;photos:string[];specifics:Array<{name:string;value:string}>;endedAt:string|null}
 async function getItemObservation(id:string,token:string,clientId:string):Promise<Observation>{
  if(!/^\d+$/.test(id))throw new Error('GetItem external identity invalid');
@@ -74,8 +67,7 @@ async function getItemObservation(id:string,token:string,clientId:string):Promis
  const selling=tag(body,'SellingStatus');const state=tag(selling,'ListingStatus').toLowerCase();
  const quantity=Number(tag(body,'Quantity'));const sold=Number(tag(selling,'QuantitySold'));
  if(!['active','completed','ended'].includes(state)||!tag(selling,'QuantitySold')||!Number.isInteger(quantity)||quantity<1||!Number.isInteger(sold)||sold<0)throw new Error('GetItem availability incomplete; statuses preserved');
- // Reuse the status endpoint's quantity policy: a partially sold ended listing
- // still has canonical units and must not mark the whole item sold.
+ // Partially sold ended listings must not mark the entire physical item sold.
  const status=parseEbayListingStatus(xml,id).status;
  const specifics=[...tag(body,'ItemSpecifics').matchAll(/<NameValueList(?:\s[^>]*)?>([\s\S]*?)<\/NameValueList>/g)].map(match=>({name:decode(tag(match[1],'Name')),value:decode(tag(match[1],'Value'))})).filter(row=>row.name&&row.value);
  const photos=[...new Set([...body.matchAll(/<PictureURL>\s*([^<]+)\s*<\/PictureURL>/g)].map(match=>decode(match[1]).trim().replace(/^http:/,'https:')))];
@@ -115,7 +107,6 @@ async function syncItemToSwish(client:ReturnType<typeof adminClient>,tenantId:st
   const listingSaved=await client.from('listings').update(listingPatch).eq('id',listing.id).eq('tenant_id',tenantId).eq('external_listing_id',ebay.externalId).eq('updated_at',listing.updated_at).select('id').abortSignal(AbortSignal.timeout(10000)).maybeSingle();
   if(listingSaved.error||!listingSaved.data)throw new Error('SWISH listing metadata save not confirmed');
  }else skippedWrites++;
- // The server-only canonical RPC atomically reconciles listing + inventory and audit evidence.
  const status=await client.rpc('swish_apply_ebay_listing_status',{p_tenant_id:tenantId,p_listing_id:listing.id,p_external_id:ebay.externalId,p_status:ebay.status,p_quantity:ebay.quantity,p_quantity_sold:ebay.sold,p_ended_at:ebay.endedAt}).abortSignal(AbortSignal.timeout(10000));
  if(status.error)throw new Error('SWISH canonical listing status could not be persisted');
  const persisted=await client.from('listings').select('status,external_listing_id,items!inner(status,media,attributes)').eq('id',listing.id).eq('tenant_id',tenantId).abortSignal(AbortSignal.timeout(10000)).maybeSingle();
@@ -129,9 +120,12 @@ serveModule(async(req:Request)=>{
  const body=await req.json().catch(()=>null);const {tenantId,nicheId,mode='full',itemIds}=body??{};
  const products=registry.products as Record<string,{specialists:string[];legacySpecialists:string[]}>;
  if(!tenantId||!products[nicheId]||!['full','data_only','refresh_token_only'].includes(mode))return json({success:false,error:'Valid authorized tenant and niche required'},400);
- const client=adminClient();const started=Date.now();
- const supplied=body?.syncRequestId;
- if(supplied!=null&&(typeof supplied!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(supplied)))return json({success:false,error:'Valid sync request identity required'},400);
+ const batched=body?.batch===true;const afterListingId=body?.afterListingId;const previousIssues=body?.previousIssues===true;
+ if(body?.previousIssues!=null&&typeof body.previousIssues!=='boolean')return json({success:false,error:'Valid batch history required'},400);
+ if(afterListingId!=null&&(!batched||typeof afterListingId!=='string'||!uuid.test(afterListingId)))return json({success:false,error:'Valid sync continuation required'},400);
+ if(itemIds!=null&&(!Array.isArray(itemIds)||!itemIds.length||itemIds.length>200||itemIds.some((id:unknown)=>typeof id!=='string'||!uuid.test(id))))return json({success:false,error:'Valid bounded item selection required'},400);
+ const client=adminClient();const started=Date.now();const supplied=body?.syncRequestId;
+ if(supplied!=null&&(typeof supplied!=='string'||!uuid.test(supplied)))return json({success:false,error:'Valid sync request identity required'},400);
  const runId=supplied??crypto.randomUUID();
  const lease=await client.rpc('swish_claim_ebay_sync',{p_tenant_id:tenantId,p_run_id:runId,p_niche_id:nicheId,p_mode:mode}).abortSignal(AbortSignal.timeout(5000));
  if(lease.error)return json({success:false,error:'SWISH sync overlap check unavailable; no eBay request started'},503);
@@ -140,8 +134,8 @@ serveModule(async(req:Request)=>{
  const metrics:Record<string,number>={tokenMs:0,scopedReadMs:0,sellingMs:0,observationMs:0,reconciliationMs:0,getItemCalls:0,sellingPageCalls:0,metadataWritesSkipped:0,trafficMs:0};
  const finishResponse=async(payload:Record<string,unknown>,httpStatus=200)=>{
   const response={...payload,syncRequestId:runId,performance:{...metrics,totalMs:Date.now()-started}};
-  const saved=await client.from('ebay_sync_log').update({status:payload.success===true?'completed':'failed',completed_at:new Date().toISOString(),records_fetched:Number(payload.processed??0),records_updated:Number(payload.updated??0),error_message:typeof payload.error==='string'?payload.error:null,metadata:{nicheId,mode,leaseSeconds:180,result:response}}).eq('id',runId).eq('tenant_id',tenantId).eq('status','running').select('id').abortSignal(AbortSignal.timeout(2000)).maybeSingle();
-  if(saved.error||!saved.data)return json({...response,success:false,partial:true,error:'SWISH sync outcome logging was not confirmed. Reconciled items are retained; reload before retrying.'},503);
+  const saved=await client.from('ebay_sync_log').update({status:payload.success===true?'completed':'failed',completed_at:new Date().toISOString(),records_fetched:Number(payload.processed??0),records_updated:Number(payload.updated??0),error_message:typeof payload.error==='string'?payload.error:null,metadata:{nicheId,mode,leaseSeconds:180,batch:batched,afterListingId:afterListingId??null,previousIssues,result:response}}).eq('id',runId).eq('tenant_id',tenantId).eq('status','running').select('id').abortSignal(AbortSignal.timeout(2000)).maybeSingle();
+  if(saved.error||!saved.data)return json({...response,success:false,batchComplete:false,partial:true,error:'SWISH sync outcome logging was not confirmed. Reconciled items are retained; reload before retrying.'},503);
   return json(response,httpStatus);
  };
  try{
@@ -149,42 +143,33 @@ serveModule(async(req:Request)=>{
   const {token,clientId,hasAnalyticsScope}=await getValidToken(client,tenantId);metrics.tokenMs=Date.now()-stageStart;
   if(mode==='refresh_token_only')return await finishResponse({success:true,message:'Existing eBay token is valid'});
   const specialists=[...products[nicheId].specialists,...products[nicheId].legacySpecialists];
-  stageStart=Date.now();
-  const listings:any[]=[];
+  stageStart=Date.now();const listings:any[]=[];let nextAfterListingId:string|null=null;
   for(let offset=0;offset<5000;offset+=200){
    let query=client.from('listings').select('id,item_id,external_listing_id,title,description,price,shipping_cost,watchers,views,category_id,updated_at,items!inner(*)').eq('tenant_id',tenantId).eq('items.tenant_id',tenantId).eq('marketplace_id','ebay').in('items.specialist_id',specialists).not('external_listing_id','is',null).neq('external_listing_id','').order('id');
    if(Array.isArray(itemIds))query=query.in('item_id',itemIds);
-   const links=await query.range(offset,offset+199).abortSignal(AbortSignal.timeout(10000));
+   if(afterListingId)query=query.gt('id',afterListingId);
+   const links=await query.range(offset,offset+(batched?SYNC_BATCH_SIZE:199)).abortSignal(AbortSignal.timeout(10000));
    if(links.error)throw new Error('SWISH scoped listings could not be loaded');
-   listings.push(...(links.data??[]));if((links.data?.length??0)<200)break;
+   const rows=links.data??[];
+   if(batched){listings.push(...rows.slice(0,SYNC_BATCH_SIZE));nextAfterListingId=rows.length>SYNC_BATCH_SIZE?String(listings[listings.length-1].id):null;break;}
+   listings.push(...rows);if(rows.length<200)break;
    if(offset===4800)throw new Error('Sync selection exceeds the safe bound; select fewer items.');
   }
   metrics.scopedReadMs=Date.now()-stageStart;
-  if(!listings.length)return await finishResponse({success:true,processed:0,updated:0,failed:0,imagesFetched:0,titlesFixed:0,message:'No imported eBay listings in this niche. Import listings first; no inventory was changed.'});
-  // Fetch section-scoped summaries. Never infer ended/sold from an absent external ID.
-  const external=new Set<string>();
-  stageStart=Date.now();
-  await mapSyncReads((Array.isArray(itemIds)&&itemIds.length ? [] : ['ActiveList','SoldList','UnsoldList']) as SellingSection[],async section=>{
-   let pages=1;for(let page=1;page<=pages;page++){
-    if(Date.now()-started>60000)throw new Error('Sync deadline reached before reconciliation; statuses preserved');
-    metrics.sellingPageCalls++;
-    try{const result=await fetchSellingPage(token,clientId,section,page);pages=result.pages;result.ids.forEach(id=>external.add(id));}
-    catch(cause){console.error('[EbaySync] Selling page unconfirmed; reconciliation cancelled before database writes');throw new Error(safeFailure(cause));}
-   }
-  });
-  metrics.sellingMs=Date.now()-stageStart;
-  // Fetch exact current observations for linked IDs, including IDs missing from My eBay.
-  // A complete set must be verified before ANY inventory mutation.
-  const observations=new Map<string,Observation>();
+  if(!listings.length)return await finishResponse({success:true,batchComplete:true,nextAfterListingId:null,processed:0,updated:0,failed:0,imagesFetched:0,titlesFixed:0,message:'No imported eBay listings in this niche. Import listings first; no inventory was changed.'});
+  // Existing-link sync needs exact GetItem observations, not whole-account
+  // selling history/discovery. Absence from a summary never means sold/ended.
+  const observations=new Map<string,Observation>();const issues:SyncListingIssue[]=[];
   stageStart=Date.now();
   await mapSyncReads([...new Set(listings.map(row=>String(row.external_listing_id)))],async id=>{
    if(Date.now()-started>65000)throw new Error('Sync deadline reached; retry a smaller item selection. Statuses preserved.');
    metrics.getItemCalls++;
-   observations.set(id,await getItemObservation(id,token,clientId));
+   try{observations.set(id,await getItemObservation(id,token,clientId));}
+   catch(cause){const message=safeFailure(cause);if(!isRemovedPolicyListing(message))throw cause;
+    issues.push({externalListingId:id,code:'21920397',message:'eBay removed this listing for a policy violation. Its local status and photos were preserved; review the restriction in eBay Seller Hub.'});
+   }
   });
   metrics.observationMs=Date.now()-stageStart;
-  // One bounded Analytics batch per explicit sync, not one request per rendered inventory card.
-  // Only request it when enough of the existing sync deadline remains.
   stageStart=Date.now();
   if(hasAnalyticsScope&&Date.now()-started<60000){
    const liveIds=[...observations.values()].filter(row=>row.status==='active').map(row=>row.externalId);
@@ -195,9 +180,10 @@ serveModule(async(req:Request)=>{
   let updated=0,imagesFetched=0,titlesFixed=0;const failed:string[]=[];const touchedItems=new Set<string>();
   stageStart=Date.now();
   for(const listing of listings){
+   // Never infer status, remove inventory or overwrite photos on a restriction.
+   if(!observations.has(String(listing.external_listing_id)))continue;
    if(Date.now()-started>90000){failed.push(String(listing.external_listing_id));continue;}
    let item=Array.isArray(listing.items)?listing.items[0]:listing.items;
-   // Legitimate multiple marketplace links must use the latest canonical CAS version after the first reconciliation.
    if(touchedItems.has(listing.item_id)){
     const fresh=await client.from('items').select('*').eq('id',listing.item_id).eq('tenant_id',tenantId).in('specialist_id',specialists).abortSignal(AbortSignal.timeout(10000)).maybeSingle();
     if(fresh.error||!fresh.data){failed.push(String(listing.external_listing_id));continue;}item=fresh.data;
@@ -207,7 +193,13 @@ serveModule(async(req:Request)=>{
    catch{failed.push(String(listing.external_listing_id));console.error('[EbaySync] Scoped item reconciliation was not confirmed.');}
   }
   metrics.reconciliationMs=Date.now()-stageStart;
-  if(!failed.length){const saved=await client.from('marketplace_connectors').update({last_sync_at:new Date().toISOString()}).eq('tenant_id',tenantId).eq('marketplace_id','ebay').abortSignal(AbortSignal.timeout(10000));if(saved.error)return await finishResponse({success:false,partial:true,updated,error:'SWISH sync timestamp could not be saved. Item outcomes were reconciled.'},503);}
-  return await finishResponse({success:failed.length===0,partial:failed.length>0,processed:listings.length,updated,failed:failed.length,imagesFetched,titlesFixed,totalEbayListings:external.size,matchedListings:listings.length,orphansFixed:0,failedEbayIds:failed.slice(0,20),...(failed.length?{error:`${failed.length} listing reconciliations were not confirmed. Reload inventory before retrying.`}:{})},failed.length?503:200);
- }catch(cause){const detail=safeFailure(cause);console.error(`[EbaySync] ${detail}`);return await finishResponse({success:false,error:`${detail}. Synchronisation not confirmed.`,requiresReauth:detail.startsWith('REQUIRES_REAUTH:'),partial:true},detail.startsWith('REQUIRES_REAUTH:')?401:503);}
+  // A clean final batch must not advertise a fully successful sync when an
+  // earlier batch explicitly reported restrictions or unconfirmed records.
+  if(!failed.length&&!issues.length&&!nextAfterListingId&&!previousIssues){
+   const saved=await client.from('marketplace_connectors').update({last_sync_at:new Date().toISOString()}).eq('tenant_id',tenantId).eq('marketplace_id','ebay').abortSignal(AbortSignal.timeout(10000));
+   if(saved.error)return await finishResponse({success:false,batchComplete:false,partial:true,updated,error:'SWISH sync timestamp could not be saved. Item outcomes were reconciled.'},503);
+  }
+  const blocked=issues.length;
+  return await finishResponse({success:failed.length===0&&blocked===0,partial:failed.length>0||blocked>0,batchComplete:failed.length===0,nextAfterListingId,processed:listings.length,updated,failed:failed.length+blocked,blocked,imagesFetched,titlesFixed,matchedListings:listings.length,orphansFixed:0,issues,failedEbayIds:[...failed,...issues.map(issue=>issue.externalListingId)].slice(0,20),...(failed.length?{error:`${failed.length} listing reconciliations were not confirmed. Reload inventory before retrying.`}:blocked?{error:`${blocked} listing(s) restricted by eBay policy (21920397). Unaffected listings were reconciled; restricted inventory and photos were preserved.`}:{})},failed.length?503:200);
+ }catch(cause){const detail=safeFailure(cause);console.error(`[EbaySync] ${detail}`);return await finishResponse({success:false,batchComplete:false,error:`${detail}. Synchronisation not confirmed.`,requiresReauth:detail.startsWith('REQUIRES_REAUTH:'),partial:true},detail.startsWith('REQUIRES_REAUTH:')?401:503);}
 });
