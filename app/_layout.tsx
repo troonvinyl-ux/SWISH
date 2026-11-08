@@ -109,6 +109,7 @@ export default function RootLayout() {
                 <Stack.Screen name="onboarding" />
                 <Stack.Screen name="lot-opportunity" />
                 <Stack.Screen name="watched-lots" options={{ headerShown: true, title: 'Watched lots', headerStyle: { backgroundColor: Colors.surface }, headerTintColor: Colors.textPrimary, headerShadowVisible: false }} />
+                <Stack.Screen name="inventory-tools" options={{ headerShown: true, title: 'More · Inventory tools', headerStyle: { backgroundColor: Colors.surface }, headerTintColor: Colors.textPrimary, headerShadowVisible: false }} />
                 <Stack.Screen name="item/[id]" />
                 <Stack.Screen name="acquisition/[id]" />
                 <Stack.Screen name="opportunities" />

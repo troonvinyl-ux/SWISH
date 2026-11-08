@@ -63,8 +63,9 @@ describe('All Coins is a lossless presentation, not an inventory migration',()=>
   const item:Item=mapItem({...rawCoin(1),condition_grade:'VF',weight_grams:'28.28',diameter_mm:'38.6',folder_number:'12',pocket_position:'4'});
   expect(item).toMatchObject({inventoryId:'KC-1',catalogueNumber:'N#123',conditionGrade:'VF',weightGrams:28.28,diameterMm:38.6,folderNumber:'12',pocketPosition:'4'});
  });
- test('UI opens All Coins and labels empty results by account',()=>{
-  const read=(file:string)=>fs.readFileSync(path.join(process.cwd(),file),'utf8');expect(read('app/(tabs)/inventory.tsx')).toContain('All Coins');expect(read('app/(tabs)/inventory.tsx')).toContain('InventoryAccountScope');
+ test('shared inventory keeps account and all-record tools in More',()=>{
+  const read=(file:string)=>fs.readFileSync(path.join(process.cwd(),file),'utf8');expect(read('app/(tabs)/inventory.tsx')).not.toContain('All Coins');expect(read('app/(tabs)/inventory.tsx')).not.toContain('InventoryAccountScope');
+  expect(read('components/feature/InventoryTools.tsx')).toContain('All records');expect(read('components/feature/InventoryTools.tsx')).toContain('InventoryAccountScope');expect(read('components/feature/ModuleMore.tsx')).toContain('inventoryMoreLinks');
   expect(read('components/feature/InventoryAccountScope.tsx')).toContain('Switching niche does not switch the owner or tenant');expect(read('app/stock-listing/[id].tsx')).toContain('const readback = await getItem(item.id)');
   for(const file of ['hooks/useInventory.ts','hooks/useMasterInventory.ts']){const contents=read(file);expect(contents).toMatch(/promise:\s*Promise<void>/);expect(contents).not.toContain('clearInterval(timer); sub.remove(); request.current++');}
  });

@@ -61,6 +61,8 @@ import { retainCaptureImage } from '@/services/captureDraftService';
 import { BrandArtwork } from '@/components/feature/BrandArtwork';
 import { InventoryAccountScope } from '@/components/feature/InventoryAccountScope';
 import { useInventory } from '@/hooks/useInventory';
+import { QuickListWorkspace } from '@/components/feature/QuickListWorkspace';
+import { MarketValueSummary } from '@/components/feature/MarketValueSummary';
 
 // ── Coin Flipper design tokens ────────────────────────────────────────────────
 const CF = {
@@ -1199,7 +1201,7 @@ function IdentifyTab({ result, capturedImages, onSave, saving, savedItemId, uplo
           <Text style={[idS.reasoningText, { color: Colors.warning }]}>{valuationError} Open Value for details or retry.</Text>
         ) : valuationResult?.valuation ? (
           <>
-            <Text style={idS.marketRange}>£{Number(valuationResult.valuation.valuationLow ?? 0).toFixed(0)}–£{Number(valuationResult.valuation.valuationHigh ?? 0).toFixed(0)}</Text>
+            <Text style={idS.marketRange}>£{Number(valuationResult.valuation.valuationMid ?? 0).toFixed(2)}</Text>
             <Text style={idS.reasoningText}>Indicative market range · {String(valuationResult.valuation.valuationConfidence ?? 'unrated').replace(/_/g, ' ')}</Text>
             <View style={idS.marketMetrics}>
               <View style={{ flex: 1 }}>
@@ -1402,7 +1404,8 @@ function ValueTab({ result, valuationResult, valuationLoading, valuationError, o
         </View>
       ) : v && v.valuationMid > 0 ? (
         <>
-          <View style={vt.priceHero}>
+          <MarketValueSummary result={valuationResult}/>
+          {false?<View style={vt.priceHero}>
             <Text style={vt.priceRange} accessibilityLabel={`Estimated value £${(v.valuationLow ?? 0).toFixed(0)} to £${(v.valuationHigh ?? 0).toFixed(0)}`}>
               £{(v.valuationLow ?? 0).toFixed(0)} – £{(v.valuationHigh ?? 0).toFixed(0)}
             </Text>
@@ -1412,7 +1415,7 @@ function ValueTab({ result, valuationResult, valuationLoading, valuationError, o
                 <Text style={vt.recommendedText}>Recommended listing price: £{v.recommendedListingPrice.toFixed(2)}</Text>
               </View>
             ) : null}
-          </View>
+          </View>:null}
           {sold && sold.relevantSoldCount > 0 ? (
             <View style={vt.metricsRow}>
               {[
@@ -2180,6 +2183,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
   }, [setScanMode]);
 
   if (showPaywall) return <CoinFlipperPaywall onBack={() => setShowPaywall(false)} />;
+  if (activeTab === 'capture') return <QuickListWorkspace nicheId="coins" tabPage={isHomeTab} />;
 
   return (
     <View style={main.container}>
