@@ -4,9 +4,9 @@ export type QuickListNiche = RegisteredNicheId;
 // Preserve legacy stages; TD is draft completion, T5 is saved review, TP is the provider response.
 export type QuickStage = 'T0'|'T1'|'T2'|'T3'|'T4'|'TD'|'T5'|'T6'|'TP'|'T7';
 export interface QuickFailure { operation:string; at:number; elapsedMs:number; message:string }
-export type AttributeSource = 'barcode_catalogue'|'photograph'|'specialist_identification'|'external_catalogue'|'user_confirmation';
+export type AttributeSource = 'barcode_catalogue'|'ai_barcode_research'|'photograph'|'specialist_identification'|'external_catalogue'|'user_confirmation';
 export interface QuickAttributeEvidence { key:string; value:string; sources:AttributeSource[]; accepted:boolean; note:string }
-export interface ProductLead { id:string; title:string; gtin:string; brand:string; model:string; categoryId:string; categoryName:string; specifics:Record<string,string>; source:'eBay Browse'; url:string }
+export interface ProductLead { id:string; title:string; gtin:string; brand:string; model:string; categoryId:string; categoryName:string; specifics:Record<string,string>; source:'eBay Browse'|'OnSpace AI'; url:string; sourceUrls?:string[]; summary?:string; confidence?:number }
 export interface QuickTiming { id:string; nicheId:QuickListNiche; timestamps:Partial<Record<QuickStage,number>>; actions:number; barcodeAttempted:boolean; barcodeMatched:boolean; aiAttempted:boolean; aiMatched:boolean; publicationAttempted:boolean; outcome:'running'|'live'|'failed'|'unconfirmed'|'abandoned'; eligible:boolean; reasons:string[]; operations:Record<string,number>; externalListingId?:string; platform:string; manualInterventions?:number; failures?:QuickFailure[]; endedAt?:number; clock?:'expo_js_launch_or_foreground' }
 export const quickBarcodeTypes = ['ean13','ean8','upc_a','upc_e','code128','code39','itf14','qr'] as const;
 function checksum(code:string):boolean { const digits=code.split('').map(Number);const check=digits.pop();return (10-digits.reverse().reduce((sum,digit,index)=>sum+digit*(index%2===0?3:1),0)%10)%10===check; }

@@ -22,6 +22,7 @@ import { getProductionNicheSpecialistIds, resolveProductionNiche } from '@/servi
 import { useMemo } from 'react';
 import { NICHES } from '@/constants/niches';
 import { runNicheEbayOperation } from '@/services/ebaySyncService';
+import { readNicheListingMetrics } from '@/services/nicheListingMetricsService';
 import { isRouteAllowedForBuild, isRouteAllowedForModule } from '@/services/nicheRouting';
 import { useAlert } from '@/template';
 
@@ -98,18 +99,10 @@ async function loadEbayMetrics(tenantId: string, specialistIds?: string[], niche
   // Build niche-filtered listing, order and sales queries. Seller-account-level
   // messages, returns, offers and financial transactions remain account-wide;
   // item-linked operational and revenue counts must respect the active niche.
-  let listingQuery = supabase
-    .from('listings')
-    .select('status, items!inner(specialist_id)')
-    .eq('tenant_id', tenantId)
-    .eq('marketplace_id', 'ebay');
-
-  if (specialistIds) {
-    if (specialistIds.length === 0) {
-      return emptyEbayMetrics();
-    }
-    listingQuery = listingQuery.in('items.specialist_id', specialistIds) as any;
-  }
+  if (!nicheId || specialistIds?.length === 0) throw new Error('Open a verified niche to read Seller Hub counts.');
+  // Shared canonical count RPC: no capped row download, duplicate draft rows,
+  // marketplace-alias duplicates or sold items incorrectly counted as live.
+  const listingQuery = readNicheListingMetrics(tenantId, nicheId);
 
   const salesQuery = async (fromDate: string) => {
     // Prefer the durable sale-time niche snapshot. Older installations can run
@@ -175,21 +168,14 @@ async function loadEbayMetrics(tenantId: string, specialistIds?: string[], niche
   ]);
 
   // A failed database read is not a zero count or an all-clear result.
-  const requiredReads=[connectorRes,listingCountsRes,ordersDispatchRes,dispatchedTodayRes,salesTodayRes,salesWeekRes,salesMonthRes,messagesRes,returnsRes,casesRes,offersRes];
+  const requiredReads=[connectorRes,ordersDispatchRes,dispatchedTodayRes,salesTodayRes,salesWeekRes,salesMonthRes,messagesRes,returnsRes,casesRes,offersRes];
   const failedRead=requiredReads.find(result=>result.error);
   if(failedRead?.error)throw new Error(failedRead.error.message ?? 'Seller metrics are unavailable.');
   const connector = connectorRes.data;
   const isConnected = connector?.status === 'connected';
   const tokenExpiry = connector?.access_token_expires_at ?? null;
   const tokenHealthy = tokenExpiry ? new Date(tokenExpiry) > new Date(Date.now() + 60 * 60 * 1000) : false;
-  // Apply niche filter to listing rows
-  const allListingRows = listingCountsRes.data ?? [];
-  const listingRows = specialistIds && specialistIds.length > 0
-    ? allListingRows.filter(l => specialistIds.includes((l as any).items?.specialist_id ?? ''))
-    : allListingRows;
-  const activeListings = listingRows.filter(l => l.status === 'active').length;
-  const draftListings = listingRows.filter(l => l.status === 'draft' || l.status === 'pending').length;
-  const endedListings = listingRows.filter(l => l.status === 'ended').length;
+  const { activeListings, draftListings, endedListings, totalListings } = listingCountsRes;
   const dispatchRows = (ordersDispatchRes.data ?? []) as any[];
   const dispatchedTodayRows = (dispatchedTodayRes.data ?? []) as any[];
   const awaitingDispatch = dispatchRows.length;
@@ -223,7 +209,7 @@ async function loadEbayMetrics(tenantId: string, specialistIds?: string[], niche
     sellerAccount: connector?.seller_account_id ?? '',
     lastSync: connector?.last_sync_at ?? null,
     activeListings, draftListings, endedListings,
-    totalListings: listingRows.length, gmv: 0,
+    totalListings, gmv: 0,
     awaitingDispatch, labelsCreated, dispatchedToday, totalOrdersThisMonth,
     revenueToday, revenueWeek, revenueMonth,
     unreadMessages, openReturns, openCases, pendingOffers,
@@ -569,8 +555,7 @@ function EbayHubScreenContent() {
       if(currentScope.current!==scope)return;
       setMetricsError(e?.message ?? 'Failed to load eBay metrics. Counts are not verified.');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if(currentScope.current===scope){setLoading(false);setRefreshing(false);}
     }
   }, [tenant?.id, showAlert, specialistIdsKey, nicheStyle.nicheId, scope, accessReady, moduleLoading]);
 
@@ -669,7 +654,7 @@ function EbayHubScreenContent() {
 
   // ── Hub sections ──────────────────────────────────────────────────────────
   const sections: HubSection[] = [
-    { id: 'listings', icon: 'receipt-long', title: 'Listings', description: `${metrics?.activeListings ?? 0} active · ${metrics?.draftListings ?? 0} draft`, route: '/(tabs)/listings', color: Colors.primary, badge: metrics?.draftListings ?? 0, badgeColor: Colors.warning, available: true },
+    { id: 'listings', icon: 'receipt-long', title: 'Listings', description: metrics ? `${metrics.activeListings} live eBay listings · ${metrics.draftListings} draft items` : 'Listing counts not verified', route: '/(tabs)/listings', color: Colors.primary, badge: metrics?.draftListings ?? 0, badgeColor: Colors.warning, available: true },
     { id: 'orders', icon: 'shopping-bag', title: 'Orders', description: `${metrics?.awaitingDispatch ?? 0} awaiting dispatch · ${metrics?.totalOrdersThisMonth ?? 0} this month`, route: '/orders', color: Colors.success, badge: metrics?.awaitingDispatch ?? 0, badgeColor: Colors.danger, available: true },
     { id: 'dispatch', icon: 'local-shipping', title: 'Dispatch', description: 'Pick, pack and dispatch orders with proof photos', route: '/dispatch', color: Colors.warning, badge: metrics?.awaitingDispatch ?? 0, badgeColor: Colors.danger, available: true },
     { id: 'messages', icon: 'mail', title: 'Messages', description: 'Buyer communications with AI reply assistant', route: '/ebay-messages', color: Colors.info, badge: metrics?.unreadMessages ?? 0, badgeColor: Colors.danger, available: true },
@@ -724,7 +709,7 @@ function EbayHubScreenContent() {
             <Text style={[s.title, { color: nicheStyle.accent }]}>{nicheStyle.label} Seller Hub</Text>
           </View>
           <Text style={s.subtitle}>
-            {metrics?.activeListings ?? 0} {nicheStyle.label.toLowerCase()} listings · £{((metrics?.revenueMonth ?? 0)).toFixed(0)} this month
+            {metrics ? `${metrics.activeListings} recorded live listings · £${metrics.revenueMonth.toFixed(0)} this month` : 'Listing counts not verified'}
           </Text>
         </View>
         <Pressable onPress={() => router.push('/marketplaces' as any)} style={s.settingsBtn} hitSlop={8}>
@@ -860,6 +845,7 @@ function EbayHubScreenContent() {
         </View>
 
         {metricsError?<View style={s.syncError}><MaterialIcons name="error-outline" size={24} color={Colors.warning}/><Text accessibilityRole="alert" style={s.syncErrorText}>{metricsError} Figures are unverified until refresh succeeds.</Text></View>:null}
+        <Text style={s.syncPanelDesc}>{tenant?.name ?? 'Current workspace'} · {tenant?.id?.slice(0,8) ?? 'unverified'} · {nicheStyle.label} only. Live counts use unique saved eBay IDs; drafts count inventory items. Other workspaces are excluded.</Text>
         {/* ── Top Metrics Grid ── */}
         <View style={s.sectionLabel}><Text style={s.sectionTitle}>TODAY</Text></View>
         <View style={s.metricsRow}>
@@ -868,7 +854,7 @@ function EbayHubScreenContent() {
           <MetricCard icon="mail" label="Messages" value={String(metrics?.unreadMessages ?? 0)} subValue="unread" color={metrics?.unreadMessages ? Colors.info : Colors.textTertiary} onPress={() => router.push('/ebay-messages' as any)} />
         </View>
         <View style={s.metricsRow}>
-          <MetricCard icon="storefront" label="Active" value={String(metrics?.activeListings ?? 0)} subValue="listings" color={Colors.success} onPress={() => router.push('/ebay-admin' as any)} />
+          <MetricCard icon="storefront" label="Live eBay" value={metrics ? String(metrics.activeListings) : '—'} subValue="recorded listings" color={Colors.success} onPress={() => router.push('/ebay-admin' as any)} />
           <MetricCard icon="trending-up" label="This Week" value={`£${(metrics?.revenueWeek ?? 0).toFixed(0)}`} color={Colors.primary} />
           <MetricCard icon="calendar-month" label="This Month" value={`£${(metrics?.revenueMonth ?? 0).toFixed(0)}`} color={Colors.accent} />
         </View>
