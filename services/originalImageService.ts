@@ -4,6 +4,7 @@ import * as FileSystem from 'expo-file-system';
 import { decode, encode } from 'base64-arraybuffer';
 import { getSupabaseClient } from '@/template';
 import { readBinaryBlob } from './binaryBlobService';
+import { measurePerformance } from './performanceMonitoringService';
 export interface OriginalBytes {bytes:ArrayBuffer;contentType:string;extension:string;hash:string}
 // Matches the existing item-images bucket; do not resize evidence to fit it.
 export const ORIGINAL_UPLOAD_LIMIT_BYTES=5*1024*1024;
@@ -29,7 +30,7 @@ export async function readOriginalBytes(uri:string):Promise<OriginalBytes> {
 /** Verify orphaned originals against their content-addressed filename before recovery. */
 export async function verifyStoredOriginal(path:string,expectedHash:string):Promise<void> {
  if(!/^[a-f0-9]{64}$/.test(expectedHash))throw new Error('Stored original has no valid byte fingerprint.');
- const read=await getSupabaseClient().storage.from('item-images').download(path);
+ const read=await measurePerformance('image_verify',()=>getSupabaseClient().storage.from('item-images').download(path),result=>Boolean(result.error));
  if(read.error||!read.data)throw new Error('Stored original could not be downloaded for verification. Retry the saved item.');
  const bytes=await readBinaryBlob(read.data);
  if(!bytes.byteLength||bytes.byteLength>20*1024*1024)throw new Error('Stored original is empty or exceeds the 20 MB limit.');
@@ -58,10 +59,10 @@ export async function uploadUntouchedOriginal(itemId:string,slotId:string,uri:st
  const storage=getSupabaseClient().storage.from('item-images');
  // Immutable upload first: avoid a full speculative GET for every new photo.
  // Duplicate paths are harmless (upsert stays false), but still require exact readback.
- const upload=await storage.upload(path,Platform.OS==='web'?new Blob([original.bytes],{type:original.contentType}):original.bytes,{contentType:original.contentType,upsert:false,cacheControl:'31536000'});
+ const upload=await measurePerformance('image_upload',()=>storage.upload(path,Platform.OS==='web'?new Blob([original.bytes],{type:original.contentType}):original.bytes,{contentType:original.contentType,upsert:false,cacheControl:'31536000'}),result=>Boolean(result.error&&!/already exists|duplicate/i.test(result.error.message)));
  if(upload.error&&!/already exists|duplicate/i.test(upload.error.message))throw new Error('Original photograph upload failed. Check the connection and retry the saved item.');
  // A successful upload or duplicate conflict does not prove byte preservation.
- const readback=await storage.download(path);
+ const readback=await measurePerformance('image_verify',()=>storage.download(path),result=>Boolean(result.error));
  if(readback.error||!readback.data)throw new Error('Stored original could not be verified.');
  const received=new Uint8Array(await readBinaryBlob(readback.data)),sent=new Uint8Array(original.bytes);
  if(received.length!==sent.length||received.some((byte,index)=>byte!==sent[index]))throw new Error('Stored original bytes differ; no evidence link accepted.');

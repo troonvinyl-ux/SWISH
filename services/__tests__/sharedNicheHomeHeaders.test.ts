@@ -82,7 +82,8 @@ describe('Shared Collectibles-style niche home and uploaded headers (source/pure
     expect(ui).not.toContain('uri: artwork');
     expect(ui).toContain('numbersUnavailable');
     const hook = source('hooks/useNicheDashboard.ts');
-    expect(hook).toContain('useInventory()');
+    expect(hook).toContain('useInventory({}, { countsOnly: true })');
+    expect(hook).toContain('useInventory({}, { enabled: purpose !== null })');
     expect(hook).toContain('active === nicheId && app.accessReady');
     expect(hook).not.toContain('setInterval');
     expect(hook).not.toContain('getSupabaseClient');

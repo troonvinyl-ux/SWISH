@@ -22,6 +22,7 @@ import { prepareCapturedImages } from './sharedImagePreparationService';
 import { persistCapturedItemPhotos, linkPersistedItemPhotos } from './photoPersistenceService';
 import { linkStudioImages } from './smartStudioStorageService';
 import { SMART_STUDIO_VERSION, studioImageIsUsable, type StudioResult } from '@/shared/smartStudio';
+import type { CaptureUploadCopy } from '@/shared/captureUpload';
 
 import { resolveProductionNiche, getProductionNicheSpecialistIds, canonicalProductionSpecialist } from '@/services/nicheRouting';
 import { getNicheWorkflowPolicy } from '@/shared/nichePolicy';
@@ -38,7 +39,8 @@ export interface CapturedImage {
   // Distinct presentation role; uri always remains the untouched original.
   studio?: StudioResult;
   originalStorageUri?: string;
-  originalByteHash?: string;
+  originalByteHash?: string; // Fingerprint of the stored capture/or authorised upload copy.
+  uploadCopy?: CaptureUploadCopy; // Local full-resolution uri remains the untouched evidence source.
   enhancedUri?: string;
   enhancementStatus?: 'processing' | 'ready' | 'failed';
   enhancementWarning?: string;

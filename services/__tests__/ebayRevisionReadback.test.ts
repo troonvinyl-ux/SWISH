@@ -37,7 +37,8 @@ describe('Shared revision description and price contract', () => {
   test('missing readback, wrong identity and wrong currency fail closed', () => {
     expect(revisionFailure({ success: true })).toMatch(/not verified/);
     expect(revisionFailure({ success: true, verified: true, warnings: [] })).toBeNull();
-    expect(revisionFailure({ success: true, verified: true, warnings: ['eBay restriction'] })).toBe('eBay restriction');
+    expect(revisionFailure({ success: true, verified: true, warnings: ['eBay restriction'] })).toBeNull();
+    expect(revisionFailure({success:true,verified:true,warnings:['Final Value Fee waived.']})).toBeNull();
     expect(verifyRevisionContent({ ...live(), currency: 'USD', externalListingId: 'different' }, expected)).toHaveLength(2);
   });
   test('no deprecated DescriptionReviseMode or raw credentials in the shared transport helper', () => {
