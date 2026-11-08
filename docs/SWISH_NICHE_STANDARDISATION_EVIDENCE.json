@@ -1,0 +1,50 @@
+{
+  "status": "IMPLEMENTED_ACCEPTANCE_OPEN",
+  "sourceSha": null,
+  "backendObservations": {
+    "defaultMappingsTested": 12,
+    "defaultMappingsAgree": true,
+    "noSessionCoinsDenied": true,
+    "noSessionCollectiblesDenied": true,
+    "installedParentPolicies": 12,
+    "installedSchemaAssertions": "PASS",
+    "canonicalProjectionDuplicates": 0,
+    "attributeNicheConflicts": 0,
+    "before": {"items":763,"withMedia":758},
+    "after": {"items":763,"withMedia":758},
+    "storedOriginals":15,
+    "linkedOriginals":13,
+    "unlinkedOriginals":2,
+    "itemsWithoutMedia":5,
+    "newPhotoPipelineRecords":0,
+    "ambiguousExternalIdentityGroups":1,
+    "unclassifiedItems":12,
+    "userDataModified":false,
+    "broadAuthenticatedRoleReadAttempt":"BACKEND_ERROR_NOT_PASSED"
+  },
+  "checks": {
+    "jest":"NOT_RUN",
+    "typescript":"NOT_RUN",
+    "sourceParityScript":"NOT_RUN",
+    "nativeDeepLinks":"NOT_TESTED",
+    "deployedEdgeRevision":"NOT_VERIFIED",
+    "separateSubscriberSessions":"NOT_TESTED",
+    "liveEbayPublication":"NOT_TESTED",
+    "mobileWebVisualParity":"NOT_TESTED"
+  },
+  "niches": [
+    {"id":"coins","items":460,"withMedia":459,"barcode":"disabled","deviceAcceptance":"NOT_TESTED","subscriberIsolation":"NOT_TESTED"},
+    {"id":"collectibles","items":8,"withMedia":5,"barcode":"start","deviceAcceptance":"NOT_TESTED","subscriberIsolation":"NOT_TESTED"},
+    {"id":"motocross","items":2,"withMedia":2,"barcode":"disabled","deviceAcceptance":"NOT_TESTED","subscriberIsolation":"NOT_TESTED"},
+    {"id":"bicycles","items":2,"withMedia":2,"barcode":"disabled","deviceAcceptance":"NOT_TESTED","subscriberIsolation":"NOT_TESTED"},
+    {"id":"clothing","items":3,"withMedia":3,"barcode":"optional","deviceAcceptance":"NOT_TESTED","subscriberIsolation":"NOT_TESTED"},
+    {"id":"trading_cards","items":0,"withMedia":0,"barcode":"disabled","deviceAcceptance":"NOT_TESTED","subscriberIsolation":"NOT_TESTED"},
+    {"id":"antiques","items":2,"withMedia":1,"barcode":"disabled","deviceAcceptance":"NOT_TESTED","subscriberIsolation":"NOT_TESTED"},
+    {"id":"fossils","items":0,"withMedia":0,"barcode":"disabled","deviceAcceptance":"NOT_TESTED","subscriberIsolation":"NOT_TESTED"},
+    {"id":"beauty","items":0,"withMedia":0,"barcode":"optional","deviceAcceptance":"NOT_TESTED","subscriberIsolation":"NOT_TESTED"},
+    {"id":"tech","items":3,"withMedia":3,"barcode":"optional","deviceAcceptance":"NOT_TESTED","subscriberIsolation":"NOT_TESTED"},
+    {"id":"surplus_flip","items":270,"withMedia":270,"barcode":"optional","deviceAcceptance":"NOT_TESTED","subscriberIsolation":"NOT_TESTED"},
+    {"id":"tunes_flip","items":1,"withMedia":1,"barcode":"optional","deviceAcceptance":"NOT_TESTED","subscriberIsolation":"NOT_TESTED"}
+  ],
+  "note":"Existing SQL reference observations and policy assertions are not new camera/save/restart or cross-tenant subscriber end-to-end acceptance. No data or routes were deleted or reassigned."
+}

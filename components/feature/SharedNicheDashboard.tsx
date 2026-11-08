@@ -12,10 +12,10 @@ import { Colors, Spacing, Radius, Typography, Shadow } from '@/constants/theme';
 import { useNicheDashboard } from '@/hooks/useNicheDashboard';
 import type { NicheDashboardAction } from '@/services/nicheDashboardService';
 
-interface SharedNicheDashboardProps { nicheId: ProductionNicheId }
+interface SharedNicheDashboardProps { nicheId: ProductionNicheId; embedded?: boolean }
 
 /** Collectibles' stage layout, with isolated data, photography, copy and specialist actions. */
-export const SharedNicheDashboard = memo(function SharedNicheDashboard({ nicheId }: SharedNicheDashboardProps) {
+export const SharedNicheDashboard = memo(function SharedNicheDashboard({ nicheId, embedded = false }: SharedNicheDashboardProps) {
   const dashboard = useNicheDashboard(nicheId);
   const { content, columns } = dashboard;
   const artwork = getNicheHeaderArtwork(nicheId);
@@ -37,8 +37,8 @@ export const SharedNicheDashboard = memo(function SharedNicheDashboard({ nicheId
   ), [content.accent, content.border, dashboard.ready, dashboard.open, dashboard.tileWidth, nicheId]);
 
   return (
-    <SafeAreaView edges={['top']} style={s.screen} testID={`module-dashboard-${nicheId}`}>
-      <StatusBar style="light" />
+    <SafeAreaView edges={embedded ? [] : ['top']} style={s.screen} testID={`module-dashboard-${nicheId}`}>
+      <StatusBar style={embedded ? 'dark' : 'light'} />
       <FlatList key={`${nicheId}:${columns}`} data={content.actions} numColumns={columns}
         keyExtractor={action => action.id} renderItem={renderAction}
         showsVerticalScrollIndicator={false} refreshing={dashboard.loading} onRefresh={dashboard.reload}
@@ -69,7 +69,7 @@ export const SharedNicheDashboard = memo(function SharedNicheDashboard({ nicheId
             {dashboard.error ? <View style={s.errorPanel}>
               <MaterialIcons name="error-outline" size={24} color={Colors.danger} />
               <View style={s.copy}><Text accessibilityRole="alert" style={s.error}>{dashboard.error}</Text>
-                <Pressable onPress={dashboard.reload} accessibilityRole="button" style={({ pressed }) => [s.retry, pressed ? s.pressed : null]}><Text style={[s.actionText, { color: content.accent }]}>Retry inventory refresh</Text></Pressable>
+                <Pressable onPress={dashboard.reload} disabled={dashboard.loading} accessibilityRole="button" accessibilityState={{ disabled: dashboard.loading, busy: dashboard.loading }} style={({ pressed }) => [s.retry, pressed ? s.pressed : null, dashboard.loading ? s.disabled : null]}><Text style={[s.actionText, { color: content.accent }]}>{dashboard.loading ? 'Refreshing inventory…' : 'Retry inventory refresh'}</Text></Pressable>
               </View>
             </View> : null}
             <Text style={[s.eyebrow, { color: content.accent }]}>{content.motto}</Text>

@@ -2,7 +2,7 @@ name: Inventory refresh and price-only revision checks
 on:
   workflow_dispatch:
   pull_request:
-    paths: ['app/**','components/**','hooks/**','services/**','shared/**','supabase/functions/**','supabase/tests/**','.github/workflows/inventory-refresh-reprice-verification.yml']
+    paths: ['app/**','components/**','hooks/**','services/**','shared/**','supabase/functions/**','supabase/tests/**','supabase/migrations/**','.github/workflows/inventory-refresh-reprice-verification.yml']
 permissions:
   contents: read
 jobs:
@@ -21,7 +21,7 @@ jobs:
       - run: bash scripts/install-dependencies.sh
       - run: npx --no-install tsc --noEmit
       - name: Ordering, price-only action and original-photo regressions
-        run: npx --no-install jest --config jest.config.ci.js --runInBand services/__tests__/inventoryRefreshAndOrdering.test.ts services/__tests__/listingPriceRevision.test.ts services/__tests__/existingStudioStorage.test.ts services/__tests__/smartStudioIntegration.test.ts services/__tests__/ebayRevisionReadback.test.ts services/__tests__/ebayRevisionUi.test.ts services/__tests__/sharedItemOverviewPhotos.test.ts services/__tests__/backendPerformance.test.ts services/__tests__/premiumNicheParity.test.ts
+        run: npx --no-install jest --config jest.config.ci.js --runInBand services/__tests__/inventoryTimeoutRepair.test.ts services/__tests__/canonicalInventoryCounting.test.ts services/__tests__/sharedNicheHomeHeaders.test.ts services/__tests__/inventoryRefreshAndOrdering.test.ts services/__tests__/listingPriceRevision.test.ts services/__tests__/existingStudioStorage.test.ts services/__tests__/smartStudioIntegration.test.ts services/__tests__/ebayRevisionReadback.test.ts services/__tests__/ebayRevisionUi.test.ts services/__tests__/sharedItemOverviewPhotos.test.ts services/__tests__/backendPerformance.test.ts services/__tests__/premiumNicheParity.test.ts
       - run: deno test supabase/tests/ebay_traffic.test.ts
       - run: deno check supabase/functions/swish-ebay-list/index.ts supabase/functions/swish-ebay-sync/index.ts
       - run: node scripts/validate-edge-deployment.mjs

@@ -1,6 +1,7 @@
 // Shared persisted-photo contract. No React, storage clients or temporary image state.
 export const PHOTO_PIPELINE_VERSION = 'canonical-photos-v1';
-export interface PhotoAsset { slotId: string; slotLabel: string; url: string; hash?: string }
+// A cloud archive copy is not a byte-identical full-resolution original. No local URI is persisted.
+export interface PhotoAsset { slotId: string; slotLabel: string; url: string; hash?: string; uploadCopy?: { kind: 'compressed_capture_copy'; sourceHash: string; dpi: 72; width: number; height: number } }
 export interface PhotoExpectation { slotId: string; slotLabel: string; url?: string }
 export function photoRoleId(value: string): string { return value.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40) || 'photo'; }
 export function mergePhotoAssets(previous: readonly PhotoAsset[], incoming: readonly PhotoAsset[]): PhotoAsset[] {

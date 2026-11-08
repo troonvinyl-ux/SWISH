@@ -21,8 +21,30 @@ export function decodeStudioRaster(bytes:Uint8Array):StudioRaster {
  const data=new Uint8Array(image.width*image.height*4);for(let i=0;i<image.width*image.height;i++){data[i*4]=image.data[i*image.channels];data[i*4+1]=image.data[i*image.channels+1];data[i*4+2]=image.data[i*image.channels+2];data[i*4+3]=image.channels===4?image.data[i*4+3]:255;}return {width:image.width,height:image.height,data};
 }
 function crc32(bytes:Uint8Array):number {let crc=0xffffffff;for(const byte of bytes){crc^=byte;for(let i=0;i<8;i++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}return (crc^0xffffffff)>>>0;}
-/** Append server provenance only. Original PNG image chunks and decoded pixels are unchanged. */
+/** 72 DPI is density metadata only; preserve the validated transparent PNG pixels. */
+export function pngAt72Dpi(png:Uint8Array):Uint8Array {
+ if(png.length<33||png[0]!==137||png[1]!==80||png[2]!==78||png[3]!==71)throw new Error('PNG export required.');
+ const density=new Uint8Array(21),view=new DataView(density.buffer);
+ view.setUint32(0,9);density.set(new TextEncoder().encode('pHYs'),4);
+ view.setUint32(8,2835);view.setUint32(12,2835);density[16]=1;
+ view.setUint32(17,crc32(density.subarray(4,17)));
+ const chunks:Uint8Array[]=[png.subarray(0,8)];let offset=8,inserted=false;
+ while(offset+12<=png.length){
+  const length=new DataView(png.buffer,png.byteOffset+offset,4).getUint32(0),end=offset+12+length;
+  if(end>png.length)throw new Error('Invalid PNG chunk.');
+  const name=String.fromCharCode(...png.subarray(offset+4,offset+8));
+  if(name!=='pHYs')chunks.push(png.subarray(offset,end));
+  if(name==='IHDR'){chunks.push(density);inserted=true;}
+  offset=end;
+ }
+ if(!inserted||offset!==png.length)throw new Error('Invalid PNG export.');
+ const output=new Uint8Array(chunks.reduce((sum,chunk)=>sum+chunk.length,0));let position=0;
+ for(const chunk of chunks){output.set(chunk,position);position+=chunk.length;}
+ return output;
+}
+/** Append density and server provenance only. Compressed pixel/alpha chunks are unchanged. */
 export function attachStudioMetadata(png:Uint8Array,metadata:Record<string,unknown>):Uint8Array {
+ png=pngAt72Dpi(png);
  const text=new TextEncoder().encode('swish_studio\0'+JSON.stringify(metadata).replace(/[^\x00-\x7f]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0')));if(text.length>32_000)throw new Error('Processing metadata exceeds limit.');
  const chunk=new Uint8Array(text.length+12),view=new DataView(chunk.buffer);view.setUint32(0,text.length);chunk.set(new TextEncoder().encode('tEXt'),4);chunk.set(text,8);view.setUint32(text.length+8,crc32(chunk.subarray(4,text.length+8)));
  const out=new Uint8Array(png.length+chunk.length);out.set(png.subarray(0,png.length-12));out.set(chunk,png.length-12);out.set(png.subarray(png.length-12),png.length-12+chunk.length);return out;

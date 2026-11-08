@@ -5,7 +5,8 @@
 
 import { serveModule } from '../_shared/moduleScope.ts';
 import { inferImportNiche } from '../_shared/ebayImportScope.ts';
-import { lookupBarcodeProducts } from '../_shared/quickListBarcode.ts';
+import { lookupAIBarcode } from '../_shared/aiBarcodeLookup.ts';
+import { nicheBarcodeAllowed } from '../_shared/nichePolicy.ts';
 import { parseEbayListingStatus } from '../_shared/listingStatus.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
@@ -87,6 +88,7 @@ async function getApplicationToken(clientId: string, clientSecret: string): Prom
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: body.toString(),
+      signal: AbortSignal.timeout(5000),
     });
     if(!res.ok)return null;
     const data = await res.json();
@@ -376,6 +378,18 @@ serveModule(async (req: Request) => {
     return json({ error: 'Authentication verification failed. Please sign in again.' }, 401);
   }
 
+  // Ask AI directly for every decoded barcode inside the existing verified module.
+  // Identification is independent of active eBay listings and seller-connector credentials.
+  if (route === 'barcode_lookup') {
+    if (!nicheBarcodeAllowed(String(body.nicheId ?? ''))) return json({ error: 'Retail barcode lookup is not enabled for this specialist. Use photos.' }, 403);
+    const gtin = String(body.gtin ?? '');
+    if (!/^(?:\d{8}|\d{12}|\d{13}|\d{14})$/.test(gtin)) return json({ error: 'Valid product GTIN required.' }, 400);
+    return json(await lookupAIBarcode(gtin, {
+      apiKey: Deno.env.get('ONSPACE_AI_API_KEY'),
+      baseUrl: Deno.env.get('ONSPACE_AI_BASE_URL'),
+    }));
+  }
+
   // ── Get connector credentials ─────────────────────────────────────────────
   const { data: connector, error: fetchErr } = await supabase
     .from('marketplace_connectors')
@@ -434,15 +448,6 @@ serveModule(async (req: Request) => {
         }, 401);
       }
     }
-  }
-
-  if(route==='barcode_lookup'){
-    if(body.nicheId!=='collectibles')return json({error:'Barcode Quick List is only available in Collectibles.'},403);
-    const gtin=String(body.gtin??'');
-    if(!/^(?:\d{8}|\d{12}|\d{13}|\d{14})$/.test(gtin))return json({error:'Valid product GTIN required.'},400);
-    const token=await getApplicationToken(credentials.clientId,credentials.clientSecret);
-    if(!token)return json({products:[],status:'unavailable',message:'eBay catalogue authorization unavailable. Use photo identification.'});
-    return json(await lookupBarcodeProducts(token,gtin));
   }
 
   // ── Route: get_item_full — fetch complete listing details via GetItem ──────

@@ -1,0 +1,10 @@
+import { memo } from 'react';
+import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { Colors, Spacing, Typography, Radius } from '@/constants/theme';
+interface InventoryRemovalPanelProps { live: boolean; sold: boolean; busy: boolean; disabled?: boolean; onDelete: () => void; }
+export const InventoryRemovalPanel = memo(function InventoryRemovalPanel({ live, sold, busy, disabled = false, onDelete }: InventoryRemovalPanelProps) {
+ return <View style={s.panel}><Text style={s.title}>Remove from inventory</Text><Text style={s.body}>{sold ? 'Sold items and order history are retained.' : live ? 'Step 1: End the listing on eBay. Step 2: Return to In Stock and delete the inventory item.' : 'Delete this item from SWISH only after every eBay listing has ended. This is separate from ending a listing.'}</Text>
+ {!sold ? <Pressable accessibilityRole="button" accessibilityLabel="Delete inventory item" disabled={live || busy || disabled} onPress={onDelete} style={({ pressed }) => [s.button, pressed || live || busy || disabled ? s.dim : null]}>{busy ? <ActivityIndicator color={Colors.danger} /> : <MaterialIcons name="delete-outline" size={22} color={Colors.danger} />}<Text style={s.label}>{busy ? 'Deleting…' : 'Delete inventory item'}</Text></Pressable> : null}</View>;
+});
+const s = StyleSheet.create({ panel: { padding: Spacing.base, gap: Spacing.sm, borderRadius: Radius.lg, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.surfaceBorder }, title: { fontSize: Typography.size.base, fontWeight: Typography.weight.semibold, color: Colors.textPrimary }, body: { fontSize: Typography.size.base, lineHeight: 26, color: Colors.textSecondary, includeFontPadding: false }, button: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, padding: Spacing.md, backgroundColor: Colors.dangerDim, borderRadius: Radius.md }, label: { fontSize: Typography.size.base, fontWeight: Typography.weight.semibold, color: Colors.danger }, dim: { opacity: 0.55 } });
