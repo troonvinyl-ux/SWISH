@@ -1,0 +1,45 @@
+{
+  "feature": "owner_performance_json_export",
+  "entry": "Master Control → Performance",
+  "schemaVersion": "swish-performance-export-v1",
+  "backend": {
+    "aggregateSelect": "executed_without_jwt_impersonation",
+    "noSessionInvocation": "denied",
+    "anonExecute": false,
+    "authenticatedRpcEntry": true,
+    "trustedOwnerGuard": "swish_is_platform_owner",
+    "emptyCapturePercentiles": "null",
+    "canonicalItemsAfter": 763,
+    "newProviderCalls": 0,
+    "productionDataWrites": 0,
+    "observedEdgeRecords7d": 83,
+    "observedSyncRecords7d": 3,
+    "observedQuickTimingRecords30d": 0
+  },
+  "timingBoundaries": {
+    "sql": "archived_administrative_explain_only",
+    "runtimeNetwork": "latest_500_runtime_operations_not_sql",
+    "edgeExecution": "recorded_handler_duration_last_7_days",
+    "syncWallClock": "persisted_start_to_completion_last_7_days",
+    "captureToLive": "confirmed_quick_list_t7_minus_t2_last_30_days"
+  },
+  "privacy": {
+    "projection": "recursive_explicit_field_allowlist",
+    "credentials": "omitted",
+    "identifiers": "omitted",
+    "itemPayloads": "omitted",
+    "rawEventsAndErrors": "omitted",
+    "archiveTenantIdentity": "omitted",
+    "exportServerStorage": "none",
+    "nativeTemporaryFiles": "deleted_after_share_or_failure"
+  },
+  "acceptance": {
+    "jest": "not_executed",
+    "typescript": "not_executed",
+    "positiveOwnerJwt": "not_executed",
+    "negativeSubscriberJwt": "not_executed",
+    "browserDownload": "not_executed",
+    "installedIosAndAndroidSharing": "not_executed"
+  },
+  "report": "docs/SWISH_PERFORMANCE_JSON_EXPORT.md"
+}

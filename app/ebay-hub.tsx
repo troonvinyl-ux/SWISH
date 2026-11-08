@@ -9,7 +9,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable,
-  ActivityIndicator, RefreshControl,
+  ActivityIndicator, RefreshControl, FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -534,7 +534,7 @@ function EbayHubScreenContent() {
   interface HubSyncState {
     phase: 'idle' | 'running' | 'done' | 'error';
     current: number; total: number; updated: number; images: number;
-    titles: number; failed: number; errorMsg?: string; requiresReauth?: boolean;
+    titles: number; failed: number; errorMsg?: string; requiresReauth?: boolean; issues?: Array<{ externalListingId: string; message: string }>; 
   }
   const EMPTY_SYNC: HubSyncState = { phase: 'idle', current: 0, total: 0, updated: 0, images: 0, titles: 0, failed: 0 };
   const [hubSync, setHubSync] = useState<HubSyncState>(EMPTY_SYNC);
@@ -601,12 +601,16 @@ function EbayHubScreenContent() {
     setHubSync({ ...EMPTY_SYNC, phase: 'running' });
     setHubImgDl(EMPTY_IMGDL);
     try {
-      const { data, error, requiresReauth } = await runNicheEbayOperation(tenant.id,effectiveNicheId,'sync');
+      const { data, error, requiresReauth } = await runNicheEbayOperation(tenant.id,effectiveNicheId,'sync',{
+        isCurrent:()=>currentScope.current===scope,
+        onProgress:progress=>{if(currentScope.current===scope)setHubSync(prev=>({...prev,current:progress.processed??0,updated:progress.updated??0,images:progress.imagesFetched??0,titles:progress.titlesFixed??0,failed:progress.failed??0,issues:progress.issues??[]}));},
+      });
       if(currentScope.current!==scope)return;
       if (error) {
         const msg=error;
         const isReauth=requiresReauth;
-        setHubSync(prev => ({ ...prev, phase: 'error', errorMsg: msg, requiresReauth: isReauth }));
+        setHubSync(prev => ({ ...prev, phase: 'error', errorMsg: msg, requiresReauth: isReauth, issues:data?.issues??prev.issues }));
+        if(Number(data?.updated)>0){triggerInventoryReload();void load();}
         return;
       }
       setHubSync({
@@ -751,7 +755,7 @@ function EbayHubScreenContent() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={s.syncPanelTitle}>Sync with eBay</Text>
-              <Text style={s.syncPanelDesc}>Update all titles, descriptions and item specifics from eBay</Text>
+              <Text style={s.syncPanelDesc}>Refresh this niche’s saved eBay links in small batches. Restricted listings are reported separately; importing new listings is a separate action.</Text>
             </View>
           </View>
 
@@ -759,7 +763,7 @@ function EbayHubScreenContent() {
           {hubSync.phase === 'running' ? (
             <View style={s.syncRunning}>
               <ActivityIndicator size="small" color="#E53238" />
-              <Text style={s.syncRunningText}>Syncing eBay listings…</Text>
+              <Text accessibilityLiveRegion="polite" style={s.syncRunningText}>Syncing… {hubSync.current} checked · {hubSync.updated} reconciled{hubSync.failed ? ` · ${hubSync.failed} need attention` : ''}</Text>
             </View>
           ) : null}
 
@@ -840,6 +844,7 @@ function EbayHubScreenContent() {
             </View>
           ) : null}
 
+          {hubSync.issues?.length ? <View style={s.syncResult}><Text style={s.syncPanelTitle}>Listings needing eBay review</Text><FlatList data={hubSync.issues} scrollEnabled={false} keyExtractor={issue=>issue.externalListingId} renderItem={({item:issue})=><View style={s.syncError}><MaterialIcons name="policy" size={20} color={Colors.warning}/><Text selectable style={s.syncErrorText}>#{issue.externalListingId} · {issue.message}</Text></View>}/><Text style={s.syncPanelDesc}>SWISH cannot override a marketplace policy removal. Review the notice in your eBay Seller Hub; no local record or photo was deleted.</Text></View>:null}
           {/* Sync button */}
           {hubSync.phase === 'idle' || hubSync.phase === 'error' ? (
             <Pressable onPress={handleHubSync} style={({ pressed }) => [s.syncBtn, pressed && { opacity: 0.8 }]}>

@@ -46,6 +46,7 @@ const workflowDefinitions = [
   { file: 'niche-config-checks.yml', label: 'Regression, security and native bundle' },
   { file: 'production-readiness-register.yml', label: 'Production register validation' },
   { file: 's2-s3-foundation.yml', label: 'S2–S3 foundation acceptance' },
+  { file: 'production-acceptance-gate.yml', label: 'Current-source production acceptance and protected review' },
 ];
 
 export function createProductionSnapshot(): ProductionSnapshot {
