@@ -543,8 +543,10 @@ export function getNicheSpecialistIds(nicheId: NicheId | string | null | undefin
   if (!nicheId) return [];
   const niche = NICHES[nicheId as NicheId];
   if (!niche) return [];
-  // Return the specialists array from the niche config (single source of truth)
-  return niche.specialists as string[];
+  // Read-only historical aliases have the same unique owner as canonical specialists.
+  // Return a copy so one caller cannot mutate the registry used by every other screen.
+  const product = NICHE_MODULES[nicheId as RegisteredNicheId];
+  return product ? [...new Set([...product.specialists, ...product.legacySpecialists])] : [...niche.specialists];
 }
 
 // Returns true if a specialist_id belongs to the given niche.
@@ -555,17 +557,16 @@ export function isSpecialistInNiche(specialistId: string, nicheId: NicheId | str
 // Returns the niche that owns a given specialist_id, or null if unclassified.
 // Used for routing items to the correct niche view.
 export function nicheIdForSpecialist(specialistId: string): NicheId | null {
-  for (const [nicheId, config] of Object.entries(NICHES)) {
-    if (config.specialists.includes(specialistId as any)) {
-      return nicheId as NicheId;
-    }
+  for (const [nicheId, config] of Object.entries(NICHE_MODULES)) {
+    if ([...config.specialists, ...config.legacySpecialists].includes(specialistId)) return nicheId as RegisteredNicheId;
   }
-  return null;
+  // Compatibility display only; 'general' never grants a production module.
+  return specialistId === 'curiosities_collectibles' ? 'general' : null;
 }
 
 // ── Production niche gate ─────────────────────────────────────────────────────
 // Only explicitly registered production niches are active in the application.
-// All ten registered products are selectable subject to server entitlements.
+// All registered products are selectable subject to server entitlements.
 // The generic catch-all remains outside production. Historical records are preserved.
 
 export const PRODUCTION_NICHE_IDS = Object.keys(moduleRegistry.products) as RegisteredNicheId[];

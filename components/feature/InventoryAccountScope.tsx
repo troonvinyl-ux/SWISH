@@ -17,7 +17,7 @@ export const InventoryAccountScope = memo(function InventoryAccountScope({ total
     <View style={s.row}><MaterialIcons name="account-circle" size={24} color={activeNiche.color}/><View style={s.flex}>
       <Text selectable style={s.name}>{user?.email ?? 'Sign in required'}</Text>
       <Text style={s.body}>{tenant?.name ?? 'Verifying workspace'} · {activeNiche.shortName}</Text>
-    </View><LogoutButton confirmationMessage="Sign out to use the account that owns your existing inventory. Original coins, photographs, valuations and eBay connections remain in their existing tenant; nothing is copied or disconnected."/></View>
+    </View><LogoutButton confirmationMessage="Sign out to use the account that owns your existing inventory. Original inventory, photographs, valuations and eBay connections remain in their existing tenant; nothing is copied or disconnected."/></View>
     {tenant?.id ? <Text selectable style={s.reference}>Workspace ID: {tenant.id}</Text> : null}
     {available && total !== undefined ? <Text style={s.body}>{total} authorised {activeNiche.terms.items.toLowerCase()} across all inventory states.</Text> : null}
     {available && total === 0 ? <Text style={s.body}>No records were returned for this account and workspace. If your collection was saved using another account, sign out and sign in with that account. Switching niche does not switch the owner or tenant.</Text> : null}

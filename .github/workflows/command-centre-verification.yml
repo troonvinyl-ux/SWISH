@@ -36,7 +36,7 @@ jobs:
         run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand --json --outputFile=command-centre-jest.json
       - name: Text-first report responsive data/layout regressions
         if: ${{ !cancelled() }}
-        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/commandMinorityReport.test.ts
+        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/commandMinorityReport.test.ts services/__tests__/commandWorkspaceCounts.test.ts services/__tests__/canonicalInventoryCounting.test.ts services/__tests__/ebayHubNicheSalesFilter.test.ts
       - name: Expo web bundling smoke check
         if: ${{ !cancelled() }}
         run: npx expo export --platform web --output-dir command-report-web

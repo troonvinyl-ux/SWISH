@@ -7,10 +7,16 @@ on:
         required: true
         default: preview-unified
         options: [preview-unified, production-unified]
+      platform:
+        type: choice
+        required: true
+        default: android
+        options: [android, ios, all]
+        description: Android needs only its verified APK; all requires both native baselines
       baseline_run:
         type: string
         required: true
-        description: Verified unified native build run ID
+        description: Successful unified native build run ID on main (selected platform artifacts required)
       message:
         type: string
         required: true
@@ -25,8 +31,12 @@ jobs:
     env:
       SWISH_NICHE: ''
       SWISH_MASTER_ADMIN: '0'
+      SWISH_TEST_LAB: '0'
+      SWISH_OTA_PUBLISH: '1'
+      SWISH_OTA_PLATFORM: ${{ inputs.platform }}
       SWISH_RELEASE_CHANNEL: ${{ inputs.channel }}
       EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
+      SWISH_RELEASE_CERT_SHA256: ${{ vars.SWISH_RELEASE_CERT_SHA256 || secrets.SWISH_RELEASE_CERT_SHA256 }}
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       GH_TOKEN: ${{ github.token }}
       SWISH_BASELINE_RUN: ${{ inputs.baseline_run }}
@@ -44,12 +54,31 @@ jobs:
         with:
           node-version: 22
       - run: bash scripts/install-dependencies.sh
+      - name: Require approved project, main branch and safe release inputs
+        run: |
+          test "$GITHUB_REF" = refs/heads/main
+          test -n "$EXPO_TOKEN" && test -n "$EXPO_PROJECT_ID"
+          node --input-type=module -e 'import { selectedOtaPlatforms } from "./scripts/unified-ota-policy.mjs"; selectedOtaPlatforms(process.env.SWISH_OTA_PLATFORM); if(!["preview-unified","production-unified"].includes(process.env.SWISH_RELEASE_CHANNEL)) throw Error("Unknown release channel"); if(!process.env.OTA_MESSAGE?.trim() || process.env.OTA_MESSAGE.length>120) throw Error("Release note must contain 1–120 characters.");'
+      - run: node --test scripts/unified-ota-policy.test.mjs
       - run: npx tsc --noEmit
+      - run: npx expo lint
       - run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand
-      - run: node scripts/verify-unified-ota.mjs
+      - name: Verify actual selected-platform artifacts and unchanged native fingerprint
+        run: node scripts/verify-unified-ota.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: swish-compatible-ota-impact
+          path: dist/unified-ota-impact.json
+          if-no-files-found: error
       - name: Publish one atomic runtime-compatible bundle only after approval
         run: |
           test -n "$EXPO_TOKEN" && test -n "$EXPO_PROJECT_ID"
           test -n "$OTA_MESSAGE" && test "${#OTA_MESSAGE}" -le 120
-          npx --yes eas-cli@27.2.0 update --channel "$SWISH_RELEASE_CHANNEL" --message "$OTA_MESSAGE" --non-interactive
+          npx --yes eas-cli@27.2.0 update --platform "$SWISH_OTA_PLATFORM" --channel "$SWISH_RELEASE_CHANNEL" --message "$OTA_MESSAGE" --non-interactive --json > dist/unified-ota-publication.json
+      - name: Retain publisher receipts without claiming installed-device acceptance
+        uses: actions/upload-artifact@v4
+        with:
+          name: swish-compatible-ota-publication
+          path: dist/unified-ota-publication.json
+          if-no-files-found: error
 # This workflow is manual only. Configure required reviewers on swish-ota-approval.

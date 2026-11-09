@@ -3,7 +3,8 @@
 import { getSupabaseClient } from '@/template';
 import { recordPrevention } from './performanceMonitoringService';
 import type { CapturedImage } from './aiIdentificationService';
-import { uploadUntouchedOriginal, verifyStoredOriginal } from './originalImageService';
+import { verifyStoredOriginal } from './originalImageService';
+import { uploadCapturedPhoto } from './captureUploadService';
 import { prepareCapturedImages } from './sharedImagePreparationService';
 import { resolveProductionNiche } from './nicheRouting';
 import { PHOTO_PIPELINE_VERSION, photoRoleId, mergePhotoAssets, photoPersistenceIssue, type PhotoAsset, type PhotoExpectation } from '@/shared/photoPersistence';
@@ -79,6 +80,11 @@ async function persist(tenantId: string, itemId: string, source: CapturedImage[]
   try {
     const row = await readRow(tenantId, itemId);
     if (!originals.length) throw new Error('Capture original photographs before saving photo references.');
+    // Finish/reuse cleanup before linking photos. Identification always uses image.uri, not the cutout.
+    if (processImages) {
+      const prepared = await prepareCapturedImages(originals, { tenantId, nicheId: resolveProductionNiche(row.specialist_id) ?? undefined });
+      prepared.forEach((image, index) => { originals[index] = image; Object.assign(source[index], image); });
+    }
     const checkpoint=await commit(tenantId, itemId, [], originals.map(image => ({ slotId: image.slotId, slotLabel: image.slotLabel, ...(image.originalStorageUri && row.media?.includes(image.originalStorageUri) ? { url: image.originalStorageUri } : {}) })), [], undefined, row);
     // Two independent immutable uploads at a time: bound native memory while hiding network latency.
     let nextIndex = 0;
@@ -95,7 +101,7 @@ async function persist(tenantId: string, itemId: string, source: CapturedImage[]
           if (!path.startsWith(root) || !/\.(jpg|jpeg|png|webp|gif)$/i.test(path) || canonicalUrl !== cached) throw new Error('Retained original belongs to another item, storage bucket or capture role.');
           await verifyStoredOriginal(path, image.originalByteHash);
           saved = { url: cached, hash: image.originalByteHash };
-        } else saved = await uploadUntouchedOriginal(itemId, image.slotId, image.uri);
+        } else saved = await uploadCapturedPhoto(itemId, image);
         originals[index] = { ...image, originalStorageUri: saved.url, originalByteHash: saved.hash };
         Object.assign(source[index], originals[index]);
       } catch (cause) {
@@ -104,14 +110,9 @@ async function persist(tenantId: string, itemId: string, source: CapturedImage[]
       }
     } };
     await Promise.all(Array.from({length:Math.min(2,originals.length)},()=>uploadWorker()));
-    const assets = originals.filter(image => image.originalStorageUri).map(image => ({ slotId: image.slotId, slotLabel: image.slotLabel, url: image.originalStorageUri!, ...(image.originalByteHash ? { hash: image.originalByteHash } : {}) }));
+    const assets = originals.filter(image => image.originalStorageUri).map(image => ({ slotId: image.slotId, slotLabel: image.slotLabel, url: image.originalStorageUri!, ...(image.originalByteHash ? { hash: image.originalByteHash } : {}), ...(image.uploadCopy ? { uploadCopy: { kind: image.uploadCopy.kind, sourceHash: image.uploadCopy.sourceHash, dpi: image.uploadCopy.dpi, width: image.uploadCopy.width, height: image.uploadCopy.height } } : {}) }));
     const expected = originals.map(image => ({ slotId: image.slotId, slotLabel: image.slotLabel, ...(image.originalStorageUri ? { url: image.originalStorageUri } : {}) }));
-    let check=await commit(tenantId, itemId, assets, expected, originals, undefined, checkpoint);
-    if (processImages) {
-      const prepared = await prepareCapturedImages(originals, { tenantId, nicheId: resolveProductionNiche(row.specialist_id) ?? undefined });
-      prepared.forEach((image, index) => { originals[index] = image; Object.assign(source[index], image); });
-      check=await commit(tenantId, itemId, assets, expected, originals, undefined, check);
-    }
+    const check=await commit(tenantId, itemId, assets, expected, originals, undefined, checkpoint);
     const issue = photoPersistenceIssue(check.media ?? [], check.attributes ?? {});
     if (issue && !errors.length) errors.push(issue);
     return { urls: originals.filter(image => image.originalStorageUri).map(image => image.originalStorageUri!), images: originals, errors, complete: !errors.length && !issue };
