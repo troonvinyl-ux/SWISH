@@ -2392,7 +2392,7 @@ export default function StockListingScreen() {
       ? { id: 'edit', label: 'Edit listing', detail: '', icon: 'edit', onPress: () => router.push(`/ebay-listing-editor?id=${activeListings[0].id}` as any) }
       : { id: 'create', label: 'Create listing', detail: '', icon: 'sell', onPress: () => router.push(`/create-listing?id=${item.id}` as any) };
   const itemActions: StockListingAction[] = [
-    { id: 'identify', label: 'Re-identify with AI', detail: `Use your ${niche.shortName.toLowerCase()} specialist and existing photos.`, icon: 'auto-awesome', onPress: () => setReIdVisible(true) },
+    ...(draftListings.length > 0 && !activeListings.length && !isSold ? [{ id: 'identify', label: 'Re-identify draft · photos & clues', detail: `Add evidence for your ${niche.shortName.toLowerCase()} specialist without publishing.`, icon: 'auto-awesome' as const, onPress: () => router.push(`/ebay-listing-editor?id=${draftListings[0].id}&reidentify=1` as any) }] : []),
     { id: 'research', label: 'Research item', detail: 'Review relevant references and marketplace evidence.', icon: 'manage-search', onPress: () => router.push(`/research?q=${encodeURIComponent(item.canonicalTitle)}` as any) },
     { id: 'photos', label: 'Fetch eBay photos', detail: 'Retrieve photos from the linked marketplace listing.', icon: 'cloud-download', onPress: handleFetchImage, busy: fetchingImage },
     ...(hasLiveLink ? [
@@ -2445,7 +2445,9 @@ export default function StockListingScreen() {
           onReconnect={() => router.push('/marketplaces' as any)}
         />
 
-        {/* ── STATUS BANNERS ── */}
+        {draftListings.length > 0 && !activeListings.length && !isSold ? <View style={s.listingCard}><SectionHeader icon="auto-awesome" label="Improve draft identification" color={nicheAccent}/><Text style={s.listingDescPreview}>Add more photos, close-ups, inscriptions or clues, then review a new identification on this same draft.</Text><Pressable accessibilityLabel="Re-identify draft with photos and clues" onPress={() => router.push(`/ebay-listing-editor?id=${draftListings[0].id}&reidentify=1` as any)} style={({pressed}) => [s.headerBtn, {width:'100%',flexDirection:'row',gap:Spacing.sm}, pressed ? {opacity:0.65} : null]}><MaterialIcons name="add-photo-alternate" size={22} color={nicheAccent}/><Text style={[s.headerTitle,{color:nicheAccent}]}>Re-identify · add photos & clues</Text></Pressable></View> : null}
+
+        {/* ── STATUS BANNNERS ── */}
         {activeListings.length > 0 ? (
           <View style={s.liveBanner}>
             <MaterialIcons name="wifi-tethering" size={14} color={Colors.success} />

@@ -40,7 +40,7 @@ export function usePremiumCamera(capture: ReturnType<typeof useGenericCapture>) 
     } catch(cause) {if(isCurrent())setError(cause instanceof Error?cause.message:'Camera unavailable. Use the gallery.');}
     finally {if(flight.current===sessionId){flight.current=null;if(isCurrent())setTaking(false);}}
   },[slot,capture.sessionId,capture.isCurrentSession,capture.busy,capture.savedId,capture.capture,capture.addCapturedPhoto,permission?.granted,requestPermission,ready,focused]);
-  return {cameraRef,permission,requestPermission,focused,ready,taking,facing,grid,flash,error,slot,setSlotId,take,
+  return {cameraRef,permission,requestPermission,focused,ready,taking,facing,grid,flash,error,slot,setSlotId,take,onReset:()=>setReady(false),
     onReady:()=>{if(capture.isCurrentSession())setReady(true);},onError:()=>{if(capture.isCurrentSession()){setReady(false);setError('Camera could not start. Check camera permission or upload photographs.');}},
     toggleGrid:()=>setGrid(value=>!value),toggleFlash:()=>setFlash(value=>!value),flip:()=>{setReady(false);setFlash(false);setFacing(value=>value==='back'?'front':'back');}};
 }

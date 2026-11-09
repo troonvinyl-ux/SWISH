@@ -2,6 +2,7 @@
 // Generates, previews, saves, and retrieves marketplace listings.
 
 import { getSupabaseClient } from '@/template';
+import { listingClarification, type ListingClarification } from '@/shared/listingClarification';
 import { preferredListingPhotos } from '@/shared/smartStudio';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { getBusinessConfig } from '@/services/businessConfigService';
@@ -459,6 +460,7 @@ export interface SubmitResult {
   accepted?: boolean;
   reconciliationPending?: boolean;
   publicationUnconfirmed?: boolean;
+  clarification?: ListingClarification;
 }
 
 export function publicationSubmitResult(publication: ListingPublication): SubmitResult {
@@ -608,7 +610,7 @@ async function performListingSubmission(
   if (nicheId) {
     const { checkAntiqueListing } = await import('@/services/listingEditorService');
     const checked = await checkAntiqueListing(tenantId, listingId, nicheId);
-    if (!checked.ready) return { success: false, step: 'failed', error: checked.error ?? 'Specialist preflight not confirmed.' };
+    if (!checked.ready) return { success: false, step: 'failed', error: checked.error ?? 'Specialist preflight not confirmed.', clarification: checked.clarification ?? listingClarification({ error: checked.error }) }; 
   }
   const safety = evaluateSpecialistSafety(nicheId, itemAttributes);
   if (safety.blocked) return { success:false,step:'failed',error:safety.reasons.join(' ') };
@@ -720,8 +722,8 @@ async function performListingSubmission(
       const result = await acceptedPublication(tenantId, listingId, String(errorPayload.externalListingId), errorPayload.publishedAt, errorPayload.warnings ?? []);
       onStep?.('done'); return result;
     }
-    if (!errorStatus || errorStatus >= 500 || errorPayload?.code === 'PUBLISH_RECONCILIATION_REQUIRED') return unconfirmedPublication(tenantId, listingId);
-    return { success: false, step: 'failed', verificationPassed: true, error: msg };
+    if (!errorStatus || (errorStatus >= 500 && errorPayload?.notSubmitted !== true) || errorPayload?.code === 'PUBLISH_RECONCILIATION_REQUIRED' || errorPayload?.code === 'PUBLISH_RECONCILIATION_REQUIRED') return unconfirmedPublication(tenantId, listingId);
+    return { success: false, step: 'failed', verificationPassed: true, error: msg, clarification: listingClarification({ ...errorPayload, error: msg }) }; 
   }
 
   if (!ebayData?.success) {
@@ -736,6 +738,7 @@ async function performListingSubmission(
       verificationPassed: true,
       error: ebayData?.error ?? 'eBay did not confirm the listing was created.',
       failureReasons: ebayData?.errors,
+      clarification: listingClarification({ ...ebayData, error: ebayData?.error }),
     };
   }
 

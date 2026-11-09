@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { availableListingPhotos, preferredListingPhotos, selectedListingPhotos } from '@/shared/smartStudio';
+import { identificationPublicationAdvice, listingClarification, type ListingClarification } from '@/shared/listingClarification';
 import { moveMainImageFirst } from '@/services/itemPhotoService';
 import { recoverCapturedItemPhotos } from '@/services/capturedPhotoRecoveryService';
 import { reviseListingPrice } from '@/services/listingPriceRevisionService';
@@ -17,7 +18,7 @@ import { loadListingEditor, saveListingEditor, invokeListingOperation, type Edit
 import { normalizeAntiqueAspects, seedAntiqueSpecifics, type AntiqueAspect, type AntiqueConditionPolicy } from '@/shared/antiqueListingPolicy';
 export interface ListingEditorState extends EditorSave {
  itemId:string;externalListingId:string;status:string;media:string[];availableMedia:string[];specialistId:string;itemAttributes?:Record<string,any>;
- inventoryId:string;valuationMid:number;recommendedPrice:number;savedPrice:number;itemTitle:string;subtitle:string;conditionId:string;
+ inventoryId:string;valuationMid:number;recommendedPrice:number;savedPrice:number;itemTitle:string;subtitle:string;conditionId:string;identificationConfidence:number;
  listingType:'FixedPriceItem'|'Chinese';auctionDays:number;startPrice:string;reservePrice:string;bestOfferEnabled:boolean;dispatchDays:number;
 }
 interface Aspect {name:string;required:boolean;values:string[];mode?:string;maxLength?:number;cardinality?:string;variations?:boolean}
@@ -32,6 +33,7 @@ export function useListingEditor(listingId:string) {
  const [state,setState]=useState<ListingEditorState|null>(null),[loadedScope,setLoadedScope]=useState('');
  const [loading,setLoading]=useState(false),[busy,setBusy]=useState(false),[dirty,setDirty]=useState(false);
  const [error,setError]=useState<string|null>(null),[aspects,setAspects]=useState<Aspect[]>([]);
+ const [publicationHelp,setPublicationHelp]=useState<{scope:string;error:string;help:ListingClarification}|null>(null);
  const [conditionPolicy,setConditionPolicy]=useState<AntiqueConditionPolicy|null>(null),[requirementsReady,setRequirementsReady]=useState(false);
  const [categories,setCategories]=useState<any[]>([]),[categorySource,setCategorySource]=useState('');
  const requirements=useCallback(async(categoryId:string)=>{
@@ -62,7 +64,7 @@ export function useListingEditor(listingId:string) {
   }catch(cause){if(currentScope.current===scope&&request===categoryRequest.current)setError(cause instanceof Error?cause.message:'Category requirements failed.');}
  },[tenant?.id,scope,antique,nicheId]);
  const load=useCallback(async()=>{
-  if(!tenant||!listingId)return;setLoading(true);setError(null);setNotice(null);setLoadedScope('');setLive(null);
+  if(!tenant||!listingId)return;setLoading(true);setError(null);setNotice(null);setLoadedScope('');setLive(null);setPublicationHelp(null);
   try{
    let result=await loadListingEditor(tenant.id,listingId,nicheId);if(currentScope.current!==scope)return;
    if(result.error||!result.data){setError(result.error);return;}
@@ -94,7 +96,7 @@ export function useListingEditor(listingId:string) {
    const originals:string[]=item.media??[],availableMedia=availableListingPhotos(originals,attrs);
    const seedRecovered=recoveredPhotos&&Array.isArray(attrs.ebay_listing_media)&&!attrs.ebay_listing_media.length&&!row.external_listing_id;
    const media=antique&&Array.isArray(attrs.ebay_listing_media)&&!seedRecovered?selectedListingPhotos(originals,attrs).filter((url:string)=>availableMedia.includes(url)):preferredListingPhotos(originals,attrs);
-   setState({tenantId:tenant.id,listingId:row.id,nicheId,itemAttributes:attrs,itemId:item.id,externalListingId:row.external_listing_id??'',status:row.status,title:row.title??'',description:row.description??'',price:String(row.price??0),savedPrice:Number(row.price??0),shippingCost:String(row.shipping_cost??0),floorPrice:String(row.floor_price??0),ceilingPrice:String(row.ceiling_price??0),categoryId,categoryName:String(attrs.ebay_category_name??categoryId),condition:item.condition??'',conditionDescription:antique?item.condition_notes||item.condition_grade||'':item.condition_grade??'',conditionId:String(attrs.ebay_condition_id??''),quantity:String(item.quantity??1),sku:item.sku??'',itemSpecifics:specifics,media,availableMedia,specialistId:item.specialist_id??'',inventoryId:item.inventory_id??'',valuationMid:Number(item.valuation_mid??0),recommendedPrice:Number(item.expected_selling_price??0),itemTitle:item.canonical_title??'',subtitle:'',listingType:options.listingType??'FixedPriceItem',auctionDays:Number(options.auctionDays??7),startPrice:String(options.startPrice??row.price??0),reservePrice:String(options.reservePrice??''),bestOfferEnabled:options.bestOfferEnabled===true,dispatchDays:Number(options.dispatchDays??3)});
+   setState({tenantId:tenant.id,listingId:row.id,nicheId,itemAttributes:attrs,itemId:item.id,externalListingId:row.external_listing_id??'',status:row.status,title:row.title??'',description:row.description??'',price:String(row.price??0),savedPrice:Number(row.price??0),shippingCost:String(row.shipping_cost??0),floorPrice:String(row.floor_price??0),ceilingPrice:String(row.ceiling_price??0),categoryId,categoryName:String(attrs.ebay_category_name??categoryId),condition:item.condition??'',conditionDescription:antique?item.condition_notes||item.condition_grade||'':item.condition_grade??'',conditionId:String(attrs.ebay_condition_id??''),quantity:String(item.quantity??1),sku:item.sku??'',itemSpecifics:specifics,media,availableMedia,specialistId:item.specialist_id??'',inventoryId:item.inventory_id??'',valuationMid:Number(item.valuation_mid??0),recommendedPrice:Number(item.expected_selling_price??0),itemTitle:item.canonical_title??'',subtitle:'',identificationConfidence:Number(item.identification_confidence??0),listingType:options.listingType??'FixedPriceItem',auctionDays:Number(options.auctionDays??7),startPrice:String(options.startPrice??row.price??0),reservePrice:String(options.reservePrice??''),bestOfferEnabled:options.bestOfferEnabled===true,dispatchDays:Number(options.dispatchDays??3)});
    setLoadedScope(scope);setDirty(seedRecovered||(Array.isArray(attrs.ebay_listing_media)&&JSON.stringify(media)!==JSON.stringify(attrs.ebay_listing_media)));setAspects([]);
    if(categoryId)await requirements(categoryId);
   }catch{if(currentScope.current===scope)setError('Listing could not load. Reload before making changes.');}
@@ -175,7 +177,7 @@ export function useListingEditor(listingId:string) {
  };
  const submit=async()=>{
   if(!state||state.externalListingId||unconfirmed||publishedId||busy||actionLock.current||loadedScope!==scope)return;actionLock.current=true;setBusy(true);setError(null);
-  try{if(!await persistState(state))return;const result=await submitListingToMarketplace(state.tenantId,state.listingId,undefined,{listingType:state.listingType,auctionDays:state.auctionDays,startPrice:state.listingType==='Chinese'?Number(state.startPrice):undefined,reservePrice:Number(state.reservePrice)||undefined});if(currentScope.current!==scope)return;if(result.success&&result.externalListingId){setPublishedId(result.externalListingId);triggerInventoryReload();}else{setUnconfirmed(Boolean(result.publicationUnconfirmed||result.accepted));setError(result.error??'Listing was not confirmed.');}}
+  try{if(!await persistState(state))return;const result=await submitListingToMarketplace(state.tenantId,state.listingId,undefined,{listingType:state.listingType,auctionDays:state.auctionDays,startPrice:state.listingType==='Chinese'?Number(state.startPrice):undefined,reservePrice:Number(state.reservePrice)||undefined});if(currentScope.current!==scope)return;if(result.success&&result.externalListingId){setPublishedId(result.externalListingId);triggerInventoryReload();}else{const message=result.error??'Listing was not confirmed.';const pending=Boolean(result.publicationUnconfirmed||result.accepted);setUnconfirmed(pending);setError(message);setPublicationHelp({scope,error:message,help:pending?listingClarification({error:message,publicationUnconfirmed:true}):result.clarification??listingClarification({error:message})});}}
   catch{if(currentScope.current===scope){setUnconfirmed(true);setError('Publication needs checking. Do not submit again.');}}finally{actionLock.current=false;if(currentScope.current===scope)setBusy(false);}
  };
  const syncPublication=async()=>{
@@ -183,5 +185,13 @@ export function useListingEditor(listingId:string) {
   try{const checked=await invokeListingOperation({route:'inspect_live',tenantId:state.tenantId,listingId:state.listingId});if(currentScope.current!==scope)return;if(checked.data?.live?.externalListingId&&checked.data.live.listingStatus==='Active'){setPublishedId(checked.data.live.externalListingId);triggerInventoryReload();}else setError(checked.error??'The existing listing is not confirmed live yet. Synchronise eBay; resubmission remains blocked.');}
   finally{actionLock.current=false;if(currentScope.current===scope)setBusy(false);}
  };
- return {applyRecommendedPrice,checkPriceRevision,priceUnconfirmed,notice:loadedScope===scope?notice:null,submit,syncPublication,unconfirmed,publishedId,data:loadedScope===scope?state:null,live:loadedScope===scope?live:null,checkLive,loading,busy,dirty,error,aspects,categories,categorySource,conditionPolicy:loadedScope===scope?conditionPolicy:null,requirementsReady,update,setMainPhoto,save,revise,generate,categoriesLookup,chooseCategory,reload:load,retryRequirements:()=>{if(state?.categoryId)void requirements(state.categoryId);}};
+ const retryRequirements=async()=>{
+  if(!state||loadedScope!==scope||busy||actionLock.current)return;
+  if(!state.categoryId){setError('Choose a final eBay category in Category, save the draft, then check its requirements.');return;}
+  actionLock.current=true;setBusy(true);setError(null);setPublicationHelp(null);
+  try{await requirements(state.categoryId);}finally{actionLock.current=false;if(currentScope.current===scope)setBusy(false);}
+ };
+ const clarification=error?(publicationHelp?.scope===scope&&publicationHelp.error===error?publicationHelp.help:listingClarification({error,publicationUnconfirmed:unconfirmed})):null;
+ const identificationAdvice=loadedScope===scope&&state?identificationPublicationAdvice(state.identificationConfidence,state.itemAttributes?.identification_state,state.itemAttributes??{}):null;
+ return {clarification,identificationAdvice,applyRecommendedPrice,checkPriceRevision,priceUnconfirmed,notice:loadedScope===scope?notice:null,submit,syncPublication,unconfirmed,publishedId,data:loadedScope===scope?state:null,live:loadedScope===scope?live:null,checkLive,loading,busy,dirty,error,aspects,categories,categorySource,conditionPolicy:loadedScope===scope?conditionPolicy:null,requirementsReady,update,setMainPhoto,save,revise,generate,categoriesLookup,chooseCategory,reload:load,retryRequirements};
 }

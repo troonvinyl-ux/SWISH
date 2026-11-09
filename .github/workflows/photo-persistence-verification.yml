@@ -24,7 +24,13 @@ jobs:
         run: npx tsc --noEmit > verification-output/typescript.txt 2>&1
       - name: All-niche mocked canonical photo lifecycle
         if: ${{ !cancelled() }}
-        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/photoCarryForwardIntegration.test.ts services/__tests__/inventoryPhotoPersistence.test.ts services/__tests__/capturedPhotoRecovery.test.ts services/__tests__/photoPipelineBoundary.test.ts services/__tests__/originalImageBytes.test.ts --json --outputFile=verification-output/photo-persistence-jest.json
+        run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand services/__tests__/photoCarryForwardIntegration.test.ts services/__tests__/captureUploadCopies.test.ts services/__tests__/inventoryPhotoPersistence.test.ts services/__tests__/capturedPhotoRecovery.test.ts services/__tests__/photoPipelineBoundary.test.ts services/__tests__/originalImageBytes.test.ts --json --outputFile=verification-output/photo-persistence-jest.json
+      - uses: denoland/setup-deno@v2
+        if: ${{ !cancelled() }}
+        with: {deno-version: v2.x}
+      - name: Offline transparent PNG export and provider-contract regressions
+        if: ${{ !cancelled() }}
+        run: deno test --allow-env supabase/tests/studio_export_density.test.ts supabase/tests/backgrounderase.test.ts > verification-output/studio-export-density.txt 2>&1
       - name: Edge dependency boundary
         if: ${{ !cancelled() }}
         run: node scripts/validate-edge-deployment.mjs
