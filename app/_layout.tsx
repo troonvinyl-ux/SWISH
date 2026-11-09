@@ -10,7 +10,9 @@ import { QuickListProvider } from '@/contexts/QuickListContext';
 import { EbayMessagesProvider } from '@/contexts/EbayMessagesContext';
 import { markQuickListAppOpened } from '@/services/quickListTelemetryService';
 import { setAppVisible } from '@/services/appVisibilityService';
-import { AppState } from 'react-native';
+import { AppState, View, StyleSheet } from 'react-native';
+import { AppUpdatesProvider } from '@/contexts/AppUpdatesContext';
+import { AppUpdateNotice } from '@/components/feature/AppUpdateNotice';
 import { Colors } from '@/constants/theme';
 import { NicheRouteBoundary } from '@/components/layout/NicheRouteBoundary';
 import * as SplashScreen from 'expo-splash-screen';
@@ -99,7 +101,11 @@ export default function RootLayout() {
             <WatchedLotsProvider>
             <QuickListProvider>
             <EbayMessagesProvider>
+            <AppUpdatesProvider>
             <TVBackHandlerProvider>
+              <View style={rootStyles.screen}>
+              <AppUpdateNotice />
+              <View style={rootStyles.screen}>
               <NicheRouteBoundary>
               <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="index" />
@@ -174,7 +180,10 @@ export default function RootLayout() {
                 <Stack.Screen name="deep-id-lab" />
               </Stack>
               </NicheRouteBoundary>
+              </View>
+              </View>
             </TVBackHandlerProvider>
+            </AppUpdatesProvider>
             </EbayMessagesProvider>
             </QuickListProvider>
             </WatchedLotsProvider>
@@ -186,3 +195,4 @@ export default function RootLayout() {
     </AlertProvider>
   );
 }
+const rootStyles = StyleSheet.create({ screen: { flex: 1, backgroundColor: Colors.background } });

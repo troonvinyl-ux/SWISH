@@ -3,12 +3,12 @@
 export interface NicheWorkflowPolicy {
   barcode: 'start' | 'optional' | 'disabled';
   quickReviewMinimum: number;
-  publicationMinimum: number;
+  publicationMinimum: number; // Zero: model confidence is advisory, not a marketplace permission.
   inventoryReviewMinimum: number;
 }
-const standard = (barcode: NicheWorkflowPolicy['barcode']): NicheWorkflowPolicy => ({ barcode, quickReviewMinimum: 0.7, publicationMinimum: 0.3, inventoryReviewMinimum: 0.8 });
+const standard = (barcode: NicheWorkflowPolicy['barcode']): NicheWorkflowPolicy => ({ barcode, quickReviewMinimum: 0.7, publicationMinimum: 0, inventoryReviewMinimum: 0.8 });
 export const NICHE_WORKFLOW_POLICIES: Readonly<Record<string, NicheWorkflowPolicy>> = {
-  coins: { ...standard('disabled'), quickReviewMinimum: 0.95, publicationMinimum: 0.95 },
+  coins: { ...standard('disabled'), quickReviewMinimum: 0.95, publicationMinimum: 0 },
   motocross: standard('disabled'), bicycles: standard('disabled'), clothing: standard('optional'),
   trading_cards: standard('disabled'), antiques: standard('disabled'), fossils: standard('disabled'),
   beauty: standard('optional'), tech: standard('optional'), surplus_flip: standard('optional'),

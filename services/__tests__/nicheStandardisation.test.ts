@@ -51,9 +51,9 @@ test('Collectibles is barcode-first, ancient coin identification cannot accept b
   expect(barcodeAgreesWithPhotos(lead, result)).toBe(false);
   expect(getSpecialistProfile('coins')?.recognition).toContain('Numista');
 });
-test('confidence thresholds preserve distinct Quick List and ordinary publication review', () => {
-  expect(getNicheWorkflowPolicy('coins')?.publicationMinimum).toBe(0.95);
-  expect(getNicheWorkflowPolicy('collectibles')).toMatchObject({ quickReviewMinimum: 0.7, publicationMinimum: 0.3 });
+test('AI review thresholds do not become eBay publishing permissions', () => {
+  expect(getNicheWorkflowPolicy('coins')).toMatchObject({ quickReviewMinimum: 0.95, publicationMinimum: 0 });
+  expect(getNicheWorkflowPolicy('collectibles')).toMatchObject({ quickReviewMinimum: 0.7, publicationMinimum: 0 });
   const slots = quickCaptureSlots('coins'), images = slots.map(slot => ({ uri: 'file://' + slot.id, slotId: slot.id, slotLabel: slot.label }));
   const result: any = { specialistId: 'coins', confidence: 0.94, attributes: {}, evidenceContradictory: [] };
   expect(quickReviewIssue('coins', result, slots, images)).toContain('ambiguous');
