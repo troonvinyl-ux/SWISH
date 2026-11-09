@@ -7,7 +7,7 @@ test('all normal scanner entry points share the short listing workspace',()=>{
  expect(source('app/antique-capture.tsx')).toContain('requiredNiche="antiques"');
 });
 test('save-only opens Draft while publish actions keep one real marketplace pipeline',()=>{
- expect(source('app/(tabs)/inventory.tsx')).toContain("['stock','draft','live','sold'].includes(requestedTab)");
+ expect(source('app/(tabs)/inventory.tsx').replace(/\s/g,'')).toContain("['stock','draft','live','sold'].includes(requestedTab)");
  expect(source('app/create-listing.tsx')).toContain("tab:'draft'");
  expect(source('components/feature/QuickListWorkspace.tsx')).toContain('flow.confirm(false)');
  expect(source('hooks/useListingEditor.ts')).toContain('submitListingToMarketplace(state.tenantId,state.listingId');
