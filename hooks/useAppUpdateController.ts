@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
-import * as Updates from 'expo-updates';
+import { idleNativeUpdateState, supportsAppUpdates, type NativeUpdateState } from '@/services/appUpdatesRuntimeService';
 import { installedAppVersion, checkCompatibleUpdate, downloadCompatibleUpdate, applyCompatibleUpdate, latestNativeRelease, openNativeRelease, type NativeRelease } from '@/services/appUpdateService';
 import { automaticUpdateDelayMs, shouldCheckAutomatically, type AppUpdateStatus } from '@/services/appUpdatePolicyService';
 
 // Mounted once by AppUpdatesProvider. No capture, auth, inventory or seller writes.
-export function useAppUpdateController() {
-  const nativeState = Updates.useUpdates();
+export function useAppUpdateController(nativeState: NativeUpdateState = idleNativeUpdateState) {
   const [status, setStatus] = useState<AppUpdateStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [nativeError, setNativeError] = useState<string | null>(null);
@@ -73,7 +72,7 @@ export function useAppUpdateController() {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const schedule = () => {
       if (timer) clearTimeout(timer);
-      const enabled = Platform.OS !== 'web' && Updates.isEnabled;
+      const enabled = supportsAppUpdates();
       if (!shouldCheckAutomatically(enabled, ready.current, busy.current || nativeBusy.current, lastAutomaticCheck.current, Date.now())) return;
       timer = setTimeout(() => {
         timer = null;

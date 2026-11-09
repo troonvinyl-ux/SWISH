@@ -1,5 +1,5 @@
 // SWISH Listing Verification Service
-// Mandatory verification gate: NO listing publishes until all checks pass.
+// Advisory quality assessment; real marketplace requirements are checked separately.
 // Verifies identity, description, condition, price, marketplace, inventory, compliance.
 
 import { getSupabaseClient } from '@/template';
@@ -257,12 +257,8 @@ export async function verifyListing(
     console.error('Failed to save verification record:', saveErr.message);
   }
 
-  // Update listing status based on verification
-  if (overallPassed) {
-    await supabase.from('listings').update({ status: 'verified' }).eq('id', listingId);
-  } else {
-    await supabase.from('listings').update({ status: 'needs_correction' }).eq('id', listingId);
-  }
+  // Quality advice must not change a saved draft's lifecycle or remove its
+  // re-identification tools. Publication/status reconciliation owns transitions.
 
   const verification: ListingVerification = {
     id: savedVerification?.id ?? 'temp',
