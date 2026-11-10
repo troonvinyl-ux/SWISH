@@ -1,808 +1,98 @@
-// SWISH — eBay Orders Import Edge Function v2
-//
-// CRITICAL CHANGES v2:
-//   1. Calls eBay Fulfillment REST API (getOrders) as primary source
-//   2. Falls back to Trading API GetOrders for legacy compatibility
-//   3. Marketplace fees sourced from ebay_financials when available (never estimated as "exact")
-//   4. Estimated 12.8% fee is always labelled ESTIMATE — never presented as exact
-//   5. Idempotent: running twice never creates duplicate orders
-//   6. All eBay order IDs stored in external_order_id for deduplication
-//   7. Logs every operation to ebay_sync_log
-//
-// POST body:
-//   { tenantId: string, daysBack?: number (default 30), mode?: 'fulfillment_api' | 'trading_api' | 'both' }
-
+// Shared eBay order sync: explicit payment + shipping evidence, atomic line ingestion, strict niche isolation.
 import { serveModule } from '../_shared/moduleScope.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
-import registry from '../_shared/niche-modules.json' with { type: 'json' };
+import { createClient } from 'npm:@supabase/supabase-js@2';
+import { encryptCredentials,decryptCredentials } from '../_shared/credentialCrypto.ts';
 import { corsHeaders } from '../_shared/cors.ts';
-import { nicheForSpecialist } from '../_shared/nicheAttribution.ts';
-
-const EBAY_TRADING_API_URL   = 'https://api.ebay.com/ws/api.dll';
-const EBAY_FULFILLMENT_API   = 'https://api.ebay.com/sell/fulfillment/v1';
-const EBAY_TOKEN_URL         = 'https://api.ebay.com/identity/v1/oauth2/token';
-
-function adminClient() {
-  return createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-  );
+import { fulfillmentOrderLines,tradingOrderPage,type OrderLineEvidence } from '../_shared/ebayOrderAdapters.ts';
+const REST='https://api.ebay.com/sell/fulfillment/v1';
+const adminClient=()=>createClient(Deno.env.get('SUPABASE_URL')??'',Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')??'');
+const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...corsHeaders,'Content-Type':'application/json'}});
+const escape=(v:string)=>v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+async function credentials(tenantId:string){
+ const db=adminClient();const result=await db.from('marketplace_connectors').select('id,status,credential_ref').eq('tenant_id',tenantId).eq('marketplace_id','ebay').maybeSingle();
+ if(result.error||!result.data?.credential_ref||result.data.status!=='connected')throw new Error('Connect eBay in Marketplaces.');
+ let creds=await decryptCredentials(result.data.credential_ref);
+ if(!creds.accessToken)throw new Error('Re-authorise eBay.');
+ if(!creds.expiresAt||Date.parse(creds.expiresAt)<Date.now()+300000){
+  if(!creds.refreshToken)throw new Error('eBay consent needs renewal.');
+  const response=await fetch('https://api.ebay.com/identity/v1/oauth2/token',{method:'POST',headers:{Authorization:`Basic ${btoa(`${creds.clientId}:${creds.clientSecret}`)}`,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'refresh_token',refresh_token:creds.refreshToken}).toString(),signal:AbortSignal.timeout(15000)});
+  const payload=await response.json();if(!response.ok||!payload.access_token)throw new Error('eBay token refresh failed. Re-authorise only if consent was revoked.');
+  creds={...creds,accessToken:payload.access_token,expiresAt:new Date(Date.now()+Number(payload.expires_in??7200)*1000).toISOString()};
+  const saved=await db.from('marketplace_connectors').update({credential_ref:await encryptCredentials(creds),access_token_expires_at:creds.expiresAt}).eq('id',result.data.id).eq('credential_ref',result.data.credential_ref).select('id').maybeSingle();
+  if(saved.error||!saved.data)throw new Error('Refreshed consent could not be saved securely.');
+ }
+ return creds;
 }
-
-type ListingMatch = {
-  listingId: string;
-  itemId: string;
-  price: number;
-  shippingCost: number;
-  categoryId: string | null;
-  specialistId: string | null;
-  nicheId: string | null;
-};
-
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
+const headers=(token:string)=>({Authorization:`Bearer ${token}`,Accept:'application/json','X-EBAY-C-MARKETPLACE-ID':'EBAY_GB'});
+async function restGet(url:string,token:string){const response=await fetch(url,{headers:headers(token),signal:AbortSignal.timeout(15000)});if(!response.ok)throw new Error(`eBay Fulfillment HTTP ${response.status}`);return response.json();}
+async function fulfillmentOrders(token:string,days:number){
+ const orders:any[]=[],from=new Date(Date.now()-days*86400000).toISOString();let complete=false;
+ for(let offset=0;offset<4000;offset+=200){const payload=await restGet(`${REST}/order?filter=${encodeURIComponent(`creationdate:[${from}..]`)}&limit=200&offset=${offset}`,token);if(!Array.isArray(payload.orders))throw new Error('eBay order page was incomplete');orders.push(...payload.orders);if(offset+payload.orders.length>=Number(payload.total??0)||payload.orders.length<200){complete=true;break;}}
+ if(!complete)throw new Error('eBay order page limit reached; choose a shorter sync window');return orders;
 }
-
-function xmlEscape(s: string): string {
-  return (s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+async function tradingOrders(token:string,clientId:string,days:number){
+ const lines:OrderLineEvidence[]=[],errors:string[]=[];let pages=1;
+ for(let page=1;page<=pages;page++){
+  // All seller commitments, including unpaid. Trading API has a maximum 90-day creation window.
+  const from=new Date(Date.now()-Math.min(90,days)*86400000).toISOString(),to=new Date(Date.now()-120000).toISOString();
+  const body=`<?xml version="1.0" encoding="utf-8"?><GetOrdersRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials><eBayAuthToken>${escape(token)}</eBayAuthToken></RequesterCredentials><CreateTimeFrom>${from}</CreateTimeFrom><CreateTimeTo>${to}</CreateTimeTo><OrderRole>Seller</OrderRole><DetailLevel>ReturnAll</DetailLevel><Pagination><EntriesPerPage>100</EntriesPerPage><PageNumber>${page}</PageNumber></Pagination></GetOrdersRequest>`;
+  const response=await fetch('https://api.ebay.com/ws/api.dll',{method:'POST',headers:{'X-EBAY-API-SITEID':'3','X-EBAY-API-COMPATIBILITY-LEVEL':'967','X-EBAY-API-CALL-NAME':'GetOrders','X-EBAY-API-APP-NAME':clientId,'Content-Type':'text/xml'},body,signal:AbortSignal.timeout(20000)});
+  if(!response.ok)throw new Error(`eBay Trading HTTP ${response.status}`);const parsed=tradingOrderPage(await response.text());pages=parsed.pages;lines.push(...parsed.lines);errors.push(...parsed.errors);
+ }
+ return {lines,errors};
 }
-
-function toEbayDate(d: Date): string {
-  return d.toISOString().replace(/\.\d{3}Z$/, '.000Z');
-}
-
-// ── Token refresh ──────────────────────────────────────────────────────────────
-
-async function refreshAccessToken(
-  clientId: string, clientSecret: string, refreshToken: string,
-): Promise<{ accessToken: string; expiresAt: string }> {
-  const basicAuth = btoa(`${clientId}:${clientSecret}`);
-  const body = new URLSearchParams({
-    grant_type: 'refresh_token',
-    refresh_token: refreshToken,
-  });
-
-  const resp = await fetch(EBAY_TOKEN_URL, {
-    method: 'POST',
-    headers: { Authorization: `Basic ${basicAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-    signal: AbortSignal.timeout(15000),
-  });
-  const data = await resp.json();
-  if (!data.access_token) throw new Error(`Token refresh failed: ${data.error_description ?? data.error ?? 'unknown'}`);
-  const expiresAt = new Date(Date.now() + (data.expires_in ?? 7200) * 1000).toISOString();
-  return { accessToken: data.access_token, expiresAt };
-}
-
-// ── Load + refresh credentials ─────────────────────────────────────────────────
-
-async function getCredentials(tenantId: string): Promise<{
-  accessToken: string; clientId: string; credentials: any;
-}> {
-  const supabase = adminClient();
-  const { data: conn } = await supabase
-    .from('marketplace_connectors')
-    .select('credential_ref, status, access_token_expires_at')
-    .eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle();
-
-  if (!conn?.credential_ref) throw new Error('eBay connector not found. Connect eBay in Marketplaces.');
-  if (conn.status !== 'connected') throw new Error(`eBay not connected (status: ${conn.status}).`);
-
-  let creds: any;
-  try { creds = await decryptCredentials(conn.credential_ref); } catch (e: any) {
-    throw new Error(`eBay credentials malformed: ${e.message}. Re-connect eBay.`);
+async function workers<T>(values:T[],work:(value:T)=>Promise<void>){let next=0;await Promise.all(Array.from({length:Math.min(4,values.length)},async()=>{for(;;){const index=next++;if(index>=values.length)return;await work(values[index]);}}));}
+serveModule(async(req:Request)=>{
+ if(req.method==='OPTIONS')return new Response(null,{headers:corsHeaders});if(req.method!=='POST')return json({error:'Method not allowed'},405);
+ let logId='';const db=adminClient();
+ try{
+  const body=await req.json(),{tenantId,nicheId,specialistIds,daysBack=90,mode='both'}=body;
+  if(!tenantId||!nicheId||!Array.isArray(specialistIds)||!specialistIds.length||!Number.isInteger(daysBack)||daysBack<1||daysBack>365||!['both','fulfillment_api','trading_api'].includes(mode))return json({error:'Invalid shared order scope or sync window'},400);
+  const userClient=createClient(Deno.env.get('SUPABASE_URL')??'',Deno.env.get('SUPABASE_ANON_KEY')??'',{global:{headers:{Authorization:req.headers.get('Authorization')??''}}});
+  // Use caller RLS for inventory matching, not service-role tenant-wide guesses.
+  const listingMap=new Map<string,{id:string;itemId:string}>();
+  for(let offset=0;;offset+=200){const loaded=await userClient.from('listings').select('id,item_id,external_listing_id,items!inner(specialist_id,tenant_id)').eq('tenant_id',tenantId).eq('items.tenant_id',tenantId).eq('marketplace_id','ebay').in('items.specialist_id',specialistIds).not('external_listing_id','is',null).order('id').range(offset,offset+199);if(loaded.error)throw new Error('Niche listing scope could not be read');for(const row of loaded.data??[])if(row.external_listing_id)listingMap.set(row.external_listing_id,{id:row.id,itemId:row.item_id});if((loaded.data?.length??0)<200)break;}
+  const logged=await db.from('ebay_sync_log').insert({tenant_id:tenantId,sync_type:'orders',status:'running',metadata:{nicheId,daysBack,mode}}).select('id').single();if(logged.error||!logged.data)throw new Error('Order sync logging unavailable');logId=logged.data.id;
+  const started=Date.now();const creds=await credentials(tenantId);const errors:string[]=[],warnings:string[]=[];let restOkay=false,tradingOkay=false;const restLines:OrderLineEvidence[]=[],xmlLines:OrderLineEvidence[]=[];
+  // Fulfillment paid orders plus Trading unpaid commitments/delivery evidence; not fallback-only.
+  await Promise.all([
+   mode!=='trading_api'?(async()=>{try{
+    const orders=await fulfillmentOrders(creds.accessToken,daysBack);const seen=new Set(orders.map(order=>String(order.orderId)));
+    const open=await userClient.from('orders').select('external_order_id').eq('tenant_id',tenantId).eq('marketplace_id','ebay').in('fulfilment_status',['awaiting_payment','awaiting_dispatch','packing','label_created','dispatched']).not('external_order_id','is',null).order('id').limit(201);
+    if(open.error)throw new Error('Open-order read failed');if((open.data?.length??0)>200)warnings.push('More than 200 open order lines: shorten the sync window and review remaining historical orders.');
+    const oldIds=[...new Set((open.data??[]).slice(0,20).map(row=>row.external_order_id as string))].filter(id=>!seen.has(id));
+    if((open.data?.length??0)>20)warnings.push('Historical open-order refresh is capped at 20 lines per run. Review older posted orders separately.');
+    await workers(oldIds,async id=>{try{orders.push(await restGet(`${REST}/order/${encodeURIComponent(id)}`,creds.accessToken));}catch{warnings.push(`Historical order ${id} is not available from Fulfillment; Trading/Seller Hub review may be needed.`);}});
+    for(const order of orders)try{restLines.push(...fulfillmentOrderLines(order));}catch(cause){errors.push(`Order ${order.orderId}: ${cause instanceof Error?cause.message:'Invalid eBay evidence'}`);}restOkay=true;
+   }catch(cause){warnings.push(cause instanceof Error?cause.message:'Fulfillment unavailable');}})():Promise.resolve(),
+   mode!=='fulfillment_api'?(async()=>{try{const parsed=await tradingOrders(creds.accessToken,creds.clientId,daysBack);xmlLines.push(...parsed.lines);errors.push(...parsed.errors);tradingOkay=true;}catch(cause){warnings.push(cause instanceof Error?cause.message:'Trading unpaid-order lookup unavailable');}})():Promise.resolve(),
+  ]);
+  if(!restOkay&&!tradingOkay)throw new Error('Neither eBay order source completed. Saved orders are unchanged.');
+  if(mode==='both'&&!tradingOkay)errors.push('Paid orders were retrieved, but unpaid commitments and legacy delivery evidence are not verified.');
+  // Merge provider representations of one transaction. Never turn a whole mixed-niche cart into one item.
+  const merged=new Map<string,OrderLineEvidence>();
+  for(const line of restLines){const counterparts=xmlLines.filter(other=>other.legacyItemId===line.legacyItemId&&other.aliases.some(alias=>line.aliases.includes(alias)));const match=counterparts.length===1?counterparts[0]:null;const next=match?{...line,lineKey:match.lineKey,aliases:[...new Set([...line.aliases,...match.aliases])],shippedAt:match.shippedAt,deliveredAt:match.deliveredAt,trackingNumber:match.trackingNumber,carrier:match.carrier}:line;
+   if(match?.deliveredAt&&next.paid){next.status='delivered';next.fulfilmentStatus='delivered';next.requiresAction=false;next.action=null;}else if(match?.shippedAt&&next.paid){next.status='dispatched';next.fulfilmentStatus='dispatched';next.requiresAction=false;next.action=null;}merged.set(next.lineKey,next);}
+  for(const line of xmlLines)if(!merged.has(line.lineKey))merged.set(line.lineKey,line);
+  // Fetch actual shipping references for posted REST lines. FULFILLED never means delivered.
+  const shippingCache=new Map<string,Promise<any>>();
+  await workers([...merged.values()].filter(line=>line.source==='fulfillment_rest'&&line.paid&&line.shippingCheck===true),async line=>{try{
+   let pending=shippingCache.get(line.orderId);if(!pending){pending=restGet(`${REST}/order/${encodeURIComponent(line.orderId)}/shipping_fulfillment`,creds.accessToken);shippingCache.set(line.orderId,pending);}const data=await pending;
+   const shipments=Array.isArray(data.fulfillments)?data.fulfillments:[];const shipment=shipments.find((ship:any)=>ship.lineItems?.some((li:any)=>String(li.lineItemId)===line.lineId));if(shipment){line.trackingNumber=shipment.shipmentTrackingNumber??shipment.trackingNumber??line.trackingNumber;line.carrier=shipment.shippingCarrierCode??line.carrier;line.shippedAt=shipment.shippedDate??line.shippedAt;if(line.shippedAt&&!line.deliveredAt){line.status='dispatched';line.fulfilmentStatus='dispatched';line.requiresAction=false;line.action=null;}}
+  }catch{errors.push(`Order ${line.orderId}: tracking readback unavailable; posted state retained, delivery not inferred.`);}});
+  let imported=0,updated=0,skipped=0;const multiChecks=new Set<string>();
+  for(const line of merged.values()){
+   if(Date.now()-started>85000){errors.push('Sync time budget reached. Completed lines are retained; run a shorter date window for the remainder.');break;}
+   const listing=listingMap.get(line.legacyItemId);if(!listing){skipped++;continue;}
+   const ingested=await db.rpc('swish_ingest_ebay_order_line',{p_tenant_id:tenantId,p_niche_id:nicheId,p_listing_id:listing.id,p_line:line});
+   if(ingested.error||!ingested.data?.id){errors.push(`Order ${line.orderId}: ${ingested.error?.code??'unconfirmed'} ${String(ingested.error?.message??'Atomic order save not confirmed').slice(0,220)}`);continue;}
+   if(ingested.data.imported)imported++;else if(ingested.data.updated)updated++;else skipped++;if(ingested.data.multiQuantity)multiChecks.add(listing.id);
   }
-  if (!creds.accessToken) throw new Error('No eBay access token. Re-authorise eBay.');
-
-  const shouldRefresh = creds.expiresAt ? Date.now() + 5 * 60_000 >= new Date(creds.expiresAt).getTime() : false;
-  if (shouldRefresh && creds.refreshToken) {
-    const { accessToken: newToken, expiresAt: newExpiry } = await refreshAccessToken(creds.clientId, creds.clientSecret, creds.refreshToken);
-    creds = { ...creds, accessToken: newToken, expiresAt: newExpiry };
-    const updatedRef = await encryptCredentials(creds);
-    const { data: persistedConnector, error: persistError } = await supabase.from('marketplace_connectors').update({
-      credential_ref: updatedRef, access_token_expires_at: newExpiry, updated_at: new Date().toISOString(),
-    }).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').eq('credential_ref', conn.credential_ref).select('id').maybeSingle();
-    if (persistError || !persistedConnector) {
-      throw new Error('Refreshed eBay credentials could not be persisted securely.');
-    }
-  }
-
-  return { accessToken: creds.accessToken, clientId: creds.clientId, credentials: creds };
-}
-
-// ── eBay Fulfillment REST API orders ──────────────────────────────────────────
-// This is the CURRENT supported eBay Orders API (replaces Trading GetOrders for new sellers)
-
-interface FulfillmentOrder {
-  orderId: string;
-  legacyOrderId?: string;
-  orderStatus: string;
-  // eBay Fulfillment API returns `orderFulfillmentStatus` (not `fulfillmentStatus`).
-  // Keep the legacy alias optional for any previously-normalized payloads.
-  orderFulfillmentStatus?: string;
-  fulfillmentStatus?: string;
-  createdAt: string;
-  lastUpdatedAt: string;
-  buyer: { username: string; buyerRegistrationAddress?: any };
-  lineItems: Array<{
-    lineItemId: string;
-    legacyItemId?: string;
-    title: string;
-    quantity: number;
-    lineItemCost: { value: string; currency: string };
-    deliveryCost: { shippingCost: { value: string; currency: string } };
-  }>;
-  pricingSummary: {
-    priceSubtotal: { value: string; currency: string };
-    deliveryCost: { value: string; currency: string };
-    total: { value: string; currency: string };
-  };
-  fulfillmentStartInstructions: Array<{
-    fulfillmentInstructionsType: string;
-    shippingStep?: {
-      shipTo?: {
-        fullName?: string;
-        contactAddress?: {
-          addressLine1?: string; addressLine2?: string;
-          city?: string; stateOrProvince?: string; postalCode?: string; countryCode?: string;
-        };
-      };
-    };
-  }>;
-}
-
-async function fetchFulfillmentOrders(
-  accessToken: string,
-  daysBack: number,
-): Promise<{ orders: FulfillmentOrder[]; apiError?: string }> {
-  const fromDate = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString();
-  const allOrders: FulfillmentOrder[] = [];
-  let offset = 0;
-  const limit = 200;
-  let hasMore = true;
-
-  while (hasMore) {
-    try {
-      const url = new URL(`${EBAY_FULFILLMENT_API}/order`);
-      // Retrieve all order states by creation date. The former combined status filter was rejected by eBay (HTTP 400) for this seller; SWISH needs completed and unfulfilled orders alike.
-      url.searchParams.set('filter', `creationdate:[${fromDate}..]`);
-      url.searchParams.set('limit', String(limit));
-      url.searchParams.set('offset', String(offset));
-
-      const resp = await fetch(url.toString(), {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'X-EBAY-C-MARKETPLACE-ID': 'EBAY_GB',
-        },
-        signal: AbortSignal.timeout(20000),
-      });
-
-      if (!resp.ok) {
-        const errText = await resp.text().catch(() => '');
-        // 403 = Managed Payments not enabled or scope not granted
-        if (resp.status === 403 || resp.status === 401) {
-          console.log(`[SWISH Orders] Fulfillment API ${resp.status}: ${errText.slice(0, 200)}`);
-          return { orders: [], apiError: `Fulfillment API not available (${resp.status}) — falling back to Trading API` };
-        }
-        console.log(`[SWISH Orders] Fulfillment API ${resp.status}: ${errText.slice(0, 200)}`);
-        return { orders: allOrders, apiError: `Fulfillment API HTTP ${resp.status}` };
-      }
-
-      const data = await resp.json();
-      const pageOrders: FulfillmentOrder[] = data.orders ?? [];
-      allOrders.push(...pageOrders);
-
-      const total = data.total ?? 0;
-      offset += limit;
-      hasMore = offset < total && pageOrders.length > 0;
-
-      if (hasMore) await new Promise(r => setTimeout(r, 100));
-    } catch (e: any) {
-      console.log(`[SWISH Orders] Fulfillment API error: ${e.message}`);
-      return { orders: allOrders, apiError: e.message };
-    }
-  }
-
-  return { orders: allOrders };
-}
-
-// ── Trading API GetOrders (fallback / legacy) ──────────────────────────────────
-
-function xmlExtract(xml: string, tag: string): string {
-  const m = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`));
-  return m ? m[1].trim() : '';
-}
-
-function xmlExtractAll(xml: string, tag: string): string[] {
-  const results: string[] = [];
-  const re = new RegExp(`<${tag}[^>]*>[\\s\\S]*?<\\/${tag}>`, 'g');
-  let m;
-  while ((m = re.exec(xml)) !== null) results.push(m[0]);
-  return results;
-}
-
-async function fetchTradingOrders(
-  accessToken: string, clientId: string, daysBack: number,
-): Promise<{ orders: TradingOrder[]; error?: string }> {
-  const toDate = new Date();
-  const fromDate = new Date(toDate.getTime() - daysBack * 24 * 60 * 60 * 1000);
-  const allBlocks: string[] = [];
-  let page = 1, totalPages = 1;
-
-  do {
-    const xml = `<?xml version="1.0" encoding="utf-8"?>
-<GetOrdersRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-  <RequesterCredentials><eBayAuthToken>${accessToken}</eBayAuthToken></RequesterCredentials>
-  <CreateTimeFrom>${xmlEscape(toEbayDate(fromDate))}</CreateTimeFrom>
-  <CreateTimeTo>${xmlEscape(toEbayDate(toDate))}</CreateTimeTo>
-  <OrderStatus>Completed</OrderStatus>
-  <Pagination><EntriesPerPage>100</EntriesPerPage><PageNumber>${page}</PageNumber></Pagination>
-</GetOrdersRequest>`;
-
-    try {
-      const resp = await fetch(EBAY_TRADING_API_URL, {
-        method: 'POST',
-        headers: {
-          'X-EBAY-API-SITEID': '3', 'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
-          'X-EBAY-API-CALL-NAME': 'GetOrders', 'X-EBAY-API-APP-NAME': clientId,
-          'Content-Type': 'text/xml;charset=utf-8',
-        },
-        body: xml, signal: AbortSignal.timeout(30000),
-      });
-      const resXml = await resp.text();
-      if (page === 1) {
-        const pagesStr = resXml.match(/<TotalNumberOfPages>(\d+)<\/TotalNumberOfPages>/)?.[1];
-        totalPages = Math.min(parseInt(pagesStr ?? '1') || 1, 20);
-      }
-      const ack = xmlExtract(resXml, 'Ack');
-      if (ack === 'Failure') {
-        const errMsg = xmlExtract(xmlExtract(resXml, 'Errors'), 'LongMessage');
-        return { orders: [], error: `GetOrders: ${errMsg}` };
-      }
-      allBlocks.push(...xmlExtractAll(resXml, 'Order'));
-      if (page < totalPages) await new Promise(r => setTimeout(r, 150));
-      page++;
-    } catch (e: any) {
-      return { orders: allBlocks.map(parseTradingOrder).filter(Boolean) as TradingOrder[], error: e.message };
-    }
-  } while (page <= totalPages);
-
-  return { orders: allBlocks.map(parseTradingOrder).filter(Boolean) as TradingOrder[] };
-}
-
-interface TradingOrder {
-  orderId: string;
-  buyerUsername: string;
-  buyerEmail: string;
-  createdAt: string;
-  salePrice: number;
-  shippingCost: number;
-  shippingAddress: Record<string, string>;
-  ebayItemIds: string[];
-  trackingNumber: string;
-  carrier: string;
-}
-
-function parseTradingOrder(block: string): TradingOrder | null {
-  const orderId = xmlExtract(block, 'OrderID');
-  if (!orderId) return null;
-  const salePrice = parseFloat(xmlExtract(block, 'AmountPaid') || '0');
-  const shippingCost = parseFloat(xmlExtract(block, 'ShippingServiceCost') || '0');
-  const addressBlock = xmlExtract(block, 'ShippingAddress');
-  const shipBlock = xmlExtract(block, 'ShippingDetails');
-  const txBlocks = xmlExtractAll(block, 'Transaction');
-  const ebayItemIds = txBlocks.map(t => xmlExtract(xmlExtract(t, 'Item'), 'ItemID')).filter(Boolean);
-
-  return {
-    orderId,
-    buyerUsername: xmlExtract(block, 'UserID') || xmlExtract(block, 'BuyerUserID'),
-    buyerEmail: xmlExtract(block, 'Email'),
-    createdAt: xmlExtract(block, 'CreatedTime'),
-    salePrice,
-    shippingCost,
-    shippingAddress: {
-      name: xmlExtract(addressBlock, 'Name'),
-      street: xmlExtract(addressBlock, 'Street1'),
-      city: xmlExtract(addressBlock, 'CityName'),
-      county: xmlExtract(addressBlock, 'StateOrProvince'),
-      postcode: xmlExtract(addressBlock, 'PostalCode'),
-      country: xmlExtract(addressBlock, 'CountryName'),
-    },
-    ebayItemIds,
-    trackingNumber: xmlExtract(shipBlock, 'ShipmentTrackingNumber'),
-    carrier: xmlExtract(shipBlock, 'ShippingCarrierUsed'),
-  };
-}
-
-// ── Import orders to SWISH DB ─────────────────────────────────────────────────
-
-// Reconcile existing orders too. The former early-continue path left sold items Live.
-// Multi-quantity listings stay available until GetItem confirms no units remain.
-async function reconcileSoldOrder(
-  supabase: ReturnType<typeof adminClient>, tenantId: string, itemId: string, listingId: string,
-  soldAt: string, salePrice: number, multiQuantityStatusChecks: Map<string, string>, nicheId: string | null,
-): Promise<string | null> {
-  const { data: item, error: readError } = await supabase.from('items').select('status, quantity')
-    .eq('id', itemId).eq('tenant_id', tenantId).maybeSingle();
-  if (readError || !item) return 'Sold inventory could not be verified';
-  if (Number(item.quantity ?? 1) > 1) {
-    if (!nicheId) return 'Multi-quantity inventory has no registered niche; status refresh was not scheduled';
-    multiQuantityStatusChecks.set(listingId, nicheId);
-    return null;
-  }
-  // One server-side transaction updates both canonical item and listing. This avoids
-  // leaving a listing marked sold when the item transition/audit insert fails.
-  const { data: reconciled, error: reconcileError } = await supabase.rpc('swish_reconcile_ebay_sold_order', {
-    p_tenant_id: tenantId,
-    p_item_id: itemId,
-    p_listing_id: listingId,
-    p_sold_at: soldAt,
-    p_sold_price: salePrice,
-  });
-  if (reconcileError) {
-    // Keep diagnostics actionable without exposing credentials or provider payloads.
-    const code = reconcileError.code ? ` (${reconcileError.code})` : '';
-    return `Sold inventory reconciliation failed${code}: ${String(reconcileError.message ?? 'database rejected the transition').slice(0, 240)}`;
-  }
-  return reconciled === true ? null : 'Sold inventory remains unchanged because the listing has multiple units';
-}
-
-async function importFulfillmentOrders(
-  supabase: ReturnType<typeof adminClient>,
-  tenantId: string,
-  ffOrders: FulfillmentOrder[],
-  listingByEbayId: Map<string, ListingMatch>,
-  existingOrderIds: Set<string>,
-  multiQuantityStatusChecks: Map<string, string>,
-  logId: string,
-): Promise<{ imported: number; skipped: number; errors: string[] }> {
-  let imported = 0, skipped = 0;
-  const errors: string[] = [];
-
-  for (const order of ffOrders) {
-    try {
-      const orderId = order.orderId;
-      if (!orderId) { skipped++; continue; }
-
-      const totalStr = order.pricingSummary?.total?.value ?? '0';
-      const salePrice = parseFloat(totalStr) || 0;
-      // IMPORTANT: eBay Fulfillment API does NOT include final value fees.
-      // Those come from the Finances API. We label this as ESTIMATE.
-      const marketplaceFee = Math.round(salePrice * 0.128 * 100) / 100; // ESTIMATE
-      const shippingCost = parseFloat(order.pricingSummary?.deliveryCost?.value ?? '0') || 0;
-      const netRevenue = Math.round((salePrice - marketplaceFee - shippingCost) * 100) / 100;
-
-      const buyer = order.buyer;
-      const shipInstr = order.fulfillmentStartInstructions?.[0];
-      const shipTo = shipInstr?.shippingStep?.shipTo;
-      const addr = shipTo?.contactAddress;
-      const buyerAddress = addr ? {
-        name: shipTo?.fullName ?? '',
-        street: addr.addressLine1 ?? '',
-        city: addr.city ?? '',
-        county: addr.stateOrProvince ?? '',
-        postcode: addr.postalCode ?? '',
-        country: addr.countryCode ?? '',
-      } : {};
-
-      // Match listing by legacy item ID
-      let matchedItemId: string | null = null;
-      let matchedListingId: string | null = null;
-      let matchedListingMeta: ListingMatch | null = null;
-      for (const li of order.lineItems ?? []) {
-        const legacyId = li.legacyItemId ?? '';
-        if (legacyId) {
-          const match = listingByEbayId.get(legacyId);
-          if (match) { matchedItemId = match.itemId; matchedListingId = match.listingId; matchedListingMeta = match; break; }
-        }
-      }
-
-      // Niche-scoped listing map: do not import unrelated or unmatched orders.
-      if (!matchedItemId || !matchedListingId) { skipped++; continue; }
-      // Multi-line orders cannot be attributed to one canonical item without allocation.
-      if ((order.lineItems ?? []).length !== 1) { errors.push(`Order ${orderId}: multi-line allocation requires review`); skipped++; continue; }
-      // Map the current eBay state before deciding whether to insert or refresh.
-      const ff = (order.orderFulfillmentStatus ?? order.fulfillmentStatus ?? '').toUpperCase();
-      const fulfilmentStatus = ff === 'FULFILLED' ? 'dispatched' : 'awaiting_dispatch';
-      const { data: existingRow } = await supabase.from('orders')
-        .select('id, fulfilment_status, tracking_number, carrier, dispatched_at, marketplace_fee')
-        .eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').eq('external_order_id', orderId)
-        .maybeSingle();
-
-      if (existingRow) {
-        // Sync must refresh existing orders too; otherwise later dispatches never reach SWISH.
-        const updatePayload: Record<string, unknown> = {
-          buyer_name: buyer?.username ?? shipTo?.fullName ?? null,
-          buyer_address: buyerAddress,
-          fulfilment_status: existingRow.fulfilment_status === 'delivered' || existingRow.fulfilment_status === 'completed'
-            ? existingRow.fulfilment_status : fulfilmentStatus,
-          sale_price: salePrice,
-          shipping_cost: shippingCost,
-          net_revenue: Math.round((salePrice - Number(existingRow.marketplace_fee ?? marketplaceFee) - shippingCost) * 100) / 100,
-          updated_at: new Date().toISOString(),
-        };
-        if (fulfilmentStatus === 'dispatched' && !existingRow.dispatched_at) {
-          updatePayload.dispatched_at = order.lastUpdatedAt || new Date().toISOString();
-        }
-        const { error: updateErr } = await supabase.from('orders').update(updatePayload)
-          .eq('id', existingRow.id).eq('tenant_id', tenantId);
-        if (updateErr) errors.push(`Order ${orderId} status refresh: ${updateErr.message}`);
-        else {
-          const reconcileError = await reconcileSoldOrder(supabase, tenantId, matchedItemId, matchedListingId, order.createdAt, salePrice, multiQuantityStatusChecks, matchedListingMeta?.nicheId ?? null);
-          if (reconcileError) errors.push(`Order ${orderId}: ${reconcileError}`);
-          skipped++;
-        }
-        existingOrderIds.add(orderId);
-        continue;
-      }
-
-      const { data: inserted, error: insertErr } = await supabase.from('orders').insert({
-        tenant_id: tenantId, item_id: matchedItemId, listing_id: matchedListingId,
-        marketplace_id: 'ebay', external_order_id: orderId,
-        buyer_name: buyer?.username ?? shipTo?.fullName ?? null,
-        buyer_email: null, buyer_address: buyerAddress,
-        status: 'completed',
-        fulfilment_status: fulfilmentStatus,
-        sale_price: salePrice, marketplace_fee: marketplaceFee,
-        shipping_cost: shippingCost, net_revenue: netRevenue,
-        tracking_number: null, carrier: null,
-        dispatched_at: fulfilmentStatus === 'dispatched' ? order.lastUpdatedAt : null,
-        notes: 'fee_note:ESTIMATE_12.8pct',
-        created_at: order.createdAt, updated_at: new Date().toISOString(),
-      }).select('id').single();
-
-      if (insertErr) {
-        if (insertErr.code === '23505') { skipped++; }
-        else { errors.push(`Order ${orderId}: ${insertErr.message}`); skipped++; }
-        continue;
-      }
-
-      if (matchedItemId) {
-        const { data: curItem } = await supabase.from('items').select('status, acquired_cost').eq('id', matchedItemId).eq('tenant_id', tenantId).maybeSingle();
-        const acquiredCost = Number(curItem?.acquired_cost ?? 0);
-        const reconcileError = await reconcileSoldOrder(supabase, tenantId, matchedItemId, matchedListingId!, order.createdAt, salePrice, multiQuantityStatusChecks, matchedListingMeta?.nicheId ?? null);
-        if (reconcileError) errors.push(`Order reconciliation: ${reconcileError}`);
-        await supabase.from('sales').insert({
-          tenant_id: tenantId, item_id: matchedItemId, listing_id: matchedListingId,
-          niche_id: matchedListingMeta?.nicheId ?? null,
-          specialist_id: matchedListingMeta?.specialistId ?? null,
-          category_id: matchedListingMeta?.categoryId ?? null,
-          marketplace_id: 'ebay', sale_price: salePrice, marketplace_fee: marketplaceFee,
-          shipping_cost: shippingCost, net_revenue: netRevenue,
-          profit: Math.round((netRevenue - acquiredCost) * 100) / 100,
-          predicted_profit: 0, sold_at: order.createdAt, external_order_id: orderId,
-        });
-      }
-
-      existingOrderIds.add(orderId);
-      imported++;
-    } catch (e: any) {
-      errors.push(`Parse error: ${e.message}`);
-      skipped++;
-    }
-  }
-
-  return { imported, skipped, errors };
-}
-
-async function importTradingOrders(
-  supabase: ReturnType<typeof adminClient>,
-  tenantId: string,
-  tradingOrders: TradingOrder[],
-  listingByEbayId: Map<string, ListingMatch>,
-  existingOrderIds: Set<string>,
-  multiQuantityStatusChecks: Map<string, string>,
-): Promise<{ imported: number; skipped: number; errors: string[] }> {
-  let imported = 0, skipped = 0;
-  const errors: string[] = [];
-
-  for (const order of tradingOrders) {
-    try {
-      if (!order.orderId) { skipped++; continue; }
-
-      let matchedItemId: string | null = null, matchedListingId: string | null = null;
-      let matchedListingMeta: ListingMatch | null = null;
-      let salePrice = order.salePrice;
-      for (const ebayItemId of order.ebayItemIds) {
-        const match = listingByEbayId.get(ebayItemId);
-        if (match) { matchedItemId = match.itemId; matchedListingId = match.listingId; matchedListingMeta = match; salePrice = order.salePrice; break; }
-      }
-
-      if (!matchedItemId || !matchedListingId) { skipped++; continue; }
-      if (order.ebayItemIds.length !== 1) { errors.push(`Order ${order.orderId}: multi-line allocation requires review`); skipped++; continue; }
-      // ESTIMATE: never presented as exact fee
-      const marketplaceFee = Math.round(salePrice * 0.128 * 100) / 100;
-      const shippingCost = order.shippingCost;
-      const netRevenue = Math.round((salePrice - marketplaceFee - shippingCost) * 100) / 100;
-
-      const orderAge = Date.now() - new Date(order.createdAt || Date.now()).getTime();
-      // Do not infer completion from order age. Only tracking/explicit eBay state may advance it.
-      const fulfilmentStatus = order.trackingNumber ? 'dispatched' : 'awaiting_dispatch';
-      const { data: existingRow } = await supabase.from('orders')
-        .select('id, fulfilment_status, tracking_number, carrier, dispatched_at, marketplace_fee')
-        .eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').eq('external_order_id', order.orderId)
-        .maybeSingle();
-
-      if (existingRow) {
-        const updatePayload: Record<string, unknown> = {
-          buyer_name: order.shippingAddress.name || order.buyerUsername || null,
-          buyer_email: order.buyerEmail || null,
-          buyer_address: order.shippingAddress,
-          sale_price: salePrice,
-          shipping_cost: shippingCost,
-          net_revenue: Math.round((salePrice - Number(existingRow.marketplace_fee ?? marketplaceFee) - shippingCost) * 100) / 100,
-          fulfilment_status: existingRow.fulfilment_status === 'delivered' || existingRow.fulfilment_status === 'completed'
-            ? existingRow.fulfilment_status
-            : order.trackingNumber ? 'dispatched' : existingRow.fulfilment_status,
-          updated_at: new Date().toISOString(),
-        };
-        if (order.trackingNumber) updatePayload.tracking_number = order.trackingNumber;
-        if (order.carrier) updatePayload.carrier = order.carrier;
-        if (order.trackingNumber && !existingRow.dispatched_at) updatePayload.dispatched_at = order.createdAt || new Date().toISOString();
-        const { error: updateErr } = await supabase.from('orders').update(updatePayload)
-          .eq('id', existingRow.id).eq('tenant_id', tenantId);
-        if (updateErr) errors.push(`Order ${order.orderId} status refresh: ${updateErr.message}`);
-        else {
-          const reconcileError = await reconcileSoldOrder(supabase, tenantId, matchedItemId, matchedListingId, order.createdAt, salePrice, multiQuantityStatusChecks, matchedListingMeta?.nicheId ?? null);
-          if (reconcileError) errors.push(`Order ${order.orderId}: ${reconcileError}`);
-          skipped++;
-        }
-        existingOrderIds.add(order.orderId);
-        continue;
-      }
-
-      const { data: inserted, error: insertErr } = await supabase.from('orders').insert({
-        tenant_id: tenantId, item_id: matchedItemId, listing_id: matchedListingId,
-        marketplace_id: 'ebay', external_order_id: order.orderId,
-        buyer_name: order.shippingAddress.name || order.buyerUsername || null,
-        buyer_email: order.buyerEmail || null, buyer_address: order.shippingAddress,
-        status: 'completed', fulfilment_status: fulfilmentStatus,
-        sale_price: salePrice, marketplace_fee: marketplaceFee,
-        shipping_cost: shippingCost, net_revenue: netRevenue,
-        tracking_number: order.trackingNumber || null, carrier: order.carrier || null,
-        dispatched_at: order.trackingNumber ? order.createdAt : null,
-        notes: 'fee_note:ESTIMATE_12.8pct',
-        created_at: order.createdAt, updated_at: new Date().toISOString(),
-      }).select('id').single();
-
-      if (insertErr) {
-        if (insertErr.code === '23505') { skipped++; } else { errors.push(`Order ${order.orderId}: ${insertErr.message}`); skipped++; }
-        continue;
-      }
-
-      if (matchedItemId) {
-        const { data: curItem } = await supabase.from('items').select('status, acquired_cost').eq('id', matchedItemId).eq('tenant_id', tenantId).maybeSingle();
-        const acquiredCost = Number(curItem?.acquired_cost ?? 0);
-        const profit = Math.round((netRevenue - acquiredCost) * 100) / 100;
-        const reconcileError = await reconcileSoldOrder(supabase, tenantId, matchedItemId, matchedListingId!, order.createdAt, salePrice, multiQuantityStatusChecks, matchedListingMeta?.nicheId ?? null);
-        if (reconcileError) errors.push(`Order reconciliation: ${reconcileError}`);
-        await supabase.from('sales').insert({
-          tenant_id: tenantId, item_id: matchedItemId, listing_id: matchedListingId,
-          niche_id: matchedListingMeta?.nicheId ?? null,
-          specialist_id: matchedListingMeta?.specialistId ?? null,
-          category_id: matchedListingMeta?.categoryId ?? null,
-          marketplace_id: 'ebay', sale_price: salePrice, marketplace_fee: marketplaceFee,
-          shipping_cost: shippingCost, net_revenue: netRevenue, profit,
-          predicted_profit: 0, sold_at: order.createdAt, external_order_id: order.orderId,
-        });
-      }
-
-      existingOrderIds.add(order.orderId);
-      imported++;
-    } catch (e: any) {
-      errors.push(`Parse error: ${e.message}`);
-      skipped++;
-    }
-  }
-
-  return { imported, skipped, errors };
-}
-
-// Refresh current eBay quantities for multi-unit listings touched by imported orders.
-// Reuse the existing authenticated, niche-scoped status endpoint rather than duplicating
-// credential decryption or GetItem parsing in the order importer.
-async function refreshMultiQuantityListingStatuses(
-  authHeader: string,
-  tenantId: string,
-  checks: Map<string, string>,
-): Promise<{ checked: number; errors: string[] }> {
-  if (!checks.size) return { checked: 0, errors: [] };
-  const baseUrl = (Deno.env.get('SUPABASE_URL') ?? '').replace(/\/+$/, '');
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
-  if (!baseUrl || !anonKey) {
-    return { checked: 0, errors: ['Multi-quantity eBay status refresh could not run because backend invocation configuration is missing.'] };
-  }
-
-  const grouped = new Map<string, string[]>();
-  for (const [listingId, nicheId] of checks) {
-    const ids = grouped.get(nicheId) ?? [];
-    ids.push(listingId);
-    grouped.set(nicheId, ids);
-  }
-
-  let checked = 0;
-  const errors: string[] = [];
-  for (const [nicheId, listingIds] of grouped) {
-    for (let start = 0; start < listingIds.length; start += 12) {
-      const batch = listingIds.slice(start, start + 12);
-      try {
-        const response = await fetch(`${baseUrl}/functions/v1/swish-ebay-listing-status`, {
-          method: 'POST',
-          headers: {
-            Authorization: authHeader,
-            apikey: anonKey,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ tenantId, nicheId, listingIds: batch }),
-          signal: AbortSignal.timeout(45_000),
-        });
-        const payload = await response.json().catch(() => null);
-        if (Number.isSafeInteger(payload?.checked)) checked += payload.checked;
-        if (!response.ok || payload?.success !== true) {
-          errors.push(`Multi-quantity eBay status refresh for ${nicheId} was not confirmed (HTTP ${response.status}).`);
-        }
-      } catch {
-        errors.push(`Multi-quantity eBay status refresh for ${nicheId} could not be reached.`);
-      }
-    }
-  }
-  return { checked, errors };
-}
-
-// ── Main handler ───────────────────────────────────────────────────────────────
-
-serveModule(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
-
-  try {
-    const body = await req.json();
-    if (!body || typeof body !== 'object' || Array.isArray(body)) return jsonResponse({ error: 'Request body must be an object' }, 400);
-    const { tenantId, daysBack = 90, mode = 'both', nicheId, specialistIds } = body;
-    if (typeof tenantId !== 'string' || !/^[0-9a-f-]{36}$/i.test(tenantId)) return jsonResponse({ error: 'tenantId is required' }, 400);
-    if (!Number.isInteger(daysBack) || daysBack < 1 || daysBack > 365 || !['both','fulfillment_api','trading_api'].includes(mode)) return jsonResponse({ error: 'Invalid order sync parameters' }, 400);
-    const products = registry.products as Record<string, { specialists: string[]; legacySpecialists: string[] }>;
-    if (nicheId !== undefined && (typeof nicheId !== 'string' || !Object.prototype.hasOwnProperty.call(products,nicheId))) return jsonResponse({ error: 'Unknown niche' }, 400);
-    const known = Object.values(products).flatMap(product => [...product.specialists, ...product.legacySpecialists]);
-    if (specialistIds !== undefined && (!Array.isArray(specialistIds) || specialistIds.some((id: unknown) => typeof id !== 'string' || !known.includes(id)))) return jsonResponse({ error: 'Invalid specialist scope' }, 400);
-    const scopeIds: string[] | undefined = nicheId ? [...products[nicheId].specialists, ...products[nicheId].legacySpecialists] : specialistIds;
-    if (nicheId && specialistIds?.some((id: string) => !scopeIds!.includes(id))) return jsonResponse({ error: 'Specialist does not belong to niche' }, 400);
-
-    const supabase = adminClient();
-
-    // Security: verify caller
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) return jsonResponse({ error: 'Authentication required.' }, 401);
-    const authToken = authHeader.replace('Bearer ', '').trim();
-    if (!authToken || authToken === Deno.env.get('SUPABASE_ANON_KEY')) return jsonResponse({ error: 'Authentication required.' }, 401);
-    try {
-      const userClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_ANON_KEY') ?? '', { global: { headers: { Authorization: authHeader } } });
-      const { data: { user }, error: uErr } = await userClient.auth.getUser();
-      if (uErr || !user) return jsonResponse({ error: 'Invalid authentication token.' }, 401);
-      const { data: member } = await supabase.from('tenant_memberships').select('id').eq('tenant_id', tenantId).eq('user_id', user.id).maybeSingle();
-      if (!member) return jsonResponse({ error: 'Access denied.' }, 403);
-    } catch (e: any) {
-      return jsonResponse({ error: 'Authentication could not be verified.' }, 401);
-    }
-
-    if (scopeIds?.length === 0) return jsonResponse({ success: true, imported: 0, skipped: 0 });
-    // Start sync log
-    const { data: syncLog } = await supabase.from('ebay_sync_log').insert({
-      tenant_id: tenantId, sync_type: 'orders', status: 'running',
-      started_at: new Date().toISOString(), metadata: { daysBack, mode },
-    }).select('id').single();
-    const logId = syncLog?.id ?? '';
-
-    let creds: { accessToken: string; clientId: string; credentials: any };
-    try { creds = await getCredentials(tenantId); } catch (e: any) {
-      if (logId) await supabase.from('ebay_sync_log').update({ status: 'failed', error_message: e.message, completed_at: new Date().toISOString() }).eq('id', logId);
-      return jsonResponse({ error: e.message }, 400);
-    }
-
-    // Load existing listings for matching
-    let listingQuery = supabase
-      .from('listings')
-      .select('id, item_id, external_listing_id, price, shipping_cost, category_id, items!inner(specialist_id)')
-      .eq('tenant_id', tenantId).eq('items.tenant_id', tenantId).eq('marketplace_id', 'ebay')
-      .not('external_listing_id', 'is', null);
-    if (scopeIds) listingQuery = listingQuery.in('items.specialist_id', scopeIds);
-    const { data: listingsData, error: listingError } = await listingQuery;
-    if (listingError) return jsonResponse({ error: 'Listing scope could not be verified' }, 503);
-
-    const listingByEbayId = new Map<string, ListingMatch>();
-    for (const l of listingsData ?? []) {
-      if (!l.external_listing_id) continue;
-      const item = Array.isArray(l.items) ? l.items[0] : l.items;
-      const specialistId = item?.specialist_id ?? null;
-      listingByEbayId.set(l.external_listing_id, {
-        listingId: l.id,
-        itemId: l.item_id,
-        price: Number(l.price ?? 0),
-        shippingCost: Number(l.shipping_cost ?? 0),
-        categoryId: l.category_id == null ? null : String(l.category_id),
-        specialistId,
-        nicheId: nicheForSpecialist(specialistId, registry.products as Record<string, { specialists: string[]; legacySpecialists: string[] }>),
-      });
-    }
-
-    // Load existing order IDs to prevent duplicates
-    const { data: existingOrdersData } = await supabase
-      .from('orders').select('external_order_id').eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').not('external_order_id', 'is', null);
-    const existingOrderIds = new Set<string>((existingOrdersData ?? []).map(o => o.external_order_id).filter(Boolean));
-
-    let totalImported = 0, totalSkipped = 0;
-    const multiQuantityStatusChecks = new Map<string, string>();
-    const allErrors: string[] = [];
-    const apiWarnings: string[] = [];
-    let ffApiUsed = false, tradingApiUsed = false;
-
-    // ── Try Fulfillment REST API first ──────────────────────────────────────
-    if (mode === 'fulfillment_api' || mode === 'both') {
-      const { orders: ffOrders, apiError } = await fetchFulfillmentOrders(creds.accessToken, daysBack);
-      if (!apiError) {
-        ffApiUsed = true;
-        const result = await importFulfillmentOrders(supabase, tenantId, ffOrders, listingByEbayId, existingOrderIds, multiQuantityStatusChecks, logId);
-        totalImported += result.imported;
-        totalSkipped += result.skipped;
-        allErrors.push(...result.errors);
-        console.log(`[SWISH Orders] Fulfillment API: fetched=${ffOrders.length} imported=${result.imported} skipped=${result.skipped}`);
-      } else if (apiError) {
-        console.log(`[SWISH Orders] Fulfillment API unavailable: ${apiError} — will try Trading API`);
-        // The supported Trading API fallback can complete the same sync. Keep this
-        // provider warning separate so a successful fallback is not reported as a failed sync.
-        apiWarnings.push(`Fulfillment API: ${apiError}`);
-      }
-    }
-
-    // ── Fall back to Trading API if needed ──────────────────────────────────
-    if (mode === 'trading_api' || (mode === 'both' && !ffApiUsed)) {
-      const { orders: tradingOrders, error: tradingErr } = await fetchTradingOrders(creds.accessToken, creds.clientId, daysBack);
-      if (!tradingErr) {
-        tradingApiUsed = true;
-        const result = await importTradingOrders(supabase, tenantId, tradingOrders, listingByEbayId, existingOrderIds, multiQuantityStatusChecks);
-        totalImported += result.imported;
-        totalSkipped += result.skipped;
-        allErrors.push(...result.errors);
-        console.log(`[SWISH Orders] Trading API: fetched=${tradingOrders.length} imported=${result.imported} skipped=${result.skipped}`);
-      } else {
-        allErrors.push(`Trading API: ${tradingErr}`);
-      }
-    }
-
-    const quantityStatusResult = await refreshMultiQuantityListingStatuses(authHeader, tenantId, multiQuantityStatusChecks);
-    allErrors.push(...quantityStatusResult.errors);
-
-    // Update sync log
-    if (logId) {
-      await supabase.from('ebay_sync_log').update({
-        status: allErrors.length > 0 && totalImported === 0 ? 'failed' : 'completed',
-        records_created: totalImported, records_skipped: totalSkipped,
-        errors: allErrors.slice(0, 20),
-        completed_at: new Date().toISOString(),
-        metadata: { daysBack, mode, ffApiUsed, tradingApiUsed, quantityStatusChecked: quantityStatusResult.checked, quantityStatusRequested: multiQuantityStatusChecks.size },
-      }).eq('id', logId);
-    }
-
-    return jsonResponse({
-      success: ffApiUsed || tradingApiUsed, imported: totalImported, skipped: totalSkipped,
-      partial: allErrors.length > 0,
-      error: !ffApiUsed && !tradingApiUsed ? 'Neither eBay orders API completed successfully' : undefined,
-      total: totalImported + totalSkipped,
-      matched: totalImported, // All imports are potentially matched
-      errors: allErrors.slice(0, 10),
-      warnings: apiWarnings.slice(0, 5),
-      quantityStatusChecked: quantityStatusResult.checked,
-      quantityStatusPending: Math.max(0, multiQuantityStatusChecks.size - quantityStatusResult.checked),
-      apiUsed: ffApiUsed ? 'fulfillment_rest' : tradingApiUsed ? 'trading_xml' : 'none',
-      feeNote: 'Marketplace fees are ESTIMATED at ~12.8%. Actual eBay fees vary by category, item price, and seller subscription level. Use Finances sync for exact figures.',
-    });
-  } catch (err: any) {
-    console.error('swish-ebay-orders unhandled error:', err.message);
-    return jsonResponse({ error: 'Unable to synchronize eBay orders. Please retry.' }, 500);
-  }
+  let quantityChecked=0;const ids=[...multiChecks];
+  for(let start=0;start<ids.length;start+=12){try{const response=await userClient.functions.invoke('swish-ebay-listing-status',{body:{tenantId,nicheId,listingIds:ids.slice(start,start+12)}});if(response.error||response.data?.success!==true)errors.push('Multi-unit inventory readback is pending. No whole-item sale was inferred.');else quantityChecked+=Number(response.data.checked??0);}catch{errors.push('Multi-unit inventory readback unavailable.');}}
+  const partial=errors.length>0;const result={success:!partial,partial,imported,updated,skipped,total:merged.size,matched:imported+updated,errors:errors.slice(0,20),warnings:warnings.slice(0,10),quantityStatusChecked:quantityChecked,quantityStatusPending:Math.max(0,ids.length-quantityChecked),apiUsed:restOkay&&tradingOkay?'fulfillment_rest+trading_xml':restOkay?'fulfillment_rest':'trading_xml',feeNote:'Fees are estimates unless Finances sync supplied actual values. Delivery requires explicit marketplace/carrier evidence.'};
+  const completed=await db.from('ebay_sync_log').update({status:partial?'partial':'completed',records_fetched:merged.size,records_created:imported,records_updated:updated,records_skipped:skipped,errors:errors.slice(0,20),completed_at:new Date().toISOString(),metadata:{nicheId,daysBack,mode,restOkay,tradingOkay,warnings:warnings.slice(0,10)}}).eq('id',logId);
+  if(completed.error)return json({...result,success:false,partial:true,error:'Orders were processed, but sync outcome logging is pending. Refresh saved orders before retrying.'});
+  console.log(`[SWISH shared orders] niche=${nicheId} imported=${imported} updated=${updated} skipped=${skipped} errors=${errors.length}`);return json({...result,error:partial?'Some order evidence could not be synchronized. Saved successful lines are retained; review the issues.':undefined});
+ }catch(cause){const message=cause instanceof Error?cause.message:'Order sync failed';if(logId)await db.from('ebay_sync_log').update({status:'failed',error_message:message,completed_at:new Date().toISOString()}).eq('id',logId);console.error('[SWISH shared orders] Sync not confirmed');return json({success:false,error:message},503);}
 });

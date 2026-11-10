@@ -11,10 +11,10 @@ const originals = ['https://example.test/front.jpg', 'https://example.test/back.
 const clean = ['https://example.test/front.png', 'https://example.test/back.png'];
 const entry = (index: number): StudioResult => ({ version: SMART_STUDIO_VERSION, status: 'ready', originalUri: originals[index], enhancedUri: clean[index], confidence: 1, warnings: [], quality: backgroundEraseQuality });
 const attrs = { _smart_studio_images: { front: entry(0), back: entry(1) } };
-test.each(PRODUCTION_NICHE_IDS)('%s uses processed-only gallery, cover and listing choices without changing archival media', () => {
+test.each(PRODUCTION_NICHE_IDS)('%s retains processed inventory while exposing both seller photo variants', () => {
  const media = Object.freeze([...originals]); const before = JSON.stringify(attrs);
  expect(preferredListingPhotos(media,attrs)).toEqual(clean);
- expect(availableListingPhotos(media,attrs)).toEqual(clean);
+ expect(availableListingPhotos(media,attrs)).toEqual([originals[0],clean[0],originals[1],clean[1]]);
  expect(preferredStudioImage(media,attrs)).toBe(clean[0]);
  expect(media).toEqual(originals); expect(JSON.stringify(attrs)).toBe(before);
 });
@@ -22,7 +22,7 @@ test('partial processing hides every original, including an unprocessed original
  const partial = { _smart_studio_images: { back: entry(1) } };
  expect(preferredListingPhotos(originals,partial)).toEqual([clean[1]]);
  expect(preferredStudioImage(originals,partial)).toBe(clean[1]);
- expect(availableListingPhotos(originals,partial)).not.toContain(originals[0]);
+ expect(availableListingPhotos(originals,partial)).toContain(originals[0]);
 });
 test('fallback uses originals only when no accepted processed photo exists', () => {
  expect(preferredListingPhotos(originals,{})).toEqual(originals);
@@ -34,17 +34,18 @@ test('mixed arrays never duplicate photos or expose masks and derivative referen
  const metadata = { _smart_studio_images:{ front:{ ...entry(0),maskUri:'https://example.test/mask.png' } } };
  expect(preferredListingPhotos([originals[0],clean[0],originals[1],clean[0],'https://example.test/mask.png'],metadata)).toEqual([clean[0]]);
 });
-test('legacy listing selections upgrade to processed images in seller order but empty choices remain empty', () => {
- expect(selectedListingPhotos(originals,attrs,[originals[1],originals[0]])).toEqual([clean[1],clean[0]]);
+test('explicit seller selections preserve originals, order and empty choices', () => {
+ expect(selectedListingPhotos(originals,attrs,[originals[1],originals[0]])).toEqual([originals[1],originals[0]]);
  expect(selectedListingPhotos(originals,attrs,[])).toEqual([]);
  expect(selectedListingPhotos(originals,attrs,['https://foreign.test/image.jpg'])).toEqual(['https://foreign.test/image.jpg']);
- expect(selectedListingPhotos(originals,{ _smart_studio_images:{ back:entry(1) } },[originals[0]])).toEqual([clean[1]]);
+ expect(selectedListingPhotos(originals,{ _smart_studio_images:{ back:entry(1) } },[originals[0]])).toEqual([originals[0]]);
 });
-test('partial processed-only selections do not weaken captured evidence completeness', () => {
+test('seller photo subsets are allowed while foreign variants remain blocked', () => {
  const metadata = { ...attrs, _photo_pipeline:{ expected: originals.map(url => ({ url })) } };
  expect(processedListingPhotoIssue(originals,metadata,clean)).toBeNull();
- expect(processedListingPhotoIssue(originals,metadata,[clean[0]])).toMatch(/every captured/);
- expect(processedListingPhotoIssue(originals,{ ...metadata,_smart_studio_images:{ front:entry(0) } },[clean[0]])).toMatch(/every captured/);
+ expect(processedListingPhotoIssue(originals,metadata,[clean[0]])).toBeNull();
+ expect(processedListingPhotoIssue(originals,{ ...metadata,_smart_studio_images:{ front:entry(0) } },[clean[0]])).toBeNull();
+ expect(processedListingPhotoIssue(originals,metadata,['https://foreign.test/x.jpg'])).toMatch(/attached/);
 });
 test('capture and re-identification keep original inputs while rendering only processed previews', () => {
  const photos = [{ uri:originals[0],studio:entry(0) },{ uri:originals[1] }];
@@ -58,12 +59,12 @@ test('processed cover selection reorders retained sources without deleting origi
  const read:any = {}; const write:any = {};
  for (const q of [read,write]) for (const method of ['select','eq','in','update','single','maybeSingle']) q[method] = jest.fn(() => q);
  read.abortSignal = jest.fn().mockResolvedValue({ data:row,error:null });
- const nextAttrs = { ...row.attributes,ebay_listing_media:[clean[1],clean[0]] };
+ const nextAttrs = row.attributes;
  write.abortSignal = jest.fn().mockResolvedValue({ data:{ ...row,media:[originals[1],originals[0]],attributes:nextAttrs },error:null });
  (getSupabaseClient as jest.Mock).mockReturnValue({ from:jest.fn().mockReturnValueOnce(read).mockReturnValue(write) });
  const result = await selectMainItemImage('tenant','collectibles','item',clean[1],originals);
  expect(result.error).toBeNull();
- expect(write.update).toHaveBeenCalledWith({ media:[originals[1],originals[0]],attributes:nextAttrs });
+ expect(write.update).toHaveBeenCalledWith({ media:[originals[1],originals[0]] });
  expect(write.eq).toHaveBeenCalledWith('tenant_id','tenant'); expect(write.eq).toHaveBeenCalledWith('updated_at','v1');
  expect(result.item?.media).toHaveLength(2);
 });

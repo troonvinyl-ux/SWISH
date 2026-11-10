@@ -78,7 +78,7 @@ async function refreshToken(
 async function getAccessToken(
   supabase: ReturnType<typeof adminClient>,
   tenantId: string,
-): Promise<{ accessToken: string } | { error: string }> {
+): Promise<{ accessToken: string; clientId: string } | { error: string }> {
   const { data: conn } = await supabase
     .from('marketplace_connectors')
     .select('credential_ref, status, access_token_expires_at')
@@ -111,7 +111,7 @@ async function getAccessToken(
     }
   }
 
-  return { accessToken: creds.accessToken };
+  return { accessToken: creds.accessToken, clientId: creds.clientId };
 }
 
 // ── Map carrier name to eBay shipping service code ────────────────────────────
@@ -146,7 +146,7 @@ async function handleDispatch(
   // 1. Load the SWISH order to get the eBay external_order_id
   const { data: orderRow, error: orderErr } = await supabase
     .from('orders')
-    .select('id, external_order_id, fulfilment_status, marketplace_id, item_id, listing_id, tenant_id')
+    .select('id, external_order_id, fulfilment_status, status, ebay_payment_status, ebay_line_item_id, dispatch_claim_id, marketplace_id, item_id, listing_id, tenant_id')
     .eq('id', swishOrderId)
     .eq('tenant_id', tenantId)
     .maybeSingle();
@@ -161,19 +161,10 @@ async function handleDispatch(
     return jsonResponse({ error: `Order is already ${orderRow.fulfilment_status}. Cannot re-dispatch.` }, 400);
   }
 
+  if (orderRow.dispatch_claim_id) return jsonResponse({ success:false, unconfirmed:true, error:'An earlier dispatch outcome needs checking. Sync orders or check eBay shipping before sending another request.' },409);
+  if (['pending','cancelled','returned'].includes(orderRow.status) || (orderRow.ebay_payment_status && orderRow.ebay_payment_status !== 'PAID')) return jsonResponse({success:false,error:'Wait for confirmed eBay payment; cancelled/refunded orders cannot be dispatched.'},409);
   const ebayOrderId = orderRow.external_order_id;
-  if (!ebayOrderId) {
-    // No eBay order ID — can only update SWISH locally
-    console.warn(`[SWISH Dispatch] Order ${swishOrderId} has no external_order_id — local update only`);
-    const localUpdate = await updateSwishOrderDispatched(supabase, tenantId, swishOrderId, carrier, trackingNumber, dispatchPhotoUrl);
-    if (localUpdate.error) return jsonResponse({ error: localUpdate.error }, 500);
-    return jsonResponse({
-      success: true,
-      ebayFulfillmentSubmitted: false,
-      localOnly: true,
-      warning: 'Order updated locally only. No eBay order ID was found to submit tracking to eBay. If this was an eBay sale, please sync orders first.',
-    });
-  }
+  if (!ebayOrderId) return jsonResponse({success:false,error:'Sync this eBay order first. No local-only dispatch is performed.'},409);
 
   // 2. Get eBay access token
   const tokenResult = await getAccessToken(supabase, tenantId);
@@ -200,42 +191,38 @@ async function handleDispatch(
     });
     if (orderResp.ok) {
       const orderData = await orderResp.json();
-      lineItems = (orderData.lineItems ?? []).map((li: any) => ({
-        lineItemId: li.lineItemId,
-        quantity: li.quantity ?? 1,
-      }));
+      if (orderData.orderPaymentStatus !== 'PAID' || orderData.cancelStatus?.cancelState === 'CANCELED') return jsonResponse({success:false,error:'eBay has not confirmed payment or the order is cancelled. No dispatch was sent.'},409);
+      const linked = await supabase.from('listings').select('external_listing_id').eq('id',orderRow.listing_id).eq('tenant_id',tenantId).eq('item_id',orderRow.item_id).maybeSingle();
+      if(linked.error||!linked.data)return jsonResponse({success:false,error:'Saved order listing identity could not be verified.'},403);
+      const matching=(orderData.lineItems??[]).filter((li:any)=>String(li.legacyItemId)===String(linked.data.external_listing_id)&&(!orderRow.ebay_line_item_id||String(li.lineItemId)===orderRow.ebay_line_item_id));
+      if(matching.length!==1||!matching[0].lineItemId||!Number.isSafeInteger(matching[0].quantity)||matching[0].quantity<1)return jsonResponse({success:false,error:'Select and sync the exact order line before dispatch. Other lines and niches will not be shipped.'},409);
+      if(['FULFILLED','IN_PROGRESS'].includes(matching[0].lineItemFulfillmentStatus))return jsonResponse({success:false,unconfirmed:true,error:'This line already has a shipping fulfillment. Sync or review its existing package on eBay; do not submit another.'},409);
+      lineItems = [{lineItemId:matching[0].lineItemId,quantity:matching[0].quantity}];
     } else {
       console.warn(`[SWISH Dispatch] eBay order lookup returned HTTP ${orderResp.status}.`);
-      // If 404, the order may not be a Managed Payments order — fall through to local-only
-      if (orderResp.status === 404) {
-        console.warn(`[SWISH Dispatch] eBay order ${ebayOrderId} not found via Fulfillment API — local update only`);
-        const localUpdate = await updateSwishOrderDispatched(supabase, tenantId, swishOrderId, carrier, trackingNumber, dispatchPhotoUrl);
-        if (localUpdate.error) return jsonResponse({ error: localUpdate.error }, 500);
-        return jsonResponse({
-          success: true,
-          ebayFulfillmentSubmitted: false,
-          localOnly: true,
-          warning: `eBay order ${ebayOrderId} not found via Fulfillment API. Order may use legacy Trading API format. SWISH updated locally. Please mark as shipped in eBay Seller Hub if required.`,
-        });
-      }
+      return jsonResponse({success:false,error:`eBay order lookup failed (HTTP ${orderResp.status}). Nothing was dispatched. Legacy orders may require eBay Seller Hub.`},409);
     }
   } catch (e: any) {
-    console.warn('[SWISH Dispatch] eBay order details unavailable; proceeding only with validated fulfillment data.');
+    return jsonResponse({success:false,error:'eBay order details unavailable. No dispatch was sent.'},503);
   }
 
   // 3b. Submit shipping fulfillment to eBay
-  const shippingCarrierCode = serviceCode || mapCarrierToEbayCode(carrier);
-  const shippedDate = new Date().toISOString();
-
-  const fulfillmentPayload: any = {
-    shippedDate,
-    shippingCarrierCode,
-    trackingNumber: trackingNumber || null,
-  };
-
-  if (lineItems.length > 0) {
-    fulfillmentPayload.lineItems = lineItems;
+  if(!lineItems.length)return jsonResponse({success:false,error:'Verified order line required.'},409);
+  // Carrier codes are not shipping SERVICE codes. Omit both optional fields for untracked mail.
+  let shippingCarrierCode='';
+  if(trackingNumber){
+    try{
+      const details=await fetch('https://api.ebay.com/ws/api.dll',{method:'POST',headers:{'X-EBAY-API-SITEID':'3','X-EBAY-API-COMPATIBILITY-LEVEL':'967','X-EBAY-API-CALL-NAME':'GeteBayDetails','X-EBAY-API-APP-NAME':tokenResult.clientId,'Content-Type':'text/xml'},body:`<?xml version="1.0" encoding="utf-8"?><GeteBayDetailsRequest xmlns="urn:ebay:apis:eBLBaseComponents"><DetailName>ShippingCarrierDetails</DetailName><RequesterCredentials><eBayAuthToken>${accessToken}</eBayAuthToken></RequesterCredentials></GeteBayDetailsRequest>`,signal:AbortSignal.timeout(10000)});
+      const xml=await details.text();if(!details.ok||!/<Ack>(Success|Warning)<\/Ack>/.test(xml))throw new Error('Carrier lookup failed');
+      const codes=[...xml.matchAll(/<ShippingCarrier>([^<]+)<\/ShippingCarrier>/g)].map(match=>match[1]);const normalize=(value:string)=>value.toLowerCase().replace(/[^a-z0-9]/g,'');
+      const requested=serviceCode||carrier;shippingCarrierCode=codes.find(code=>normalize(code)===normalize(requested))??'';
+      if(!shippingCarrierCode)return jsonResponse({success:false,error:'Choose a current eBay shipping carrier code; a delivery service code is not a carrier code.'},422);
+    }catch{return jsonResponse({success:false,error:'Current eBay carrier codes could not be verified. No dispatch sent.'},503);}
   }
+  const shippedDate = new Date().toISOString();
+  const fulfillmentPayload: any = {shippedDate,lineItems,...(trackingNumber?{shippingCarrierCode,trackingNumber}:{})};
+  const claimId=crypto.randomUUID();const claimed=await supabase.from('orders').update({dispatch_claim_id:claimId,dispatch_claimed_at:shippedDate}).eq('id',swishOrderId).eq('tenant_id',tenantId).is('dispatch_claim_id',null).select('id').maybeSingle();
+  if(claimed.error||!claimed.data)return jsonResponse({success:false,unconfirmed:true,error:'Dispatch is already pending or its claim could not be saved. Sync before retrying.'},409);
 
   let ebayFulfillmentId: string | null = null;
   let ebayFulfillmentError: string | null = null;
@@ -260,11 +247,12 @@ async function handleDispatch(
     console.log(`[SWISH Dispatch] eBay fulfillment API ${fulfillResp.status} for order ${ebayOrderId}`);
 
     if (fulfillResp.status === 201 || fulfillResp.status === 200) {
+      ebayFulfillmentId=fulfillResp.headers.get('Location')?.split('/').pop()??null;
       // Success — eBay confirmed the fulfillment
       ebayFulfillmentSubmitted = true;
       try {
         const responseData = JSON.parse(responseText);
-        ebayFulfillmentId = responseData.fulfillmentId ?? null;
+        ebayFulfillmentId = responseData.fulfillmentId ?? ebayFulfillmentId;
       } catch {}
       console.log(`[SWISH Dispatch] eBay fulfillment confirmed for order ${ebayOrderId}, fulfillmentId=${ebayFulfillmentId}`);
     } else if (fulfillResp.status === 204) {
@@ -274,6 +262,7 @@ async function handleDispatch(
     } else {
       // FAILURE: eBay rejected the fulfillment — parse the error
       const parsedError = `eBay rejected dispatch (HTTP ${fulfillResp.status}).`;
+      if(fulfillResp.status<500)await supabase.from('orders').update({dispatch_claim_id:null,dispatch_claimed_at:null}).eq('id',swishOrderId).eq('tenant_id',tenantId).eq('dispatch_claim_id',claimId);
 
       ebayFulfillmentError = parsedError;
 
@@ -316,6 +305,12 @@ async function handleDispatch(
     }, 503);
   }
 
+  // Read back the exact package, line and optional tracking. Never replay an unknown POST.
+  try{
+    const check=await fetch(`${EBAY_FULFILLMENT_API}/order/${encodeURIComponent(ebayOrderId)}/shipping_fulfillment`,{headers:{Authorization:`Bearer ${accessToken}`,Accept:'application/json'},signal:AbortSignal.timeout(10000)});
+    const payload=await check.json();const matching=payload.fulfillments?.find((shipment:any)=>shipment.lineItems?.some((li:any)=>String(li.lineItemId)===lineItems[0].lineItemId&&Number(li.quantity)===lineItems[0].quantity)&&(!trackingNumber||(shipment.shipmentTrackingNumber??shipment.trackingNumber)===trackingNumber));
+    if(!check.ok||!matching)throw new Error('Package readback pending');
+  }catch{return jsonResponse({success:false,accepted:true,unconfirmed:true,error:'eBay accepted dispatch, but package readback is pending. Sync orders or check eBay; do not dispatch again.'},503);}
   // 4. eBay confirmed — now update SWISH
   const swishUpdate = await updateSwishOrderDispatched(
     supabase, tenantId, swishOrderId, carrier, trackingNumber, dispatchPhotoUrl, ebayFulfillmentId,
@@ -365,13 +360,17 @@ async function updateSwishOrderDispatched(
 ): Promise<{ error: string | null }> {
   const { error } = await supabase.from('orders').update({
     fulfilment_status: 'dispatched',
+    status: 'dispatched',
+    ebay_payment_status: 'PAID',
+    requires_action: false, action_required: null,
+    dispatch_claim_id: null, dispatch_claimed_at: null,
     tracking_number: trackingNumber || null,
     carrier: carrier || null,
     dispatched_at: new Date().toISOString(),
     ...(dispatchPhotoUrl ? { dispatch_photo_url: dispatchPhotoUrl } : {}),
     ...(ebayFulfillmentId ? { notes: `ebay_fulfillment_id:${ebayFulfillmentId}` } : {}),
     updated_at: new Date().toISOString(),
-  }).eq('id', orderId).eq('tenant_id', tenantId);
+  }).eq('id', orderId).eq('tenant_id', tenantId).select('id').single();
 
   if (error) console.error('[SWISH Dispatch] SWISH order status update failed.');
   return { error: error ? 'Unable to update the SWISH order status.' : null };

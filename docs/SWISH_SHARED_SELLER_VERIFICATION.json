@@ -1,0 +1,24 @@
+{
+  "scope": "shared original/cutout listing photos, camera barcode input and eBay order-line lifecycle",
+  "backendReady": true,
+  "schemaInstallation": "SUCCEEDED",
+  "serverOnlyIngestAcl": "CONFIRMED_READ_ONLY",
+  "authenticatedIngestDenial": "CONFIRMED_ROLLBACK_PROBE",
+  "historicalFailureObserved": "Fulfillment creationDate was read as createdAt, omitting p_sold_at and causing PGRST202 reconciliation errors",
+  "existingUserRowsModifiedDuringInstallation": false,
+  "liveAccountSync": "NOT_RUN",
+  "realDispatch": "NOT_RUN",
+  "jest": "NOT_RUN",
+  "typescript": "NOT_RUN",
+  "deno": "NOT_RUN",
+  "deviceScanning": "NOT_TESTED",
+  "otaPublication": "NOT_RUN",
+  "limits": [
+    "Original and background-removed versions are listing choices; inventory still prefers processed photos.",
+    "Maximum 12 selected eBay photographs; unsupported/foreign derivatives are rejected.",
+    "Delivery is not inferred from order age, tracking, acknowledgement or fulfilled status.",
+    "Ambiguous multi-line discounts/taxes are reported, not guessed.",
+    "Historical open-order exact lookups are bounded to 20 per run; provider availability is reported.",
+    "Trading unpaid commitments currently use GetOrders and need a successor before June 30, 2027."
+  ]
+}

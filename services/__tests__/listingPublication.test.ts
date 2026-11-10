@@ -110,6 +110,17 @@ test('explicit eBay rejection remains a genuine failure', async () => {
   submissionSetup({ data: { success: false, error: 'Invalid price' }, error: null });
   expect(await submitListingToMarketplace('tenant', 'draft')).toMatchObject({ success: false, error: 'Invalid price' });
 });
+test('known pre-submission service failure supplies help without an uncertain-publish lock', async () => {
+ const response=new Response(JSON.stringify({error:'eBay Taxonomy API error (503): unavailable',code:'CATEGORY_ASPECTS_UNAVAILABLE',notSubmitted:true}),{status:503});
+ const {invoke}=submissionSetup({data:null,error:new FunctionsHttpError(response)},draft);
+ const result=await submitListingToMarketplace('tenant','draft');
+ expect(result.success).toBe(false);expect(result.publicationUnconfirmed).not.toBe(true);expect(result.clarification?.target).toBe('retry');expect(invoke).toHaveBeenCalledTimes(1);
+});
+test('required field names from eBay are retained for the clarification prompt', async () => {
+ const response=new Response(JSON.stringify({error:'Missing item information',missingRequiredAspects:['Year','Country']}),{status:422});
+ submissionSetup({data:null,error:new FunctionsHttpError(response)},draft);
+ expect((await submitListingToMarketplace('tenant','draft')).clarification?.fields).toEqual(['Year','Country']);
+});
 test('network failure after dispatch resolves saved acceptance without republishing', async () => {
   const { invoke } = submissionSetup(null, live()); invoke.mockRejectedValueOnce(new Error('Network timeout'));
   expect(await submitListingToMarketplace('tenant', 'draft')).toMatchObject({ success: true, accepted: true }); expect(invoke).toHaveBeenCalledTimes(1);
