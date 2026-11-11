@@ -99,7 +99,9 @@ describe('Authorization and all eleven canonical inventories',()=>{
 describe('Provider and SQL invariants',()=>{
   test('verification refresh neither grants from metadata nor extends a stale snapshot indefinitely',()=>{
     const source=read('contexts/AppContext.tsx');
-    expect(source).toContain('verificationMaxAge');expect(source).toContain('isBackendUnavailable(failure)');
+    expect(source).toContain('verificationMaxAge');expect(source).toContain('isBackendUnavailable(message)');
+    expect(source).toContain('Date.now()-previous.verifiedAt<verificationMaxAge');
+    expect(source).toContain('accessRef.current=null;setAccess(null);setAccessError(message);clearModule()');
     expect(source).toContain('activateModuleScope(account.id, id)');expect(source).not.toContain('isSwishMasterAdmin(user?.email)');
   });
   test('query repair retains invoker RLS and does not mutate inventory rows',()=>{
