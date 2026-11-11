@@ -1,6 +1,9 @@
 // Dependency-free Smart Studio geometry and pixel protection contract.
 // Mirrored byte-for-byte into the deployable Edge directory; no React or secrets.
 export const SMART_STUDIO_VERSION = 'backgrounderase-3.0.0';
+export const COIN_PRESENTATION_VERSION = 'coin-white-centered-v1';
+/** Only coins spend background-removal credits automatically; all other niches require a tap. */
+export function shouldAutoRemoveBackground(nicheId?: string): boolean { return nicheId === 'coins'; }
 export const BACKGROUND_ERASE_CHECKS = ['validPng','dimensionsUnchanged','foregroundPresent','transparencyPresent'] as const;
 export type StudioPoint = [number, number];
 export interface StudioDetection {
@@ -26,6 +29,7 @@ export interface StudioResult {
 export interface StudioRaster { width: number; height: number; data: Uint8Array }
 export function studioProfile(niche: string): string {
  const profiles: Record<string, string> = {
+  stamps:'Preserve every perforation, margin, postmark, gum trace and sheet/cover context. Never redraw edges, improve colour or repair faults. Originals are the evidence default.',
   coins:'Full rim, genuine holes, irregular flans and patina. Do not force irregular coins into circles.',
   tunes_flip:'Detect the actual selected CD disc, jewel case, sleeve or vinyl. Keep disc labels separate. Never use the entire photograph as the product plane.',
   collectibles:'Preserve accessories and irregular silhouette. Printed artwork is part of the product, not separate physical objects.',
@@ -202,40 +206,37 @@ export function preferredStudioImage(media:readonly string[],attributes:Record<s
  return preferredListingPhotos(media,attributes)[0];
 }
 export function preferredListingPhotos(media: readonly string[], attributes: Record<string,any>): string[] {
+ if (attributes?._stamp_suggestions != null) return originalListingPhotos(media,attributes);
  const processed = processedItemPhotos(media,attributes);
  if (processed.length) return processed; // Item-wide policy: never mix originals with processed views.
  const entries = attributes?._smart_studio_images;
  const derivatives = new Set(entries && typeof entries === 'object' ? Object.values(entries).flatMap((entry:any) => [entry?.enhancedUri,entry?.maskUri]) : []);
  return [...new Set(media.filter(uri => typeof uri === 'string' && uri.length > 0 && !derivatives.has(uri) && !/\/(?:studio|references)\//i.test(uri.split('?')[0])))];
 }
+/** Seller choices are independent from the processed-only inventory gallery. */
+export function originalListingPhotos(media: readonly string[], attributes: Record<string,any>): string[] {
+ const entries = attributes?._smart_studio_images;
+ const derivatives = new Set(entries && typeof entries === 'object' ? Object.values(entries).flatMap((entry:any) => [entry?.enhancedUri,entry?.maskUri]) : []);
+ return [...new Set(media.filter(uri => typeof uri === 'string' && uri.startsWith('https://') && !derivatives.has(uri) && !/\/(?:studio|references)\//i.test(uri.split('?')[0])))];
+}
 export function availableListingPhotos(media: readonly string[], attributes: Record<string,any>): string[] {
- return preferredListingPhotos(media,attributes);
+ return [...new Set(originalListingPhotos(media,attributes).flatMap(uri => [uri,...(studioForOriginal(uri,attributes)?.enhancedUri ? [studioForOriginal(uri,attributes)!.enhancedUri!] : [])]))];
 }
-/** Upgrade legacy original selections; preserve an intentionally empty selection and reject foreign URLs at validation. */
+/** Never upgrade, replace, drop or re-order an explicit seller selection. */
 export function selectedListingPhotos(media: readonly string[], attributes: Record<string,any>, selection: unknown = attributes?.ebay_listing_media): string[] {
- if (!Array.isArray(selection)) return preferredListingPhotos(media,attributes);
- if (!processedItemPhotos(media,attributes).length) return [...selection];
- const allowed = preferredListingPhotos(media,attributes);
- const next = [...new Set(selection.flatMap(uri => {
-  if (typeof uri !== 'string') return [uri]; // Keep malformed entries so validators fail closed.
-  const clean = studioForOriginal(uri,attributes)?.enhancedUri ?? uri;
-  if (allowed.includes(clean)) return [clean];
-  return media.includes(uri) ? [] : [uri];
- }))] as string[];
- return selection.length && !next.length ? allowed : next;
+ return Array.isArray(selection) ? [...selection] : preferredListingPhotos(media,attributes);
 }
-/** Original persistence alone does not prove all captured views are present in a processed-only listing. */
+/** Capture completeness stays enforced separately; sellers choose which views buyers see. */
 export function processedListingPhotoIssue(media: readonly string[], attributes: Record<string,any>, selected: readonly string[]): string | null {
- if (!processedItemPhotos(media,attributes).length) return null;
- const expected = attributes?._photo_pipeline?.expected;
- if (Array.isArray(expected) && expected.some(entry => !entry?.url || !studioForOriginal(entry.url,attributes)?.enhancedUri || !selected.includes(studioForOriginal(entry.url,attributes)!.enhancedUri!))) return 'Process and select every captured evidence view before publishing. Originals remain archived; they are not added to the processed-only listing.';
- return null;
+ const allowed = availableListingPhotos(media,attributes);
+ if (selected.length > 12 || new Set(selected).size !== selected.length) return 'Select at most 12 distinct listing photos; nothing is silently truncated.';
+ return selected.some(uri => typeof uri !== 'string' || !allowed.includes(uri)) ? 'Choose originals or verified background-removed photos attached to this item.' : null;
 }
 export interface CapturedPresentationPhoto { uri: string; originalStorageUri?: string; studio?: StudioResult }
 export function capturedPresentationUri(photo: CapturedPresentationPhoto): string {
  return photo.studio?.status === 'ready' && studioImageIsUsable(photo.studio) ? photo.studio.enhancedUri! : photo.originalStorageUri ?? photo.uri;
 }
 export function visibleCapturedPhotos<T extends CapturedPresentationPhoto>(photos: readonly T[]): T[] {
- const processed = photos.filter(photo => photo.studio?.status === 'ready' && studioImageIsUsable(photo.studio));
- return processed.length ? processed : [...photos];
+ // One view per retained photo: a manual cutout must never hide the other originals.
+ return [...photos];
 }

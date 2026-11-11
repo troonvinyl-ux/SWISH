@@ -17,6 +17,8 @@ export async function saveSpecialistItemFields(tenantId:string,nicheId:string,it
     changed[descriptor.key]={ before:attributes[descriptor.key] ?? null,after:value };
     attributes[descriptor.key]=value;
     fields[descriptor.key]={ value,basis:'user_supplied',reason:'Human correction; not independently verified.' };
+    // A deliberate human correction replaces its stale AI-inference marker, not catalogue provenance.
+    delete attributes[`_inferred_${descriptor.key}`];
   }
   attributes._specialist_analysis={ ...original,fields };
   const history=Array.isArray(attributes._specialist_corrections) ? attributes._specialist_corrections : [];
