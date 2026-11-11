@@ -12,6 +12,9 @@ on:
         required: true
         default: preview-unified
         options: [preview-unified, production-unified]
+concurrency:
+  group: swish-unified-apk-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
