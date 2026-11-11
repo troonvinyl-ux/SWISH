@@ -78,7 +78,7 @@ jobs:
           mkdir -p dist
           npx expo config --type public --json > dist/unified-runtime-config.json
           node scripts/verify-unified-config.mjs dist/unified-runtime-config.json
-          node --test scripts/unified-ota-policy.test.mjs scripts/android-release-policy.test.mjs
+          node --test scripts/unified-ota-policy.test.mjs scripts/android-release-policy.test.mjs scripts/release-workflow-contract.test.mjs
       - run: node scripts/generate-unified-route-types.cjs
       - name: typescript (mandatory)
         run: |
@@ -204,7 +204,6 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 90
     env:
-      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID || secrets.EXPO_PROJECT_ID || vars.EAS_PROJECT_ID || secrets.EAS_PROJECT_ID }}
       SWISH_PRODUCTION_ACCEPTANCE_RUN: ${{ inputs.production_acceptance_run }}

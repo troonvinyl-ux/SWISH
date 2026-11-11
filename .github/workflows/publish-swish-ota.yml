@@ -81,7 +81,7 @@ jobs:
       - run: node scripts/verify-ota-owner-approval.mjs
       - run: node scripts/verify-expo-project.mjs
       - run: node scripts/verify-production-approval.mjs
-      - run: node --test scripts/unified-ota-policy.test.mjs scripts/android-release-policy.test.mjs
+      - run: node --test scripts/unified-ota-policy.test.mjs scripts/android-release-policy.test.mjs scripts/release-workflow-contract.test.mjs
       - run: node scripts/generate-unified-route-types.cjs
       - run: npx tsc --noEmit
       - run: npx expo lint
