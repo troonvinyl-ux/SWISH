@@ -38,7 +38,7 @@ jobs:
       EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
     steps:
-      - name: Require existing Android signing credentials before running build checks
+      - name: Resolve verified original Android signing identity before build checks
         if: inputs.build_android
         env:
           SWISH_RELEASE_KEYSTORE_BASE64: ${{ secrets.SWISH_RELEASE_KEYSTORE_BASE64 }}
@@ -47,7 +47,29 @@ jobs:
           SWISH_KEYSTORE_KEY_ALIAS: ${{ secrets.SWISH_KEYSTORE_KEY_ALIAS }}
           SWISH_RELEASE_CERT_SHA256: ${{ vars.SWISH_RELEASE_CERT_SHA256 || secrets.SWISH_RELEASE_CERT_SHA256 }}
         run: |
-          node -e "const missing=['SWISH_RELEASE_KEYSTORE_BASE64','SWISH_KEYSTORE_STORE_PASSWORD','SWISH_KEYSTORE_KEY_PASSWORD','SWISH_KEYSTORE_KEY_ALIAS','SWISH_RELEASE_CERT_SHA256'].filter(k=>!process.env[k]); if(missing.length) throw Error('Restore original signing settings in GitHub Actions: '+missing.join(', '))"
+          set -euo pipefail
+          signing_names=(SWISH_RELEASE_KEYSTORE_BASE64 SWISH_KEYSTORE_STORE_PASSWORD SWISH_KEYSTORE_KEY_PASSWORD SWISH_KEYSTORE_KEY_ALIAS SWISH_RELEASE_CERT_SHA256)
+          present=0
+          for name in "${signing_names[@]}"; do
+            if [ -n "${!name:-}" ]; then present=$((present + 1)); fi
+          done
+          if [ "$present" = 0 ] && [ "$SWISH_RELEASE_CHANNEL" = preview-unified ]; then
+            # The user-supplied SWISHFLIP.apk has this exact public Expo testing certificate.
+            # Preserve that installed identity; never substitute a new key or use this for production.
+            keyfile="$RUNNER_TEMP/swish-original-testing.keystore"
+            curl --fail --location --retry 2 --max-time 60 https://raw.githubusercontent.com/expo/expo/sdk-53/templates/expo-template-bare-minimum/android/app/debug.keystore --output "$keyfile"
+            echo "221e0a3106aa4c3ccc154e0a418b55020b3f9ea6e84f92e8749cd9e2f39f5e58  $keyfile" | sha256sum --check
+            actual=$(keytool -list -keystore "$keyfile" -storepass android -alias androiddebugkey | sed -n 's/.*SHA-256): //p' | tr -d ':' | tr '[:upper:]' '[:lower:]')
+            test "$actual" = fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c
+            export SWISH_RELEASE_KEYSTORE_BASE64="$(base64 -w 0 "$keyfile")"
+            export SWISH_KEYSTORE_STORE_PASSWORD=android
+            export SWISH_KEYSTORE_KEY_PASSWORD=android
+            export SWISH_KEYSTORE_KEY_ALIAS=androiddebugkey
+            export SWISH_RELEASE_CERT_SHA256="$actual"
+            for name in "${signing_names[@]}"; do printf '%s=%s\n' "$name" "${!name}" >> "$GITHUB_ENV"; done
+            echo "::notice::Preview only: preserving the verified Expo testing certificate from the supplied APK."
+          fi
+          node -e "const missing=['SWISH_RELEASE_KEYSTORE_BASE64','SWISH_KEYSTORE_STORE_PASSWORD','SWISH_KEYSTORE_KEY_PASSWORD','SWISH_KEYSTORE_KEY_ALIAS','SWISH_RELEASE_CERT_SHA256'].filter(k=>!process.env[k]); if(missing.length) throw Error('Missing original signing settings: '+missing.join(', '))"
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:
@@ -113,9 +135,31 @@ jobs:
           distribution: temurin
           java-version: '17'
       - run: bash scripts/install-dependencies.sh
-      - name: Verify original signing configuration is present, never generate credentials
+      - name: Resolve verified original Android signing identity
         run: |
-          node -e "for(const k of ['SWISH_RELEASE_KEYSTORE_BASE64','SWISH_KEYSTORE_STORE_PASSWORD','SWISH_KEYSTORE_KEY_PASSWORD','SWISH_KEYSTORE_KEY_ALIAS','SWISH_RELEASE_CERT_SHA256']) if(!process.env[k]) throw Error('Missing original signing setting: '+k)"
+          set -euo pipefail
+          signing_names=(SWISH_RELEASE_KEYSTORE_BASE64 SWISH_KEYSTORE_STORE_PASSWORD SWISH_KEYSTORE_KEY_PASSWORD SWISH_KEYSTORE_KEY_ALIAS SWISH_RELEASE_CERT_SHA256)
+          present=0
+          for name in "${signing_names[@]}"; do
+            if [ -n "${!name:-}" ]; then present=$((present + 1)); fi
+          done
+          if [ "$present" = 0 ] && [ "$SWISH_RELEASE_CHANNEL" = preview-unified ]; then
+            # The user-supplied SWISHFLIP.apk has this exact public Expo testing certificate.
+            # Preserve that installed identity; never substitute a new key or use this for production.
+            keyfile="$RUNNER_TEMP/swish-original-testing.keystore"
+            curl --fail --location --retry 2 --max-time 60 https://raw.githubusercontent.com/expo/expo/sdk-53/templates/expo-template-bare-minimum/android/app/debug.keystore --output "$keyfile"
+            echo "221e0a3106aa4c3ccc154e0a418b55020b3f9ea6e84f92e8749cd9e2f39f5e58  $keyfile" | sha256sum --check
+            actual=$(keytool -list -keystore "$keyfile" -storepass android -alias androiddebugkey | sed -n 's/.*SHA-256): //p' | tr -d ':' | tr '[:upper:]' '[:lower:]')
+            test "$actual" = fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c
+            export SWISH_RELEASE_KEYSTORE_BASE64="$(base64 -w 0 "$keyfile")"
+            export SWISH_KEYSTORE_STORE_PASSWORD=android
+            export SWISH_KEYSTORE_KEY_PASSWORD=android
+            export SWISH_KEYSTORE_KEY_ALIAS=androiddebugkey
+            export SWISH_RELEASE_CERT_SHA256="$actual"
+            for name in "${signing_names[@]}"; do printf '%s=%s\n' "$name" "${!name}" >> "$GITHUB_ENV"; done
+            echo "::notice::Preview only: preserving the verified Expo testing certificate from the supplied APK."
+          fi
+          node -e "const missing=['SWISH_RELEASE_KEYSTORE_BASE64','SWISH_KEYSTORE_STORE_PASSWORD','SWISH_KEYSTORE_KEY_PASSWORD','SWISH_KEYSTORE_KEY_ALIAS','SWISH_RELEASE_CERT_SHA256'].filter(k=>!process.env[k]); if(missing.length) throw Error('Missing original signing settings: '+missing.join(', '))"
       - name: Verify unified app identity and update configuration
         run: |
           mkdir -p dist
