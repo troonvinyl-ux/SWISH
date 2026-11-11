@@ -10,6 +10,8 @@ jest.mock('@/services/marketValueService', () => ({}));
 jest.mock('@/services/originalImageService', () => ({}));
 jest.mock('@/services/smartStudioStorageService', () => ({}));
 jest.mock('@/services/itemService', () => ({}));
+jest.mock('@/services/photoPersistenceService', () => ({ persistCapturedItemPhotos: jest.fn() }));
+jest.mock('@/services/captureIdentityService', () => ({ captureCanonicalId: jest.fn() }));
 
 import { identifyItemWithAI, type CapturedImage } from '@/services/aiIdentificationService';
 import { identifyQuickPhotos } from '@/services/quickListService';
