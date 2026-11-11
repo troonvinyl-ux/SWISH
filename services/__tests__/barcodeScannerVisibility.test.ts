@@ -13,9 +13,9 @@ test('Collectibles opens in barcode mode while optional niches can choose it', (
   expect(source('hooks/useQuickList.ts')).toContain('visual:!quickStartsWithBarcode(nicheId)');
 });
 
-test('photo-only specialists do not gain a mandatory retail barcode step', () => {
+test('optional retail barcode lookup does not replace specialist photo workflows', () => {
   for (const niche of ['coins', 'antiques', 'fossils', 'motocross', 'bicycles', 'trading_cards'] as const) {
-    expect(quickBarcodeSupported(niche)).toBe(false);
+    expect(quickBarcodeSupported(niche)).toBe(true);
     expect(quickStartsWithBarcode(niche)).toBe(false);
   }
   expect(source('components/feature/QuickListWorkspace.tsx')).toContain('{flow.barcodeSupported ? <View accessibilityRole="tablist"');
@@ -25,7 +25,7 @@ test('barcode mode, manual entry and product candidates are visible before More 
   const ui = source('components/feature/QuickListWorkspace.tsx');
   const more = ui.indexOf("more ? 'Hide options' : 'More options'");
   expect(more).toBeGreaterThan(0);
-  for (const label of ['accessibilityLabel="Scan barcode"', 'Enter barcode manually', 'label="Product barcode"', 'state.leads.length ? <FlatList', 'Take item photos']) {
+  for (const label of ['accessibilityLabel="Scan barcode"', 'Enter barcode manually', 'label="Product barcode"', 'state.leads.length ? <FlatList', 'BarcodeProductConfirmation']) {
     expect(ui.indexOf(label)).toBeGreaterThan(0);
     expect(ui.indexOf(label)).toBeLessThan(more);
   }

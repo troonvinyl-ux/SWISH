@@ -1,8 +1,8 @@
 // Shared server codec/provenance adapter. BackgroundErase is the ONLY image processor.
-// No AI generation, visual comparison, geometry correction, relighting or compositing.
+// No AI generation, visual comparison or relighting. Coins use deterministic alpha-on-white centering.
 import { decode as decodeJpeg } from 'npm:jpeg-js@0.4.4';
 import { decode as decodePng, encode as encodePng } from 'npm:fast-png@6.2.0';
-import { SMART_STUDIO_VERSION, type StudioRaster, type StudioResult } from './smartStudio.ts';
+import { SMART_STUDIO_VERSION, COIN_PRESENTATION_VERSION, type StudioRaster, type StudioResult } from './smartStudio.ts';
 import { BackgroundEraseError, removeBackgroundBytes } from './backgroundEraseService.ts';
 export function imageBytes(data:string):Uint8Array {
  const match=data.match(/^data:image\/(jpeg|jpg|png);base64,([A-Za-z0-9+/=]+)$/i);
@@ -56,15 +56,31 @@ export function encodeStudioPng(image:StudioRaster,metadata?:Record<string,unkno
 export function readStudioMetadata(bytes:Uint8Array):Omit<StudioResult,'originalUri'>|null {
  try{const png=decodePng(bytes);const data=JSON.parse(png.text.swish_studio??'null');return data?.version===SMART_STUDIO_VERSION?data:null;}catch{return null;}
 }
-export interface StudioServerConfig {provider:'BackgroundErase';format:'png';channels:'rgba';size:'full';crop:false;despill:false}
-export function studioServerConfig():StudioServerConfig {return {provider:'BackgroundErase',format:'png',channels:'rgba',size:'full',crop:false,despill:false};}
+export interface StudioServerConfig {provider:'BackgroundErase';format:'png';channels:'rgba';size:'full';crop:false;despill:false;coinPresentationVersion:string}
+export function studioServerConfig():StudioServerConfig {return {provider:'BackgroundErase',format:'png',channels:'rgba',size:'full',crop:false,despill:false,coinPresentationVersion:COIN_PRESENTATION_VERSION};}
+/** Translate every nonzero-alpha provider pixel onto a square white canvas; no resizing or rim reconstruction. */
+export function centeredWhiteCoinRaster(cutout:StudioRaster):StudioRaster {
+ if(!Number.isInteger(cutout.width)||!Number.isInteger(cutout.height)||cutout.width<1||cutout.height<1||cutout.data.length!==cutout.width*cutout.height*4)throw new Error('Invalid coin cutout.');
+ const side=Math.max(cutout.width,cutout.height);
+ if(side*side>3_000_000)throw new Error('Coin presentation exceeds the raster budget. Original retained.');
+ let left=cutout.width,top=cutout.height,right=-1,bottom=-1;
+ for(let y=0;y<cutout.height;y++)for(let x=0;x<cutout.width;x++)if(cutout.data[(y*cutout.width+x)*4+3]>0){left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);}
+ if(right<left||bottom<top)throw new Error('Coin cutout is empty. Original retained.');
+ const dx=Math.floor((side-(right-left+1))/2),dy=Math.floor((side-(bottom-top+1))/2);
+ const data=new Uint8Array(side*side*4);data.fill(255);
+ for(let y=top;y<=bottom;y++)for(let x=left;x<=right;x++){
+  const src=(y*cutout.width+x)*4,dst=((dy+y-top)*side+dx+x-left)*4,alpha=cutout.data[src+3]/255;
+  for(let channel=0;channel<3;channel++)data[dst+channel]=Math.round(cutout.data[src+channel]*alpha+255*(1-alpha));
+ }
+ return {width:side,height:side,data};
+}
 export function validateBackgroundEraseRaster(source:StudioRaster,output:StudioRaster):Record<string,boolean> {
  const dimensionsUnchanged=source.width===output.width&&source.height===output.height;
  let foreground=0,transparent=0;
  for(let i=3;i<output.data.length;i+=4){if(output.data[i]>0)foreground++;if(output.data[i]<255)transparent++;}
  return {validPng:true,dimensionsUnchanged,foregroundPresent:foreground>0,transparencyPresent:transparent>0};
 }
-export async function processStudioCopy(imageDataUrl:string,_nicheId:string,_angle:string,_hint:string,_references:Array<{imageDataUrl:string;angle:string}>,_config:StudioServerConfig):Promise<{result:Omit<StudioResult,'originalUri'>;image?:Uint8Array;mask?:Uint8Array}> {
+export async function processStudioCopy(imageDataUrl:string,nicheId:string,_angle:string,_hint:string,_references:Array<{imageDataUrl:string;angle:string}>,_config:StudioServerConfig):Promise<{result:Omit<StudioResult,'originalUri'>;image?:Uint8Array;mask?:Uint8Array}> {
  const input=imageBytes(imageDataUrl),source=decodeStudioRaster(input);
  if(source.width<320||source.height<320||source.width>1800||source.height>1800)throw new BackgroundEraseError('BACKGROUND_ERASE_INPUT_DIMENSIONS',422,'BackgroundErase: processing copy dimensions are unsupported; original retained.');
  const png=await removeBackgroundBytes(input,/^data:image\/png;/i.test(imageDataUrl)?'image/png':'image/jpeg');
@@ -73,5 +89,10 @@ export async function processStudioCopy(imageDataUrl:string,_nicheId:string,_ang
  const checks=validateBackgroundEraseRaster(source,output);
  if(!Object.values(checks).every(Boolean))throw new BackgroundEraseError('BACKGROUND_ERASE_OUTPUT_REVIEW',422,'BackgroundErase: output is empty, opaque or has changed dimensions; original retained.');
  const result:Omit<StudioResult,'originalUri'>={version:SMART_STUDIO_VERSION,status:'ready',confidence:0,warnings:['BackgroundErase cutout. Check product edges, defects and lettering against the original before listing.'],quality:{sourcePixelsOnly:false,method:'backgrounderase',provider:'BackgroundErase',checks,completeness:'not_assessed',boundary:'Provider alpha segmentation; manually review fine edges',detailCheck:'PNG and dimensions checked; no AI reconstruction or pixel-fidelity certification',background:'transparent'}};
+ if(nicheId==='coins'){
+  const presentation=centeredWhiteCoinRaster(output);
+  result.quality={...result.quality,background:'white_centered',detailCheck:'Provider cutout translated onto white without resizing, relighting or reconstruction; review against original'};
+  return {result,image:pngAt72Dpi(encodeStudioPng(presentation))};
+ }
  return {result,image:png};
 }

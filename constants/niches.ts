@@ -10,6 +10,7 @@
 // integration, valuation engine, and AI system power every niche.
 
 import { SpecialistId } from './specialists';
+import { Colors } from './theme';
 import moduleRegistry from '../niche-modules.json';
 
 import type { NicheModuleContract, RegisteredNicheId } from '@/shared/moduleContracts';
@@ -60,6 +61,18 @@ export interface NicheConfig {
 }
 
 export const NICHES: Record<NicheId, NicheConfig> = {
+  stamps: {
+    id: 'stamps', name: 'Stamp Flipper', shortName: 'Stamps', tagline: 'Read the issue · check the back · list with confidence',
+    description: 'Beginner-friendly postage stamp, set, sheet, cover and collection resale using shared SWISH inventory and eBay workflows. AI proposes identity; exact varieties and authenticity need independent checks.',
+    icon: 'local-post-office', color: Colors.primary, accentColor: Colors.gold,
+    specialists: NICHE_MODULES.stamps.specialists as SpecialistId[], defaultSpecialist: 'stamps',
+    terms: { item: 'Stamp / lot', items: 'Stamps & lots', itemPlural: 'stamps', scan: 'Identify Stamps', identify: 'Identify', condition: 'Usage / gum / faults', catalogue: 'SG / Scott / Michel' },
+    quickActions: [{ icon: 'photo-camera', label: 'Identify Stamps', route: '/(tabs)/scan' }, { icon: 'inventory-2', label: 'Inventory', route: '/(tabs)/inventory' }, { icon: 'sell', label: 'eBay Listings', route: '/(tabs)/listings' }, { icon: 'menu-book', label: 'Stamp guide', route: '/stamp-guide' }],
+    keyAttributes: ['country', 'denomination', 'issue_name', 'usage', 'gum', 'sg_number', 'perforation', 'watermark', 'format', 'album_location'],
+    acquisitionSources: ['Collections', 'Stamp fairs', 'Auction houses', 'Local philatelic societies', 'Estate sales', 'Dealers'], marketplaces: ['eBay'],
+    captureInstructions: ['Photograph the full front including every edge in neutral light', 'Photograph the reverse if loose; never detach a stamp or open a sealed booklet to do so', 'Keep covers and joined blocks intact; show the whole cover, sheet or page', 'Show faults and postmarks; use a physical perforation gauge for exact measurements', 'Catalogue values are reference prices, not expected sale proceeds'],
+    hasMeasurements: true, measurementLabels: { size: 'Stamp dimensions (mm)' }, version: '1.0.0',
+  },
   tunes_flip: {
     id:'tunes_flip', name:'Tunes Flip', shortName:'Music', tagline:'Scan · verify the pressing · value · sell',
     description:'Vinyl, singles, CDs, cassettes and box sets. Confirm exact release and grade media and packaging separately.',

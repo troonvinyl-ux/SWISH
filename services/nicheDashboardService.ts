@@ -26,6 +26,7 @@ export interface NicheDashboardContent {
   actions: NicheDashboardAction[];
 }
 const HERO_COPY: Record<ProductionNicheId, { headline: string; categories: string; motto?: string }> = {
+  stamps: { headline: 'Small details. A world of stories.', categories: 'Stamps · Sets · Covers · Collections', motto: 'IDENTIFY · CHECK · SORT · SELL' },
   tunes_flip: { headline:'Find the release. Verify the pressing.', categories:'Vinyl · CDs · Cassettes · Box sets', motto:'SCAN · VERIFY · VALUE · LIST · SELL' },
   collectibles: { headline: 'Every find has a story.', categories: 'Toys · Comics · Figures · Memorabilia' },
   tech: { headline: 'Smart tech. Smarter flips.', categories: 'Devices · Cameras · Gaming · Audio' },

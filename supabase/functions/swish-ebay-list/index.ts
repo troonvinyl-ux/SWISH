@@ -42,6 +42,7 @@ import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 import { assessListingConfidence } from '../_shared/listingConfidencePolicy.ts';
+import { listingClarification } from '../_shared/listingClarification.ts';
 import { requirePaidNiche, nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
 import { specialistNiche } from '../_shared/specialistRegistry.ts';
 import { evaluateSpecialistSafety } from '../_shared/specialistIntelligence.ts';
@@ -111,7 +112,10 @@ function adminClient() {
 }
 
 function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
+  // Preserve exact eBay detail while attaching an actionable clarification.
+  const value = body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : null;
+  const output = value && typeof value.error === 'string' ? { ...value, clarification: listingClarification(value) } : body;
+  return new Response(JSON.stringify(output), {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
@@ -1136,16 +1140,16 @@ function friendlyError(rawErrors: string[], fallback: string): string {
     return 'The selected category is a parent/invalid eBay category. Open the Listing Editor → tap Category → use the live browser to drill down to a category marked "✓ Leaf" → tap Save, then retry.';
   }
   if (raw.includes('business polic') || raw.includes('seller polic') || raw.includes('fulfillment polic') || (raw.includes('shipping') && raw.includes('invalid'))) {
-    return 'Your eBay account uses Business Policies. Please load and select your policy IDs in Settings → eBay Connection, then retry.';
+    return `${rawErrors.join('; ')} Load and select the required policy in Settings → eBay Connection, then retry.`;
   }
   if (raw.includes('return polic') || raw.includes('returnpolic')) {
-    return 'Your eBay account requires a return policy ID. Load your policies in Settings → eBay Connection.';
+    return `${rawErrors.join('; ')} Load and select your return policy in Settings → eBay Connection.`;
   }
   if (raw.includes('too long') || raw.includes('characters')) return rawErrors[0];
   if (raw.includes('title')) return `eBay rejected the listing title: ${rawErrors[0]}`;
   if (raw.includes('categoryid')) return `eBay rejected the category ID. Raw eBay error: ${rawErrors[0]}`;
-  if (raw.includes('condition') || raw.includes('conditionid')) return 'eBay requires a valid condition. Please set the item condition before submitting.';
-  if (raw.includes('price') || raw.includes('startprice')) return 'eBay rejected the price. Please check the listing price is valid and greater than £0.00.';
+  if (raw.includes('condition') || raw.includes('conditionid')) return `${rawErrors.join('; ')} Open Condition and choose one of the current category-specific eBay options.`;
+  if (raw.includes('price') || raw.includes('startprice')) return `${rawErrors.join('; ')} Open Pricing and correct the amount or constraint reported by eBay.`;
   if (raw.includes('token') || raw.includes('auth') || raw.includes('credential')) return 'eBay authentication failed. Please re-authorise your eBay connection in Marketplaces.';
   if (raw.includes('suspended') || raw.includes('restricted') || raw.includes('selling limit')) return 'Your eBay account has a selling restriction. Please check your eBay Seller Hub.';
   if (raw.includes('duplicate') || raw.includes('same title')) return 'eBay flagged this as a duplicate listing. You may already have this item listed.';
@@ -2403,13 +2407,16 @@ async function handleRequest(req: Request): Promise<Response> {
   let taxonomyToken = creds.accessToken;
   if (isAntique) {
     const appToken = await getAppToken();
-    if (!appToken) return jsonResponse({ error: 'Current eBay taxonomy authorization unavailable. Nothing submitted.' }, 503);
+    if (!appToken) return jsonResponse({ error: 'Current eBay taxonomy authorization unavailable. Nothing submitted. Retry requirements; changing item clues will not repair this service check.', code: 'CATEGORY_REQUIREMENTS_UNAVAILABLE', notSubmitted: true }, 503);
     taxonomyToken = appToken;
     const leaf = await verifyCategoryIsLeaf(taxonomyToken, creds.clientId, resolvedCategoryId, supabase);
-    if (leaf?.isLeaf !== true) return jsonResponse({ error: 'Selected specialist category is not a verified current eBay leaf. Nothing submitted.' }, 422);
-    const policy = await getItemConditionPolicy(taxonomyToken, resolvedCategoryId);
+    if (!leaf) return jsonResponse({ error: `eBay category ${resolvedCategoryId} could not be verified because the live lookup did not finish. Retry requirements; nothing was submitted.`, code: 'CATEGORY_REQUIREMENTS_UNAVAILABLE', notSubmitted: true }, 503);
+    if (leaf.isLeaf !== true) return jsonResponse({ error: `Category ${resolvedCategoryId} (${leaf.name}) is not a final eBay leaf. Choose a child category in Category, save and retry. Nothing submitted.`, code: 'CATEGORY_SELECTION_REQUIRED', notSubmitted: true }, 422);
+    let policy: AntiqueConditionPolicy;
+    try { policy = await getItemConditionPolicy(taxonomyToken, resolvedCategoryId); }
+    catch (cause) { return jsonResponse({ error: cause instanceof Error ? cause.message : 'eBay condition metadata unavailable. Retry requirements.', code: 'CONDITION_REQUIREMENTS_UNAVAILABLE', notSubmitted: true }, 503); }
     const selected = selectAntiqueCondition(policy, String(attrs.ebay_condition_id ?? ''));
-    if (selected.error) return jsonResponse({ error: selected.error }, 422);
+    if (selected.error) return jsonResponse({ error: `Which eBay condition matches this item? Choose ${policy.itemConditions.map(choice => choice.conditionDescription).join(' / ')} in Condition, then save and retry.`, code: 'CONDITION_SELECTION_REQUIRED', notSubmitted: true, conditionPolicy: policy }, 422);
     conditionId = selected.id;
     conditionRequired = policy.itemConditionRequired;
     if (!await verifyPresentationPhotos(mediaUrls,originalMedia,attrs,tenantId,specialistNiche(specialistId) ?? '')) return jsonResponse({ error: 'Select verified original or accepted clean photographs attached to this inventory item.' }, 422);
@@ -2425,7 +2432,7 @@ async function handleRequest(req: Request): Promise<Response> {
   // This keeps every niche on the same source of truth and prevents a green
   // client preflight from submitting a listing with missing required aspects.
   let categoryAspectResult = await getEbayCategoryAspects(taxonomyToken, resolvedCategoryId);
-  if (isAntique && categoryAspectResult.error) return jsonResponse({ error: categoryAspectResult.error, code: 'CATEGORY_ASPECTS_UNAVAILABLE' }, 503);
+  if (isAntique && categoryAspectResult.error) return jsonResponse({ error: categoryAspectResult.error, code: 'CATEGORY_ASPECTS_UNAVAILABLE', notSubmitted: true }, 503);
 
   // If eBay denies Taxonomy access (e.g. OAuth/app permissions), use only a
   // recently synchronised category-aspect cache from SWISH's existing table.
@@ -2462,8 +2469,10 @@ async function handleRequest(req: Request): Promise<Response> {
     }
   }
   if (isAntique) {
-    const issue = validateAntiqueSpecifics(itemSpecifics, normalizeAntiqueAspects(categoryAspectResult.aspects));
-    if (issue) return jsonResponse({ error: issue, code: 'SPECIALIST_SPECIFICS_INVALID' }, 422);
+    const normalizedAspects = normalizeAntiqueAspects(categoryAspectResult.aspects);
+    const issue = validateAntiqueSpecifics(itemSpecifics, normalizedAspects);
+    if (issue) return jsonResponse({ error: issue, code: 'SPECIALIST_SPECIFICS_INVALID', notSubmitted: true,
+      missingRequiredAspects: normalizedAspects.filter(aspect => aspect.required && !itemSpecifics.some(specific => specific.name.trim().toLowerCase() === aspect.name.toLowerCase() && specific.value.trim())).map(aspect => aspect.name) }, 422);
   }
   const requiredAspects = categoryAspectResult.aspects
     .filter((aspect) => aspect.aspectConstraint?.aspectRequired === true || aspect.aspectConstraint?.aspectUsage === 'REQUIRED')
@@ -2516,7 +2525,7 @@ async function handleRequest(req: Request): Promise<Response> {
   if (!externalListingId) return jsonResponse({ success: false, code: 'PUBLISH_RECONCILIATION_REQUIRED', error: 'eBay did not return a listing ID. The result must be reconciled before retrying.' }, 502);
   const publishedAt = new Date().toISOString();
 
-  const warnings: string[] = [];
+  const warnings: string[] = confidenceGate.advisory ? [confidenceGate.advisory] : [];
   let reconciliationPending = false;
   try {
     const { data: persistedListing, error: listingSaveError } = await supabase.from('listings').update({

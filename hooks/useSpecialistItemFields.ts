@@ -12,7 +12,12 @@ export function useSpecialistItemFields(item:Item,onUpdated:(updates:Partial<Ite
   const [values,setValues]=useState<Record<string,string>>({});const [busy,setBusy]=useState(false);const [error,setError]=useState<string|null>(null);const [saved,setSaved]=useState(false);
   useEffect(()=>{
     const fields=recordValue(recordValue(item.attributes._specialist_analysis).fields);const initial:Record<string,string>={};
-    for(const descriptor of profile?.fields ?? []) initial[descriptor.key]=String(item.attributes[descriptor.key] ?? recordValue(fields[descriptor.key]).value ?? '');
+    for(const descriptor of profile?.fields ?? []) {
+      const entry=recordValue(fields[descriptor.key]);
+      // Stamps: an untouched AI variety suggestion is never silently saved as a seller claim.
+      const inferred=profile?.nicheId==='stamps' && (entry.basis==='inferred' || item.attributes[`_inferred_${descriptor.key}`]!=null);
+      initial[descriptor.key]=inferred?'':String(item.attributes[descriptor.key] ?? entry.value ?? '');
+    }
     setValues(initial);setError(null);setSaved(false);
   },[scope,item.updatedAt]);
   const update=useCallback((key:string,value:string)=>{ setValues(previous=>({ ...previous,[key]:value }));setSaved(false); },[]);

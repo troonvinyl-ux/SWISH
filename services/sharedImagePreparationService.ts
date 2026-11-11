@@ -3,7 +3,7 @@
 import * as ImageManipulator from 'expo-image-manipulator';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { getSupabaseClient } from '@/template';
-import { SMART_STUDIO_VERSION, studioImageIsUsable, type StudioResult } from '@/shared/smartStudio';
+import { SMART_STUDIO_VERSION, COIN_PRESENTATION_VERSION, shouldAutoRemoveBackground, studioImageIsUsable, type StudioResult } from '@/shared/smartStudio';
 import type { CapturedImage } from './aiIdentificationService';
 export interface StudioRequest {
  original:{uri:string;width?:number;height?:number};nicheId?:string;tenantId?:string;
@@ -30,7 +30,7 @@ async function process(request:StudioRequest,signal:AbortSignal):Promise<StudioR
  const {default:AsyncStorage}=await import('@react-native-async-storage/async-storage');
  const {digestStringAsync,CryptoDigestAlgorithm}=await import('expo-crypto');
  const imageDataUrl=await copy(uri,request.quality==='high'?1600:1280,signal,request.original.width,request.original.height);
- const hash=await digestStringAsync(CryptoDigestAlgorithm.SHA256,JSON.stringify({version:SMART_STUDIO_VERSION,imageDataUrl,userId,tenantId:request.tenantId,nicheId:request.nicheId}));
+ const hash=await digestStringAsync(CryptoDigestAlgorithm.SHA256,JSON.stringify({version:SMART_STUDIO_VERSION,presentation:shouldAutoRemoveBackground(request.nicheId)?COIN_PRESENTATION_VERSION:'transparent',imageDataUrl,userId,tenantId:request.tenantId,nicheId:request.nicheId}));
  const key=`@swish_studio:${userId}:${hash}`;checkSignal(signal);
  const cached=await AsyncStorage.getItem(key).catch(()=>null);checkSignal(signal);
  if(cached){try{const saved=JSON.parse(cached);if(studioImageIsUsable(saved)&&saved.cachedAt>Date.now()-6*60*60*1000)return {...saved,originalUri:uri};}catch{/* Corrupt cache is not evidence. */}}
@@ -66,7 +66,9 @@ export async function generateSharedObjectImageReference(uri:string,options:Omit
  return {enhancedUri:studio.enhancedUri,warning:studio.warnings.join(' '),generatedBy:'BackgroundErase',studio};
 }
 /** Serial, hard-budgeted batch. Neither this service nor the server calls identification. */
-export async function prepareCapturedImages(images:readonly CapturedImage[],options:{tenantId?:string;nicheId?:string;deadlineMs?:number}={}):Promise<CapturedImage[]>{
+export async function prepareCapturedImages(images:readonly CapturedImage[],options:{tenantId?:string;nicheId?:string;deadlineMs?:number;manual?:boolean}={}):Promise<CapturedImage[]>{
+ // Return immediately, before auth/codecs/cache/network, unless coins or an explicit BG-remove tap.
+ if(!options.manual&&!shouldAutoRemoveBackground(options.nicheId))return images.map(image=>({...image}));
  const output:CapturedImage[]=[];const deadline=Date.now()+(options.deadlineMs??150_000);
  for(const image of images){
   // Rechecks and inventory saves reuse this attempt, including a failed attempt: no automatic paid replay.
