@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import 'react-native-url-polyfill/auto';
 import { SupabaseConfig } from './types';
@@ -26,12 +27,13 @@ class SupabaseManager {
     try {
       console.log(`[Template:Client] Creating Supabase client instance #${this.creationCount}`);
       
-      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-      const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+      const embeddedSupabase = Constants.expoConfig?.extra?.supabase;
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || embeddedSupabase?.url;
+      const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || embeddedSupabase?.anonKey;
       
       if (!supabaseUrl || !supabaseAnonKey) {
-        const errorMsg = '[Template:Client] Supabase environment variables missing\n' +
-          'Please check EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in .env file';
+        const errorMsg = '[Template:Client] Supabase public configuration missing\n' +
+          'Check EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY or Expo embedded extra.supabase';
         console.error(errorMsg);
         throw new Error(errorMsg);
       }
