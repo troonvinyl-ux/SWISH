@@ -78,7 +78,7 @@ test('optional processed images are linked by original role and become available
  (prepareCapturedImages as jest.Mock).mockImplementation(async captures=>captures.map((image:any)=>({...image,studio:{version:SMART_STUDIO_VERSION,status:'ready',originalUri:image.uri,enhancedUri:`https://storage.test/processed/${image.slotId}.png`,confidence:1,warnings:[],quality:{method:'backgrounderase',provider:'BackgroundErase',sourcePixelsOnly:true,completeness:'reviewed',boundary:'reviewed',detailCheck:'unchanged',background:'transparent',checks:{validPng:true,dimensionsUnchanged:true,foregroundPresent:true,transparencyPresent:true}}}})));
  const saved=await persistCapturedItemPhotos('tenant','item',images);expect(saved.complete).toBe(true);
  expect(db.row().attributes._smart_studio_images.front.originalUri).toBe(saved.urls[0]);
- expect(availableListingPhotos(db.row().media,db.row().attributes)).toEqual(['https://storage.test/processed/front.png','https://storage.test/processed/back.png']);expect(db.row().media).toEqual(saved.urls);expect(db.row().attributes._photo_assets).toHaveLength(2);
+ expect(availableListingPhotos(db.row().media,db.row().attributes)).toEqual([saved.urls[0],'https://storage.test/processed/front.png',saved.urls[1],'https://storage.test/processed/back.png']);expect(db.row().media).toEqual(saved.urls);expect(db.row().attributes._photo_assets).toHaveLength(2);
 });
 test('an oversized condition photo and successful cutout both carry into the same draft-ready item',async()=>{
  const db=setup('tech'),images=photos().slice(0,2),large=new Uint8Array(ORIGINAL_UPLOAD_LIMIT_BYTES+1);large.set([255,216]);
@@ -91,8 +91,44 @@ test('an oversized condition photo and successful cutout both carry into the sam
  expect(db.row().attributes._photo_assets[0].uploadCopy.kind).toBe('compressed_capture_copy');
  expect(db.row().attributes._photo_assets[0].uploadCopy.uri).toBeUndefined();
  expect(db.row().attributes._photo_pipeline.status).toBe('complete');
- expect(availableListingPhotos(db.row().media,db.row().attributes)).toEqual(['https://storage.test/processed/front.png','https://storage.test/processed/back.png']);
+ expect(availableListingPhotos(db.row().media,db.row().attributes)).toEqual([saved.urls[0],'https://storage.test/processed/front.png',saved.urls[1],'https://storage.test/processed/back.png']);
  expect(photoPersistenceIssue(db.row().media,db.row().attributes)).toBeNull();
+});
+test.each(PRODUCTION_NICHE_IDS)('%s permits lifetime gallery additions without changing sales or seller selections',async niche=>{
+ const db=setup(niche);
+ for(const status of ['new','review_required','listed','active','sold','fulfilled','completed','held','archived','disposed']){
+  const old='https://storage.test/old.jpg';
+  const pipeline={version:'canonical-photos-v1',status:'complete',expected:[{slotId:'original',url:old}]};
+  db.change({status,media:[old],sold_at:'2026-11-01T12:00:00Z',sold_price:95,attributes:{seller_note:'keep',ebay_listing_media:[old],_photo_pipeline:pipeline}});
+  const capture={uri:'file://new.jpg',slotId:`gallery_${status}`,slotLabel:'Extra photo'};
+  const saved=await persistCapturedItemPhotos('tenant','item',[capture],{processImages:false,appendOnly:true});
+  expect(saved.complete).toBe(true);expect(db.row().status).toBe(status);expect(db.row().sold_price).toBe(95);
+  expect(db.row().sold_at).toBe('2026-11-01T12:00:00Z');expect(db.row().media).toEqual([old,...saved.urls]);
+  expect(db.row().attributes.ebay_listing_media).toEqual([old]);expect(db.row().attributes._photo_pipeline).toEqual(pipeline);
+ }
+ expect(prepareCapturedImages).not.toHaveBeenCalled();
+});
+test('optional gallery failures never turn complete listing evidence into a publish blocker',async()=>{
+ const db=setup();const old='https://storage.test/old.jpg',pipeline={version:'canonical-photos-v1',status:'complete',expected:[{slotId:'original',url:old}]};
+ db.change({media:[old],attributes:{_photo_pipeline:pipeline,ebay_listing_media:[old]}});
+ let fail=true;const actual=db.storage.upload.getMockImplementation()!;
+ db.storage.upload.mockImplementation(async(path,data)=>path.includes('/back_')&&fail?{error:{message:'Network failure'}}:actual(path,data));
+ const images=photos().slice(0,2),options={processImages:false,appendOnly:true};
+ const first=await persistCapturedItemPhotos('tenant','item',images,options);
+ expect(first.complete).toBe(false);expect(db.row().media).toHaveLength(2);expect(db.row().attributes._photo_pipeline).toEqual(pipeline);
+ expect(photoPersistenceIssue(db.row().media,db.row().attributes)).toBeNull();
+ fail=false;expect((await persistCapturedItemPhotos('tenant','item',images,options)).complete).toBe(true);
+ expect(db.storage.upload).toHaveBeenCalledTimes(3);expect(db.row().media).toHaveLength(3);expect(db.row().media[0]).toBe(old);
+});
+test('lifetime append merges concurrent metadata without dropping older photos',async()=>{
+ const db=setup();const actual=db.storage.upload.getMockImplementation()!;
+ db.storage.upload.mockImplementation(async(path,data)=>{db.change({media:['https://storage.test/main.jpg','https://storage.test/concurrent.jpg'],attributes:{seller_note:'edited elsewhere'},updated_at:'concurrent'});return actual(path,data);});
+ const saved=await persistCapturedItemPhotos('tenant','item',photos().slice(0,1),{processImages:false,appendOnly:true});
+ expect(saved.complete).toBe(true);expect(db.row().media).toEqual(['https://storage.test/main.jpg','https://storage.test/concurrent.jpg',...saved.urls]);expect(db.row().attributes.seller_note).toBe('edited elsewhere');
+});
+test('a changed workspace prevents uploads and optional association',async()=>{
+ const db=setup();const saved=await persistCapturedItemPhotos('tenant','item',photos().slice(0,1),{processImages:false,appendOnly:true,isCurrent:()=>false});
+ expect(saved.complete).toBe(false);expect(saved.errors.join(' ')).toMatch(/Workspace changed/);expect(db.storage.upload).not.toHaveBeenCalled();expect(db.row().media).toEqual([]);
 });
 test('wrong tenant stops before upload and local URLs cannot be linked as persisted media',async()=>{
  const db=setup();expect((await persistCapturedItemPhotos('other','item',photos())).complete).toBe(false);expect(db.storage.upload).not.toHaveBeenCalled();

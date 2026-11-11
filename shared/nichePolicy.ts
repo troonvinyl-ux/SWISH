@@ -8,9 +8,9 @@ export interface NicheWorkflowPolicy {
 }
 const standard = (barcode: NicheWorkflowPolicy['barcode']): NicheWorkflowPolicy => ({ barcode, quickReviewMinimum: 0.7, publicationMinimum: 0, inventoryReviewMinimum: 0.8 });
 export const NICHE_WORKFLOW_POLICIES: Readonly<Record<string, NicheWorkflowPolicy>> = {
-  coins: { ...standard('disabled'), quickReviewMinimum: 0.95, publicationMinimum: 0 },
-  motocross: standard('disabled'), bicycles: standard('disabled'), clothing: standard('optional'),
-  trading_cards: standard('disabled'), antiques: standard('disabled'), fossils: standard('disabled'),
+  coins: { ...standard('optional'), quickReviewMinimum: 0.95, publicationMinimum: 0 },
+  motocross: standard('optional'), bicycles: standard('optional'), clothing: standard('optional'),
+  trading_cards: standard('optional'), antiques: standard('optional'), fossils: standard('optional'),
   beauty: standard('optional'), tech: standard('optional'), surplus_flip: standard('optional'),
   tunes_flip: standard('optional'), collectibles: standard('start'),
 };

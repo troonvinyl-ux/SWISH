@@ -1,16 +1,15 @@
 import { memo } from 'react';
 import { View,Text,TextInput,FlatList,Pressable,StyleSheet,ActivityIndicator,Linking } from 'react-native';
-import { CameraView } from 'expo-camera';
+import { BarcodeInputButton } from './BarcodeInputButton';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTunesCatalogue } from '@/hooks/useTunesCatalogue';
-import { useMusicBarcode } from '@/hooks/useMusicBarcode';
 import { useOwnerAuthorization } from '@/hooks/useOwnerAuthorization';
 import type { DiscogsMode } from '@/services/discogsService';
 import { Colors,Spacing,Radius,Typography } from '@/constants/theme';
 interface MusicCataloguePanelProps { compact?:boolean }
 const modes:Array<{id:DiscogsMode;label:string}>=[{id:'text',label:'Text'},{id:'barcode',label:'Barcode'},{id:'catalogue',label:'Catalogue no.'},{id:'artist_title',label:'Artist + title'}];
 export const MusicCataloguePanel=memo(function MusicCataloguePanel({compact=false}:MusicCataloguePanelProps){
- const tunes=useTunesCatalogue();const {state}=tunes;const barcode=useMusicBarcode();const owner=useOwnerAuthorization();const release=state.release;const disabled=state.busy||!tunes.ready;
+ const tunes=useTunesCatalogue();const {state}=tunes;const owner=useOwnerAuthorization();const release=state.release;const disabled=state.busy||!tunes.ready;
  const openLink=(url:string)=>{void Linking.openURL(url).catch(()=>{});};
  return <View style={s.panel}>
   <View style={s.row}><MaterialIcons name="album" size={28} color={Colors.primary}/><View style={s.flex}><Text style={s.title}>Verify the release</Text><Text style={s.body}>Catalogue match is not proof of your pressing.</Text></View></View>
@@ -18,9 +17,7 @@ export const MusicCataloguePanel=memo(function MusicCataloguePanel({compact=fals
   {state.mode==='artist_title'?<View style={s.block}><Text style={s.label}>Artist</Text><TextInput accessibilityLabel="Music artist" value={state.artist} onChangeText={tunes.setArtist} editable={!disabled} style={s.input}/></View>:null}
   <Text style={s.label}>{state.mode==='barcode'?'Printed barcode':state.mode==='catalogue'?'Catalogue number':state.mode==='artist_title'?'Release title':'Artist, title or music release'}</Text>
   <TextInput accessibilityLabel="Discogs search query" value={state.query} onChangeText={tunes.setQuery} onSubmitEditing={()=>void tunes.search()} editable={!disabled} autoCapitalize="none" keyboardType={state.mode==='barcode'?'number-pad':'default'} style={s.input}/>
-  <View style={s.row}><Pressable disabled={disabled||state.query.trim().length<2} onPress={()=>void tunes.search()} style={({pressed})=>[s.button,pressed||disabled?s.pressed:null]}><Text style={s.dark}>Search releases</Text></Pressable><Pressable disabled={disabled} accessibilityLabel="Scan a music barcode" onPress={()=>void barcode.toggle()} style={({pressed})=>[s.secondary,pressed?s.pressed:null]}><MaterialIcons name="qr-code-scanner" size={24} color={Colors.primary}/><Text style={s.body}>{barcode.enabled?'Close camera':'Scan barcode'}</Text></Pressable></View>
-  {barcode.enabled?<CameraView style={s.camera} facing="back" barcodeScannerSettings={{barcodeTypes:['ean13','ean8','upc_a','upc_e']}} onBarcodeScanned={barcode.scanned}/>:null}
-  {barcode.error?<Text style={s.body}>{barcode.error}</Text>:null}
+  <View style={s.row}><Pressable disabled={disabled||state.query.trim().length<2} onPress={()=>void tunes.search()} style={({pressed})=>[s.button,pressed||disabled?s.pressed:null]}><Text style={s.dark}>Search releases</Text></Pressable><BarcodeInputButton disabled={disabled} label="Scan music barcode" onValue={code=>{tunes.setMode('barcode');tunes.setQuery(code);}}/></View>
   {state.busy?<ActivityIndicator color={Colors.primary}/>:null}
   {state.error?<View style={s.error}><MaterialIcons name="error-outline" size={24} color={Colors.danger}/><Text accessibilityRole="alert" style={[s.body,s.flex]}>{state.error}</Text></View>:null}
   {state.search?<View style={s.block}><Text style={s.label}>{state.search.total} matches · page {state.search.page}/{state.search.pages} · select, then compare</Text>

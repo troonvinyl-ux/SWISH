@@ -1,0 +1,103 @@
+name: Shared seller photo barcode and order lifecycle checks
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'shared/smartStudio.ts'
+      - 'shared/nichePolicy.ts'
+      - 'shared/ebayOrderLifecycle.ts'
+      - 'services/listingPhotoService.ts'
+      - 'services/inventoryGalleryService.ts'
+      - 'services/photoPersistenceService.ts'
+      - 'hooks/useInventoryGallery.ts'
+      - 'components/feature/InventoryPhotoActions.tsx'
+      - 'components/feature/ItemPhotoGallery.tsx'
+      - 'app/stock-listing/[id].tsx'
+      - 'services/__tests__/inventoryLifetimeGallery.test.ts'
+      - 'services/__tests__/photoCarryForwardIntegration.test.ts'
+      - 'services/sellerOrderService.ts'
+      - 'services/itemPhotoService.ts'
+      - 'services/quickListService.ts'
+      - 'hooks/useListingPhotoManager.ts'
+      - 'hooks/useBarcodeScanner.ts'
+      - 'hooks/useSellerOrderFocus.ts'
+      - 'contexts/SellerOrdersContext.tsx'
+      - 'components/feature/*Barcode*.tsx'
+      - 'components/feature/ListingPhoto*.tsx'
+      - 'components/feature/SellerOrder*.tsx'
+      - 'app/orders.tsx'
+      - 'app/dispatch.tsx'
+      - 'app/_layout.tsx'
+      - 'app/ebay-hub.tsx'
+      - 'supabase/functions/swish-ebay-orders/**'
+      - 'supabase/functions/swish-ebay-post-order/**'
+      - 'supabase/functions/_shared/ebayOrder*.ts'
+      - 'supabase/migrations/20261125*.sql'
+      - 'supabase/tests/ebay_order_lifecycle.test.ts'
+      - 'services/__tests__/sharedSellerOrders.test.ts'
+      - 'services/__tests__/sellerPhotoChoices.test.ts'
+permissions:
+  contents: read
+jobs:
+  regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Install dependencies without touching the lockfile
+        run: npm install --ignore-scripts --package-lock=false
+      - name: Record source
+        run: |
+          mkdir -p verification-output
+          git rev-parse HEAD > verification-output/source-sha.txt
+      - name: Shared photo and lifecycle regressions (no seller requests)
+        id: jest
+        continue-on-error: true
+        run: npx jest --config jest.config.ci.js --runInBand services/__tests__/sellerPhotoChoices.test.ts services/__tests__/inventoryLifetimeGallery.test.ts services/__tests__/sharedSellerOrders.test.ts services/__tests__/itemMainImage.test.ts services/__tests__/processedPhotoPresentation.test.ts services/__tests__/studioPhotoPolicy.test.ts services/__tests__/photoCarryForwardIntegration.test.ts services/__tests__/shortListingFlow.test.ts --json --outputFile=verification-output/shared-seller-jest.json
+      - name: Order and photo adapters (no provider requests)
+        id: deno
+        if: always()
+        continue-on-error: true
+        run: deno test supabase/tests/ebay_order_lifecycle.test.ts supabase/tests/processed_photo_presentation.test.ts > verification-output/order-adapters.txt 2>&1
+      - name: Edge function type checks
+        id: edge
+        if: always()
+        continue-on-error: true
+        run: deno check supabase/functions/swish-ebay-orders/index.ts supabase/functions/swish-ebay-post-order/index.ts > verification-output/order-edge-types.txt 2>&1
+      - name: Application TypeScript gate
+        id: types
+        if: always()
+        continue-on-error: true
+        run: npx tsc --noEmit > verification-output/app-types.txt 2>&1
+      - name: Canonical deployment asset parity
+        id: parity
+        if: always()
+        continue-on-error: true
+        run: node scripts/sync-backend-registry.mjs --check > verification-output/shared-parity.txt 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shared-seller-workflow-${{ github.sha }}
+          path: verification-output/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Require all actual checks to pass
+        if: always()
+        env:
+          JEST: ${{ steps.jest.outcome }}
+          DENO: ${{ steps.deno.outcome }}
+          EDGE: ${{ steps.edge.outcome }}
+          TYPES: ${{ steps.types.outcome }}
+          PARITY: ${{ steps.parity.outcome }}
+        run: |
+          test "$JEST" = success
+          test "$DENO" = success
+          test "$EDGE" = success
+          test "$TYPES" = success
+          test "$PARITY" = success

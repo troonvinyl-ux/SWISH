@@ -41,11 +41,11 @@ describe('durable eBay sales niche attribution', () => {
 
   test('both eBay order import paths snapshot niche, specialist and category', () => {
     const source = fs.readFileSync(path.join(root, 'supabase/functions/swish-ebay-orders/index.ts'), 'utf8');
-    expect(source).toContain("select('id, item_id, external_listing_id, price, shipping_cost, category_id, items!inner(specialist_id)')");
-    expect(source).toContain('nicheForSpecialist(specialistId, registry.products');
-    expect((source.match(/niche_id: matchedListingMeta\?\.nicheId/g) ?? []).length).toBe(2);
-    expect((source.match(/specialist_id: matchedListingMeta\?\.specialistId/g) ?? []).length).toBe(2);
-    expect((source.match(/category_id: matchedListingMeta\?\.categoryId/g) ?? []).length).toBe(2);
+    expect(source).toContain("rpc('swish_ingest_ebay_order_line'");
+    expect(source).toContain(".in('items.specialist_id',specialistIds)");
+    const sql=fs.readFileSync(path.join(root,'supabase/migrations/20261125_shared_order_lifecycle.sql'),'utf8');
+    expect(sql).toContain('public.swish_specialist_niche(i.specialist_id) is distinct from p_niche_id');
+    expect(sql).toContain('p_niche_id,i.specialist_id,l.category_id');
   });
 
   test('migration adds nullable fields and backfills only from same-tenant relationships', () => {

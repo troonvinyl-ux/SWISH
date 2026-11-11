@@ -69,7 +69,7 @@ test('reviewed apply uses exact versions, optionally preserves draft title, neve
 });
 test('evidence-only save does not apply AI; oversized title does not truncate silently', async () => {
   const snapshot = await readDraftEvidence(scope);
-  await expect(saveDraftEvidence(scope,snapshot,[],'hint',null,'x'.repeat(81),()=>true)).rejects.toThrow(/1–80/);
+  await expect(saveDraftEvidence(scope,snapshot,[],'hint',null,'x'.repeat(81),()=>true)).rejects.toThrow(/1–80|review an identification/);
   expect(rpc).not.toHaveBeenCalled();
   await saveDraftEvidence(scope,snapshot,[],'hint',null,null,()=>true);
   expect(rpc).toHaveBeenCalledWith('swish_apply_draft_reidentification',expect.objectContaining({p_proposal:null,p_draft_title:null}));
@@ -107,5 +107,5 @@ test('source enforces draft locks/RLS, preserves seller fields and refreshes sha
   for(const required of ['security invoker','swish_current_module','swish_can_access_niche','for update','l.publish_claim_id','x.publish_claim_id','p_item_version','p_listing_version','from public,anon'])expect(sql).toContain(required);
   expect(sql).not.toContain('security definer'); expect(sql).not.toMatch(/valuation_mid\s*=/); expect(sql).not.toMatch(/description\s*=/); expect(sql).not.toMatch(/price\s*=/); expect(sql).not.toMatch(/insert into public\.(items|listings)/);
   const hook=fs.readFileSync('hooks/useDraftReidentification.ts','utf8'); expect(hook).toContain('app.triggerInventoryReload()');expect(hook).toContain('app.moduleEpoch');expect(hook).toContain('setResult(null)');
-  const screen=fs.readFileSync('app/ebay-listing-editor.tsx','utf8');expect(screen).toContain('privateDraft');expect(screen).toContain('Save & continue');expect(screen).toContain('Re-identify · add photos & clues');
+  const screen=fs.readFileSync('app/ebay-listing-editor.tsx','utf8');expect(screen).toContain('privateDraft');expect(screen).toContain('Save & continue');expect(fs.readFileSync('components/feature/ListingReidentificationActions.tsx','utf8')).toContain('Re-identify · add photos & clues');
 });
