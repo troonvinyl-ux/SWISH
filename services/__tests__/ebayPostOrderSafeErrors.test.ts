@@ -24,6 +24,6 @@ describe('eBay Post-Order safe error handling', () => {
 
   test('successful fulfillment response parsing remains intact', () => {
     expect(source).toContain('const responseData = JSON.parse(responseText)');
-    expect(source).toContain('ebayFulfillmentId = responseData.fulfillmentId ?? null');
+    expect(source).toContain('ebayFulfillmentId = responseData.fulfillmentId ?? ebayFulfillmentId');
   });
 });

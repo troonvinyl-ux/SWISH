@@ -12,6 +12,7 @@
 //   COINS / CLOTHING / MX — see full comments in v5
 
 import { serveModule } from '../_shared/moduleScope.ts';
+import { guardStampIdentification } from '../_shared/stampIdentification.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { requirePaidNiche,nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
@@ -1701,7 +1702,9 @@ serveModule(async (req: Request) => {
     const specialistSystemPrompt = SPECIALIST_SYSTEM_PROMPTS[specialist] ?? (profile ? `You are SWISH's ${profile.nicheId} identification specialist. ${profile.recognition}` : SPECIALIST_SYSTEM_PROMPTS['curiosities_collectibles']);
     const antiqueEvidenceRules = `Classify the actual object: ceramic, porcelain, glass, furniture, artwork, silverware, decorative object, book or unknown. Do not use coin taxonomy or numismatic fields. Read maker/brand, literal marks/signatures, material, style/design, pattern, period or approximate age, origin, dimensions and condition only where supported. Style does not establish date. Photograph a ruler for dimensions; never estimate exact sizes. Rarity, provenance, original/reproduction and authenticity are unverified unless independently evidenced. Label estimates and competing attributions. If a maker, mark, date or origin is unclear, ask for one useful additional view or user documentation. Never invent a maker, provenance or comparable sale.`;
     const musicMode = profile?.nicheId === 'tunes_flip';
-    const fullSystemPrompt = specialistSystemPrompt + (musicMode ? '\n' + MUSIC_IDENTIFICATION_RULES : profile?.nicheId === 'antiques' ? '\n' + antiqueEvidenceRules + '\nAll valuation fields must be zero; identity is a proposal, not authentication.' : MASTER_EVIDENCE_RULES) + (profile ? '\n' + specialistOutputInstructions(profile) : '');
+    const stampMode = profile?.nicheId === 'stamps';
+    const stampRules = 'Use the philatelic taxonomy, not coin fields. Read country, denomination, inscriptions, overprint and usage. Exact issue/variety, watermark, perforation, gum originality and SG/Scott/Michel references remain unverified unless independently checked. Postmark dates are not issue dates. Keep covers, pages and sheets intact. All valuation fields must be zero; no rarity or MNH guarantee.';
+    const fullSystemPrompt = specialistSystemPrompt + (musicMode ? '\n' + MUSIC_IDENTIFICATION_RULES : stampMode ? '\n' + stampRules : profile?.nicheId === 'antiques' ? '\n' + antiqueEvidenceRules + '\nAll valuation fields must be zero; identity is a proposal, not authentication.' : MASTER_EVIDENCE_RULES) + (profile ? '\n' + specialistOutputInstructions(profile) : '');
     const coinMode = isCoinLikeSpecialist(specialist);
     const vehicleMode = isVehicleSpecialist(specialist) && captureMode !== 'part';
     const identificationSchema = profile && !coinMode ? `Return ONLY a JSON object with canonicalTitle, specialistId, objectType (a relevant category from the specialist taxonomy), identificationState (observation_only|candidate), confidence (0..1), confidenceReason, identificationSource (detected|inferred), condition, conditionNotes, attributesConfirmed, attributesInferred, attributes, candidateIdentification { primaryCandidate, alternativeCandidates, whyCandidateSelected, whyUncertain }, evidenceSupporting, evidenceContradictory, missingInformation, warnings, suggestedDisposition, dispositionDecision. Include specialistAnalysis as specified above. Prices MUST be zero and saleProb30d MUST be null. Do not emit coinFields or medalFields for non-numismatic objects.` : OUTPUT_SCHEMA;
@@ -1736,6 +1739,8 @@ The caller will use only the requested output (title or description). Do not inv
       ? 'MANDATORY FIRST STEP: Read the brand label exactly as shown. Then read the care label. Then: garment type, era, condition, authentication risk.'
       : profile?.nicheId === 'tunes_flip'
       ? (captureMode === 'cd_box_set' ? 'MANDATORY FIRST STEP: Read the CD/box-set front and rear covers, each numbered disc label and the all-discs contents view. Identify a compilation versus single-artist release. Compare declared catalogue disc count with observed or user-counted discs; never infer all discs are present. Read the CD hub matrix only if visible, not vinyl Side A/Side B runouts. Catalogue identity is confirmed by the user in the separate Discogs workflow; this call only assesses photos.' : 'MANDATORY FIRST STEP: Read artist/title, label, barcode, catalogue number and matrix/runout. Compare individual editions; never automatically declare an exact pressing verified.')
+      : stampMode
+      ? 'MANDATORY FIRST STEP: Identify a stamp, intact cover, sheet/booklet or collection page. Transcribe country, face value and inscriptions; distinguish broad issue from unverified variety.'
       : profile?.nicheId === 'antiques'
       ? 'MANDATORY FIRST STEP: Classify the antique object or book from its form, construction and literal marks. Use the antique taxonomy; no coin fields.'
       : 'MANDATORY FIRST STEP: Classify object type (coin/medal/token/jeton/commemorative_piece/banknote/jewellery/motorcycle/garment/unknown).';
@@ -2064,6 +2069,7 @@ The caller will use only the requested output (title or description). Do not inv
     }
 
     // Shared analysis is model assessment, not independent source verification.
+    if (stampMode) constrained = guardStampIdentification(constrained, knownAttributes ?? {});
     constrained.specialistId = specialist;
     if (profile) {
       const analysis = normalizeSpecialistAnalysis(constrained.specialistAnalysis, profile, Number(constrained.confidence));

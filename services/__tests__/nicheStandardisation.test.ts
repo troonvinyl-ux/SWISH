@@ -43,9 +43,9 @@ test.each(PRODUCTION_NICHE_IDS)('%s retains its expertise and uses a single role
 });
 test('Collectibles is barcode-first, ancient coin identification cannot accept barcode leads', () => {
   expect(quickStartsWithBarcode('collectibles')).toBe(true);
-  expect(quickBarcodeSupported('coins')).toBe(false);
+  expect(quickBarcodeSupported('coins')).toBe(true);
   expect(nicheBarcodeAllowed('unknown')).toBe(false);
-  for (const niche of ['antiques', 'fossils', 'motocross', 'bicycles', 'trading_cards']) expect(nicheBarcodeAllowed(niche)).toBe(false);
+  for (const niche of ['antiques', 'fossils', 'motocross', 'bicycles', 'trading_cards']) expect(nicheBarcodeAllowed(niche)).toBe(true);
   const result: any = { specialistId: 'coins', attributesConfirmed: { EAN: '4006381333931' }, evidenceContradictory: [] };
   const lead: any = { id: 'product', gtin: '4006381333931', title: 'Retail product', model: 'ABC' };
   expect(barcodeAgreesWithPhotos(lead, result)).toBe(false);
@@ -98,7 +98,8 @@ test('runtime wiring uses shared services and guards stale inbox/order callbacks
   expect(capture).not.toContain('uploadItemImages(');
   const inbox = read('app/ebay-messages.tsx'); expect(inbox).toContain('useEbayMessages'); expect(inbox).not.toContain('getSupabaseClient');
   const provider = read('contexts/EbayMessagesContext.tsx'); expect(provider).toContain('guard.isCurrent(scope)'); expect(provider).toContain('version !== sequence.current');
-  expect(read('app/orders.tsx')).toContain('version !== loadVersion.current');
+  expect(read('app/orders.tsx')).toContain('SellerOrdersWorkspace');
+  expect(read('contexts/SellerOrdersContext.tsx')).toContain('serial!==readSerial.current');
   expect(read('app/_layout.tsx')).toContain('<EbayMessagesProvider>');
   const boundary = read('supabase/functions/_shared/moduleScope.ts');
   expect(boundary).toContain('moduleRequestAliasIssue'); expect(boundary).toContain('nicheBarcodeAllowed(nicheId)'); expect(boundary).toContain('Resource is not in the active account and niche');

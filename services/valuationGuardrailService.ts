@@ -107,6 +107,7 @@ interface NicheQualityRule {
 }
 
 const NICHE_QUALITY_RULES: Record<string, NicheQualityRule> = {
+  stamps: { minRelevantSoldForWeak: 1, minRelevantSoldForModerate: 3, minRelevantSoldForStrong: 8, allowReferenceOnlyValuation: false, idConfidencePenaltyThreshold: 0.7, maxConfidenceWhenIdLow: 'very_low' },
   coins: {
     minRelevantSoldForWeak: 1,
     minRelevantSoldForModerate: 3,

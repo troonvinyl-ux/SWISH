@@ -4,6 +4,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { withModuleScope } from '../_shared/moduleScope.ts';
 import { normalizeMusicCandidate, normalizeMusicRelease, MUSIC_NICHE_ID } from '../_shared/musicRelease.ts';
+import { catalogueGtin } from '../_shared/quickListBarcode.ts';
 const API='https://api.discogs.com';
 const secretNames=['DISCOGS_CONSUMER_KEY','DISCOGS_CONSUMER_SECRET','DISCOGS_USER_AGENT'] as const;
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...corsHeaders,'Content-Type':'application/json','Cache-Control':'no-store'}});
@@ -32,6 +33,21 @@ const scopedCatalogue=withModuleScope(async(request:Request)=>{
   const role=await client.rpc('swish_is_platform_owner');if(role.error)return json({error:'OWNER_CHECK_UNAVAILABLE'},503);
   // Owner evaluation is not permission for paid/commercial deployment.
   if(role.data!==true&&Deno.env.get('DISCOGS_COMMERCIAL_USE_APPROVED')!=='true')return json({error:'DISCOGS_USAGE_REVIEW_REQUIRED',message:'Discogs catalogue integration awaits commercial-use permission. Use manual identification and your own photos; no membership was changed.'},403);
+  if(body.action==='barcode_products'){
+   const gtin=catalogueGtin(body.query);if(!gtin)return json({error:'INVALID_BARCODE'},400);
+   const raw=await catalogue(`/database/search?type=release&barcode=${encodeURIComponent(gtin)}&per_page=2`);
+   const products=[];
+   for(const candidate of (Array.isArray(raw.results)?raw.results:[]).slice(0,2)){
+    if(!Number.isSafeInteger(candidate.id)||candidate.id<1)continue;
+    const release=normalizeMusicRelease(await catalogue(`/releases/${candidate.id}`));
+    const codes=release.identifiers.filter(x=>/^barcode$/i.test(x.type)).map(x=>catalogueGtin(x.value)).filter(Boolean);
+    if(!codes.length||codes.some(code=>code!.padStart(14,'0')!==gtin.padStart(14,'0')))continue;
+    const specifics:Record<string,string>={Artist:release.artist.slice(0,65),Title:release.releaseTitle.slice(0,65)};
+    for(const [name,value] of [['Label',release.labels.join(', ')],['Format',release.format.join(', ')],['Release Year',release.year],['Release Date',release.released]])if(value&&value.length<=65)specifics[name]=value;
+    products.push({id:`discogs:${release.id}`,title:release.title,gtin,brand:release.labels[0]??'',model:'',categoryId:'',categoryName:'',specifics,source:'Discogs',verificationStatus:'catalogue_verified',confidence:0.9,url:release.url,sourceUrls:[release.url],publisher:release.labels.join(', '),releaseYear:release.year,releaseDate:release.released,format:release.format.join(', '),summary:'Data provided by Discogs. Exact barcode association; pressing and condition need review.',fieldSources:Object.fromEntries(Object.keys(specifics).map(key=>[key,'Discogs']))});
+   }
+   return json({products,status:products.length?'candidates':'no_match',attribution:'Data provided by Discogs.'});
+  }
   if(body.action==='release'){
    const id=Number(body.releaseId);if(!Number.isSafeInteger(id)||id<1)return json({error:'INVALID_RELEASE_ID'},400);
    return json({release:normalizeMusicRelease(await catalogue(`/releases/${id}`)),attribution:'Data provided by Discogs.',restrictedDataExcluded:true});

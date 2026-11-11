@@ -7,11 +7,12 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as SplashScreen from 'expo-splash-screen';
 import { AlertProvider, AuthProvider } from '@/template';
 import { AppProvider } from '@/contexts/AppContext';
+import { AppUpdatesProvider } from '@/contexts/AppUpdatesContext';
 
 export default function MasterAdminRootLayout() {
   useFonts(MaterialIcons.font);
   useEffect(() => { void SplashScreen.hideAsync().catch(() => { /* Host may already have hidden the splash. */ }); }, []);
-  return <AlertProvider><SafeAreaProvider><AuthProvider><AppProvider>
+  return <AlertProvider><SafeAreaProvider><AuthProvider><AppProvider><AppUpdatesProvider>
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index"/>
       <Stack.Screen name="login"/>
@@ -20,5 +21,5 @@ export default function MasterAdminRootLayout() {
       <Stack.Screen name="master-diagnostics"/>
       <Stack.Screen name="privacy-policy"/>
     </Stack>
-  </AppProvider></AuthProvider></SafeAreaProvider></AlertProvider>;
+  </AppUpdatesProvider></AppProvider></AuthProvider></SafeAreaProvider></AlertProvider>;
 }

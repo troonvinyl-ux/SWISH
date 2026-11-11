@@ -78,7 +78,8 @@ export function useListingEditor(listingId:string) {
     }
    }
    let recoveredPhotos=false;
-   if(initialItem?.id&&(!(initialItem.media??[]).length||(initialItem.attributes?._photo_pipeline&&initialItem.attributes._photo_pipeline.status!=='complete'))){
+   // A barcode-confirmed draft intentionally starts without photos. Do not run legacy recovery or hold its populated editor behind a photo gate.
+   if(initialItem?.id&&!(initialItem.attributes?._barcode_identification?.userConfirmed===true&&!(initialItem.media??[]).length)&&(!(initialItem.media??[]).length||(initialItem.attributes?._photo_pipeline&&initialItem.attributes._photo_pipeline.status!=='complete'))){
     const recovered=await recoverCapturedItemPhotos(tenant.id,initialItem.id,nicheId);if(currentScope.current!==scope)return;
     if(recovered.error||!recovered.item)setError(recovered.error??'Captured photos could not be recovered. Open the saved inventory item to retry.');
     else{recoveredPhotos=true;triggerInventoryReload();result=await loadListingEditor(tenant.id,listingId,nicheId);if(currentScope.current!==scope)return;if(result.error||!result.data){setError(result.error??'Reload the draft to view its recovered photos.');return;}}
@@ -95,7 +96,7 @@ export function useListingEditor(listingId:string) {
    const categoryId=String(row.category_id??attrs.ebay_category_id??''),options=antique?attrs.ebay_listing_options??{}:{};
    const originals:string[]=item.media??[],availableMedia=availableListingPhotos(originals,attrs);
    const seedRecovered=recoveredPhotos&&Array.isArray(attrs.ebay_listing_media)&&!attrs.ebay_listing_media.length&&!row.external_listing_id;
-   const media=antique&&Array.isArray(attrs.ebay_listing_media)&&!seedRecovered?selectedListingPhotos(originals,attrs).filter((url:string)=>availableMedia.includes(url)):preferredListingPhotos(originals,attrs);
+   const media=Array.isArray(attrs.ebay_listing_media)&&!seedRecovered?selectedListingPhotos(originals,attrs):preferredListingPhotos(originals,attrs);
    setState({tenantId:tenant.id,listingId:row.id,nicheId,itemAttributes:attrs,itemId:item.id,externalListingId:row.external_listing_id??'',status:row.status,title:row.title??'',description:row.description??'',price:String(row.price??0),savedPrice:Number(row.price??0),shippingCost:String(row.shipping_cost??0),floorPrice:String(row.floor_price??0),ceilingPrice:String(row.ceiling_price??0),categoryId,categoryName:String(attrs.ebay_category_name??categoryId),condition:item.condition??'',conditionDescription:antique?item.condition_notes||item.condition_grade||'':item.condition_grade??'',conditionId:String(attrs.ebay_condition_id??''),quantity:String(item.quantity??1),sku:item.sku??'',itemSpecifics:specifics,media,availableMedia,specialistId:item.specialist_id??'',inventoryId:item.inventory_id??'',valuationMid:Number(item.valuation_mid??0),recommendedPrice:Number(item.expected_selling_price??0),itemTitle:item.canonical_title??'',subtitle:'',identificationConfidence:Number(item.identification_confidence??0),listingType:options.listingType??'FixedPriceItem',auctionDays:Number(options.auctionDays??7),startPrice:String(options.startPrice??row.price??0),reservePrice:String(options.reservePrice??''),bestOfferEnabled:options.bestOfferEnabled===true,dispatchDays:Number(options.dispatchDays??3)});
    setLoadedScope(scope);setDirty(seedRecovered||(Array.isArray(attrs.ebay_listing_media)&&JSON.stringify(media)!==JSON.stringify(attrs.ebay_listing_media)));setAspects([]);
    if(categoryId)await requirements(categoryId);

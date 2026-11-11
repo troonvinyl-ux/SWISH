@@ -6,6 +6,27 @@ on:
       - 'shared/ebayRevisionContract.ts'
       - 'services/ebayRevisionService.ts'
       - 'hooks/useListingEditor.ts'
+      - 'shared/listingClarification.ts'
+      - 'shared/nichePolicy.ts'
+      - 'supabase/functions/_shared/listingConfidencePolicy.ts'
+      - 'supabase/functions/_shared/listingClarification.ts'
+      - 'components/feature/ListingPublishHelp.tsx'
+      - 'services/listingService.ts'
+      - 'services/listingEditorService.ts'
+      - 'services/verificationService.ts'
+      - 'services/__tests__/listingClarification.test.ts'
+      - 'supabase/tests/listing_confidence_advisory.test.ts'
+      - 'shared/draftReidentification.ts'
+      - 'services/draftReidentificationService.ts'
+      - 'hooks/useDraftReidentification.ts'
+      - 'components/feature/DraftReidentification.tsx'
+      - 'app/ebay-listing-editor.tsx'
+      - 'app/stock-listing/**'
+      - 'supabase/migrations/20261123_draft_reidentification.sql'
+      - 'services/__tests__/draftReidentification.test.ts'
+      - 'services/__tests__/liveReidentification.test.ts'
+      - 'supabase/migrations/20261124_live_reidentification.sql'
+      - 'components/feature/ListingReidentificationActions.tsx'
       - 'supabase/functions/swish-ebay-list/**'
       - 'supabase/functions/_shared/ebay*'
       - 'supabase/functions/swish-ebay-sync/**'
@@ -34,12 +55,12 @@ jobs:
       - name: Focused shared revision regressions (no seller writes)
         id: focused
         continue-on-error: true
-        run: npx jest --config jest.config.ci.js --runInBand services/__tests__/ebayRevisionReadback.test.ts services/__tests__/premiumNicheParity.test.ts services/__tests__/listingEditorSpecifics.test.ts services/__tests__/antiqueWorkflow.test.ts --json --outputFile=verification-output/revision-jest.json
+        run: npx jest --config jest.config.ci.js --runInBand services/__tests__/ebayRevisionReadback.test.ts services/__tests__/premiumNicheParity.test.ts services/__tests__/listingEditorSpecifics.test.ts services/__tests__/antiqueWorkflow.test.ts services/__tests__/draftReidentification.test.ts services/__tests__/liveReidentification.test.ts services/__tests__/listingClarification.test.ts services/__tests__/listingPublication.test.ts services/__tests__/nicheStandardisation.test.ts --json --outputFile=verification-output/revision-jest.json
       - name: XML parser round-trip tests (no live eBay calls)
         id: parser
         if: always()
         continue-on-error: true
-        run: deno test supabase/tests/ebay_revision_readback.test.ts > verification-output/xml-parser.txt 2>&1
+        run: deno test supabase/tests/ebay_revision_readback.test.ts supabase/tests/listing_confidence_advisory.test.ts > verification-output/xml-parser.txt 2>&1
       - name: Edge function type checks
         id: edge
         if: always()

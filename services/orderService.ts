@@ -57,7 +57,7 @@ export const ORDER_STATUS_CONFIG: Record<OrderStatus, {
   nextStatus?: OrderStatus;
   nextLabel?: string;
 }> = {
-  pending: { label: 'Pending', color: '#F59E0B', icon: 'hourglass-empty', nextStatus: 'payment_received', nextLabel: 'Mark Paid' },
+  pending: { label: 'Waiting for payment', color: '#F59E0B', icon: 'hourglass-empty', nextStatus: 'payment_received', nextLabel: 'Mark Paid' },
   payment_received: { label: 'Payment Received', color: '#3B82F6', icon: 'payments', nextStatus: 'picked', nextLabel: 'Mark Picked' },
   picked: { label: 'Picked', color: '#8B5CF6', icon: 'inventory', nextStatus: 'packed', nextLabel: 'Mark Packed' },
   packed: { label: 'Packed', color: '#6366F1', icon: 'inventory-2', nextStatus: 'dispatched', nextLabel: 'Mark Dispatched' },
@@ -275,6 +275,9 @@ export async function updateOrderStatus(
   }
 
   if (!tenantId) return { error: 'tenantId is required.' };
+  const current=await supabase.from('orders').select('marketplace_id,external_order_id').eq('id',orderId).eq('tenant_id',tenantId).maybeSingle();
+  if(current.error||!current.data)return {error:'Order not found in this workspace.'};
+  if(current.data.marketplace_id==='ebay'&&current.data.external_order_id)return {error:'Use shared Seller Hub order actions; eBay payment and delivery cannot be marked manually.'};
   const { data: updated, error } = await supabase.from('orders').update(updates).eq('id', orderId).eq('tenant_id', tenantId).select('id').maybeSingle();
   return { error: error?.message ?? (updated ? null : 'Order update was not authorized or confirmed.') };
 }

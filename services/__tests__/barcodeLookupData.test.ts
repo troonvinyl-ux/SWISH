@@ -65,17 +65,18 @@ test('showing a model-free lead does not bypass photo or edition corroboration',
   expect(barcodeAgreesWithPhotos(game, { ...result, attributesConfirmed: { EAN: game.gtin }, evidenceContradictory: ['Wrong edition'] })).toBe(false);
 });
 
-test('barcode lookup asks AI before seller-connector checks and preserves module policy', () => {
+test('barcode lookup queries catalogue plus AI before seller-connector checks and preserves module policy', () => {
   const server = fs.readFileSync('supabase/functions/swish-ebay-browse/index.ts', 'utf8');
   const route = server.indexOf("if (route === 'barcode_lookup')");
   expect(route).toBeGreaterThan(server.indexOf('Authentication required. Please sign in'));
   expect(route).toBeLessThan(server.indexOf('// ── Get connector credentials'));
   expect(server).toContain("nicheBarcodeAllowed(String(body.nicheId ?? ''))");
-  expect(server).toContain('await lookupAIBarcode(gtin');
+  expect(server).toContain('await lookupUniversalBarcode(');
   const barcodeRoute = server.slice(route, server.indexOf('// ── Get connector credentials'));
   expect(barcodeRoute).toContain("Deno.env.get('ONSPACE_AI_API_KEY')");
-  expect(barcodeRoute).not.toContain('getApplicationToken');
-  expect(barcodeRoute).not.toContain('lookupBarcodeProducts');
+  expect(barcodeRoute).toContain('getApplicationToken');
+  expect(barcodeRoute).toContain('lookupBarcodeProducts');
+  expect(barcodeRoute).toContain("p_feature:'barcode_lookup'");
   expect(server).not.toContain("Barcode Quick List is only available in Collectibles.");
   const camera = fs.readFileSync('hooks/useQuickListCamera.ts', 'utf8');
   expect(camera).toContain('!flow.barcodeLookup.code');

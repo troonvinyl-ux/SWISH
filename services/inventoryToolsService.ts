@@ -11,6 +11,7 @@ export function inventoryMoreLinks(nicheId: string): InventoryToolLink[] {
  ];
  const niche = resolveProductionNiche(nicheId);
  const specialist: Partial<Record<string, InventoryToolLink[]>> = {
+  stamps: [{ title: 'Stamp guide & time savers', detail: 'Condition terms, safe handling, perforation helper and sort-to-sell plan', icon: 'menu-book', route: '/stamp-guide' }],
   coins: [
    { title: 'Islamic & Indian Silver', detail: 'Zeno, Numista and specialist evidence', icon: 'toll', route: '/islamic-batch' },
    { title: 'Silver batch', detail: 'Shared inventory with silver-specific checks', icon: 'layers', route: '/silver-batch' },

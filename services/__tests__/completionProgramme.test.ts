@@ -7,7 +7,7 @@ import { getSpecialistProfile } from '@/shared/specialistIntelligence';
 import { resolveNicheFromNativeAppId, isRouteAllowedForBuild, getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 const source=(file:string)=>fs.readFileSync(path.join(process.cwd(),file),'utf8');
 describe('Unified portfolio acceptance foundation',()=>{
- test('original eleven plus music share one canonical registry',()=>expect(Object.keys(registry.products)).toHaveLength(12));
+ test('original eleven plus music share one canonical registry',()=>expect(Object.keys(registry.products)).toHaveLength(13));
  test.each(Object.entries(registry.products))('%s has isolated ownership and all five footer destinations',(id,product)=>{
   expect(resolveNicheFromNativeAppId(product.androidPackage)).toBe(id);
   expect(NICHES[id as keyof typeof NICHES].defaultSpecialist).toBe(product.defaultSpecialist);
