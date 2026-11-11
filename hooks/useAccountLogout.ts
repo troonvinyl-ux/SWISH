@@ -36,7 +36,7 @@ export function useAccountLogout({ confirmationMessage = defaultMessage }: Accou
     if (!alive.current || inFlight.current || authBusy.current || currentUserId.current !== expectedUserId) return;
     inFlight.current = true;
     setSigningOut(true);
-    let result: { error: string | null };
+    let result: { error?: string | null };
     try { result = await logout(); }
     catch { result = { error: 'Sign-out could not be completed. Retry; your saved records and marketplace connections are unchanged.' }; }
     if (!alive.current) return;

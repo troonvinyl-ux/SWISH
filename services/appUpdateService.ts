@@ -1,14 +1,10 @@
 import { Platform, Linking } from 'react-native';
-import Constants from 'expo-constants';
+import { installedAppVersion } from './appInstalledMetadataService';
+export { installedAppVersion } from './appInstalledMetadataService';
 import { getAppUpdatesRuntime, supportsAppUpdates } from './appUpdatesRuntimeService';
 import { getSupabaseClient } from '@/template';
 import { isNewerNativeRelease } from './appUpdatePolicyService';
 export interface NativeRelease { version: string; buildNumber: string | null; url: string | null; notes: string; sha256: string | null; sourceSha: string; affectedNiches: string[] }
-export function installedAppVersion() {
-  const updates = getAppUpdatesRuntime();
-  return { platform: Platform.OS, version: Constants.nativeAppVersion ?? Constants.expoConfig?.version ?? 'unknown', build: Constants.nativeBuildVersion ?? (Platform.OS === 'android' ? Constants.expoConfig?.android?.versionCode?.toString() ?? null : Constants.expoConfig?.ios?.buildNumber ?? null),
-    runtime: updates?.runtimeVersion ?? null, channel: updates?.channel ?? Constants.expoConfig?.updates?.requestHeaders?.['expo-channel-name'] ?? 'not-configured', updateId: updates?.updateId ?? null, otaEnabled: supportsAppUpdates(), embedded: updates?.isEmbeddedLaunch ?? true };
-}
 export async function checkCompatibleUpdate(): Promise<{ available: boolean; error: string | null }> {
   if (Platform.OS === 'web') return { available: false, error: 'Browser releases are applied by reloading the hosted SWISH site; native OTA is not used.' };
   const updates = getAppUpdatesRuntime();
@@ -34,7 +30,7 @@ export async function latestNativeRelease(): Promise<{ release: NativeRelease | 
   const timer = setTimeout(() => controller.abort(), 10000);
   try {
     const { data, error } = await getSupabaseClient().from('swish_release_catalog').select('version,build_number,artifact_url,release_notes,artifact_sha256,source_sha,affected_niches')
-      .eq('channel', installed.channel).eq('platform', installed.platform).eq('status', 'verified').order('created_at', { ascending: false }).limit(1).maybeSingle().abortSignal(controller.signal);
+      .eq('channel', installed.channel).eq('platform', installed.platform).eq('status', 'verified').order('created_at', { ascending: false }).limit(1).abortSignal(controller.signal).maybeSingle();
     if (error) return { release: null, error: 'Verified native release information is unavailable.' };
     if (!data || !isNewerNativeRelease(installed.version, installed.build, data.version, data.build_number)) return { release: null, error: null };
     return { release: { version: data.version, buildNumber: data.build_number, url: data.artifact_url && /^https:\/\//.test(data.artifact_url) ? data.artifact_url : null, notes: data.release_notes, sha256: data.artifact_sha256, sourceSha: data.source_sha, affectedNiches: data.affected_niches }, error: null };

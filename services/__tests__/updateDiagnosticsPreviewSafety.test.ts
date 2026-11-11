@@ -43,3 +43,17 @@ test('installed APK diagnostics are observational and never check, fetch or appl
   expect(updates.fetchUpdateAsync).not.toHaveBeenCalled();
   expect(updates.reloadAsync).not.toHaveBeenCalled();
 });
+test('diagnostics are collected afresh and never substitute OTA app-config version/build', () => {
+ const {diagnostics,updates}=loadDiagnostics('android','standalone');
+ const constants=require('expo-constants');
+ constants.nativeAppVersion=null;constants.nativeBuildVersion=null;
+ jest.doMock('expo-application',()=>({nativeApplicationVersion:null,nativeBuildVersion:null}));
+ constants.expoConfig={version:'99.0.0',android:{versionCode:999},extra:{token:'PRIVATE_CONFIG_TOKEN'}};
+ updates.isEnabled=false;updates.isEmbeddedLaunch=false;
+ const first=diagnostics.collectUpdateDiagnostics();
+ expect(first).toMatchObject({installedVersion:null,androidBuild:null,runningBundle:'unknown',otaEnabled:false});
+ constants.nativeAppVersion='1.2.0';constants.nativeBuildVersion='10';
+ const next=diagnostics.collectUpdateDiagnostics();
+ expect(next).toMatchObject({installedVersion:'1.2.0',androidBuild:'10'});
+ expect(diagnostics.formatUpdateDiagnostics(next)).not.toContain('PRIVATE_CONFIG_TOKEN');
+});

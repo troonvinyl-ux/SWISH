@@ -27,5 +27,5 @@ try {
  if(!team || team!==process.env.SWISH_APPROVED_IOS_TEAM_ID) throw Error('Original iOS team identity has not been verified');
  const sha=crypto.createHash('sha256').update(bytes).digest('hex');
  fs.writeFileSync('dist/swish-unified-ipa.sha256',sha+'  swish-unified.ipa\n');
- fs.writeFileSync('dist/unified-ios-evidence.json',JSON.stringify({platform:'ios',buildId:build.id,sourceSha:build.gitCommitHash,bundleId:bundle,teamIdentifier:team,runtimeVersion:build.runtimeVersion,channel:typeof build.channel==='string' ? build.channel : build.channel?.name ?? process.env.SWISH_RELEASE_CHANNEL,artifactSha256:sha,binaryVerified:true,deviceAcceptance:'NOT TESTED',createdAt:new Date().toISOString()},null,2));
+ fs.writeFileSync('dist/unified-ios-evidence.json',JSON.stringify({platform:'ios',buildRunId:process.env.GITHUB_RUN_ID,buildId:build.id,sourceSha:build.gitCommitHash,bundleId:bundle,teamIdentifier:team,runtimeVersion:build.runtimeVersion,channel:typeof build.channel==='string' ? build.channel : build.channel?.name ?? process.env.SWISH_RELEASE_CHANNEL,artifactSha256:sha,binaryVerified:true,deviceAcceptance:'NOT TESTED',createdAt:new Date().toISOString()},null,2));
 }finally{fs.rmSync(temp,{recursive:true,force:true});}

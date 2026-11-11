@@ -62,3 +62,20 @@ test('publication is explicitly Android-targeted without weakening fingerprint o
  expect(verifier).toContain('runtimeversion:resolve');
  expect(verifier).toContain('assertNoNativeOtaChanges');
 });
+
+test('offline checks can be retried successfully without restarting', async () => {
+ (Updates.checkForUpdateAsync as jest.Mock).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({isAvailable:true});
+ expect((await checkCompatibleUpdate()).error).not.toBeNull();
+ expect(await checkCompatibleUpdate()).toEqual({available:true,error:null});
+ expect(Updates.reloadAsync).not.toHaveBeenCalled();
+});
+test('disabled updater and a default false embedded flag cannot prove a downloaded bundle', () => {
+ const runtime=require('expo-updates') as {isEnabled:boolean;isEmbeddedLaunch:boolean;updateId:string|null};
+ runtime.isEnabled=false;runtime.isEmbeddedLaunch=false;
+ expect(installedAppVersion()).toMatchObject({otaEnabled:false,runningBundle:'unknown',embedded:null,updateId:null,runtime:null});
+ runtime.isEnabled=true;runtime.updateId=null;
+ expect(installedAppVersion().runningBundle).toBe('unknown');
+ runtime.updateId='12345678-1234-1234-1234-123456789abc';
+ expect(installedAppVersion().runningBundle).toBe('downloaded');
+ runtime.updateId=null;runtime.isEmbeddedLaunch=true;
+});

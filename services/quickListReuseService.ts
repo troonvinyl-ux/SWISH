@@ -4,7 +4,7 @@ export function createQuickReuse<T>(ttlMs:number,limit=32){
  return {
   get(key:string,load:()=>Promise<T>,usable:(value:T)=>boolean=()=>true):Promise<T>{
    const cached=entries.get(key);if(cached&&cached.expiresAt>Date.now())return cached.promise;
-   const entry={expiresAt:Date.now()+ttlMs,promise:Promise.resolve(null as unknown as T)};
+   const entry:{expiresAt:number;promise:Promise<T>}={expiresAt:Date.now()+ttlMs,promise:Promise.resolve(null as unknown as T)};
    const remove=()=>{if(entries.get(key)===entry)entries.delete(key);};
    entry.promise=Promise.resolve().then(load).then(value=>{if(!usable(value))remove();return value;},cause=>{remove();throw cause;});
    entries.set(key,entry);while(entries.size>limit)entries.delete(entries.keys().next().value!);return entry.promise;

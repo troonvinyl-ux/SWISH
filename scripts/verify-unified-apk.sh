@@ -16,18 +16,4 @@ test "$(grep -c '^Signer #[0-9]* certificate SHA-256 digest:' dist/unified-signa
 cp "$APK" dist/swish-unified.apk
 sha256sum dist/swish-unified.apk > dist/swish-unified.sha256
 export SWISH_VERIFIED_CERT="$ACTUAL"
-node --input-type=module <<'NODE'
-import fs from 'node:fs';
-import crypto from 'node:crypto';
-const config=JSON.parse(fs.readFileSync('dist/unified-runtime-config.json','utf8'));
-const original=JSON.parse(fs.readFileSync('app.json','utf8')).expo;
-const badging=fs.readFileSync('dist/unified-badging.txt','utf8');
-if(!badging.includes("package: name='"+original.android.package+"'")) throw Error('APK package changed');
-if(!badging.includes("application-label:'SWISH'") || !badging.includes('launchable-activity:')) throw Error('Unified launcher missing');
-const strings=fs.readFileSync('android/app/src/main/res/values/strings.xml','utf8');
-const runtime=strings.match(/<string name="expo_runtime_version"[^>]*>([^<]+)<\/string>/)?.[1];
-if(!runtime) throw Error('Actual generated native runtime was not recorded');
-const checksum=crypto.createHash('sha256').update(fs.readFileSync('dist/swish-unified.apk')).digest('hex');
-const evidence={platform:'android',sourceSha:process.env.GITHUB_SHA,package:original.android.package,apkSha256:checksum,certificateSha256:process.env.SWISH_VERIFIED_CERT,runtimeVersion:runtime,channel:config.updates.requestHeaders['expo-channel-name'],binaryVerified:true,deviceAcceptance:'NOT TESTED',createdAt:new Date().toISOString()};
-fs.writeFileSync('dist/unified-android-evidence.json',JSON.stringify(evidence,null,2));
-NODE
+"${SWISH_APK_PYTHON:?APK inspector Python required}" scripts/inspect-unified-apk.py "$APK" dist/unified-runtime-config.json dist/unified-android-runtime.json dist/unified-android-evidence.json

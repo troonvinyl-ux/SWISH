@@ -85,7 +85,7 @@ module.exports = ({ config }) => {
     return { ...baseConfig, name: 'SWISH',
       // Preserve original package, bundle ID and URI scheme. Never infer a new iOS identity.
       runtimeVersion: { policy: 'fingerprint' },
-      updates: { ...(baseConfig.updates || {}), enabled: !!easProjectId, checkAutomatically: 'ON_LOAD', fallbackToCacheTimeout: 0,
+      updates: { ...(baseConfig.updates || {}), enabled: !!easProjectId, disableAntiBrickingMeasures: false, useEmbeddedUpdate: true, checkAutomatically: 'ON_LOAD', fallbackToCacheTimeout: 0,
         requestHeaders: { ...(baseConfig.updates?.requestHeaders || {}), 'expo-channel-name': channel } },
       extra: { ...(baseConfig.extra || {}), swishUnifiedBuild: true, swishReleaseChannel: channel },
     };

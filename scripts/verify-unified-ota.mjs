@@ -4,13 +4,14 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import {approvedCertificate,approvedProject} from './android-release-policy.mjs';
 import { selectedOtaPlatforms, assertOtaBaselineRun, assertCompatibleRuntime, assertNoNativeOtaChanges } from './unified-ota-policy.mjs';
 const repo=process.env.GITHUB_REPOSITORY, runId=process.env.SWISH_BASELINE_RUN, current=process.env.GITHUB_SHA;
 if(!repo || !/^\d+$/.test(runId ?? '') || !/^[a-f0-9]{40}$/.test(current ?? '') || process.env.GITHUB_REF!=='refs/heads/main') throw Error('Pinned main commit and explicit unified baseline run required');
 const platforms=selectedOtaPlatforms(process.env.SWISH_OTA_PLATFORM ?? 'android');
 const channel=process.env.SWISH_RELEASE_CHANNEL, projectId=process.env.EXPO_PROJECT_ID;
 if(!['preview-unified','production-unified'].includes(channel)) throw Error('Approved unified channel required');
-if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(projectId ?? '')) throw Error('Existing Expo project ID required; do not create a replacement project.');
+if(projectId!==approvedProject) throw Error('Existing Expo project ID required; do not create a replacement project.');
 const gh=endpoint=>JSON.parse(execFileSync('gh',['api',endpoint],{encoding:'utf8',maxBuffer:20*1024*1024}));
 const run=gh(`repos/${repo}/actions/runs/${runId}`);
 assertOtaBaselineRun(run);
@@ -34,15 +35,28 @@ try {
   if(!evidence || !binary || !configFile) throw Error('Baseline binary, update config or evidence missing; build an update-enabled baseline once.');
   const meta=JSON.parse(fs.readFileSync(evidence,'utf8'));
   const config=JSON.parse(fs.readFileSync(configFile,'utf8'));
-  if(meta.sourceSha!==run.head_sha || meta.binaryVerified!==true || !meta.runtimeVersion || meta.channel!==channel) throw Error('Source, runtime or channel baseline mismatch');
+  if(String(meta.buildRunId)!==String(runId) || meta.sourceSha!==run.head_sha || meta.binaryVerified!==true || !meta.runtimeVersion || meta.channel!==channel) throw Error('Source, runtime or channel baseline mismatch');
   if(config.extra?.swishUnifiedBuild!==true || config.extra?.eas?.projectId!==projectId || config.updates?.enabled!==true || config.updates?.url!==`https://u.expo.dev/${projectId}` || config.updates?.requestHeaders?.['expo-channel-name']!==channel) throw Error('Baseline native build belongs to a different update project or channel.');
   if(platform==='android') {
    const original=JSON.parse(fs.readFileSync('app.json','utf8')).expo;
-   const expected=(process.env.SWISH_RELEASE_CERT_SHA256 ?? '').replace(/[:\s]/g,'').toLowerCase();
+   const expected=approvedCertificate(channel,process.env.SWISH_RELEASE_CERT_SHA256);
    if(meta.package!==original.android?.package || !/^[a-f0-9]{64}$/.test(expected) || meta.certificateSha256!==expected) throw Error('Original Android package/signing evidence mismatch.');
   }
   const checksum=crypto.createHash('sha256').update(fs.readFileSync(binary)).digest('hex');
   if(checksum!==(meta.apkSha256 ?? meta.artifactSha256)) throw Error('Native artifact checksum mismatch');
+  const checksumFile=files.find(file=>file.endsWith(platform==='android'?'swish-unified.sha256':'swish-unified-ipa.sha256'));
+  if(!checksumFile || fs.readFileSync(checksumFile,'utf8').trim().split(/\s+/)[0]!==checksum)throw Error('Retained binary checksum receipt mismatch');
+  const currentConfig=JSON.parse(execFileSync('npx',['--no-install','expo','config','--type','public','--json'],{encoding:'utf8',maxBuffer:20*1024*1024}));
+  if(JSON.stringify(config.extra?.supabase)!==JSON.stringify(currentConfig.extra?.supabase))throw Error('Native baseline and OTA backend environments differ');
+  if(platform==='android') {
+    const expected=approvedCertificate(channel,process.env.SWISH_RELEASE_CERT_SHA256);
+    const actual=JSON.parse(execFileSync(process.env.SWISH_APK_PYTHON,['scripts/inspect-unified-apk.py',binary],{encoding:'utf8',maxBuffer:4*1024*1024}));
+    for(const key of ['package','versionName','versionCode','certificateSha256','runtimeVersion','channel','updatesEnabled','nativeUpdaterPresent','updateUrl','antiBrickingEnabled','hasEmbeddedUpdate','apkSha256'])if(actual[key]!==meta[key])throw Error('Actual baseline APK/evidence mismatch: '+key);
+    if(actual.certificateSha256!==expected || actual.updatesEnabled!==true || !actual.antiBrickingEnabled || !actual.hasEmbeddedUpdate)throw Error('Actual baseline signing/update protection mismatch');
+    const tools=process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT;
+    if(!tools)throw Error('Android signing verifier unavailable');
+    execFileSync(path.join(tools,'build-tools','36.0.0','apksigner'),['verify','--verbose',binary],{stdio:'pipe'});
+  }
   // Installed Expo CLI resolver, not an invented runtime or compatibility override.
   const resolved=JSON.parse(execFileSync('npx',['--no-install','expo-updates','runtimeversion:resolve','--platform',platform,'--workflow','managed'],{encoding:'utf8',maxBuffer:20*1024*1024}));
   assertCompatibleRuntime(meta,resolved,channel,platform);

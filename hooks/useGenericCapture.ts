@@ -173,9 +173,9 @@ export function useGenericCapture(){
    if(isCurrentSession()){setDraft(previous=>({...previous,images:[...visible.images]}));lock.current=false;setBusy(false);setPhase('');}
   }
  },[tenant?.id,ready,visible,scope,current,storageScope,reviewedResult,triggerInventoryReload,activeNiche,market,music,slots,isCurrentSession]);
- const retryStudio=useCallback(async()=>{
+ const retryStudio=useCallback(async(slotId?:string)=>{
   if(!isCurrentSession()||busy||!ready||lock.current||!tenant)return;lock.current=true;setBusy(true);setError(null);setPhase('Removing backgrounds with BackgroundErase; originals retained');
-  try{const images=await prepareCapturedImages(visible.images.map(image=>({...image,studio:undefined,enhancedUri:undefined,enhancementStatus:undefined,enhancementWarning:undefined})),{tenantId:tenant.id,nicheId:activeNiche.id});if(isCurrentSession())setDraft(previous=>({...previous,images}));}
+  try{const images=await prepareCapturedImages(visible.images.filter(image=>!slotId||image.slotId===slotId).map(image=>({...image,studio:undefined,enhancedUri:undefined,enhancementStatus:undefined,enhancementWarning:undefined})),{tenantId:tenant.id,nicheId:activeNiche.id});if(isCurrentSession())setDraft(previous=>({...previous,images:previous.images.map(image=>images.find(prepared=>prepared.slotId===image.slotId&&prepared.uri===image.uri)??image)}));}
   catch(cause:unknown){if(isCurrentSession())setError(cause instanceof Error?cause.message:'Studio preparation failed. Original photographs are unchanged.');}
   finally{if(isCurrentSession()){lock.current=false;setBusy(false);setPhase('');}}
  },[busy,ready,tenant?.id,visible.images,activeNiche.id,isCurrentSession]);

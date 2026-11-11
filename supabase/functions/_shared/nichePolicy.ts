@@ -13,7 +13,6 @@ export const NICHE_WORKFLOW_POLICIES: Readonly<Record<string, NicheWorkflowPolic
   trading_cards: standard('optional'), antiques: standard('optional'), fossils: standard('optional'),
   beauty: standard('optional'), tech: standard('optional'), surplus_flip: standard('optional'),
   tunes_flip: standard('optional'), collectibles: standard('start'),
-  stamps: { ...standard('optional'), quickReviewMinimum: 0.6 },
 };
 export function getNicheWorkflowPolicy(nicheId: string): NicheWorkflowPolicy | null {
   return Object.prototype.hasOwnProperty.call(NICHE_WORKFLOW_POLICIES, nicheId) ? { ...NICHE_WORKFLOW_POLICIES[nicheId] } : null;

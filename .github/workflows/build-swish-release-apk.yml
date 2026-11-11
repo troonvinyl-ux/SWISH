@@ -8,6 +8,10 @@ on:
       - .github/workflows/build-swish-release-apk.yml
   workflow_dispatch:
     inputs:
+      production_acceptance_run:
+        type: string
+        required: false
+        description: Protected successful current-source acceptance run (production only)
       channel:
         type: choice
         required: true
@@ -18,10 +22,12 @@ concurrency:
   cancel-in-progress: true
 permissions:
   contents: read
+  actions: read
 jobs:
   unified:
     uses: ./.github/workflows/build-swish-unified.yml
     with:
+      production_acceptance_run: ${{ inputs.production_acceptance_run || '' }}
       channel: ${{ inputs.channel || 'preview-unified' }}
       build_android: true
       build_ios: false

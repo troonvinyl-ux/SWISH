@@ -23,7 +23,7 @@ export async function getBusinessConfig(tenantId: string, nicheId?: string | nul
  return shareBackendRequest(`business-config:${tenantId}:${nicheId ?? 'resolve'}`, async () => {
   try {
    const client=getSupabaseClient();
-   const {data}=await backendRead(`business-base:${tenantId}`, signal => client.from('business_config').select('*').eq('tenant_id',tenantId).maybeSingle().abortSignal(signal));
+   const {data}=await backendRead(`business-base:${tenantId}`, signal => client.from('business_config').select('*').eq('tenant_id',tenantId).abortSignal(signal).maybeSingle());
    if(!data) return {config:null,error:null};
    // Known scoped callers already passed swish_open_module. RLS still checks the settings read.
    let selected=nicheId;
@@ -33,7 +33,7 @@ export async function getBusinessConfig(tenantId: string, nicheId?: string | nul
    }
    let overlay:Record<string,unknown>={};
    if(selected) {
-    const preferences=await backendRead(`business-overlay:${tenantId}:${selected}`, signal => client.from('swish_niche_settings').select('settings').eq('tenant_id',tenantId).eq('niche_id',selected).maybeSingle().abortSignal(signal));
+    const preferences=await backendRead(`business-overlay:${tenantId}:${selected}`, signal => client.from('swish_niche_settings').select('settings').eq('tenant_id',tenantId).eq('niche_id',selected).abortSignal(signal).maybeSingle());
     overlay=Object.fromEntries(Object.entries(preferences.data?.settings ?? {}).filter(([key])=>moduleKeys.has(key)));
    }
    return {config:mapConfig({...data,...overlay}),error:null};

@@ -1405,17 +1405,7 @@ function ValueTab({ result, valuationResult, valuationLoading, valuationError, o
       ) : v && v.valuationMid > 0 ? (
         <>
           <MarketValueSummary result={valuationResult}/>
-          {false?<View style={vt.priceHero}>
-            <Text style={vt.priceRange} accessibilityLabel={`Estimated value £${(v.valuationLow ?? 0).toFixed(0)} to £${(v.valuationHigh ?? 0).toFixed(0)}`}>
-              £{(v.valuationLow ?? 0).toFixed(0)} – £{(v.valuationHigh ?? 0).toFixed(0)}
-            </Text>
-            {v.recommendedListingPrice && v.recommendedListingPrice > 0 ? (
-              <View style={vt.recommended}>
-                <MaterialIcons name="auto-awesome" size={13} color={CF.gold} />
-                <Text style={vt.recommendedText}>Recommended listing price: £{v.recommendedListingPrice.toFixed(2)}</Text>
-              </View>
-            ) : null}
-          </View>:null}
+
           {sold && sold.relevantSoldCount > 0 ? (
             <View style={vt.metricsRow}>
               {[
@@ -2206,12 +2196,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
           {isPremium ? <View style={main.proBadge}><Text style={main.proBadgeText}>PRO</Text></View> : null}
         </Pressable>
         {/* Specialist indicator in header */}
-        {activeTab === 'capture' && selectedSpecialist.id !== 'general' ? (
-          <View style={[main.specialistIndicator, { backgroundColor: selectedSpecialist.color + '20', borderColor: selectedSpecialist.color + '50' }]}>
-            <MaterialIcons name={selectedSpecialist.icon as any} size={11} color={selectedSpecialist.color} />
-            <Text style={[main.specialistIndicatorText, { color: selectedSpecialist.color }]}>{selectedSpecialist.label}</Text>
-          </View>
-        ) : (
+        {(
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.xs }}>
             <Pressable
               onPress={() => router.push('/deep-id-lab' as any)}
@@ -2262,49 +2247,6 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
       <View style={{ flex: 1 }}>
         {activeTab === 'home' ? (
           <HomeTab onTabSelect={handleTabSelect} isPremium={isPremium} tenant={tenant} onUpgrade={() => setShowPaywall(true)} onPeriodSelect={p => { setSelectedPeriod(p); const chip = SPECIALIST_CHIPS.find(c => c.periodId === p); if (chip) setSelectedSpecialist(chip); }} selectedPeriod={selectedPeriod} />
-        ) : activeTab === 'capture' ? (
-          <CaptureTabErrorBoundary onRetry={() => setActiveTab('home')}>
-            <CaptureTab
-            capturedImages={capturedImages}
-            onCapture={handleCapture}
-            onRemove={handleRemoveImage}
-            onIdentify={handleIdentify}
-            onProcessImage={handleProcessImage}
-            onRestoreImage={handleRestoreImage}
-            identifying={identifying}
-            processingStatus={processingStatus}
-            aiError={aiError}
-            onTabSelect={handleTabSelect}
-            isPremium={isPremium}
-            selectedSpecialist={selectedSpecialist}
-            onSpecialistChange={handleSpecialistChange}
-            quickMode={quickMode}
-            onToggleQuickMode={() => { setQuickMode(v => !v); setQuickDone(false); }}
-            quickCaptures={quickCaptures}
-            quickIdentificationResults={quickIdentificationResults}
-            selectedQuickResult={selectedQuickResult}
-            onQuickResultSelect={setSelectedQuickResult}
-            onCloseQuickResult={() => setSelectedQuickResult(null)}
-            onQuickCapture={handleQuickCapture}
-            onRunQuickBatch={handleRunQuickBatch}
-            quickRunning={quickRunning}
-            quickDone={quickDone}
-            onClearQuick={handleClearQuick}
-            islamicBatchItems={islamicBatchItems}
-            selectedIslamicItem={selectedIslamicItem}
-            onIslamicItemPress={setSelectedIslamicItem}
-            weightInput={weightInput}
-            setWeightInput={setWeightInput}
-            diameterInput={diameterInput}
-            setDiameterInput={setDiameterInput}
-            yearInput={yearInput}
-            setYearInput={setYearInput}
-            materialInput={materialInput}
-            setMaterialInput={setMaterialInput}
-            edgeLegendInput={edgeLegendInput}
-            setEdgeLegendInput={setEdgeLegendInput}
-            />
-          </CaptureTabErrorBoundary>
         ) : activeTab === 'identify' ? (
           <IdentifyTab result={idResult} capturedImages={capturedImages} onSave={handleSave} saving={isSaving} savedItemId={savedItemId} uploadProgress={uploadProgress} isUploading={isUploading} onReset={handleReset} onTabSelect={handleTabSelect} onProcessImage={handleProcessImage} onRestoreImage={handleRestoreImage} onIdentify={handleIdentify} identifying={identifying} valuationResult={valuationResult} valuationLoading={valuationLoading} valuationError={valuationError} />
         ) : activeTab === 'reference' ? (
@@ -2319,7 +2261,7 @@ export default function CoinFlipperScreen({ isHomeTab = false }: { isHomeTab?: b
       </View>
 
       {/* ── Bottom upgrade bar ── */}
-      {!isPremium && activeTab !== 'home' && activeTab !== 'capture' ? (
+      {!isPremium && activeTab !== 'home' ? (
         <View style={[main.upgradeBar, { paddingBottom: insets.bottom + 4 }]}>
           <MaterialIcons name="workspace-premium" size={13} color={CF.black} />
           <Text style={main.upgradeBarText}>Upgrade to Coin Flipper Pro</Text>

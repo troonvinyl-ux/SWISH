@@ -6,10 +6,10 @@ import {blankAcceptance,evaluateAcceptance,speedCohort,continuousPercentile} fro
 import {loadJwtFixtureConfig} from './verify-command-jwt.mjs';
 const source='a'.repeat(40),ids=Object.keys(JSON.parse(fs.readFileSync(new URL('../niche-modules.json',import.meta.url),'utf8')).products);
 const attempt=(patch={})=>({attemptRef:'fixture',sourceSha:source,nicheId:'coins',cohort:'listing_ready',platform:'android',clock:'native_process',openedAt:1000,liveAt:60000,outcome:'confirmed_live',liveConfirmation:'seller_GetItem_Active',canonicalOccurrences:1,photosRetained:true,manualInterventions:0,...patch});
-test('blank twelve-niche evidence cannot release and all fourteen journey steps remain required',()=>{
+test('blank thirteen-niche evidence cannot release and all fourteen journey steps remain required',()=>{
  const input=blankAcceptance(source,ids),report=evaluateAcceptance(input,source,ids);
- assert.equal(ids.length,12);assert.equal(input.checks.filter(row=>row.id.startsWith('coins:')).length,14);
- assert.equal(report.acceptancePassed,false);assert.equal(report.releaseDecision,'BLOCKED');assert.equal(report.speed.length,72);
+ assert.equal(ids.length,13);assert.equal(input.checks.filter(row=>row.id.startsWith('coins:')).length,14);
+ assert.equal(report.acceptancePassed,false);assert.equal(report.releaseDecision,'BLOCKED');assert.equal(report.speed.length,78);
 });
 test('static presence, zero assertions, unresolved artifacts and stale commits cannot certify runtime',()=>{
  for(const patch of [{kind:'source'},{assertions:0},{sourceSha:'b'.repeat(40)},{evidence:[]},{result:'SKIPPED'}]){
@@ -40,10 +40,10 @@ test('open high defects and duplicate checks keep a fully populated manifest blo
  input.defects=[{severity:'high',resolved:false}];assert.equal(evaluateAcceptance(input,source,ids).acceptancePassed,false);
  input.defects=[];input.checks.push(input.checks[0]);assert.ok(evaluateAcceptance(input,source,ids).blockers.includes('DUPLICATE_CHECK_EVIDENCE'));
 });
-test('existing approved JWT runner supports twelve niches and still requires an unentitled niche',()=>{
+test('existing approved JWT runner supports thirteen niches and still requires an unentitled niche',()=>{
  const token=claims=>Buffer.from('{}').toString('base64url')+'.'+Buffer.from(JSON.stringify(claims)).toString('base64url')+'.fixture';
  const id=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0'),exp=Math.floor(Date.now()/1000)+3600;
  const env={SWISH_APPROVED_JWT_READS:'1',SWISH_APPROVED_DIAGNOSTIC_EVIDENCE:'1',GITHUB_SHA:source,SWISH_ANON_KEY:token({role:'anon'}),SWISH_OWNER_USER_ID:id(1),SWISH_SUBSCRIBER_USER_ID:id(2),SWISH_OWNER_TENANT_ID:id(3),SWISH_SUBSCRIBER_TENANT_ID:id(4),SWISH_FOREIGN_TENANT_ID:id(5),SWISH_OWNER_JWT:token({role:'authenticated',sub:id(1),exp}),SWISH_SUBSCRIBER_JWT:token({role:'authenticated',sub:id(2),exp}),SWISH_SUBSCRIBER_NICHES:'coins'};
- assert.equal(loadJwtFixtureConfig(env).config?.nicheIds.length,12);
+ assert.equal(loadJwtFixtureConfig(env).config?.nicheIds.length,13);
  assert.equal(loadJwtFixtureConfig({...env,SWISH_SUBSCRIBER_NICHES:ids.join(',')}).config,null);
 });

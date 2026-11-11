@@ -57,9 +57,9 @@ export function loadJwtFixtureConfig(env = process.env, now = Date.now()) {
   catch { return { config: null, reason: 'CANONICAL_REGISTRY_UNAVAILABLE' }; }
   const nicheIds = Object.keys(registry.products ?? {});
   const subscriberNiches = env.SWISH_SUBSCRIBER_NICHES.split(',').map(value => value.trim());
-  // Current unified acceptance scope is all twelve registered products. Keep the
+  // Current unified acceptance scope is all thirteen registered products. Keep the
   // denied-niche fixture requirement; adding Tunes Flip must not disable the runner.
-  if (nicheIds.length !== 12 || !nicheIds.includes('collectibles') || !nicheIds.includes('tunes_flip') || !subscriberNiches.length || !unique(subscriberNiches) ||
+  if (nicheIds.length !== 13 || !nicheIds.includes('collectibles') || (!nicheIds.includes('tunes_flip') || !nicheIds.includes('stamps')) || !subscriberNiches.length || !unique(subscriberNiches) ||
     subscriberNiches.some(id => !nicheIds.includes(id)) || subscriberNiches.length >= nicheIds.length) {
     return { config: null, reason: 'FIXTURE_REQUIRES_CANONICAL_ENTITLEMENTS_AND_ONE_DENIED_NICHE' };
   }

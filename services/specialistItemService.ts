@@ -29,6 +29,7 @@ export async function saveSpecialistItemFields(tenantId:string,nicheId:string,it
   const { error,count }=await query;
   if(error||count!==1)return {attributes:null,error:error?.message??'The item changed while saving. Reload it and review your edits before retrying.'};
   const persisted=await client.from('items').select('attributes').eq('id',itemId).eq('tenant_id',tenantId).in('specialist_id',specialists).maybeSingle();
-  if(persisted.error||!persisted.data||profile.fields.some(field=>field.key in values && String(persisted.data.attributes?.[field.key]??'')!==values[field.key].trim()))return {attributes:null,error:persisted.error?.message??'Saved specialist fields could not be confirmed. Reload this item before continuing.'};
-  return {attributes:persisted.data.attributes,error:null};
+  const persistedRow=persisted.data;
+  if(persisted.error||!persistedRow||profile.fields.some(field=>field.key in values && String(persistedRow.attributes?.[field.key]??'')!==values[field.key].trim()))return {attributes:null,error:persisted.error?.message??'Saved specialist fields could not be confirmed. Reload this item before continuing.'};
+  return {attributes:persistedRow.attributes,error:null};
 }

@@ -26,7 +26,7 @@ export function evaluateAcceptance(input,sourceSha,nicheIds,now=Date.now()) {
  const checked=Date.parse(input?.checkedAt??'');
  if(!Number.isFinite(checked)||checked>now||now-checked>7*86400000)blockers.push('FRESH_NONFUTURE_EVIDENCE_REQUIRED');
  if(input?.review?.authorized!==true||input?.review?.sourceSha!==sourceSha)blockers.push('PROTECTED_OPERATOR_REVIEW_REQUIRED');
- if(!Array.isArray(nicheIds)||nicheIds.length!==12||new Set(nicheIds).size!==12||!nicheIds.includes('collectibles')||!nicheIds.includes('tunes_flip'))blockers.push('COMPLETE_TWELVE_NICHE_REGISTRY_REQUIRED');
+ if(!Array.isArray(nicheIds)||nicheIds.length!==13||new Set(nicheIds).size!==13||!nicheIds.includes('collectibles')||(!nicheIds.includes('tunes_flip') || !nicheIds.includes('stamps')))blockers.push('COMPLETE_THIRTEEN_NICHE_REGISTRY_REQUIRED');
  const suppliedRows=Array.isArray(input?.checks)?input.checks:[];
  const rows=suppliedRows.filter(row=>row&&typeof row==='object'&&!Array.isArray(row)&&typeof row.id==='string'),seen=new Set();
  if(rows.length!==suppliedRows.length)blockers.push('MALFORMED_CHECK_EVIDENCE');

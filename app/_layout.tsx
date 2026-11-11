@@ -11,6 +11,7 @@ import { EbayMessagesProvider } from '@/contexts/EbayMessagesContext';
 import { markQuickListAppOpened } from '@/services/quickListTelemetryService';
 import { setAppVisible } from '@/services/appVisibilityService';
 import { AppState, View, StyleSheet } from 'react-native';
+import { SellerOrdersProvider } from '@/contexts/SellerOrdersContext';
 import { AppUpdatesProvider } from '@/contexts/AppUpdatesContext';
 import { AppUpdateNotice } from '@/components/feature/AppUpdateNotice';
 import { Colors } from '@/constants/theme';
@@ -101,7 +102,7 @@ export default function RootLayout() {
             <WatchedLotsProvider>
             <QuickListProvider>
             <EbayMessagesProvider>
-            <AppUpdatesProvider>
+            <SellerOrdersProvider><AppUpdatesProvider>
             <TVBackHandlerProvider>
               <View style={rootStyles.screen}>
               <AppUpdateNotice />
@@ -183,7 +184,7 @@ export default function RootLayout() {
               </View>
               </View>
             </TVBackHandlerProvider>
-            </AppUpdatesProvider>
+            </AppUpdatesProvider></SellerOrdersProvider>
             </EbayMessagesProvider>
             </QuickListProvider>
             </WatchedLotsProvider>

@@ -57,6 +57,13 @@ export const Colors = {
   statusConfirmed: '#22C55E',
   statusVerified: '#7C5CFC',
 
+  // Buyer-facing static listing preview (separate from the dark application shell)
+  listingPaper: '#FFFFFF',
+  listingInk: '#222222',
+  listingRule: '#DDDDDD',
+  listingCreditSurface: '#202329',
+  listingCreditBrand: '#F3C928',
+
   // Transparent overlays
   overlay: 'rgba(9,9,14,0.8)',
   overlay20: 'rgba(9,9,14,0.2)',

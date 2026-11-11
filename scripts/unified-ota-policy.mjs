@@ -16,6 +16,6 @@ export function assertCompatibleRuntime(baseline, resolved, channel, platform) {
   if (baseline?.binaryVerified !== true || baseline.platform !== platform || !baseline.runtimeVersion || baseline.channel !== channel || !resolved?.runtimeVersion || resolved.runtimeVersion !== baseline.runtimeVersion) throw Error(`Actual ${platform} native runtime or channel mismatch. Build a new compatible binary; do not override its fingerprint.`);
 }
 export function assertNoNativeOtaChanges(changedFiles) {
-  const native = /^(app\.(config\.(js|ts)|json)|eas\.json|package\.json|.*lock.*|(?:metro|babel|react-native)\.config\..*|niche-modules\.json|android\/|ios\/|plugins\/|native\/|scripts\/prepare-niche)/;
+  const native = /^(app\.(config\.(js|ts)|json)|eas\.json|package\.json|.*lock.*|(?:metro|babel|react-native)\.config\..*|niche-modules\.json|release\/android-installed-baseline\.json|android\/|ios\/|plugins\/|native\/|scripts\/prepare-niche)/;
   if (changedFiles.some(file => native.test(file))) throw Error('Native or packaging changes require new native builds, not OTA.');
 }

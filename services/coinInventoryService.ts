@@ -240,7 +240,9 @@ export async function importEbayCandidate(
 
   const scope = await supabase.rpc('swish_current_module');
   if (scope.error || scope.data?.tenant_id !== tenantId || !isProductionNiche(scope.data.niche_id)) return {itemId:null,inventoryId:null,error:'Open a verified specialist module before importing.'};
-  const product = NICHE_MODULES[scope.data.niche_id];
+  const moduleNiche = scope.data.niche_id;
+  if (!isProductionNiche(moduleNiche)) return {itemId:null,inventoryId:null,error:'Unknown specialist module.'};
+  const product = NICHE_MODULES[moduleNiche];
   nicheSpecialistId = nicheSpecialistId ?? product.defaultSpecialist;
   if (!product.specialists.includes(nicheSpecialistId) || inferImportNiche(candidate.categoryName,candidate.title) !== scope.data.niche_id) return {itemId:null,inventoryId:null,error:'This listing belongs to another niche or needs manual classification review.'};
   // The transactional importer generates the permanent reference only for a new item.

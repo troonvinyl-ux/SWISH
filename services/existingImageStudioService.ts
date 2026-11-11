@@ -30,7 +30,7 @@ async function worker(options:ExistingStudioRequest,signal:AbortSignal):Promise<
  const client=getSupabaseClient();check(signal);
  const session=await client.auth.getSession();check(signal);
  if(session.error||session.data.session?.user.id!==userId)throw new Error('The signed-in account changed. Reopen this item before processing.');
- const read=await client.from('items').select('*').eq('id',itemId).eq('tenant_id',tenantId).in('specialist_id',specialists).maybeSingle().abortSignal(signal);
+ const read=await client.from('items').select('*').eq('id',itemId).eq('tenant_id',tenantId).in('specialist_id',specialists).abortSignal(signal).maybeSingle();
  if(read.error)throw new Error(read.error.message);check(signal);
  if(!read.data||read.data.tenant_id!==tenantId||!specialists.includes(read.data.specialist_id))throw new Error('Item is not available in this workspace.');
  const item=mapItem(read.data);

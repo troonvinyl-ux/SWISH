@@ -9,7 +9,7 @@ export const emptyCanonicalCounts = ():CanonicalInventoryCounts => ({total:0,uni
 export function parseCanonicalCounts(data:unknown):CanonicalInventoryCounts {
  if(!data||typeof data!=='object'||Array.isArray(data))throw new Error('Canonical inventory counts unavailable.');
  const row=data as Record<string,unknown>;const counts=emptyCanonicalCounts();
- for(const field of Object.keys(counts) as Array<keyof CanonicalInventoryCounts>){
+ for(const field of ['total','units','stock','draft','live','sold','archived','liveListings'] as const){
   const value=row[field==='liveListings'?'live_listings':field];
   if(typeof value!=='number'||!Number.isSafeInteger(value)||value<0)throw new Error('Canonical inventory count contract was not confirmed.');
   counts[field]=value;

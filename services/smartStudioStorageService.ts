@@ -54,7 +54,7 @@ export async function saveExistingStudioImage(options:{tenantId:string;nicheId:s
  const client=getSupabaseClient();
  try{
   check();
-  const read=await client.from('items').select('*').eq('id',itemId).eq('tenant_id',tenantId).in('specialist_id',specialists).maybeSingle().abortSignal(controller.signal);
+  const read=await client.from('items').select('*').eq('id',itemId).eq('tenant_id',tenantId).in('specialist_id',specialists).abortSignal(controller.signal).maybeSingle();
   if(read.error)throw new Error(read.error.message);check();
   const row=read.data;
   if(!row||row.tenant_id!==tenantId||!specialists.includes(row.specialist_id)||!row.updated_at)throw new Error('Item ownership/version could not be verified.');
@@ -64,11 +64,11 @@ export async function saveExistingStudioImage(options:{tenantId:string;nicheId:s
   // Reuse a verified persisted cutout even if a previous client reported a transport-shape mismatch.
   if(studioAssociationMatches(entries?.[slotId],linked[slotId]))return {item:mapItem(row),error:null};
   // Merge fresh attributes, not the screen snapshot. CAS prevents overwriting newer edits.
-  const write=await client.from('items').update({attributes:{...row.attributes,_smart_studio_images:linked}}).eq('id',itemId).eq('tenant_id',tenantId).in('specialist_id',specialists).eq('updated_at',row.updated_at).select('*').maybeSingle().abortSignal(controller.signal);
+  const write=await client.from('items').update({attributes:{...row.attributes,_smart_studio_images:linked}}).eq('id',itemId).eq('tenant_id',tenantId).in('specialist_id',specialists).eq('updated_at',row.updated_at).select('*').abortSignal(controller.signal).maybeSingle();
   if(write.error)throw new Error(write.error.message);check();
   if(!write.data)throw new Error('Inventory changed while saving the studio result. Reload and retry; no automatic overwrite was made.');
   if(!sameJson(write.data.media,row.media))throw new Error('Original photo order could not be confirmed after saving. Reload before retrying.');
-  const verify=await client.from('items').select('*').eq('id',itemId).eq('tenant_id',tenantId).in('specialist_id',specialists).maybeSingle().abortSignal(controller.signal);
+  const verify=await client.from('items').select('*').eq('id',itemId).eq('tenant_id',tenantId).in('specialist_id',specialists).abortSignal(controller.signal).maybeSingle();
   if(verify.error)throw new Error(verify.error.message);check();
   if(!verify.data||!verify.data.media?.includes(originalUri)||!studioAssociationMatches(verify.data.attributes?._smart_studio_images?.[slotId],linked[slotId]))throw new Error('Studio association readback could not be confirmed. Reload before retrying.');
   return {item:mapItem(verify.data),error:null};
