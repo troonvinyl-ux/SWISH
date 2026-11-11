@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "onspace-app",
-    "slug": "onspace-app",
+    "slug": "swish",
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/images/hero-dashboard.jpg",
@@ -26,7 +26,8 @@
             "android.intent.category.LEANBACK_LAUNCHER"
           ]
         }
-      ]
+      ],
+      "versionCode": 1794427892
     },
     "plugins": [
       "expo-router",
@@ -64,6 +65,11 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "dadff40d-3fba-46ef-a13c-88e1ba4e4f07"
+      }
     }
   }
 }

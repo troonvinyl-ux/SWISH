@@ -1,5 +1,10 @@
 name: Build SWISH unified signed testing APK
 on:
+  push:
+    branches: [main]
+    paths:
+      - app.json
+      - .github/workflows/build-swish-release-apk.yml
   workflow_dispatch:
     inputs:
       channel:
@@ -13,7 +18,7 @@ jobs:
   unified:
     uses: ./.github/workflows/build-swish-unified.yml
     with:
-      channel: ${{ inputs.channel }}
+      channel: ${{ inputs.channel || 'preview-unified' }}
       build_android: true
       build_ios: false
     secrets: inherit

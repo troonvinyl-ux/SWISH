@@ -38,6 +38,16 @@ jobs:
       EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
     steps:
+      - name: Require existing Android signing credentials before running build checks
+        if: inputs.build_android
+        env:
+          SWISH_RELEASE_KEYSTORE_BASE64: ${{ secrets.SWISH_RELEASE_KEYSTORE_BASE64 }}
+          SWISH_KEYSTORE_STORE_PASSWORD: ${{ secrets.SWISH_KEYSTORE_STORE_PASSWORD }}
+          SWISH_KEYSTORE_KEY_PASSWORD: ${{ secrets.SWISH_KEYSTORE_KEY_PASSWORD }}
+          SWISH_KEYSTORE_KEY_ALIAS: ${{ secrets.SWISH_KEYSTORE_KEY_ALIAS }}
+          SWISH_RELEASE_CERT_SHA256: ${{ vars.SWISH_RELEASE_CERT_SHA256 || secrets.SWISH_RELEASE_CERT_SHA256 }}
+        run: |
+          node -e "const missing=['SWISH_RELEASE_KEYSTORE_BASE64','SWISH_KEYSTORE_STORE_PASSWORD','SWISH_KEYSTORE_KEY_PASSWORD','SWISH_KEYSTORE_KEY_ALIAS','SWISH_RELEASE_CERT_SHA256'].filter(k=>!process.env[k]); if(missing.length) throw Error('Restore original signing settings in GitHub Actions: '+missing.join(', '))"
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:

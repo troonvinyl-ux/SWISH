@@ -435,7 +435,7 @@ importers:
 
 packages:
   jpeg-js@0.4.4:
-    resolution: {tarball: https://registry.npmjs.org/jpeg-js/-/jpeg-js-0.4.4.tgz}
+    resolution: {integrity: sha512-WZzeDOEtTOBK4Mdsar0IqEU5sMr3vSV2RqkAIzUEV2BHnUfKGyswWFPFwK5EeDo93K3FohSHbLAjj0s1Wzd+dg==, tarball: https://registry.npmjs.org/jpeg-js/-/jpeg-js-0.4.4.tgz}
 
 
   '@0no-co/graphql.web@1.1.2':
