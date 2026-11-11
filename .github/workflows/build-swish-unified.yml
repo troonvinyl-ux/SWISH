@@ -50,6 +50,21 @@ jobs:
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
     steps:
       - uses: actions/checkout@v4
+      - name: Resolve existing public OnSpace configuration from checked-in .env
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const source = fs.readFileSync('.env', 'utf8');
+          const values = Object.fromEntries(source.split(/\r?\n/).filter(line => /^[A-Za-z_][A-Za-z0-9_]*=/.test(line)).map(line => {
+            const index = line.indexOf('=');
+            return [line.slice(0, index), line.slice(index + 1).trim().replace(/^["']|["']$/g, '')];
+          }));
+          for (const key of ['EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_ANON_KEY']) {
+            const value = process.env[key] || values[key];
+            if (!value || /[\r\n]/.test(value)) throw Error('Missing valid public OnSpace configuration: ' + key);
+            fs.appendFileSync(process.env.GITHUB_ENV, key + '=' + value + '\n');
+          }
+          NODE
       - uses: pnpm/action-setup@v4
         with:
           version: 9.15.9
@@ -141,6 +156,21 @@ jobs:
       SWISH_RELEASE_CERT_SHA256: ${{ vars.SWISH_RELEASE_CERT_SHA256 || secrets.SWISH_RELEASE_CERT_SHA256 }}
     steps:
       - uses: actions/checkout@v4
+      - name: Resolve existing public OnSpace configuration from checked-in .env
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const source = fs.readFileSync('.env', 'utf8');
+          const values = Object.fromEntries(source.split(/\r?\n/).filter(line => /^[A-Za-z_][A-Za-z0-9_]*=/.test(line)).map(line => {
+            const index = line.indexOf('=');
+            return [line.slice(0, index), line.slice(index + 1).trim().replace(/^["']|["']$/g, '')];
+          }));
+          for (const key of ['EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_ANON_KEY']) {
+            const value = process.env[key] || values[key];
+            if (!value || /[\r\n]/.test(value)) throw Error('Missing valid public OnSpace configuration: ' + key);
+            fs.appendFileSync(process.env.GITHUB_ENV, key + '=' + value + '\n');
+          }
+          NODE
       - uses: pnpm/action-setup@v4
         with:
           version: 9.15.9
@@ -219,6 +249,21 @@ jobs:
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
     steps:
       - uses: actions/checkout@v4
+      - name: Resolve existing public OnSpace configuration from checked-in .env
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const source = fs.readFileSync('.env', 'utf8');
+          const values = Object.fromEntries(source.split(/\r?\n/).filter(line => /^[A-Za-z_][A-Za-z0-9_]*=/.test(line)).map(line => {
+            const index = line.indexOf('=');
+            return [line.slice(0, index), line.slice(index + 1).trim().replace(/^["']|["']$/g, '')];
+          }));
+          for (const key of ['EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_ANON_KEY']) {
+            const value = process.env[key] || values[key];
+            if (!value || /[\r\n]/.test(value)) throw Error('Missing valid public OnSpace configuration: ' + key);
+            fs.appendFileSync(process.env.GITHUB_ENV, key + '=' + value + '\n');
+          }
+          NODE
       - uses: pnpm/action-setup@v4
         with:
           version: 9.15.9
