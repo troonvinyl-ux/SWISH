@@ -3,6 +3,7 @@ import { getSpecialistProfile } from '@/shared/specialistIntelligence';
 export interface SpecialistTool { title:string;detail:string;route:string;icon:string }
 export function specialistTools(nicheId:ProductionNicheId):SpecialistTool[] {
   const extras:Partial<Record<ProductionNicheId,SpecialistTool[]>>={
+    stamps:[{title:'Stamp starter guide & tools',detail:'Plain-English condition terms, safe handling, perforation estimate and selling checklist',route:'/stamp-guide',icon:'menu-book'}],
     tunes_flip:[{title:'Exact pressing review',detail:'Catalogue, barcode, labels and matrix; no automatic edition selection',route:'/music-search',icon:'album'},{title:'Music collection',detail:'Artist, format and independent media/sleeve grades',route:'/music-collection',icon:'library-music'}],
     coins:[{title:'Islamic & Indian Silver',detail:'Existing specialist attribution pipeline',route:'/islamic-batch',icon:'toll'},{title:'Deep Identification Lab',detail:'Legends, measurements and competing candidates',route:'/deep-id-lab',icon:'manage-search'}],
     trading_cards:[{title:'Raw vs graded scenarios',detail:'Fees, probabilities and sale assumptions; not a predicted professional grade',route:'/card-grading',icon:'style'}],

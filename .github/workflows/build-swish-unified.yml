@@ -2,6 +2,11 @@ name: Build unified SWISH testing artifacts
 on:
   workflow_dispatch:
     inputs:
+      channel:
+        type: choice
+        required: true
+        default: preview-unified
+        options: [preview-unified, production-unified]
       build_android:
         type: boolean
         default: true
@@ -10,6 +15,9 @@ on:
         default: false
   workflow_call:
     inputs:
+      channel:
+        type: string
+        default: preview-unified
       build_android:
         type: boolean
         default: true
@@ -24,7 +32,8 @@ jobs:
     env:
       SWISH_NICHE: ''
       SWISH_MASTER_ADMIN: '0'
-      SWISH_RELEASE_CHANNEL: preview-unified
+      SWISH_TEST_LAB: '0'
+      SWISH_RELEASE_CHANNEL: ${{ inputs.channel }}
       EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
       EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
@@ -37,6 +46,12 @@ jobs:
         with:
           node-version: 22
       - run: bash scripts/install-dependencies.sh
+      - name: Require an update-enabled configuration before compiling any release
+        run: |
+          mkdir -p dist
+          npx expo config --type public --json > dist/unified-runtime-config.json
+          node scripts/verify-unified-config.mjs dist/unified-runtime-config.json
+          node --test scripts/unified-ota-policy.test.mjs
       - run: npx tsc --noEmit
       - run: npx expo lint
       - run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand
@@ -65,7 +80,8 @@ jobs:
     env:
       SWISH_NICHE: ''
       SWISH_MASTER_ADMIN: '0'
-      SWISH_RELEASE_CHANNEL: preview-unified
+      SWISH_TEST_LAB: '0'
+      SWISH_RELEASE_CHANNEL: ${{ inputs.channel }}
       EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
       EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
@@ -133,7 +149,9 @@ jobs:
       EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
       SWISH_NICHE: ''
       SWISH_MASTER_ADMIN: '0'
-      SWISH_RELEASE_CHANNEL: preview-unified
+      SWISH_TEST_LAB: '0'
+      SWISH_RELEASE_CHANNEL: ${{ inputs.channel }}
+      SWISH_IOS_PROFILE: ${{ inputs.channel == 'production-unified' && 'unified-store' || 'unified-ios-testing' }}
       SWISH_APPROVED_IOS_BUNDLE_ID: ${{ vars.SWISH_APPROVED_IOS_BUNDLE_ID }}
       SWISH_APPROVED_IOS_TEAM_ID: ${{ vars.SWISH_APPROVED_IOS_TEAM_ID }}
       EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
@@ -154,7 +172,7 @@ jobs:
           npx expo config --type public --json > dist/unified-runtime-config.json
           node scripts/verify-unified-config.mjs dist/unified-runtime-config.json ios
       - name: Build with existing remote credentials only; do not submit or reset provisioning
-        run: npx --yes eas-cli@27.2.0 build --platform ios --profile unified-ios-testing --non-interactive --wait --json > dist/unified-ios-build.json
+        run: npx --yes eas-cli@27.2.0 build --platform ios --profile "$SWISH_IOS_PROFILE" --non-interactive --wait --json > dist/unified-ios-build.json
       - name: Download and inspect the actual existing-identity iOS artifact
         run: node scripts/verify-unified-ios.mjs dist/unified-ios-build.json
       - uses: actions/upload-artifact@v4
@@ -164,6 +182,7 @@ jobs:
             dist/swish-unified.ipa
             dist/unified-ios-evidence.json
             dist/unified-ios-build.json
+            dist/unified-runtime-config.json
             dist/swish-unified-ipa.sha256
           if-no-files-found: error
 # No OTA publication, App Store submission, Google Play upload or database writes.

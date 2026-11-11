@@ -31,7 +31,8 @@ import { useApp } from '@/hooks/useApp';
 import { upsertBusinessConfig } from '@/services/businessConfigService';
 import { getSupabaseClient } from '@/template';
 import { FunctionsHttpError } from '@supabase/supabase-js';
-import type { NicheId } from '@/constants/niches';
+import { PRODUCTION_NICHES, NICHE_MODULES, type NicheId } from '@/constants/niches';
+import type { NicheClassification } from '@/services/nicheCategoryService';
 import { nicheToEntryRoute as resolveNicheEntryRoute } from '@/services/nicheRouting';
 import { classifyListing, nicheToSpecialistId } from '@/services/nicheCategoryService';
 import type { SpecialistId } from '@/constants/specialists';
@@ -52,7 +53,9 @@ const ONBOARDING_NICHES: Array<{
   icon: string;
   color: string;
   description: string;
-}> = [
+}> = PRODUCTION_NICHES.map(niche => ({ id: niche.id, name: NICHE_MODULES[niche.id as keyof typeof NICHE_MODULES].name, tagline: niche.tagline, icon: niche.icon, color: niche.color, description: niche.description }));
+/* Historical descriptions retained for reference only; selection derives from the shared registry.
+const legacyOnboardingDescriptions = [
   {
     id: 'coins',
     name: 'Coin Flipper',
@@ -138,6 +141,8 @@ const ONBOARDING_NICHES: Array<{
     description: 'Track supplier manifests, bulk quantities, and prepare surplus stock for resale.',
   },
 ];
+
+*/
 
 type eBayConnectionStatus = 'idle' | 'authorizing' | 'polling' | 'connected' | 'error';
 
@@ -420,12 +425,10 @@ export default function OnboardingScreen() {
       // Resolve the subscriber's selected niche to a baseline NicheClassification
       // so the classification function can use it as a strong prior when a listing
       // cannot be classified from category/title evidence alone.
-      type NicheClassification004 =
-        | 'coins' | 'motocross' | 'bicycles' | 'clothing'
-        | 'trading_cards' | 'antiques' | 'fossils' | 'beauty'
-        | 'tech' | 'surplus_flip' | 'collectibles' | 'unclassified';
+      type NicheClassification004 = NicheClassification;
 
       const NICHE_TO_CLASSIFICATION: Record<NicheId, NicheClassification004> = {
+        stamps: 'stamps', tunes_flip: 'tunes_flip',
         coins: 'coins',
         motocross: 'motocross',
         bicycles: 'bicycles',

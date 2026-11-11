@@ -4,6 +4,7 @@
 
 import { getSupabaseClient } from '@/template';
 import { backendRead } from './backendRequestService';
+import { isAuthenticationFailure, recoverAuthenticatedSession, signInRequiredMessage } from './authSessionRecoveryService';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { Linking } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
@@ -33,12 +34,36 @@ async function invokeEdgeFunction<T = any>(
   body: Record<string, any> = {},
 ): Promise<{ data: T | null; error: string | null }> {
   const supabase = getSupabaseClient();
-  // Only the read-only verification call is governed here. Checkout/portal are never replayed.
+  // Only this read-only membership check may retry after a rejected JWT.
+  // Checkout, portal and all other mutations retain their single-request behavior.
   let response;
   try {
-    response = name === 'swish-check-subscription'
-      ? await backendRead(`subscription:${JSON.stringify(body)}`, signal => supabase.functions.invoke(name, { body, signal }), 'access', 20000)
-      : await supabase.functions.invoke(name, { body });
+    if (name === 'swish-check-subscription') {
+      const sessionResult = await supabase.auth.getSession();
+      if (sessionResult.error) throw new Error(sessionResult.error.message);
+      const token = sessionResult.data.session?.access_token;
+      if (!token) throw new Error(signInRequiredMessage);
+      const readVerification = (accessToken: string) => backendRead(`subscription:${JSON.stringify(body)}`, async signal => {
+        const current = await supabase.auth.getSession();
+        if (current.error) throw new Error(current.error.message);
+        if (current.data.session?.access_token !== accessToken) throw new Error('Authenticated session changed before verification. Retry with your current sign-in.');
+        // Explicitly send the user JWT, never an anonymous fallback or the rejected token.
+        return supabase.functions.invoke(name, { body, signal, headers: { Authorization: `Bearer ${accessToken}` } });
+      }, 'access', 20000);
+      try {
+        response = await readVerification(token);
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : '';
+        if (!isAuthenticationFailure(message)) throw cause;
+        const recovered = await recoverAuthenticatedSession(token);
+        if (recovered.error || !recovered.accessToken) throw new Error(recovered.error ?? signInRequiredMessage);
+        try { response = await readVerification(recovered.accessToken); }
+        catch (retryCause) {
+          if (isAuthenticationFailure(retryCause instanceof Error ? retryCause.message : '')) throw new Error(signInRequiredMessage);
+          throw retryCause;
+        }
+      }
+    } else response = await supabase.functions.invoke(name, { body });
   } catch (cause) { return { data: null, error: cause instanceof Error ? cause.message : 'Subscription verification unavailable' }; }
   const { data, error } = response;
 

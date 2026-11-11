@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { preferredStudioImage } from '@/shared/smartStudio';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { listItems, Item, ACTIVE_INVENTORY_STATUSES } from '@/services/itemService';
@@ -216,7 +217,8 @@ function ReviewItemCard({ item, onPress }: { item: Item; onPress: (id: string) =
   const ready = isReadyToList(item);
   const idConf = item.identificationConfidence ?? 0;
   const confColor = idConf >= 0.50 ? Colors.warning : idConf >= 0.30 ? Colors.danger : Colors.danger;
-  const hasPhoto = (item.media ?? []).length > 0;
+  const cover = preferredStudioImage(item.media,item.attributes);
+  const hasPhoto = Boolean(cover);
   const objectType = item.attributes?.object_type as string | undefined;
 
   const objectTypeBadge = objectType ? (
@@ -238,7 +240,7 @@ function ReviewItemCard({ item, onPress }: { item: Item; onPress: (id: string) =
       <View style={styles.cardThumb}>
         {hasPhoto ? (
           <Image
-            source={{ uri: item.media[0] }}
+            source={{ uri: cover }}
             style={styles.thumbImg}
             contentFit="cover"
             transition={150}

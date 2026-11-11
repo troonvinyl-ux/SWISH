@@ -7,6 +7,8 @@ import { NICHE_MODULES, isProductionNiche } from '@/constants/niches';
 import { inferImportNiche } from '@/shared/ebayImportScope';
 import { getProductionNicheSpecialistIds } from './nicheRouting';
 import { importCanonicalEbayInventory } from './ebayInventoryImportService';
+import { sellerOrderStage } from '@/shared/ebayOrderLifecycle';
+import { readSellerOrders } from './sellerOrderService';
 
 // ── KC Inventory ID generation ────────────────────────────────────────────────
 
@@ -535,6 +537,8 @@ export async function updateShippingService(
 // ── Fulfilment / dispatch ─────────────────────────────────────────────────────
 
 export type FulfilmentStatus =
+  | 'awaiting_payment'
+  | 'cancelled'
   | 'awaiting_dispatch'
   | 'packing'
   | 'label_created'
@@ -553,6 +557,7 @@ export const FULFILMENT_STEPS: FulfilmentStatus[] = [
 ];
 
 export const FULFILMENT_LABELS: Record<FulfilmentStatus, string> = {
+  awaiting_payment: 'Waiting for payment', cancelled: 'Cancelled',
   awaiting_dispatch: 'Awaiting Dispatch',
   packing: 'Packing',
   label_created: 'Label Created',
@@ -568,14 +573,20 @@ export async function updateOrderFulfilmentStatus(
   extra?: { packedAt?: string; shipmentId?: string },
 ): Promise<{ error: string | null }> {
   const supabase = getSupabaseClient();
+  if(!['packing','label_created','completed'].includes(status))return {error:'Use shared eBay sync/dispatch for payment, posted and delivered status.'};
+  const module=await supabase.rpc('swish_current_module');if(module.error||!module.data?.tenant_id)return {error:'Verified order workspace required.'};
+  const { data: current, error: readError }=await supabase.from('orders').select('id,updated_at,fulfilment_status').eq('id',orderId).eq('tenant_id',module.data.tenant_id).maybeSingle();
+  if(readError||!current)return {error:'Order not found in this niche.'};
+  const next:Record<string,string>={awaiting_dispatch:'packing',packing:'label_created',delivered:'completed'};if(next[current.fulfilment_status]!==status)return {error:'Invalid local order transition. Sync eBay first.'};
   const { error } = await supabase
     .from('orders')
     .update({
+      status:status==='completed'?'completed':'payment_received',
       fulfilment_status: status,
       ...(extra?.packedAt && { packed_at: extra.packedAt }),
       ...(extra?.shipmentId && { shipment_id: extra.shipmentId }),
     })
-    .eq('id', orderId);
+    .eq('id', orderId).eq('tenant_id',module.data.tenant_id).eq('updated_at',current.updated_at).select('id').single();
   return { error: error?.message ?? null };
 }
 
@@ -622,7 +633,7 @@ function mapOrder(row: any): OrderWithItem {
     buyerName: row.buyer_name ?? undefined,
     buyerAddress: row.buyer_address ?? {},
     status: row.status,
-    fulfilmentStatus: (row.fulfilment_status ?? 'awaiting_dispatch') as FulfilmentStatus,
+    fulfilmentStatus: sellerOrderStage(row),
     salePrice: Number(row.sale_price ?? 0),
     marketplaceFee: Number(row.marketplace_fee ?? 0),
     shippingCost: Number(row.shipping_cost ?? 0),
@@ -678,7 +689,7 @@ export async function getAllOrders(
     query = query.eq('fulfilment_status', fulfilmentStatus);
   }
 
-  const { data, error } = await query.limit(200);
-  if (error) return { orders: [], error: error.message };
-  return { orders: (data ?? []).map(mapOrder), error: null };
+  const data:any[]=[];
+  for(let offset=0;offset<10000;offset+=200){const page=await query.range(offset,offset+199);if(page.error)return {orders:[],error:page.error.message};data.push(...(page.data??[]));if((page.data?.length??0)<200)break;}
+  return { orders: data.map(mapOrder), error: null };
 }
