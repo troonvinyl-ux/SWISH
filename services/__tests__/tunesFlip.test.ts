@@ -8,7 +8,7 @@ const source=(name:string)=>fs.readFileSync(path.resolve(__dirname,'../..',name)
 const fixture={id:123,title:'Example Album',artists:[{name:'Example Artist'}],year:1985,country:'UK',labels:[{name:'Example Label',catno:'ABC-123'}],formats:[{name:'Vinyl',descriptions:['LP','Album']}],genres:['Rock'],styles:['Alternative'],tracklist:[{position:'A1',title:'First track',duration:'3:00'}],identifiers:[{type:'Matrix / Runout',value:'ABC-123 A1'}],master_id:456,images:[{uri:'restricted-image'}],lowest_price:999,community:{have:800},user_data:{token:'must-not-leak'}};
 describe('Tunes Flip source and pure contracts — not live acceptance',()=>{
  test('new niche owns only the existing music specialist and shared workflow',()=>{
-  expect(Object.keys(registry.products)).toHaveLength(12);expect(registry.products.tunes_flip.specialists).toEqual(['vinyl_records']);expect(resolveProductionNiche('vinyl_records')).toBe('tunes_flip');
+  expect(Object.keys(registry.products)).toHaveLength(13);expect(registry.products.tunes_flip.specialists).toEqual(['vinyl_records']);expect(resolveProductionNiche('vinyl_records')).toBe('tunes_flip');
   expect(isRouteAllowedForModule('/music-search','tunes_flip')).toBe(true);expect(isRouteAllowedForModule('/music-search','coins')).toBe(false);
   for(const id of Object.keys(registry.products).filter(id=>id!=='tunes_flip'))expect(getProductionNicheSpecialistIds(id)).not.toContain('vinyl_records');
  });

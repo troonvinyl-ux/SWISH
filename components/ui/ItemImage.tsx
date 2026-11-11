@@ -27,6 +27,7 @@ function isEbayUrl(uri: string | null | undefined): boolean {
 export function getNichePlaceholderIcon(specialistId?: string | null): string {
   if (!specialistId) return 'inventory-2';
   const id = specialistId.toLowerCase();
+  if (id === 'stamps') return 'local-post-office';
   if (id === 'motocross') return 'two-wheeler';
   if (id === 'bicycles' || id === 'cycling') return 'pedal-bike';
   if (id === 'clothing' || id === 'trainers_sneakers') return 'checkroom';

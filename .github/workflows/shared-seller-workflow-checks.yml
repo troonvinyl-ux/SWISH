@@ -3,6 +3,47 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - 'niche-modules.json'
+      - 'constants/niches.ts'
+      - 'constants/specialists.ts'
+      - 'shared/stamp*.ts'
+      - 'shared/specialistIntelligence.ts'
+      - 'services/stamp*Service.ts'
+      - 'services/nicheCategoryService.ts'
+      - 'services/__tests__/stampsNiche.test.ts'
+      - 'components/feature/StampGuide.tsx'
+      - 'hooks/useStampGuide.ts'
+      - 'app/entry/stamps.tsx'
+      - 'app/stamp-guide.tsx'
+      - 'supabase/functions/_shared/stamp*.ts'
+      - 'supabase/functions/swish-identify/**'
+      - 'supabase/functions/swish-market-value/**'
+      - 'supabase/functions/swish-list-generate/**'
+      - 'supabase/tests/stamp*.test.ts'
+      - 'shared/barcodeIdentification.ts'
+      - 'shared/quickList.ts'
+      - 'services/barcode*Service.ts'
+      - 'services/__tests__/barcode*.test.ts'
+      - 'services/__tests__/aiBarcodeFlow.test.ts'
+      - 'hooks/useUniversalBarcode.ts'
+      - 'hooks/useBarcodeConfirmation.ts'
+      - 'hooks/useQuickList.ts'
+      - 'hooks/useListingEditor.ts'
+      - 'components/feature/QuickListWorkspace.tsx'
+      - 'supabase/functions/_shared/*Barcode*.ts'
+      - 'supabase/functions/_shared/barcodeIdentification.ts'
+      - 'supabase/functions/swish-ebay-browse/**'
+      - 'supabase/functions/swish-discogs/**'
+      - 'supabase/tests/*barcode*.test.ts'
+      - 'services/sharedImagePreparationService.ts'
+      - 'services/aiIdentificationService.ts'
+      - 'hooks/useGenericCapture.ts'
+      - 'components/feature/ExistingPhotoStudioControls.tsx'
+      - 'components/feature/PremiumScanner.tsx'
+      - 'services/__tests__/scannerToLiveTarget.test.ts'
+      - 'services/__tests__/coinImageEnhancementService.test.ts'
+      - 'supabase/functions/_shared/smartStudioEngine.ts'
+      - 'supabase/tests/backgrounderase.test.ts'
       - 'shared/smartStudio.ts'
       - 'shared/nichePolicy.ts'
       - 'shared/ebayOrderLifecycle.ts'
@@ -59,17 +100,17 @@ jobs:
       - name: Shared photo and lifecycle regressions (no seller requests)
         id: jest
         continue-on-error: true
-        run: npx jest --config jest.config.ci.js --runInBand services/__tests__/sellerPhotoChoices.test.ts services/__tests__/inventoryLifetimeGallery.test.ts services/__tests__/sharedSellerOrders.test.ts services/__tests__/itemMainImage.test.ts services/__tests__/processedPhotoPresentation.test.ts services/__tests__/studioPhotoPolicy.test.ts services/__tests__/photoCarryForwardIntegration.test.ts services/__tests__/shortListingFlow.test.ts --json --outputFile=verification-output/shared-seller-jest.json
+        run: npx jest --config jest.config.ci.js --runInBand services/__tests__/scannerToLiveTarget.test.ts services/__tests__/coinImageEnhancementService.test.ts services/__tests__/backgroundEraseReplay.test.ts services/__tests__/backgroundEraseBoundary.test.ts services/__tests__/existingImageStudio.test.ts services/__tests__/smartStudioIntegration.test.ts services/__tests__/quickListContracts.test.ts services/__tests__/stampsNiche.test.ts services/__tests__/registeredNicheAudit.test.ts services/__tests__/barcodeConfirmation.test.ts services/__tests__/aiBarcodeFlow.test.ts services/__tests__/barcodeLookupData.test.ts services/__tests__/barcodeScannerVisibility.test.ts services/__tests__/sellerPhotoChoices.test.ts services/__tests__/inventoryLifetimeGallery.test.ts services/__tests__/sharedSellerOrders.test.ts services/__tests__/itemMainImage.test.ts services/__tests__/processedPhotoPresentation.test.ts services/__tests__/studioPhotoPolicy.test.ts services/__tests__/photoCarryForwardIntegration.test.ts services/__tests__/shortListingFlow.test.ts --json --outputFile=verification-output/shared-seller-jest.json
       - name: Order and photo adapters (no provider requests)
         id: deno
         if: always()
         continue-on-error: true
-        run: deno test supabase/tests/ebay_order_lifecycle.test.ts supabase/tests/processed_photo_presentation.test.ts > verification-output/order-adapters.txt 2>&1
+        run: deno test --allow-env=BACKGROUND_ERASE_API_KEY supabase/tests/backgrounderase.test.ts supabase/tests/stamp_identification.test.ts supabase/tests/ai_barcode_lookup.test.ts supabase/tests/universal_barcode.test.ts supabase/tests/ebay_order_lifecycle.test.ts supabase/tests/processed_photo_presentation.test.ts > verification-output/order-adapters.txt 2>&1
       - name: Edge function type checks
         id: edge
         if: always()
         continue-on-error: true
-        run: deno check supabase/functions/swish-ebay-orders/index.ts supabase/functions/swish-ebay-post-order/index.ts > verification-output/order-edge-types.txt 2>&1
+        run: deno check supabase/functions/swish-coin-image-enhance/index.ts supabase/functions/swish-identify/index.ts supabase/functions/swish-market-value/index.ts supabase/functions/swish-list-generate/index.ts supabase/functions/swish-ebay-browse/index.ts supabase/functions/swish-discogs/index.ts supabase/functions/swish-ebay-orders/index.ts supabase/functions/swish-ebay-post-order/index.ts > verification-output/order-edge-types.txt 2>&1
       - name: Application TypeScript gate
         id: types
         if: always()

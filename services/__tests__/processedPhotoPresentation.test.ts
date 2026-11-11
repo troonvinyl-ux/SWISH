@@ -47,9 +47,10 @@ test('seller photo subsets are allowed while foreign variants remain blocked', (
  expect(processedListingPhotoIssue(originals,{ ...metadata,_smart_studio_images:{ front:entry(0) } },[clean[0]])).toBeNull();
  expect(processedListingPhotoIssue(originals,metadata,['https://foreign.test/x.jpg'])).toMatch(/attached/);
 });
-test('capture and re-identification keep original inputs while rendering only processed previews', () => {
+test('capture keeps every view visible while preferring each available processed preview', () => {
  const photos = [{ uri:originals[0],studio:entry(0) },{ uri:originals[1] }];
- expect(visibleCapturedPhotos(photos)).toEqual([photos[0]]);
+ expect(visibleCapturedPhotos(photos)).toEqual(photos);
+ expect(capturedPresentationUri(visibleCapturedPhotos(photos)[1])).toBe(originals[1]);
  expect(capturedPresentationUri(visibleCapturedPhotos(photos)[0])).toBe(clean[0]);
  expect(photos[0].uri).toBe(originals[0]); expect(photos).toHaveLength(2);
  expect(visibleCapturedPhotos([{ uri:originals[1] }])).toEqual([{ uri:originals[1] }]);
@@ -71,7 +72,7 @@ test('processed cover selection reorders retained sources without deleting origi
 test('UI has no original-comparison toggles and server applies the same selection policy', () => {
  const gallery = fs.readFileSync('components/feature/ItemPhotoGallery.tsx','utf8');
  const controls = fs.readFileSync('components/feature/ExistingPhotoStudioControls.tsx','utf8');
- expect(gallery).toContain('preferredListingPhotos(originalMedia,attributes)');
+ expect(gallery).toContain('inventoryGalleryPhotos(originalMedia, attributes)');
  expect(gallery).not.toContain('setOriginalView'); expect(controls).not.toContain('setShowOriginal');
  const server = fs.readFileSync('supabase/functions/swish-ebay-list/index.ts','utf8');
  expect(server).toContain('selectedListingPhotos(originalMedia,attrs');

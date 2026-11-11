@@ -8,6 +8,12 @@ export interface NicheHomeExperience {
 }
 
 const EXPERIENCES: Record<string, NicheHomeExperience> = {
+  stamps: {
+    headline: 'Start with the country and issue. Check the back before claiming mint.',
+    focusTitle: 'Stamp evidence checklist', focusBody: 'Identify first, check varieties only when the details can change the sale decision.',
+    evidenceChecks: ['Country, denomination and literal inscription', 'Whole front and all perforations or margins', 'Usage, gum, hinge traces and faults separately', 'Whole cover, sheet or album page; never split for a photograph', 'SG / Scott / Michel reference and catalogue edition only when independently checked'],
+    cautionTitle: 'Catalogue value is not resale value', cautionBody: 'Compare sold examples of the same issue, variety, usage and gum. AI cannot certify rarity, watermarks, gum originality or authenticity. Keep originals for colour and perforation evidence; common duplicates often sell more efficiently as honest lots.',
+  },
   collectibles: {
     headline: 'Read the maker marks. Identify the model. Price the evidence.',
     focusTitle: 'Clearance find evidence checklist', focusBody: 'Document the complete object and marks before attributing a maker or edition.',

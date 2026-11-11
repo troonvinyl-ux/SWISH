@@ -46,7 +46,7 @@ test('shared editor removes taxonomy dump while preserving save, validation and 
   expect(editor).not.toContain('Stable inventory ID:');
   expect(editor).toContain('editor.save()');
   expect(editor).toContain('editor.requirementsReady');
-  expect(editor).toContain('<ListingPhotoPicker');
+  expect(editor).toContain('<ListingPhotoManager');
   const component = fs.readFileSync('components/feature/ListingItemSpecifics.tsx', 'utf8');
   expect(component).toContain('FlatList');
   expect(component).toContain('Search item specific values');

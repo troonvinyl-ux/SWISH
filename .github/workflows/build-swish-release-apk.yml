@@ -1,12 +1,19 @@
 name: Build SWISH unified signed testing APK
 on:
   workflow_dispatch:
+    inputs:
+      channel:
+        type: choice
+        required: true
+        default: preview-unified
+        options: [preview-unified, production-unified]
 permissions:
   contents: read
 jobs:
   unified:
     uses: ./.github/workflows/build-swish-unified.yml
     with:
+      channel: ${{ inputs.channel }}
       build_android: true
       build_ios: false
     secrets: inherit

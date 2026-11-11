@@ -18,12 +18,12 @@ function equal(actual: unknown, expected: unknown): void {
 Deno.test('Edge presentation hides every original once one validated processed photo is ready', () => {
  const media = Object.freeze([rear,original]);
  equal(preferredListingPhotos(media,attributes),[processed]);
- equal(availableListingPhotos(media,attributes),[processed]);
+ equal(availableListingPhotos(media,attributes),[rear,original,processed]);
  equal(preferredStudioImage(media,attributes),processed);
  equal(media,[rear,original]);
 });
-Deno.test('Edge upgrades old selections but preserves empty selections and unknown URL rejection', () => {
- equal(selectedListingPhotos([original,rear],attributes,[original,rear]),[processed]);
+Deno.test('Edge preserves seller selections but preserves empty selections and unknown URL rejection', () => {
+ equal(selectedListingPhotos([original,rear],attributes,[original,rear]),[original,rear]);
  equal(selectedListingPhotos([original,rear],attributes,[]),[]);
  equal(selectedListingPhotos([original],attributes,['https://foreign.test/image.jpg']),['https://foreign.test/image.jpg']);
 });
@@ -32,9 +32,10 @@ Deno.test('originals remain fallback before successful processing; provenance ch
  equal(preferredListingPhotos([original],{ _smart_studio_images:{ front:{ ...entry,status:'review' } } }),[original]);
  equal(preferredListingPhotos([original],{ _smart_studio_images:{ front:{ ...entry,quality:{ ...entry.quality,checks:{ ...entry.quality.checks,foregroundPresent:false } } } } }),[original]);
 });
-Deno.test('a partially processed evidence set cannot publish by adding archived originals', () => {
+Deno.test('a seller may select a subset while capture persistence remains independent', () => {
  const scoped = { ...attributes,_photo_pipeline:{ expected:[{ url:original },{ url:rear }] } };
  const issue = processedListingPhotoIssue([original,rear],scoped,[processed]);
- if (!issue?.includes('every captured')) throw new Error('Missing processed evidence was not blocked.');
+ if (issue !== null) throw new Error('A valid seller subset was blocked.');
+ if (!processedListingPhotoIssue([original,rear],scoped,['https://foreign.test/photo.jpg'])) throw new Error('Foreign photos were accepted.');
  equal(processedListingPhotoIssue([original],{ ...attributes,_photo_pipeline:{ expected:[{ url:original }] } },[processed]),null);
 });
