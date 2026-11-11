@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - app.json
+      - .github/workflows/build-swish-unified.yml
       - .github/workflows/build-swish-release-apk.yml
   workflow_dispatch:
     inputs:
