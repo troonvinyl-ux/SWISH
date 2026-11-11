@@ -92,7 +92,7 @@ async function persist(tenantId: string, itemId: string, source: CapturedImage[]
       prepared.forEach((image, index) => { originals[index] = image; Object.assign(source[index], image); });
     }
     // Optional lifetime gallery evidence must never alter required capture completeness.
-    const checkpoint=options.appendOnly ? undefined : await commit(tenantId, itemId, [], originals.map(image => ({ slotId: image.slotId, slotLabel: image.slotLabel, ...(image.originalStorageUri && row.media?.includes(image.originalStorageUri) ? { url: image.originalStorageUri } : {}) })), [], undefined, row, options.isCurrent);
+    if (!options.appendOnly) await commit(tenantId, itemId, [], originals.map(image => ({ slotId: image.slotId, slotLabel: image.slotLabel, ...(image.originalStorageUri && row.media?.includes(image.originalStorageUri) ? { url: image.originalStorageUri } : {}) })), [], undefined, row, options.isCurrent);
     // Two independent immutable uploads at a time: bound native memory while hiding network latency.
     let nextIndex = 0;
     const uploadWorker = async () => { for (;;) {
@@ -121,7 +121,8 @@ async function persist(tenantId: string, itemId: string, source: CapturedImage[]
     const assets = originals.filter(image => image.originalStorageUri).map(image => ({ slotId: image.slotId, slotLabel: image.slotLabel, url: image.originalStorageUri!, ...(image.originalByteHash ? { hash: image.originalByteHash } : {}), ...(image.uploadCopy ? { uploadCopy: { kind: image.uploadCopy.kind, sourceHash: image.uploadCopy.sourceHash, dpi: image.uploadCopy.dpi, width: image.uploadCopy.width, height: image.uploadCopy.height } } : {}) }));
     const expected = originals.map(image => ({ slotId: image.slotId, slotLabel: image.slotLabel, ...(image.originalStorageUri ? { url: image.originalStorageUri } : {}) }));
     assertCurrent(options.isCurrent);
-    const check=await commit(tenantId, itemId, assets, options.appendOnly ? null : expected, originals, undefined, checkpoint, options.isCurrent);
+    // Re-read after the checkpoint write: its updated_at is no longer the initial row version.
+    const check=await commit(tenantId, itemId, assets, options.appendOnly ? null : expected, originals, undefined, undefined, options.isCurrent);
     const issue = options.appendOnly ? null : photoPersistenceIssue(check.media ?? [], check.attributes ?? {});
     if (issue && !errors.length) errors.push(issue);
     return { urls: originals.filter(image => image.originalStorageUri).map(image => image.originalStorageUri!), images: originals, errors, complete: !errors.length && !issue };
