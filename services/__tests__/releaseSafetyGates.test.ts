@@ -14,10 +14,10 @@ describe('Android and OTA release safety gates', () => {
   });
 
   test('niche and full-suite Android builds cannot continue after failed Jest tests', () => {
-    for (const file of ['.github/workflows/_niche-android.yml', '.github/workflows/build-swish-suite.yml']) {
+    for (const file of ['.github/workflows/_niche-android.yml', '.github/workflows/build-swish-unified.yml']) {
       const workflow = read(file);
       expect(workflow).not.toContain('continue-on-error: true');
-      expect(workflow).toContain('Regression tests (mandatory release gate)');
+      expect(workflow).toMatch(/Regression tests \(mandatory release gate\)|unit \(mandatory\)/);
     }
   });
 
@@ -28,6 +28,8 @@ describe('Android and OTA release safety gates', () => {
     expect(verifier).toContain('apksigner');
     expect(verifier).toContain('launchable-activity:');
     const workflow = read('.github/workflows/build-swish-suite.yml');
-    expect(workflow).toContain('bash scripts/verify-master-admin-apk.sh "$APK"');
+    expect(workflow).toContain('uses: ./.github/workflows/build-swish-unified.yml');
+    const unified = read('.github/workflows/build-swish-unified.yml');
+    expect(unified).toContain('scripts/verify-unified-apk.sh');
   });
 });
