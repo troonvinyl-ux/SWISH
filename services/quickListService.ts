@@ -94,7 +94,8 @@ export interface QuickReviewInput {title:string;description:string;price:string;
 export async function saveQuickReview(tenantId:string,nicheId:QuickListNiche,draft:QuickDraft,input:QuickReviewInput,mode:'publish'|'draft'='publish'){
  const canonical=await getItem(draft.itemId);
  if(canonical.error||!canonical.item||canonical.item.tenantId!==tenantId||!NICHE_MODULES[nicheId].specialists.includes(canonical.item.specialistId))return {error:canonical.error??'Item ownership could not be verified.'};
- const photos=preferredListingPhotos(canonical.item.media,canonical.item.attributes);
+ const photos=draft.photos;
+ const selectionIssue=processedListingPhotoIssue(canonical.item.media,canonical.item.attributes,photos);if(selectionIssue)return {error:selectionIssue};
  if(mode==='publish'){
   if(draft.requirements.error)return {error:draft.requirements.error};
   const photoIssue=processedListingPhotoIssue(canonical.item.media,canonical.item.attributes,photos);if(photoIssue)return {error:photoIssue};

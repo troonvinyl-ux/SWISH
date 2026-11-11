@@ -1,4 +1,5 @@
 import { availableListingPhotos, selectedListingPhotos, processedListingPhotoIssue } from '@/shared/smartStudio';
+import { listingClarification, type ListingClarification } from '@/shared/listingClarification';
 import { recordCommandPreflight } from './commandPreflightEvidenceService';
 import { evaluateSpecialistSafety } from '@/shared/specialistIntelligence';
 import { photoPersistenceIssue } from '@/shared/photoPersistence';
@@ -130,6 +131,7 @@ export async function saveAntiqueCategory(tenantId: string, itemId: string, cate
 export interface SpecialistPreflightResult {
   ready: boolean; error: string | null; issue?: 'condition';
   conditionPolicy?: AntiqueConditionPolicy; conditionId?: string; categoryId?: string;
+  clarification?: ListingClarification;
 }
 /** Read-only preflight via the existing Taxonomy/Metadata API; never a live publication. */
 export async function checkAntiqueListing(tenantId: string, listingId: string, nicheId = 'antiques'): Promise<SpecialistPreflightResult> {
@@ -139,7 +141,7 @@ export async function checkAntiqueListing(tenantId: string, listingId: string, n
     const row: any = loaded.data; const item = row.items; const attributes = item.attributes ?? {};
     const finish=async(result:SpecialistPreflightResult,issue:string|null=null):Promise<SpecialistPreflightResult>=>{
       await recordCommandPreflight({tenantId,listingId,itemId:item.id,nicheId,itemUpdatedAt:item.updated_at,listingUpdatedAt:row.updated_at,ready:result.ready,issue});
-      return result;
+      return result.error ? { ...result, clarification: listingClarification({ error: result.error }) } : result;
     };
     const photoIssue = photoPersistenceIssue(item.media ?? [], attributes);
     if(photoIssue)return finish({ready:false,error:photoIssue},'photos');
@@ -156,10 +158,15 @@ export async function checkAntiqueListing(tenantId: string, listingId: string, n
     const conditionPolicy = conditions.data.policy as AntiqueConditionPolicy;
     const conditionId = String(attributes.ebay_condition_id ?? '');
     const condition = selectAntiqueCondition(conditionPolicy, conditionId);
-    if (condition.error) return finish({ ready: false, error: 'Choose the eBay condition that matches this item.', issue: 'condition', conditionPolicy, conditionId, categoryId },'condition');
+    if (condition.error) return finish({ ready: false, error: `Which eBay condition matches this item? Choose ${conditionPolicy.itemConditions.map(choice => choice.conditionDescription).join(' / ')} in Condition, then save and retry.`, issue: 'condition', conditionPolicy, conditionId, categoryId },'condition');
     const specifics = Array.isArray(attributes.ebay_item_specifics) ? attributes.ebay_item_specifics : [];
-    const missing = validateAntiqueSpecifics(specifics, normalizeAntiqueAspects(aspects.data.aspects));
-    if (missing) return finish({ ready: false, error: missing, conditionPolicy, conditionId, categoryId },'specifics');
+    const normalized = normalizeAntiqueAspects(aspects.data.aspects);
+    const missing = validateAntiqueSpecifics(specifics, normalized);
+    if (missing) {
+      const fields = normalized.filter(aspect => aspect.required && !specifics.some((specific: any) => String(specific.name ?? '').trim().toLowerCase() === aspect.name.toLowerCase() && String(specific.value ?? '').trim())).map(aspect => aspect.name);
+      const checked = await finish({ ready: false, error: missing, conditionPolicy, conditionId, categoryId }, 'specifics');
+      return { ...checked, clarification: listingClarification({ error: missing, missingRequiredAspects: fields }) };
+    }
     const originalMedia = item.media ?? [];
     const allowedMedia = availableListingPhotos(originalMedia, attributes);
     const media = selectedListingPhotos(originalMedia, attributes);

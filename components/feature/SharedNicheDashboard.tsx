@@ -19,7 +19,7 @@ export const SharedNicheDashboard = memo(function SharedNicheDashboard({ nicheId
   const dashboard = useNicheDashboard(nicheId);
   const { content, columns } = dashboard;
   const artwork = getNicheHeaderArtwork(nicheId);
-  const numbersUnavailable = !dashboard.ready || dashboard.loading || Boolean(dashboard.error);
+  const numbersUnavailable = !dashboard.ready || !dashboard.hasSnapshot;
   const identifyAction = content.actions.find(action => action.id === 'identify');
   const selectTitle = dashboard.purpose === 'listing' ? 'Choose stock for a listing' : dashboard.purpose === 'condition' ? 'Choose stock to assess' : 'Choose stock to value';
 
@@ -66,6 +66,7 @@ export const SharedNicheDashboard = memo(function SharedNicheDashboard({ nicheId
               <View style={s.stat}><Text style={[s.number, { color: content.accent }]}>{numbersUnavailable ? '—' : dashboard.stats.liveCount}</Text><Text style={s.body}>Live</Text></View>
               <View style={s.stat}><Text style={[s.number, { color: content.accent }]}>{numbersUnavailable ? '—' : dashboard.stats.soldCount}</Text><Text style={s.body}>Sold</Text></View>
             </View>
+            {dashboard.hasSnapshot && (dashboard.loading || dashboard.error) ? <Text style={s.body}>Last confirmed inventory totals · refresh pending</Text> : null}
             {dashboard.error ? <View style={s.errorPanel}>
               <MaterialIcons name="error-outline" size={24} color={Colors.danger} />
               <View style={s.copy}><Text accessibilityRole="alert" style={s.error}>{dashboard.error}</Text>
@@ -90,8 +91,15 @@ export const SharedNicheDashboard = memo(function SharedNicheDashboard({ nicheId
               <MaterialIcons name="close" size={24} color={content.accent} />
             </Pressable>
           </View>
+          {dashboard.stockError ? <View style={s.errorPanel}>
+            <MaterialIcons name="error-outline" size={24} color={Colors.danger} />
+            <View style={s.copy}><Text accessibilityRole="alert" style={s.error}>{dashboard.stockError}</Text>
+              <Pressable onPress={dashboard.reloadStock} disabled={dashboard.stockLoading} accessibilityRole="button" accessibilityState={{ disabled: dashboard.stockLoading, busy: dashboard.stockLoading }} style={({ pressed }) => [s.retry, pressed ? s.pressed : null, dashboard.stockLoading ? s.disabled : null]}><Text style={[s.actionText, { color: content.accent }]}>{dashboard.stockLoading ? 'Loading stock…' : 'Retry loading stock'}</Text></Pressable>
+            </View>
+          </View> : null}
           <FlatList data={dashboard.items} keyExtractor={item => item.id} contentContainerStyle={s.content}
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={false} refreshing={dashboard.stockLoading} onRefresh={dashboard.reloadStock}
+            initialNumToRender={8} maxToRenderPerBatch={8} windowSize={5}
             renderItem={({ item }) => (
               <Pressable accessibilityRole="button" accessibilityLabel={`Select ${item.canonicalTitle}`}
                 onPress={() => dashboard.select(item.id)} style={({ pressed }) => [s.item, pressed ? s.pressed : null]}>
@@ -103,9 +111,9 @@ export const SharedNicheDashboard = memo(function SharedNicheDashboard({ nicheId
             )}
             ListEmptyComponent={
               <View style={s.empty}>
-                {dashboard.loading ? <ActivityIndicator color={content.accent} /> : <>
-                  <Text style={s.body}>{dashboard.error ?? `Capture and save your first ${content.shortName.toLowerCase()} item, then prepare its listing or research its value.`}</Text>
-                  {dashboard.error ? <Pressable onPress={dashboard.reload} style={({ pressed }) => [s.retry, pressed ? s.pressed : null]}><Text style={[s.actionText, { color: content.accent }]}>Retry loading stock</Text></Pressable> : identifyAction ?
+                {dashboard.stockLoading ? <ActivityIndicator color={content.accent} /> : <>
+                  <Text style={s.body}>{dashboard.stockError ? 'Stock could not be verified. Use Retry loading stock above.' : `Capture and save your first ${content.shortName.toLowerCase()} item, then prepare its listing or research its value.`}</Text>
+                  {!dashboard.stockError && identifyAction ?
                     <Pressable accessibilityRole="button" onPress={() => { dashboard.close(); dashboard.open(identifyAction); }} style={({ pressed }) => [s.primary, { backgroundColor: content.accent }, pressed ? s.pressed : null]}><Text style={s.primaryText}>{identifyAction.title}</Text></Pressable> : null}
                 </>}
               </View>

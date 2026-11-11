@@ -10,6 +10,8 @@ import { resolveProductionNiche } from './nicheRouting';
 import { PHOTO_PIPELINE_VERSION, photoRoleId, mergePhotoAssets, photoPersistenceIssue, type PhotoAsset, type PhotoExpectation } from '@/shared/photoPersistence';
 import { studioImageIsUsable } from '@/shared/smartStudio';
 export interface PersistedCapturePhotos { urls: string[]; images: CapturedImage[]; errors: string[]; complete: boolean }
+export interface PersistPhotoOptions { processImages?: boolean; appendOnly?: boolean; isCurrent?: () => boolean }
+function assertCurrent(isCurrent?: () => boolean) { if (isCurrent && !isCurrent()) throw new Error('Workspace changed. Reopen the original item before retrying photos.'); }
 const flights = new Map<string, Promise<PersistedCapturePhotos>>();
 // PostgreSQL jsonb does not preserve object-key order. Compare semantic values.
 function normalized(value: unknown): unknown {
@@ -24,8 +26,9 @@ async function readRow(tenantId: string, itemId: string) {
   return result.data;
 }
 /** Merge fresh metadata with CAS; never replace existing media or seller listing selections. */
-async function commit(tenantId: string, itemId: string, assets: PhotoAsset[], expected: PhotoExpectation[] | null, images: readonly CapturedImage[], expectedUpdatedAt?: string, initialRow?: Awaited<ReturnType<typeof readRow>>) {
+async function commit(tenantId: string, itemId: string, assets: PhotoAsset[], expected: PhotoExpectation[] | null, images: readonly CapturedImage[], expectedUpdatedAt?: string, initialRow?: Awaited<ReturnType<typeof readRow>>, isCurrent?: () => boolean) {
   for (let attempt = 0; attempt < 3; attempt++) {
+    assertCurrent(isCurrent);
     const row = attempt === 0 && initialRow ? initialRow : await readRow(tenantId, itemId);
     let check = row;
     if (expectedUpdatedAt && row.updated_at !== expectedUpdatedAt) throw new Error('Item changed during photo recovery. Reload before retrying.');
@@ -45,6 +48,7 @@ async function commit(tenantId: string, itemId: string, assets: PhotoAsset[], ex
     for (const image of images) if (image.originalStorageUri && media.includes(image.originalStorageUri) && studioImageIsUsable(image.studio)) studio[image.slotId] = { ...image.studio!, originalUri: image.originalStorageUri };
     if (Object.keys(studio).length) attributes._smart_studio_images = studio;
     if (!jsonSame(row.media ?? [], media) || !jsonSame(row.attributes ?? {}, attributes)) {
+      assertCurrent(isCurrent);
       const saved = await getSupabaseClient().from('items').update({ media, attributes }).eq('id', itemId).eq('tenant_id', tenantId).eq('updated_at', row.updated_at).select('id,tenant_id,specialist_id,media,attributes,updated_at').maybeSingle();
       if (saved.error) throw new Error(`Photographs could not be linked to inventory: ${saved.error.message}`);
       if (!saved.data) { if (!expectedUpdatedAt && attempt < 2) continue; throw new Error('Item changed or access was denied. Reload and retry photos on this item.'); }
@@ -68,7 +72,7 @@ export async function linkPersistedItemPhotos(tenantId: string, itemId: string, 
   const check = await commit(tenantId, itemId, fresh, null, [], expectedUpdatedAt, row);
   if (urls.some(url => !check.media?.includes(url))) throw new Error('Canonical photo links could not be confirmed after saving.');
 }
-async function persist(tenantId: string, itemId: string, source: CapturedImage[], processImages: boolean): Promise<PersistedCapturePhotos> {
+async function persist(tenantId: string, itemId: string, source: CapturedImage[], processImages: boolean, options: PersistPhotoOptions): Promise<PersistedCapturePhotos> {
   const errors: string[] = [];const usedRoles = new Set<string>();
   const originals = source.map((image,index) => {
     const base = photoRoleId(image.slotId);let role = base;
@@ -78,20 +82,24 @@ async function persist(tenantId: string, itemId: string, source: CapturedImage[]
     usedRoles.add(role);return { ...image, slotId: role };
   });
   try {
+    assertCurrent(options.isCurrent);
     const row = await readRow(tenantId, itemId);
+    assertCurrent(options.isCurrent);
     if (!originals.length) throw new Error('Capture original photographs before saving photo references.');
     // Finish/reuse cleanup before linking photos. Identification always uses image.uri, not the cutout.
     if (processImages) {
       const prepared = await prepareCapturedImages(originals, { tenantId, nicheId: resolveProductionNiche(row.specialist_id) ?? undefined });
       prepared.forEach((image, index) => { originals[index] = image; Object.assign(source[index], image); });
     }
-    const checkpoint=await commit(tenantId, itemId, [], originals.map(image => ({ slotId: image.slotId, slotLabel: image.slotLabel, ...(image.originalStorageUri && row.media?.includes(image.originalStorageUri) ? { url: image.originalStorageUri } : {}) })), [], undefined, row);
+    // Optional lifetime gallery evidence must never alter required capture completeness.
+    const checkpoint=options.appendOnly ? undefined : await commit(tenantId, itemId, [], originals.map(image => ({ slotId: image.slotId, slotLabel: image.slotLabel, ...(image.originalStorageUri && row.media?.includes(image.originalStorageUri) ? { url: image.originalStorageUri } : {}) })), [], undefined, row, options.isCurrent);
     // Two independent immutable uploads at a time: bound native memory while hiding network latency.
     let nextIndex = 0;
     const uploadWorker = async () => { for (;;) {
       const index = nextIndex++; if (index >= originals.length) return;
       const image = originals[index];
       try {
+        assertCurrent(options.isCurrent);
         let saved: { url: string; hash?: string };
         const cached = image.originalStorageUri;
         if (cached && image.originalByteHash) {
@@ -112,8 +120,9 @@ async function persist(tenantId: string, itemId: string, source: CapturedImage[]
     await Promise.all(Array.from({length:Math.min(2,originals.length)},()=>uploadWorker()));
     const assets = originals.filter(image => image.originalStorageUri).map(image => ({ slotId: image.slotId, slotLabel: image.slotLabel, url: image.originalStorageUri!, ...(image.originalByteHash ? { hash: image.originalByteHash } : {}), ...(image.uploadCopy ? { uploadCopy: { kind: image.uploadCopy.kind, sourceHash: image.uploadCopy.sourceHash, dpi: image.uploadCopy.dpi, width: image.uploadCopy.width, height: image.uploadCopy.height } } : {}) }));
     const expected = originals.map(image => ({ slotId: image.slotId, slotLabel: image.slotLabel, ...(image.originalStorageUri ? { url: image.originalStorageUri } : {}) }));
-    const check=await commit(tenantId, itemId, assets, expected, originals, undefined, checkpoint);
-    const issue = photoPersistenceIssue(check.media ?? [], check.attributes ?? {});
+    assertCurrent(options.isCurrent);
+    const check=await commit(tenantId, itemId, assets, options.appendOnly ? null : expected, originals, undefined, checkpoint, options.isCurrent);
+    const issue = options.appendOnly ? null : photoPersistenceIssue(check.media ?? [], check.attributes ?? {});
     if (issue && !errors.length) errors.push(issue);
     return { urls: originals.filter(image => image.originalStorageUri).map(image => image.originalStorageUri!), images: originals, errors, complete: !errors.length && !issue };
   } catch (cause) {
@@ -121,9 +130,9 @@ async function persist(tenantId: string, itemId: string, source: CapturedImage[]
     return { urls: originals.filter(image => image.originalStorageUri).map(image => image.originalStorageUri!), images: originals, errors, complete: false };
   }
 }
-export function persistCapturedItemPhotos(tenantId: string, itemId: string, images: CapturedImage[], options: { processImages?: boolean } = {}): Promise<PersistedCapturePhotos> {
-  const key = `${tenantId}:${itemId}:${options.processImages !== false}:${JSON.stringify(images.map(image => [image.slotId, image.uri]))}`;
+export function persistCapturedItemPhotos(tenantId: string, itemId: string, images: CapturedImage[], options: PersistPhotoOptions = {}): Promise<PersistedCapturePhotos> {
+  const key = `${tenantId}:${itemId}:${options.processImages !== false}:${options.appendOnly === true}:${JSON.stringify(images.map(image => [image.slotId, image.uri]))}`;
   const existing = flights.get(key); if (existing) { recordPrevention('photo_flight'); return existing; }
-  const pending = persist(tenantId, itemId, images, options.processImages !== false).finally(() => { if (flights.get(key) === pending) flights.delete(key); });
+  const pending = persist(tenantId, itemId, images, options.processImages !== false, options).finally(() => { if (flights.get(key) === pending) flights.delete(key); });
   flights.set(key, pending); return pending;
 }

@@ -37,7 +37,9 @@ export function validateCommandSnapshot(value:unknown,platform:boolean,tenantId:
  return row.modules.every(module=>{
   if(!isProductionNiche(module.id)||ids.has(module.id))return false;ids.add(module.id);
   const fields=['inventory','stock_total','inventory_units','sold_total','review','listed_inventory','live','drafts','listed_value','sold_week','sales_week','sales_month','realised_total','completed_sales','duplicate_sales','outstanding'];
-  return fields.every(field=>{const amount=(module as unknown as Record<string,unknown>)[field];return typeof amount==='number'&&Number.isFinite(amount);});
+  const moneyFields=new Set(['listed_value','sales_week','sales_month','realised_total']);
+  return fields.every(field=>{const amount=(module as unknown as Record<string,unknown>)[field];return typeof amount==='number'&&Number.isFinite(amount)&&(moneyFields.has(field)||(Number.isSafeInteger(amount)&&amount>=0));})
+   && module.stock_total+module.drafts+module.listed_inventory+module.sold_total<=module.inventory;
  });
 }
 /** Session + user + tenant + reporting mode isolate flights; no cross-scope result reuse. */
@@ -59,7 +61,7 @@ export async function loadAdminInspection(section:AdminInspectionSection,nicheId
  }catch{return {inspection:null,error:'Administrative inspection connection or authorization failed.'};}
 }
 export function sumCommandModules(modules:readonly CommandModule[]){
- return modules.reduce((sum,row)=>({inventory:sum.inventory+row.inventory,stock:sum.stock+row.stock_total,units:sum.units+row.inventory_units,completedSales:sum.completedSales+row.completed_sales,listed:sum.listed+row.listed_value,weekly:sum.weekly+row.sales_week,monthly:sum.monthly+row.sales_month,realised:sum.realised+row.realised_total,soldWeek:sum.soldWeek+row.sold_week,sold:sum.sold+row.sold_total,live:sum.live+row.live,drafts:sum.drafts+row.drafts,outstanding:sum.outstanding+row.outstanding,review:sum.review+row.review,duplicates:sum.duplicates+row.duplicate_sales}),{inventory:0,stock:0,units:0,completedSales:0,listed:0,weekly:0,monthly:0,realised:0,soldWeek:0,sold:0,live:0,drafts:0,outstanding:0,review:0,duplicates:0});
+ return modules.reduce((sum,row)=>({inventory:sum.inventory+row.inventory,stock:sum.stock+row.stock_total,units:sum.units+row.inventory_units,completedSales:sum.completedSales+row.completed_sales,listed:sum.listed+row.listed_value,weekly:sum.weekly+row.sales_week,monthly:sum.monthly+row.sales_month,realised:sum.realised+row.realised_total,soldWeek:sum.soldWeek+row.sold_week,sold:sum.sold+row.sold_total,live:sum.live+row.live,liveItems:sum.liveItems+row.listed_inventory,archived:sum.archived+Math.max(0,row.inventory-row.stock_total-row.drafts-row.listed_inventory-row.sold_total),drafts:sum.drafts+row.drafts,outstanding:sum.outstanding+row.outstanding,review:sum.review+row.review,duplicates:sum.duplicates+row.duplicate_sales}),{inventory:0,stock:0,units:0,completedSales:0,listed:0,weekly:0,monthly:0,realised:0,soldWeek:0,sold:0,live:0,liveItems:0,archived:0,drafts:0,outstanding:0,review:0,duplicates:0});
 }
 export function formatCommandMoney(value:number|null|undefined,currencies:readonly string[]){
  if(value==null||currencies.length!==1||!/^[A-Z]{3}$/.test(currencies[0])||currencies[0]==='UNKNOWN')return 'Unavailable';

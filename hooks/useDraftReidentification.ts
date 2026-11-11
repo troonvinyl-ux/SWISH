@@ -4,14 +4,14 @@ import { useApp } from './useApp';
 import { useReidentificationPhotoReview } from './useReidentificationPhotoReview';
 import { readDraftEvidence, analyseDraftEvidence, saveDraftEvidence, pickDraftEvidencePhoto, type DraftEvidenceSnapshot } from '@/services/draftReidentificationService';
 import type { AIIdentificationResult, CapturedImage } from '@/services/aiIdentificationService';
-import { DRAFT_REID_LIMITS } from '@/shared/draftReidentification';
+import { DRAFT_REID_LIMITS, type ReidentificationMode } from '@/shared/draftReidentification';
 import { studioForOriginal } from '@/shared/smartStudio';
-export function useDraftReidentification(listingId: string, onSaved: () => void) {
+export function useDraftReidentification(listingId: string, onSaved: () => void, mode: ReidentificationMode = 'draft') {
   const { user } = useAuth();
   const app = useApp();
   const nicheId = app.fixedNicheId ?? app.activeNicheId;
-  const scope = useMemo(() => ({ listingId, tenantId: app.tenant?.id ?? '', nicheId, userId: user?.id ?? '' }), [listingId, app.tenant?.id, nicheId, user?.id]);
-  const key = `${scope.userId}:${scope.tenantId}:${scope.nicheId}:${app.moduleEpoch}:${listingId}`;
+  const scope = useMemo(() => ({ listingId, tenantId: app.tenant?.id ?? '', nicheId, userId: user?.id ?? '', mode }), [listingId, app.tenant?.id, nicheId, user?.id, mode]);
+  const key = `${scope.userId}:${scope.tenantId}:${scope.nicheId}:${app.moduleEpoch}:${listingId}:${mode}`;
   const ready = Boolean(user && app.tenant && app.accessReady && !app.moduleLoading && !app.subscriptionLoading);
   const current = useRef(''); current.current = ready ? key : '';
   const mounted = useRef(false), locked = useRef(false);
@@ -24,19 +24,19 @@ export function useDraftReidentification(listingId: string, onSaved: () => void)
   const [clues, setClues] = useState('');
   const [result, setResult] = useState<AIIdentificationResult | null>(null);
   const [draftTitle, setDraftTitle] = useState('');
-  const [replaceTitle, setReplaceTitle] = useState(true);
+  const [replaceTitle, setReplaceTitle] = useState(mode === 'draft');
   const isCurrent = useCallback(() => mounted.current && current.current === key, [key]);
   const photos = useMemo(() => [...images, ...stored.map((uri, index) => ({ uri, slotLabel: `Stored photo ${index + 1}`, studio: snapshot ? studioForOriginal(uri, snapshot.item.attributes) : undefined }))], [images, stored, snapshot]);
   const review = useReidentificationPhotoReview(`${key}:${clues}`, Boolean(snapshot && ready), photos);
   useEffect(() => {
-    mounted.current = true; setLoadedKey(''); setSnapshot(null); setImages([]); setStored([]); setClues(''); setResult(null); setError(null); setBusy('loading');
-    if (!ready) { setError('Waiting for a verified draft workspace.'); setBusy(null); return () => { mounted.current = false; }; }
+    mounted.current = true; setLoadedKey(''); setSnapshot(null); setImages([]); setStored([]); setClues(''); setResult(null); setDraftTitle(''); setReplaceTitle(mode === 'draft'); setError(null); setBusy('loading');
+    if (!ready) { setError('Waiting for a verified listing workspace.'); setBusy(null); return () => { mounted.current = false; }; }
     void readDraftEvidence(scope).then(value => {
       if (!isCurrent()) return;
       setSnapshot(value); setLoadedKey(key); setStored(value.originalUrls.slice(0, DRAFT_REID_LIMITS.photos)); setClues(value.savedClues); setBusy(null);
-    }).catch(cause => { if (isCurrent()) { setError(cause instanceof Error ? cause.message : 'Draft could not load.'); setBusy(null); } });
+    }).catch(cause => { if (isCurrent()) { setError(cause instanceof Error ? cause.message : 'Listing evidence could not load.'); setBusy(null); } });
     return () => { mounted.current = false; };
-  }, [key, ready, scope, isCurrent]);
+  }, [key, ready, scope, isCurrent, mode]);
   const invalidate = useCallback(() => { setResult(null); setDraftTitle(''); setError(null); }, []);
   const addPhoto = useCallback(async (source: 'camera' | 'library') => {
     if (locked.current || busy || !snapshot || !isCurrent()) return;
@@ -63,7 +63,7 @@ export function useDraftReidentification(listingId: string, onSaved: () => void)
       if (!isCurrent() || !review.isCurrent()) return;
       if (response.error || !response.result) { if (!review.recordReview(response.photoReview, 'identify')) setError(response.error ?? 'No identification returned.'); return; }
       setResult(response.result); setDraftTitle(response.result.canonicalTitle);
-    } catch (cause) { if (isCurrent()) setError(cause instanceof Error ? cause.message : 'Identification failed. Draft unchanged.'); }
+    } catch (cause) { if (isCurrent()) setError(cause instanceof Error ? cause.message : 'Identification failed. Saved listing unchanged.'); }
     finally { locked.current = false; if (isCurrent()) { setImages([...images]); setBusy(null); } }
   }, [busy, snapshot, scope, images, stored, clues, review.allowWarnings, review.recordReview, review.isCurrent, isCurrent]);
   const accept = useCallback(async (evidenceOnly = false) => {
@@ -73,7 +73,7 @@ export function useDraftReidentification(listingId: string, onSaved: () => void)
       await saveDraftEvidence(scope, snapshot, images, clues, evidenceOnly ? null : result, !evidenceOnly && replaceTitle ? draftTitle : null, isCurrent);
       if (!isCurrent()) return;
       app.triggerInventoryReload(); onSaved();
-    } catch (cause) { if (isCurrent()) { app.triggerInventoryReload(); setError(cause instanceof Error ? cause.message : 'Draft save was not confirmed.'); } }
+    } catch (cause) { if (isCurrent()) { app.triggerInventoryReload(); setError(cause instanceof Error ? cause.message : 'Identification save was not confirmed.'); } }
     finally { locked.current = false; if (isCurrent()) { setImages([...images]); setBusy(null); } }
   }, [busy, snapshot, scope, images, clues, result, replaceTitle, draftTitle, isCurrent, app.triggerInventoryReload, onSaved]);
   return { snapshot: ready && loadedKey === key ? snapshot : null, busy, error, images, stored, clues, result, draftTitle, replaceTitle, photos, review,

@@ -8,7 +8,9 @@ test('every registered niche has an independent, explicitly untested device/subs
   for (const row of evidence.niches) {
     expect(row.deviceAcceptance).toBe('NOT_TESTED');
     expect(row.subscriberIsolation).toBe('NOT_TESTED');
-    expect(row.barcode).toBe(getNicheWorkflowPolicy(row.id)?.barcode);
+    // Historical evidence records the policy at audit time, not today's optional scanner availability.
+    expect(['start','optional','disabled']).toContain(row.barcode);
+    expect(getNicheWorkflowPolicy(row.id)).not.toBeNull();
   }
 });
 test('observed counts reconcile without modifying historical records or inventing new pipeline tests', () => {

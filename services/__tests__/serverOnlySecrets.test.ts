@@ -731,7 +731,7 @@ describe('eBay credential refresh compare-and-swap guards', () => {
 
   test.each(refreshPaths)('%s only persists refreshed credentials against the version it read', (relativePath) => {
     const source = fs.readFileSync(path.join(projectRoot, relativePath), 'utf8');
-    expect(source).toContain(".eq('credential_ref', conn.credential_ref)");
+    expect(source).toContain(relativePath.endsWith('swish-ebay-orders/index.ts')?".eq('credential_ref',result.data.credential_ref)":".eq('credential_ref', conn.credential_ref)");
     expect(source).toContain(".select('id')");
     expect(source).toContain('.maybeSingle()');
   });
@@ -739,7 +739,7 @@ describe('eBay credential refresh compare-and-swap guards', () => {
   test('all non-sync refresh paths fail closed when refreshed credentials are not persisted', () => {
     for (const relativePath of refreshPaths.filter((p) => !p.endsWith('swish-ebay-sync/index.ts'))) {
       const source = fs.readFileSync(path.join(projectRoot, relativePath), 'utf8');
-      expect(source).toContain('Refreshed eBay credentials could not be persisted securely.');
+      expect(source).toContain(relativePath.endsWith('swish-ebay-orders/index.ts')?'Refreshed consent could not be saved securely.':'Refreshed eBay credentials could not be persisted securely.');
     }
   });
 

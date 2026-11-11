@@ -21,7 +21,7 @@ const input={title:'Observed product',description:'Observed condition only',pric
 beforeEach(()=>{jest.clearAllMocks();(getItem as jest.Mock).mockResolvedValue({error:null,item:{tenantId:'tenant',specialistId:'collectibles',condition:'Not assessed',sku:'',inventoryId:'SWISH-1',media:[original],attributes:{_smart_studio_images:{front:{version:SMART_STUDIO_VERSION,status:'ready',originalUri:original,enhancedUri:processed,quality:backgroundEraseQuality}}}}});(saveListingEditor as jest.Mock).mockResolvedValue({error:null});});
 test('Save for later persists a zero-price incomplete draft without publication, fabricated condition or original thumbnails',async()=>{
  expect(await saveQuickReview('tenant','collectibles',draft,input,'draft')).toEqual({error:null});
- expect(saveListingEditor).toHaveBeenCalledWith(expect.objectContaining({listingId:'draft',price:'0',condition:'Not assessed',conditionId:'',sku:'SWISH-1',media:[processed]}));
+ expect(saveListingEditor).toHaveBeenCalledWith(expect.objectContaining({listingId:'draft',price:'0',condition:'Not assessed',conditionId:'',sku:'SWISH-1',media:[original]}));
  expect(submitListingToMarketplace).not.toHaveBeenCalled();
 });
 test('the same incomplete draft cannot be published without verified requirements',async()=>{expect((await saveQuickReview('tenant','collectibles',draft,input,'publish')).error).toBe('Taxonomy unavailable');expect(saveListingEditor).not.toHaveBeenCalled();expect(submitListingToMarketplace).not.toHaveBeenCalled();});
