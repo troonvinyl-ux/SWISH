@@ -40,8 +40,9 @@ describe('SWISH authentication session bootstrap regressions', () => {
     expect(method).not.toContain('client.auth.getSession()');
   });
 
-  test('password login navigates only after a confirmed user is returned', () => {
+  test('password login redirects declaratively only when the auth provider confirms a user', () => {
     expect(loginSource).toContain('if (error || !user)');
-    expect(loginSource).toContain("router.replace('/')");
+    expect(loginSource).toContain('if (signedInUser) return <Redirect href="/" />');
+    expect(loginSource).not.toContain("router.replace('/')");
   });
 });
