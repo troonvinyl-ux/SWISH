@@ -4,6 +4,12 @@ on:
     branches: [main]
     paths:
       - app.json
+      - app.config.js
+      - eas.json
+      - package.json
+      - pnpm-lock.yaml
+      - 'plugins/**'
+      - release/android-installed-baseline.json
       - .github/workflows/build-swish-unified.yml
       - .github/workflows/build-swish-release-apk.yml
   workflow_dispatch:

@@ -26,6 +26,10 @@ test('tools are initialized before release scripts and OTA publication remains o
  assert.ok(steps.findIndex(step=>step.run?.includes('verify-ota-owner-approval.mjs'))<publish);
  assert.ok(steps.findIndex(step=>step.run?.includes('verify-unified-ota.mjs'))<publish);
 });
+test('native release inputs trigger the existing APK entry workflow',()=>{
+ const paths=read('build-swish-release-apk.yml').on.push.paths;
+ for(const path of ['app.json','app.config.js','eas.json','package.json','pnpm-lock.yaml','plugins/**','release/android-installed-baseline.json'])assert.ok(paths.includes(path));
+});
 test('EAS profiles select the unified shell without invalid empty environment values',()=>{
  const eas=JSON.parse(fs.readFileSync('eas.json','utf8'));
  for(const name of ['unified-preview','unified-ios-testing','unified-store']) {

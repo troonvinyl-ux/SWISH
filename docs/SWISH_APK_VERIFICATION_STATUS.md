@@ -10,7 +10,7 @@ This is a source-delivery checkpoint, not a release certificate.
 | Current TypeScript | PASS after attached-source reconciliation; `node node_modules/typescript/bin/tsc --noEmit` returned 0 |
 | Existing Expo lint | PASS, 0 errors / 369 warnings; `pnpm@9.15.9 exec expo lint` |
 | Update/diagnostics Jest suites | PASS: 3 suites, 30 tests |
-| Release/OTA/production policy Node tests | PASS: 22 tests |
+| Release/OTA/production policy Node tests | PASS: 23 tests |
 | Compiled-metadata verifier Python tests | PASS: 2 tests, including mismatch rejection cases |
 | Canonical niche contracts / backend source mirror parity | PASS: 13 modules, generated asset parity |
 | Full unit suite before final reconciliation | FAIL: 72 suites / 215 tests failed; 94 suites / 2181 tests passed |
