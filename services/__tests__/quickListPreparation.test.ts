@@ -6,6 +6,7 @@ jest.mock('@/services/listingService',()=>({generateListing:jest.fn(),saveListin
 jest.mock('@/services/listingEditorService',()=>({invokeListingOperation:jest.fn(),saveListingEditor:jest.fn()}));
 jest.mock('@/services/marketValueService',()=>({getMarketValue:jest.fn()}));
 jest.mock('@/services/photoPersistenceService',()=>({persistCapturedItemPhotos:jest.fn()}));
+jest.mock('@/services/captureIdentityService',()=>({captureCanonicalId:jest.fn()}));
 jest.mock('@/services/smartStudioStorageService',()=>({linkStudioImages:jest.fn()}));
 jest.mock('@/services/itemService',()=>({getItem:jest.fn()}));
 import {getSupabaseClient} from '@/template';
