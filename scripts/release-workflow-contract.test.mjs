@@ -26,3 +26,13 @@ test('tools are initialized before release scripts and OTA publication remains o
  assert.ok(steps.findIndex(step=>step.run?.includes('verify-ota-owner-approval.mjs'))<publish);
  assert.ok(steps.findIndex(step=>step.run?.includes('verify-unified-ota.mjs'))<publish);
 });
+test('EAS profiles select the unified shell without invalid empty environment values',()=>{
+ const eas=JSON.parse(fs.readFileSync('eas.json','utf8'));
+ for(const name of ['unified-preview','unified-ios-testing','unified-store']) {
+  const profile=eas.build[name];
+  assert.equal(profile.env.SWISH_NICHE,undefined);
+  assert.equal(profile.env.SWISH_MASTER_ADMIN,'0');
+  assert.equal(profile.env.SWISH_TEST_LAB,'0');
+  for(const value of Object.values(profile.env))assert.ok(typeof value==='string'&&value.length>0);
+ }
+});

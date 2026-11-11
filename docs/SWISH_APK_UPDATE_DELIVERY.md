@@ -12,7 +12,7 @@ No new APK has been verified, no OTA has been published and no installation/devi
 
 ## One recommended route
 
-Use GitHub **Build SWISH unified signed testing APK** (`build-swish-release-apk.yml`), which calls `build-swish-unified.yml`. Keep `SWISH_NICHE` empty, `SWISH_MASTER_ADMIN=0`, `SWISH_TEST_LAB=0`; the canonical `app` tree and all registered niches are included. The owner export contains Stamps alongside the twelve previously registered modules; its missing entry, registry record and companion application modules have been reconciled rather than deleting their callers.
+Use GitHub **Build SWISH unified signed testing APK** (`build-swish-release-apk.yml`), which calls `build-swish-unified.yml`. Keep `SWISH_NICHE` empty/unset (EAS profiles omit it because EAS rejects empty env strings), `SWISH_MASTER_ADMIN=0`, `SWISH_TEST_LAB=0`; the canonical `app` tree and all registered niches are included. The owner export contains Stamps alongside the twelve previously registered modules; its missing entry, registry record and companion application modules have been reconciled rather than deleting their callers.
 
 The build preserves the original Android package/scheme and existing OnSpace Cloud/auth/storage/entitlements. Missing source files were recovered from the owner ZIP. Backend registry/shared files are generated mirrors; restoring source/migration files does **not** deploy an Edge Function or execute SQL. No backend deployment or user-data mutation was performed.
 

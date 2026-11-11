@@ -10,7 +10,7 @@ This is a source-delivery checkpoint, not a release certificate.
 | Current TypeScript | PASS after attached-source reconciliation; `node node_modules/typescript/bin/tsc --noEmit` returned 0 |
 | Existing Expo lint | PASS, 0 errors / 369 warnings; `pnpm@9.15.9 exec expo lint` |
 | Update/diagnostics Jest suites | PASS: 3 suites, 30 tests |
-| Release/OTA/production policy Node tests | PASS: 21 tests |
+| Release/OTA/production policy Node tests | PASS: 22 tests |
 | Compiled-metadata verifier Python tests | PASS: 2 tests, including mismatch rejection cases |
 | Canonical niche contracts / backend source mirror parity | PASS: 13 modules, generated asset parity |
 | Full unit suite before final reconciliation | FAIL: 72 suites / 215 tests failed; 94 suites / 2181 tests passed |
@@ -31,7 +31,7 @@ This is a source-delivery checkpoint, not a release certificate.
 - Missing application/companion source was recovered from the owner ZIP while preserving the existing Expo release configuration. Canonical route types are regenerated before TypeScript. Existing Stamps source is included in registry/acceptance scope, increasing checks rather than dropping the feature. No migration, Edge Function or user-data operation was executed.
 - Two barcode web dependencies used by existing code were missing. The existing Supabase client was updated within major version 2 (to 2.119.0) because the old locked Functions SDK did not implement the AbortSignal option already used by the application. Existing backend/auth configuration is retained. PostgREST cancellation now attaches before single-result conversion. Full service regressions remain mandatory; this is not an assertion that authentication is device-tested.
 
-The fresh corrected pipeline run is [43108119979](https://github.com/troonvinyl-ux/SWISH/actions/runs/43108119979), source `7cdb6e484b0e345f9422400f71b0581fe85ffb0f`. At inspection it had initialized checkout/Node/pnpm/Java and passed original preview signing, then was installing dependencies. This is not a native-build pass. Live workflow validation caught a duplicate iOS environment key even for the Android-only run; it was repaired and a duplicate-key regression test was added.
+Fresh run [43108119979](https://github.com/troonvinyl-ux/SWISH/actions/runs/43108119979), source `7cdb6e484b0e345f9422400f71b0581fe85ffb0f`, passed tool setup, inspected original preview signing and dependency installation. It stopped because EAS rejected the existing empty SWISH_NICHE profile env strings before project access could be checked. Those profile keys have now been omitted (unset selects unified); the resulting eas.json was validated successfully using the actual EAS CLI 27.2.0 Joi schema, and a regression test was added. Live workflow validation also caught a duplicate iOS environment key; it was repaired with a duplicate-key regression test. These failures are recorded rather than reported as successful builds.
 
 ## Release blockers and owner decisions
 

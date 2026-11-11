@@ -5,7 +5,6 @@
       "channel": "preview-unified",
       "credentialsSource": "remote",
       "env": {
-        "SWISH_NICHE": "",
         "SWISH_MASTER_ADMIN": "0",
         "SWISH_RELEASE_CHANNEL": "preview-unified",
         "SWISH_TEST_LAB": "0"
@@ -20,7 +19,6 @@
       "channel": "preview-unified",
       "credentialsSource": "remote",
       "env": {
-        "SWISH_NICHE": "",
         "SWISH_MASTER_ADMIN": "0",
         "SWISH_RELEASE_CHANNEL": "preview-unified",
         "SWISH_TEST_LAB": "0"
@@ -32,7 +30,6 @@
       "channel": "production-unified",
       "credentialsSource": "remote",
       "env": {
-        "SWISH_NICHE": "",
         "SWISH_MASTER_ADMIN": "0",
         "SWISH_RELEASE_CHANNEL": "production-unified",
         "SWISH_TEST_LAB": "0"
