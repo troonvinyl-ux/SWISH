@@ -26,9 +26,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --ignore-scripts --package-lock=false
+      - name: Prepare verification output
+        run: mkdir -p verification-output
+      - name: Install dependencies with legacy peer compatibility
+        run: npm install --ignore-scripts --package-lock=false --legacy-peer-deps
       - name: Record exact tested commit
-        run: mkdir -p verification-output && git rev-parse HEAD > verification-output/source-sha.txt
+        run: git rev-parse HEAD > verification-output/source-sha.txt
       - name: Coin inventory scope, pagination and preservation regressions
         id: coins
         continue-on-error: true
