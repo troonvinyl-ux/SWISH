@@ -33,10 +33,11 @@ test('Edge Function telemetry stores metadata only and does not persist payloads
   expect(source).not.toContain('credential_ref');
 });
 
-test('Edge Function log migration restricts reads to the master owner and enables realtime inserts', () => {
+test('Edge Function log migration restricts reads to the master owner and uses polling without unsupported Realtime publication', () => {
   const sql = fs.readFileSync(path.join(root, 'supabase/migrations/20261103_edge_function_logs.sql'), 'utf8');
   expect(sql).toContain('enable row level security');
   expect(sql).toContain("'troonvinyl@gmail.com'");
-  expect(sql).toContain('alter publication supabase_realtime add table public.edge_function_logs');
+  expect(sql).toContain('Read telemetry by polling');
+  expect(sql).not.toMatch(/alter\s+publication\s+supabase_realtime\s+add\s+table\s+public\.edge_function_logs/i);
   expect(sql).toContain('grant insert on public.edge_function_logs to service_role');
 });
