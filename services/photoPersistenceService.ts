@@ -8,7 +8,7 @@ import { uploadCapturedPhoto } from './captureUploadService';
 import { prepareCapturedImages } from './sharedImagePreparationService';
 import { resolveProductionNiche } from './nicheRouting';
 import { PHOTO_PIPELINE_VERSION, photoRoleId, mergePhotoAssets, photoPersistenceIssue, type PhotoAsset, type PhotoExpectation } from '@/shared/photoPersistence';
-import { studioImageIsUsable } from '@/shared/smartStudio';
+import { shouldAutoRemoveBackground, studioImageIsUsable } from '@/shared/smartStudio';
 export interface PersistedCapturePhotos { urls: string[]; images: CapturedImage[]; errors: string[]; complete: boolean }
 export interface PersistPhotoOptions { processImages?: boolean; appendOnly?: boolean; isCurrent?: () => boolean }
 function assertCurrent(isCurrent?: () => boolean) { if (isCurrent && !isCurrent()) throw new Error('Workspace changed. Reopen the original item before retrying photos.'); }
@@ -87,7 +87,7 @@ async function persist(tenantId: string, itemId: string, source: CapturedImage[]
     assertCurrent(options.isCurrent);
     if (!originals.length) throw new Error('Capture original photographs before saving photo references.');
     // Finish/reuse cleanup before linking photos. Identification always uses image.uri, not the cutout.
-    if (processImages) {
+    if (processImages && shouldAutoRemoveBackground(resolveProductionNiche(row.specialist_id) ?? undefined)) {
       const prepared = await prepareCapturedImages(originals, { tenantId, nicheId: resolveProductionNiche(row.specialist_id) ?? undefined });
       prepared.forEach((image, index) => { originals[index] = image; Object.assign(source[index], image); });
     }

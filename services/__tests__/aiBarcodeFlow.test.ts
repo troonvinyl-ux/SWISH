@@ -45,10 +45,12 @@ test('printed title and platform corroborate a proposal but do not auto-confirm 
   ]));
   expect(barcodeAgreesWithPhotos(lead, { ...result, evidenceContradictory: ['Wrong edition'] })).toBe(false);
 });
-test('UI asks AI automatically without adding a review or publication step', () => {
+test('UI shows a compact confirmation without mandatory photos or automatic publication', () => {
   const ui = fs.readFileSync('components/feature/QuickListWorkspace.tsx', 'utf8');
-  expect(ui).toContain('Asking AI…'); expect(ui).toContain('AI research suggestion'); expect(ui).toContain('state.lead.summary');
-  expect(ui).toContain('label="View source"'); expect(ui).toContain('label="List now"'); expect(ui).toContain('label="Save for later"');
+  expect(ui).toContain('Asking AI…'); expect(ui).toContain('BarcodeProductConfirmation');
+  const card=fs.readFileSync('components/feature/BarcodeProductConfirmation.tsx','utf8');
+  expect(card).toContain('AI-SUGGESTED · NOT VERIFIED'); expect(card).toContain('Confirm Product');
+  expect(ui).toContain('label="List now"'); expect(ui).toContain('label="Save for later"');
   const hook = fs.readFileSync('hooks/useQuickList.ts', 'utf8');
   expect(hook).toContain('await lookupQuickBarcode(tenant.id,value,type)');
   expect(hook).toContain('barcodeVersion!==barcodeSerial.current');
