@@ -236,6 +236,17 @@ jobs:
           ./gradlew assembleRelease --no-daemon --max-workers=1 --console=plain -Dorg.gradle.jvmargs="-Xmx5g -XX:MaxMetaspaceSize=1g" 2>&1 | tee ../dist/unified-android-build.log
       - name: Verify actual APK, certificate and runtime; retain checksums
         run: bash scripts/verify-unified-apk.sh android/app/build/outputs/apk/release/app-release.apk
+      - name: Retain compiled APK for signing investigation if verification fails
+        if: failure() && inputs.channel == 'preview-unified'
+        uses: actions/upload-artifact@v4
+        with:
+          name: swish-unverified-testing-apk
+          path: |
+            android/app/build/outputs/apk/release/app-release.apk
+            dist/unified-signature.txt
+            dist/unified-badging.txt
+          retention-days: 7
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         with:
           name: swish-unified-android
