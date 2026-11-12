@@ -14,6 +14,11 @@ on:
       - .github/workflows/build-swish-release-apk.yml
   workflow_dispatch:
     inputs:
+      quick_test_apk:
+        type: boolean
+        required: false
+        default: false
+        description: Build preview Android APK without unrelated full regression suite
       production_acceptance_run:
         type: string
         required: false
@@ -33,6 +38,7 @@ jobs:
   unified:
     uses: ./.github/workflows/build-swish-unified.yml
     with:
+      quick_test_apk: ${{ inputs.quick_test_apk || false }}
       production_acceptance_run: ${{ inputs.production_acceptance_run || '' }}
       channel: ${{ inputs.channel || 'preview-unified' }}
       build_android: true
