@@ -11,7 +11,12 @@ unzip -t "$APK" >/dev/null
 "$TOOLS/aapt" dump badging "$APK" > dist/unified-badging.txt
 ACTUAL="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' dist/unified-signature.txt | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
 EXPECTED="$(printf '%s' "${SWISH_RELEASE_CERT_SHA256:?Original certificate SHA-256 required}" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
-test -n "$ACTUAL" && test "$ACTUAL" = "$EXPECTED" || { echo 'Original signing certificate mismatch'; exit 1; }
+if [ -z "$ACTUAL" ] || [ "$ACTUAL" != "$EXPECTED" ]; then
+  echo "Original signing certificate mismatch: expected=$EXPECTED actual=${ACTUAL:-unavailable}"
+  echo 'Signer diagnostics (public certificate fingerprints only):'
+  grep -E 'Signer #[0-9]+ certificate SHA-256 digest:' dist/unified-signature.txt || true
+  exit 1
+fi
 test "$(grep -c '^Signer #[0-9]* certificate SHA-256 digest:' dist/unified-signature.txt)" = 1 || { echo 'Multiple signing certificates require manual original-identity review'; exit 1; }
 cp "$APK" dist/swish-unified.apk
 sha256sum dist/swish-unified.apk > dist/swish-unified.sha256
