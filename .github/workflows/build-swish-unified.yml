@@ -210,7 +210,9 @@ jobs:
           "$SDK_MANAGER" --install 'platform-tools' 'platforms;android-36' 'build-tools;36.0.0'
       - name: Initialize binary inspection tools
         run: |
-          sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+          SDK_MANAGER="$(find "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          test -x "$SDK_MANAGER"
+          "$SDK_MANAGER" --install 'platforms;android-36' 'build-tools;36.0.0'
           python3 -m venv "$RUNNER_TEMP/apk-inspector"
           "$RUNNER_TEMP/apk-inspector/bin/pip" install androguard==4.1.3
           echo "SWISH_APK_PYTHON=$RUNNER_TEMP/apk-inspector/bin/python" >> "$GITHUB_ENV"
