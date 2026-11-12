@@ -11,6 +11,10 @@ on:
         type: string
         required: false
         description: Successful protected current-source acceptance run (production only)
+      quick_test_apk:
+        type: boolean
+        default: false
+        description: Skip unrelated regression gates for preview Android testing only
       build_android:
         type: boolean
         default: true
@@ -19,6 +23,9 @@ on:
         default: false
   workflow_call:
     inputs:
+      quick_test_apk:
+        type: boolean
+        default: false
       production_acceptance_run:
         type: string
         default: ''
@@ -49,6 +56,9 @@ jobs:
       EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
     steps:
+      - name: Reject quick testing mode for production or iOS
+        if: ${{ inputs.quick_test_apk && (inputs.channel != 'preview-unified' || inputs.build_ios || !inputs.build_android) }}
+        run: exit 1
       - uses: actions/checkout@v4
       - name: Resolve existing public OnSpace configuration from checked-in .env
         run: |
@@ -96,30 +106,38 @@ jobs:
           node --test scripts/unified-ota-policy.test.mjs scripts/android-release-policy.test.mjs scripts/release-workflow-contract.test.mjs
       - run: node scripts/generate-unified-route-types.cjs
       - name: typescript (mandatory)
+        if: ${{ !inputs.quick_test_apk }}
         run: |
           set -o pipefail
           mkdir -p dist
           npx tsc --noEmit 2>&1 | tee dist/unified-typescript.log
       - name: lint (mandatory)
+        if: ${{ !inputs.quick_test_apk }}
         run: |
           set -o pipefail
           mkdir -p dist
           npx expo lint 2>&1 | tee dist/unified-lint.log
       - name: unit (mandatory)
+        if: ${{ !inputs.quick_test_apk }}
         run: |
           set -o pipefail
           mkdir -p dist
           npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand 2>&1 | tee dist/unified-unit.log
-      - run: node scripts/validate-unified-modules.mjs
-      - run: node scripts/sync-backend-registry.mjs --check
+      - if: ${{ !inputs.quick_test_apk }}
+        run: node scripts/validate-unified-modules.mjs
+      - if: ${{ !inputs.quick_test_apk }}
+        run: node scripts/sync-backend-registry.mjs --check
       - name: Export shared browser experience without publishing
+        if: ${{ !inputs.quick_test_apk }}
         run: npx expo export --platform web --output-dir dist/unified-web
       - name: Retain website artifact and source evidence
+        if: ${{ !inputs.quick_test_apk }}
         run: |
           printf '%s\n' "$GITHUB_SHA" > dist/unified-web-source-sha.txt
           tar -czf dist/unified-web.tar.gz -C dist unified-web
           sha256sum dist/unified-web.tar.gz > dist/unified-web.sha256
       - uses: actions/upload-artifact@v4
+        if: ${{ !inputs.quick_test_apk }}
         with:
           name: swish-unified-web
           path: |
