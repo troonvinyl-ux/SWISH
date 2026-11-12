@@ -38,7 +38,7 @@ jobs:
   unified:
     uses: ./.github/workflows/build-swish-unified.yml
     with:
-      quick_test_apk: ${{ inputs.quick_test_apk || false }}
+      quick_test_apk: ${{ github.event_name == 'push' || inputs.quick_test_apk == true }}
       production_acceptance_run: ${{ inputs.production_acceptance_run || '' }}
       channel: ${{ inputs.channel || 'preview-unified' }}
       build_android: true
