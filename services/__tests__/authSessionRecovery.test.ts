@@ -146,7 +146,7 @@ test('session failures use actionable copy rather than raw JSON or a payment/ver
 test('all niches share recovery; security and mounted navigators remain intact', () => {
   const read = (file: string) => fs.readFileSync(file, 'utf8');
   expect(read('app/index.tsx')).toContain('<AuthRouter loginRoute="/login">');
-  expect(read('components/layout/NicheRouteBoundary.tsx')).toContain('<AccountAccessRecovery overlay');
+  expect(read('components/layout/NicheRouteBoundary.tsx')).toContain("pointerEvents={loading || moduleLoading || !allowed ? 'none' : 'auto'}");
   expect(read('components/layout/NicheRouteBoundary.tsx')).toContain('{children}</View>');
   expect(read('hooks/useAccessRecovery.ts')).not.toMatch(/router\.|setSession|AsyncStorage/);
   expect(read('supabase/functions/swish-check-subscription/index.ts')).toContain('admin.auth.getUser(auth.slice(7))');

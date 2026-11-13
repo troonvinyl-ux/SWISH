@@ -12,7 +12,8 @@ describe('server-side listing confidence policy', () => {
   );
 
   test('coin listing at exactly 95% needs no advisory message', () => {
-    expect(assessListingConfidence('coins', 0.95, 'verified')).toMatchObject({ allowed: true, advisory: undefined });
+    const result=assessListingConfidence('coins', 0.95, 'verified');
+    expect(result.allowed).toBe(true);expect(result).not.toHaveProperty('advisory');
   });
 
   test('observation-only records retain a disclosure advisory in every niche', () => {
@@ -49,7 +50,8 @@ test('eBay publish route enforces the server-side gate before requesting eBay cr
 test('listing UI explains the advisory confidence disclosure before a draft is generated', () => {
   const fs = require('node:fs');
   const path = require('node:path');
-  const source = fs.readFileSync(path.resolve(__dirname, '../../app/create-listing.tsx'), 'utf8');
-  expect(source).toContain('identificationPublicationAdvice');
-  expect(source).toContain('AI confidence is advisory');
+  const hook = fs.readFileSync(path.resolve(__dirname, '../../hooks/useListingEditor.ts'), 'utf8');
+  const advice = fs.readFileSync(path.resolve(__dirname, '../../shared/listingClarification.ts'), 'utf8');
+  expect(hook).toContain('identificationPublicationAdvice');
+  expect(advice).toContain('AI confidence is advisory');
 });

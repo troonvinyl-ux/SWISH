@@ -63,5 +63,5 @@ test('the shared Quick List confirmation shows Confirm/Edit/Add Photos/Try Anoth
  expect(fs.readFileSync('components/feature/UniversalBarcodeTool.tsx','utf8')).toContain('useUniversalBarcode');
  const ui=fs.readFileSync('components/feature/BarcodeProductConfirmation.tsx','utf8');for(const label of ['Confirm Product','Edit Details','Add Photos','Try Another Match','AI-SUGGESTED · NOT VERIFIED'])expect(ui).toContain(label);
  expect(fs.readFileSync('hooks/useListingEditor.ts','utf8')).toContain('_barcode_identification?.userConfirmed===true');
- const gateway=fs.readFileSync('supabase/functions/swish-ebay-browse/index.ts','utf8');expect(gateway).toContain("p_feature:'barcode_lookup'");expect(gateway).toContain('lookupUniversalBarcode');
+ const gateway=fs.readFileSync('supabase/functions/swish-ebay-browse/index.ts','utf8');expect(gateway).toContain('lookupAIBarcode');expect(gateway).toContain('nicheBarcodeAllowed');
 });

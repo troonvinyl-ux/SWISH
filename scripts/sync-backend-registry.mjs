@@ -12,7 +12,7 @@ export function syncBackendRegistry(root = process.cwd(), check = false) {
   } else fs.writeFileSync(target, JSON.stringify(canonical, null, 2) + '\n');
 }
 // Byte-identical shared assets; OnSpace deploys the Edge directory, not repo-root files.
-export const BACKEND_SHARED_ASSETS = ['identificationPolicy.ts', 'musicRelease.ts', 'nicheAuthorization.ts', 'specialistIntelligence.ts', 'ebayMessagePagination.ts', 'ebayImportScope.ts', 'antiqueListingPolicy.ts', 'ebaySellingRequest.ts', 'ebayRevisionContract.ts', 'nichePolicy.ts', 'moduleRequestContract.ts', 'listingClarification.ts', 'smartStudio.ts', 'ebayOrderLifecycle.ts', 'barcodeIdentification.ts', 'stampIdentification.ts', 'stampMarket.ts'];
+export const BACKEND_SHARED_ASSETS = ['identificationPolicy.ts', 'musicRelease.ts', 'nicheAuthorization.ts', 'specialistIntelligence.ts', 'ebayMessagePagination.ts', 'ebayImportScope.ts', 'antiqueListingPolicy.ts', 'ebaySellingRequest.ts', 'ebayRevisionContract.ts', 'nichePolicy.ts', 'moduleRequestContract.ts', 'listingClarification.ts', 'listingDescription.ts', 'smartStudio.ts', 'ebayOrderLifecycle.ts', 'barcodeIdentification.ts', 'stampIdentification.ts', 'stampMarket.ts'];
 export function syncBackendSharedAssets(root = process.cwd(), check = false) {
   for (const name of BACKEND_SHARED_ASSETS) {
     const source = fs.readFileSync(path.join(root, 'shared', name), 'utf8');
