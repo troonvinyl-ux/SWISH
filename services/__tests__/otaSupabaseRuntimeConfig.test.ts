@@ -1,4 +1,4 @@
-jest.mock('expo/virtual/env.js', () => ({}), { virtual: true });
+jest.mock('expo/virtual/env', () => ({ env: process.env }), { virtual: true });
 jest.mock('react-native', () => ({ Platform: { OS: 'android' } }));
 jest.mock('react-native-url-polyfill/auto', () => ({}));
 

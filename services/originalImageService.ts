@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import { CryptoDigestAlgorithm, digestStringAsync } from 'expo-crypto';
 import { decode, encode } from 'base64-arraybuffer';
-import { getSupabaseClient } from '@/template';
+import { getSupabaseClient } from '@/template/core';
 import { readBinaryBlob } from './binaryBlobService';
 import { measurePerformance } from './performanceMonitoringService';
 export interface OriginalBytes {bytes:ArrayBuffer;contentType:string;extension:string;hash:string}

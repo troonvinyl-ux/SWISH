@@ -5,6 +5,10 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
     '^expo-crypto$': '<rootDir>/test/mocks/expo-crypto.js',
+    '^expo-constants$': '<rootDir>/test/mocks/expo-constants.js',
+    '^expo/virtual/env$': '<rootDir>/test/mocks/expo-virtual-env.js',
+    '^react-native$': '<rootDir>/test/mocks/react-native.js',
+    '^react-native-url-polyfill/auto$': '<rootDir>/test/mocks/react-native-url-polyfill-auto.js',
   },
   setupFilesAfterEnv: ['<rootDir>/test/jest-postgrest-shim.js'],
   transform: {

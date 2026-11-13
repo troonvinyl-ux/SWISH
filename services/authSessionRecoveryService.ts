@@ -1,4 +1,4 @@
-import { getSupabaseClient } from '@/template';
+import { getSupabaseClient } from '@/template/core';
 
 export const signInRequiredMessage = 'Your sign-in session is no longer valid. Sign in again to continue.';
 export const authConnectionMessage = 'Authentication service temporarily unavailable. Please retry when connected.';

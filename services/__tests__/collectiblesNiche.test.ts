@@ -35,12 +35,14 @@ describe('Collectibles Flipper classification', () => {
     const itemView = fs.readFileSync('app/stock-listing/[id].tsx', 'utf8');
     const panel = fs.readFileSync('components/feature/NicheValuationPanel.tsx', 'utf8');
 
-    expect(valuation).toContain('a specific collectible such as an action figure');
-    expect(itemView).toContain('Collectibles eBay Product Research & exact-match sold comps');
+    expect(valuation).toContain('const requestedNiche = specialistNiche(specialistId)');
+    expect(valuation).toContain('await requirePaidNiche');
+    expect(valuation).toContain('itemProduct !== requestedProduct');
+    expect(itemView).toContain('getNicheEvidenceLabel');
     expect(panel).toContain("collectibles: { specialistId: 'collectibles'");
-    expect(listing).toContain("const isCollectibles = item.specialist_id === 'collectibles'");
-    expect(listing).toContain('COLLECTIBLES LISTING RULES');
-    expect(listing).toContain('selected eBay leaf category Taxonomy');
+    expect(listing).toContain("const specialistId: string = item.specialist_id ?? 'curiosities_collectibles'");
+    expect(listing).toContain('profileForSpecialist(specialistId)');
+    expect(listing).toContain('evaluateSpecialistSafety');
   });
 
 
@@ -48,20 +50,21 @@ describe('Collectibles Flipper classification', () => {
     const editor = fs.readFileSync('app/ebay-listing-editor.tsx', 'utf8');
     const listingService = fs.readFileSync('services/listingService.ts', 'utf8');
     const stockDetail = fs.readFileSync('app/stock-listing/[id].tsx', 'utf8');
-    expect(editor).toContain("const isCollectibles=activeNicheId==='collectibles'");
-    expect(editor).toContain('COLLECTIBLES · LISTING WORKSPACE');
-    expect(editor).toContain('collapsible={isCollectibles}');
-    expect(editor.match(/<EditorSection /g)?.length).toBe(7);
-    expect(editor.match(/<\\/EditorSection>/g)?.length).toBe(7);
+    expect(editor).toContain('ListingItemSpecifics');
+    expect(editor).toContain('Review listing requirements');
+    expect(editor).toContain('List now on eBay');
     expect(listingService).toContain('externalListingId: published.externalListingId');
-    expect(stockDetail).toContain('eBay accepted — SWISH sync pending');
-    expect(stockDetail).toContain('Do not submit or retry this draft again');
+    expect(listingService).toContain('Published on eBay. SWISH stock synchronisation is pending; do not submit again.');
+    expect(listingService).toContain('Publication outcome is not yet confirmed.');
+    expect(stockDetail).toContain('EbayListingLiveCheck');
+    expect(stockDetail).toContain('StockListingToolbar');
   });
 
-  test('avoids the zero-argument owner RPC during client membership loading', () => {
+  test('uses the server-provided owner claim before the backwards-compatible role check', () => {
     const access = fs.readFileSync('services/moduleAccessService.ts', 'utf8');
-    expect(access).toContain("from('swish_platform_owners')");
-    expect(access).not.toContain("rpc('swish_is_platform_owner')");
+    expect(access).toContain("typeof billing.status.platformOwner === 'boolean'");
+    expect(access).toContain("rpc('swish_is_platform_owner')");
+    expect(access).toContain("backendRead('platform-owner'");
   });
 
   test('does not force an ambiguous generic title into Collectibles', () => {
