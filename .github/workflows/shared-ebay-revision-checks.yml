@@ -40,14 +40,18 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: pnpm
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - name: Install existing dependencies
-        run: npm install --ignore-scripts --package-lock=false
+      - name: Install locked project dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Record exact source
         run: |
           mkdir -p verification-output
@@ -55,7 +59,7 @@ jobs:
       - name: Focused shared revision regressions (no seller writes)
         id: focused
         continue-on-error: true
-        run: npx jest --config jest.config.ci.js --runInBand services/__tests__/ebayRevisionReadback.test.ts services/__tests__/premiumNicheParity.test.ts services/__tests__/listingEditorSpecifics.test.ts services/__tests__/antiqueWorkflow.test.ts services/__tests__/draftReidentification.test.ts services/__tests__/liveReidentification.test.ts services/__tests__/listingClarification.test.ts services/__tests__/listingPublication.test.ts services/__tests__/nicheStandardisation.test.ts --json --outputFile=verification-output/revision-jest.json
+        run: pnpm exec jest --config jest.config.ci.js --runInBand services/__tests__/ebayRevisionReadback.test.ts services/__tests__/premiumNicheParity.test.ts services/__tests__/listingEditorSpecifics.test.ts services/__tests__/antiqueWorkflow.test.ts services/__tests__/draftReidentification.test.ts services/__tests__/liveReidentification.test.ts services/__tests__/listingClarification.test.ts services/__tests__/listingPublication.test.ts services/__tests__/nicheStandardisation.test.ts --json --outputFile=verification-output/revision-jest.json
       - name: XML parser round-trip tests (no live eBay calls)
         id: parser
         if: always()
@@ -70,12 +74,12 @@ jobs:
         id: types
         if: always()
         continue-on-error: true
-        run: npx tsc --noEmit > verification-output/typescript.txt 2>&1
+        run: pnpm exec tsc --noEmit > verification-output/typescript.txt 2>&1
       - name: Complete regression suite
         id: full
         if: always()
         continue-on-error: true
-        run: npx jest --config jest.config.ci.js --runInBand --json --outputFile=verification-output/full-jest.json
+        run: pnpm exec jest --config jest.config.ci.js --runInBand --json --outputFile=verification-output/full-jest.json
       - name: Deployment assets and parity
         id: assets
         if: always()
