@@ -13,6 +13,8 @@ import { backendRead, shareBackendRequest } from './backendRequestService';
 import { readListingPublication, type ListingPublication } from './listingPublicationService';
 import { readCanonicalInventoryCounts } from './canonicalInventoryService';
 import {recordPerformance,recordPrevention} from './performanceMonitoringService';
+import { verifyListing } from './verificationService';
+import { checkAntiqueListing } from './listingEditorService';
 
 export interface GeneratedListing {
   title: string;
@@ -557,8 +559,6 @@ async function performListingSubmission(
   // ── Step 1: Verify ──────────────────────────────────────────────────────────
   onStep?.('verifying');
 
-  // Import verificationService inline to avoid circular deps
-  const { verifyListing } = await import('@/services/verificationService');
   const { verification, error: verifyError } = await verifyListing(tenantId, listingId);
 
   if (verifyError || !verification) {
@@ -608,7 +608,6 @@ async function performListingSubmission(
   if (itemAttributes._manifest_review_required === true) return { success:false,step:'failed',error:'Manifest stock has not been physically reviewed. Save editor changes and confirm the manifest inspection before publishing.' };
   const nicheId = resolveProductionNiche((listingRow?.items as any)?.specialist_id) ?? '';
   if (nicheId) {
-    const { checkAntiqueListing } = await import('@/services/listingEditorService');
     const checked = await checkAntiqueListing(tenantId, listingId, nicheId);
     if (!checked.ready) return { success: false, step: 'failed', error: checked.error ?? 'Specialist preflight not confirmed.', clarification: checked.clarification ?? listingClarification({ error: checked.error }) }; 
   }

@@ -36,7 +36,7 @@ export async function searchNumistaImages(images: unknown, requestFetch: typeof 
     if (!unique.size) return { result: { ...result, status: 'no_results', message: 'Numista found no visual matches. Text/legend discovery remains available.' }, catalogue: [] };
     // Eight detail requests at most, within the published 15-details-per-search allowance.
     const catalogue = await Promise.all([...unique].map(async ([id, row], index) => {
-      let detail = row;
+      let detail: Record<string, any> = row as Record<string, any>;
       try {
         const response = await requestFetch(`${API}/types/${id}?lang=en`, { headers: { 'Numista-API-Key': key, Accept: 'application/json' }, signal: AbortSignal.timeout(6000) });
         if (response.ok) { const received = await response.json(); if (Number(received.id) === id) detail = received; }
