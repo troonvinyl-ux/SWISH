@@ -16,8 +16,10 @@ describe('Master Admin Production Control route', () => {
 
   test('the destination retains its owner-only access guard', () => {
     const screen = fs.readFileSync(path.join(root, 'app/production-control.tsx'), 'utf8');
-    expect(screen).toContain("!isSwishMasterAdmin(user?.email) || !isMasterAdmin");
-    expect(screen).toContain("return <Redirect href={\"/master-admin\" as any} />");
+    expect(screen).toContain("import { useOwnerAuthorization } from '@/hooks/useOwnerAuthorization'");
+    expect(screen).toContain('const owner = useOwnerAuthorization();');
+    expect(screen).toContain('if (!allowed) return');
+    expect(screen).toContain('Owner authorization required');
   });
 });
 

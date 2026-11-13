@@ -40,6 +40,7 @@ jobs:
         with: { node-version: 22 }
       - uses: denoland/setup-deno@v2
         with: { deno-version: v2.x }
+      - run: deno install
       - run: mkdir -p verification-output && git rev-parse HEAD > verification-output/source-sha.txt
       - name: Deployable dependency boundaries and mirrored contracts
         run: node scripts/validate-edge-deployment.mjs > verification-output/deployment.txt 2>&1

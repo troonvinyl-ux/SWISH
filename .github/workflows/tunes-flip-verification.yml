@@ -54,6 +54,7 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+      - run: deno install
       - run: deno check supabase/functions/swish-discogs/index.ts
       - name: Resolve updated identify function deployment graph
         if: ${{ !cancelled() }}

@@ -5,7 +5,13 @@ const read=(path:string)=>fs.readFileSync(path,'utf8');
 test('client has no provider endpoint, secret name, header or Edge imports',()=>{
  const folders=['app','components','hooks','contexts','services','constants','shared','template','plugins'];
  function visit(path:string):string[]{return fs.readdirSync(path,{withFileTypes:true}).flatMap(entry=>{if(entry.name==='__tests__'||entry.name==='__mocks__')return [];const file=`${path}/${entry.name}`;return entry.isDirectory()?visit(file):/\.(tsx?|js|json)$/.test(file)?[file]:[];});}
- for(const file of [...folders.flatMap(visit),'app.config.js','app.json'])expect(read(file)).not.toMatch(/BACKGROUND_ERASE_API_KEY|EXPO_PUBLIC_BACKGROUND|api\.backgrounderase\.com|supabase\/functions\//);
+ for(const file of [...folders.flatMap(visit),'app.config.js','app.json']){
+  const source=read(file);
+  expect(source).not.toMatch(/BACKGROUND_ERASE_API_KEY|EXPO_PUBLIC_BACKGROUND|api\.backgrounderase\.com/);
+  // Documentation strings may name an Edge directory; only a client import
+  // crosses the secret boundary.
+  expect(source).not.toMatch(/(?:from\s*['"][^'"]*supabase\/functions\/|import\s*\([^)]*supabase\/functions\/)/);
+ }
 });
 test('BackgroundErase is the only production image processor and does not log raw provider payloads',()=>{
  const engine=read('supabase/functions/_shared/smartStudioEngine.ts'),gateway=read('supabase/functions/_shared/backgroundEraseService.ts');

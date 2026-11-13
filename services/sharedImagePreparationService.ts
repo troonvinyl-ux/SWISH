@@ -1,6 +1,8 @@
 // One BackgroundErase gateway for all niches. Provider calls and credentials stay server-side.
 // Local codecs only create transport copies; they do not crop, beautify, reconstruct or replace originals.
 import * as ImageManipulator from 'expo-image-manipulator';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CryptoDigestAlgorithm, digestStringAsync } from 'expo-crypto';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { getSupabaseClient } from '@/template';
 import { SMART_STUDIO_VERSION, COIN_PRESENTATION_VERSION, shouldAutoRemoveBackground, studioImageIsUsable, type StudioResult } from '@/shared/smartStudio';
@@ -27,8 +29,6 @@ async function process(request:StudioRequest,signal:AbortSignal):Promise<StudioR
  const uri=request.original.uri,client=getSupabaseClient();checkSignal(signal);
  const session=await client.auth.getSession();const userId=session.data.session?.user.id;
  if(session.error||!userId)throw new Error('A verified session is required. Original photograph retained.');checkSignal(signal);
- const {default:AsyncStorage}=await import('@react-native-async-storage/async-storage');
- const {digestStringAsync,CryptoDigestAlgorithm}=await import('expo-crypto');
  const imageDataUrl=await copy(uri,request.quality==='high'?1600:1280,signal,request.original.width,request.original.height);
  const hash=await digestStringAsync(CryptoDigestAlgorithm.SHA256,JSON.stringify({version:SMART_STUDIO_VERSION,presentation:shouldAutoRemoveBackground(request.nicheId)?COIN_PRESENTATION_VERSION:'transparent',imageDataUrl,userId,tenantId:request.tenantId,nicheId:request.nicheId}));
  const key=`@swish_studio:${userId}:${hash}`;checkSignal(signal);

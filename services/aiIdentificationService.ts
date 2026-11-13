@@ -450,11 +450,15 @@ export async function identifyItemWithAI(
     // a generic specialist, retain the caller's niche specialist.
     // Ownership is registry-derived; new specialists cannot fall through a stale hard-coded list.
     const aiSpecialist = id.specialistId as SpecialistId | undefined;
+    const isGenericSpecialist = aiSpecialist === 'curiosities_collectibles';
     const callerNiche = resolveProductionNiche(specialistId);
-    if (callerNiche && aiSpecialist && !getProductionNicheSpecialistIds(callerNiche).includes(aiSpecialist)) {
+    // A generic result is not a cross-niche claim. Preserve the caller's
+    // specialist below; only reject an explicit, non-generic specialist that
+    // belongs to another niche.
+    if (callerNiche && aiSpecialist && !isGenericSpecialist && !getProductionNicheSpecialistIds(callerNiche).includes(aiSpecialist)) {
       return { result: null, error: 'The returned identification does not match this specialist. Add evidence or request human review; nothing was saved.' };
     }
-    const resolvedSpecialistId = (aiSpecialist ?? specialistId) as SpecialistId;
+    const resolvedSpecialistId = (isGenericSpecialist ? specialistId : aiSpecialist ?? specialistId) as SpecialistId;
 
     const requestedNiche = resolveProductionNiche(specialistId);
     if (requestedNiche && !getProductionNicheSpecialistIds(requestedNiche).includes(resolvedSpecialistId)) {
