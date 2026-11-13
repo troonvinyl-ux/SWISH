@@ -33,6 +33,7 @@
     "mobileWebVisualParity":"NOT_TESTED"
   },
   "niches": [
+    {"id":"stamps","items":0,"withMedia":0,"barcode":"disabled","deviceAcceptance":"NOT_TESTED","subscriberIsolation":"NOT_TESTED"},
     {"id":"coins","items":460,"withMedia":459,"barcode":"disabled","deviceAcceptance":"NOT_TESTED","subscriberIsolation":"NOT_TESTED"},
     {"id":"collectibles","items":8,"withMedia":5,"barcode":"start","deviceAcceptance":"NOT_TESTED","subscriberIsolation":"NOT_TESTED"},
     {"id":"motocross","items":2,"withMedia":2,"barcode":"disabled","deviceAcceptance":"NOT_TESTED","subscriberIsolation":"NOT_TESTED"},

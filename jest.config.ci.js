@@ -4,7 +4,9 @@ module.exports = {
   testEnvironment: 'node',
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
+    '^expo-crypto$': '<rootDir>/test/mocks/expo-crypto.js',
   },
+  setupFilesAfterEnv: ['<rootDir>/test/jest-postgrest-shim.js'],
   transform: {
     '^.+\\.[jt]sx?$': 'babel-jest',
   },

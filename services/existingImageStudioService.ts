@@ -1,5 +1,6 @@
 // Reuses the shared engine for saved inventory photos; no capture, identification or seller writes.
 import { getSupabaseClient } from '@/template';
+import { CryptoDigestAlgorithm, digestStringAsync } from 'expo-crypto';
 import { SMART_STUDIO_VERSION, studioImageIsUsable, type StudioResult } from '@/shared/smartStudio';
 import { getProductionNicheSpecialistIds } from './nicheRouting';
 import { mapItem, type Item } from './itemService';
@@ -40,7 +41,6 @@ async function worker(options:ExistingStudioRequest,signal:AbortSignal):Promise<
  // Do not infer a side from media order: the seller may have reordered originals.
  const studio=await prepareObjectImage({original:{uri:originalUri},tenantId,nicheId,angle:'unspecified',signal});check(signal);
  if(!studio.enhancedUri||studio.status==='fallback')return {item:null,studio,reused:false,error:studio.warnings.join(' ')||'Studio could not prepare this photo; original retained.'};
- const {digestStringAsync,CryptoDigestAlgorithm}=await import('expo-crypto');
  const hash=await digestStringAsync(CryptoDigestAlgorithm.SHA256,originalUri);check(signal);
  const slotId=studioEntries(item).find(([,value])=>value?.originalUri===originalUri)?.[0]??`existing_${hash}`;
  const nextSession=await client.auth.getSession();check(signal);
