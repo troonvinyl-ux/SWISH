@@ -41,6 +41,7 @@
       ],
       "defaultSpecialist": "coins",
       "dedicatedRoutes": [
+        "coins.tsx",
         "coin-flipper.tsx",
         "keen-on-coins.tsx",
         "islamic-batch.tsx",
@@ -72,6 +73,7 @@
       ],
       "defaultSpecialist": "motocross",
       "dedicatedRoutes": [
+        "mx.tsx",
         "flipper-mx.tsx",
         "mx-acquisition.tsx"
       ],
@@ -102,6 +104,7 @@
       ],
       "defaultSpecialist": "bicycles",
       "dedicatedRoutes": [
+        "bikes.tsx",
         "bike-flipper.tsx"
       ],
       "modulePath": "/bikes",
@@ -136,6 +139,7 @@
       ],
       "defaultSpecialist": "clothing",
       "dedicatedRoutes": [
+        "threads.tsx",
         "threads-flip.tsx"
       ],
       "modulePath": "/threads",
@@ -165,6 +169,7 @@
       ],
       "defaultSpecialist": "pokemon_cards",
       "dedicatedRoutes": [
+        "cards.tsx",
         "card-grading.tsx"
       ],
       "scannerRoute": "/capture"
@@ -191,6 +196,7 @@
       ],
       "defaultSpecialist": "antiques",
       "dedicatedRoutes": [
+        "antiques.tsx",
         "antique-capture.tsx",
         "antique-guides.tsx",
         "antique-condition.tsx",
@@ -218,7 +224,9 @@
       ],
       "legacySpecialists": [],
       "defaultSpecialist": "fossils",
-      "dedicatedRoutes": [],
+      "dedicatedRoutes": [
+        "fossils.tsx"
+      ],
       "scannerRoute": "/capture"
     },
     "beauty": {
@@ -239,7 +247,9 @@
       ],
       "legacySpecialists": [],
       "defaultSpecialist": "beauty",
-      "dedicatedRoutes": [],
+      "dedicatedRoutes": [
+        "beauty.tsx"
+      ],
       "scannerRoute": "/capture"
     },
     "tech": {
@@ -265,7 +275,9 @@
       ],
       "legacySpecialists": [],
       "defaultSpecialist": "tech",
-      "dedicatedRoutes": [],
+      "dedicatedRoutes": [
+        "tech.tsx"
+      ],
       "scannerRoute": "/capture"
     },
     "surplus_flip": {
@@ -291,6 +303,7 @@
       ],
       "defaultSpecialist": "surplus_trader",
       "dedicatedRoutes": [
+        "surplus.tsx",
         "surplus-flip.tsx"
       ],
       "modulePath": "/surplus",
@@ -400,12 +413,16 @@
       "legacySpecialists": [],
       "defaultSpecialist": "stamps",
       "dedicatedRoutes": [
+        "stamps.tsx",
         "stamp-guide.tsx"
       ],
       "scannerRoute": "/capture"
     }
   },
   "contractVersion": 1,
+  "unifiedOnlyRoutes": [
+    "niche-select.tsx"
+  ],
   "coreServices": [
     "identification",
     "valuation",
@@ -423,7 +440,6 @@
     "login.tsx",
     "onboarding.tsx",
     "swish.tsx",
-    "niche-select.tsx",
     "app-updates.tsx",
     "dispatch.tsx",
     "buy-decision.tsx",

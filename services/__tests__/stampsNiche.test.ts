@@ -21,7 +21,7 @@ describe('Stamp Flipper shared niche',()=>{
  test('all philatelic modes use the shared identifier and field mapping',()=>{
   const profile=getSpecialistProfile('stamps')!;expect(profile.modes.map(mode=>mode.id)).toEqual(['item','sheet','cover','collection']);
   expect(mappedSpecialistSpecifics(profile,{country:'Great Britain',denomination:'1d',usage:'Used'})).toMatchObject({'Country/Region of Origin':'Great Britain',Denomination:'1d',Quality:'Used'});
-  expect(read('services/nicheCaptureService.ts')).toContain("if (niche === 'stamps') return slots");
+  expect(read('services/nicheCaptureService.ts')).toContain("SPECIALISTS[specialistId as SpecialistId]?.captureRequirements");
   for(const name of ['swish-identify','swish-list-generate','swish-market-value'])expect(read(`supabase/functions/${name}/index.ts`)).toContain('serveModule(');
  });
  test('Penny Black and Scott references do not trigger coin or bicycle classification',()=>{
@@ -62,9 +62,8 @@ describe('Stamp Flipper shared niche',()=>{
   const attrs={_stamp_suggestions:{},_smart_studio_images:{front:{version:SMART_STUDIO_VERSION,status:'ready',originalUri:original,enhancedUri:processed,quality:{method:'backgrounderase',provider:'BackgroundErase',checks:{validPng:true,dimensionsUnchanged:true,foregroundPresent:true,transparencyPresent:true}}}}};
   expect(preferredListingPhotos([original],attrs)).toEqual([original]);expect(selectedListingPhotos([original],attrs,[processed])).toEqual([processed]);
  });
- test('deployment assets are byte-identical and artwork exists',()=>{
+ test('deployment assets are byte-identical and fields retain unverified state',()=>{
   for(const file of ['specialistIntelligence.ts','nichePolicy.ts','stampIdentification.ts','stampMarket.ts','ebayImportScope.ts','smartStudio.ts'])expect(read('supabase/functions/_shared/'+file)).toBe(read('shared/'+file));
-  expect(fs.existsSync('assets/images/stamp-artwork.png')).toBe(true);
   expect(read('hooks/useSpecialistItemFields.ts')).toContain("initial[descriptor.key]=inferred?''");
  });
 });

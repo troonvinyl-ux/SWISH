@@ -63,6 +63,7 @@ export function isRouteAllowedForBuild(pathname: string, fixedNiche: string | nu
   const niche = resolveProductionNiche(fixedNiche);
   if (!niche) return false;
   const route = pathname.split('?')[0].replace(/^\//, '').replace(/\/$/, '');
+  if ((moduleRegistry.unifiedOnlyRoutes ?? []).some(file => file.replace(/\.tsx$/, '') === route)) return false;
   if (moduleRegistry.adminOnlyRoutes.some(file => file.replace(/\.tsx$/, '') === route)) return false;
   const config = NICHE_MODULES[niche];
   const allowed = [...(unified ? moduleRegistry.sharedRoutes : config.buildSharedRoutes ?? moduleRegistry.sharedRoutes), config.entry, config.home, ...config.dedicatedRoutes].filter((file): file is string => Boolean(file));

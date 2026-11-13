@@ -12,7 +12,8 @@ const source=[{uri:'file://original.jpg',slotId:'main',slotLabel:'Main item'}];
 beforeEach(()=>jest.clearAllMocks());
 test('failed removal attempt is retained; identify/save does not silently repeat the provider request',async()=>{
  mockInvoke.mockResolvedValue({data:null,error:{message:'BackgroundErase: provider unavailable'}});
- const attempted=await prepareCapturedImages(source,{tenantId:'tenant',nicheId:'collectibles'});
+ // Non-coin capture is opt-in; this is the explicit seller cleanup action.
+ const attempted=await prepareCapturedImages(source,{tenantId:'tenant',nicheId:'collectibles',manual:true});
  expect(attempted[0].studio?.status).toBe('fallback');expect(attempted[0].uri).toBe(source[0].uri);expect(attempted[0].enhancedUri).toBeUndefined();
  const retry=await prepareCapturedImages(attempted,{tenantId:'tenant',nicheId:'collectibles'});expect(retry).toEqual(attempted);expect(mockInvoke).toHaveBeenCalledTimes(1);
  expect(source[0]).not.toHaveProperty('studio');

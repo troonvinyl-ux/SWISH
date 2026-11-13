@@ -36,12 +36,14 @@ export async function searchNumistaImages(images: unknown, requestFetch: typeof 
     if (!unique.size) return { result: { ...result, status: 'no_results', message: 'Numista found no visual matches. Text/legend discovery remains available.' }, catalogue: [] };
     // Eight detail requests at most, within the published 15-details-per-search allowance.
     const catalogue = await Promise.all([...unique].map(async ([id, row], index) => {
-      let detail = row;
+      let detail: Record<string, any> = row as Record<string, any>;
       try {
         const response = await requestFetch(`${API}/types/${id}?lang=en`, { headers: { 'Numista-API-Key': key, Accept: 'application/json' }, signal: AbortSignal.timeout(6000) });
         if (response.ok) { const received = await response.json(); if (Number(received.id) === id) detail = received; }
       } catch { /* Keep the lightweight search candidate; do not invent specifications. */ }
-      return { ...detail, id, _numistaImageRank: index + 1, _numistaDetailRetrieved: detail !== row };
+      // Keep the catalogue record's index signature after spreading it so
+      // Deno can type the title consumed by the response projection below.
+      return { ...detail, id, _numistaImageRank: index + 1, _numistaDetailRetrieved: detail !== row } as Record<string, any>;
     }));
     return { result: { ...result, status: 'results', message: 'Visual catalogue leads, not confirmed identity. Compare both faces and measured specifications.', candidates: catalogue.map(row => ({ typeId: row.id, numistaN: `N#${row.id}`, title: String(row.title ?? `Numista type ${row.id}`).slice(0, 180), url: `https://en.numista.com/${row.id}`, rank: row._numistaImageRank })) }, catalogue };
   } catch { return fail('Numista image search timed out or could not connect. Existing identification continues; no automatic retry was made.'); }

@@ -58,8 +58,9 @@ test('changed account/scope and wrong specialist fail closed before item creatio
  stored={id:'canonical-item',tenant_id:'tenant',specialist_id:'coins',attributes:{_capture_session_id:'scan'}};
  await expect(confirmBarcodeProduct(input())).rejects.toThrow('another scan or specialist');expect(createQuickInventory).not.toHaveBeenCalled();
 });
-test('both shared scanner entry points show Confirm/Edit/Add Photos/Try Another before a photo requirement',()=>{
- for(const path of ['components/feature/UniversalBarcodeTool.tsx','components/feature/QuickListWorkspace.tsx'])expect(fs.readFileSync(path,'utf8')).toContain('BarcodeProductConfirmation');
+test('the shared Quick List confirmation shows Confirm/Edit/Add Photos/Try Another before a photo requirement',()=>{
+ expect(fs.readFileSync('components/feature/QuickListWorkspace.tsx','utf8')).toContain('BarcodeProductConfirmation');
+ expect(fs.readFileSync('components/feature/UniversalBarcodeTool.tsx','utf8')).toContain('useUniversalBarcode');
  const ui=fs.readFileSync('components/feature/BarcodeProductConfirmation.tsx','utf8');for(const label of ['Confirm Product','Edit Details','Add Photos','Try Another Match','AI-SUGGESTED · NOT VERIFIED'])expect(ui).toContain(label);
  expect(fs.readFileSync('hooks/useListingEditor.ts','utf8')).toContain('_barcode_identification?.userConfirmed===true');
  const gateway=fs.readFileSync('supabase/functions/swish-ebay-browse/index.ts','utf8');expect(gateway).toContain("p_feature:'barcode_lookup'");expect(gateway).toContain('lookupUniversalBarcode');

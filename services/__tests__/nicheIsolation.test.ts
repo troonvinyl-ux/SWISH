@@ -653,12 +653,11 @@ describe('Mutation tenant guard', () => {
     const path = require('node:path');
     const ordersScreen = fs.readFileSync(path.resolve(__dirname, '../../app/orders.tsx'), 'utf8');
     const ebayAdminScreen = fs.readFileSync(path.resolve(__dirname, '../../app/ebay-admin.tsx'), 'utf8');
-    for (const source of [ordersScreen, ebayAdminScreen]) {
-      expect(source).toContain('if (!data?.success)');
-      expect(source).toContain('Import Partially Complete');
-      expect(source).toContain('quantityStatusPending');
-      expect(source).toContain('errors.filter');
-    }
+    expect(ordersScreen).toContain('<SellerOrdersWorkspace/>');
+    expect(ebayAdminScreen).toContain('if (!data?.success)');
+    expect(ebayAdminScreen).toContain('Import Partially Complete');
+    expect(ebayAdminScreen).toContain('quantityStatusPending');
+    expect(ebayAdminScreen).toContain('errors.filter');
   });
 
   test('eBay publish, order and sync server paths use the atomic lifecycle RPC', () => {
@@ -669,10 +668,10 @@ describe('Mutation tenant guard', () => {
     const sync = fs.readFileSync(path.resolve(__dirname, '../../supabase/functions/swish-ebay-sync/index.ts'), 'utf8');
     expect(publish).toContain("rpc('swish_transition_item'");
     expect(publish).not.toContain(".from('items').update({\n        status: 'listed'");
-    expect(orders).toContain("rpc('swish_reconcile_ebay_sold_order'");
+    expect(orders).toContain("rpc('swish_ingest_ebay_order_line'");
     expect(orders).not.toContain(".from('items').update({status:'sold'");
-    expect(orders).toContain("functions/v1/swish-ebay-listing-status");
-    expect(orders).toContain("multiQuantityStatusChecks.set(listingId, nicheId)");
+    expect(orders).toContain("functions.invoke('swish-ebay-listing-status'");
+    expect(orders).toContain('multiChecks.add(listing.id)');
     expect(orders).toContain("quantityStatusPending:");
     const status = fs.readFileSync(path.resolve(__dirname, '../../supabase/functions/swish-ebay-listing-status/index.ts'), 'utf8');
     expect(status).toContain('Every listing must belong to this account and niche');

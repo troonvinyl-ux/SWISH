@@ -94,7 +94,7 @@ describe('Shared scanner physical-item sessions', () => {
   test('viewfinder and upper reset control are shared, including Collectibles', () => {
     const scanner = source('components/feature/PremiumScanner.tsx');
     expect(scanner).not.toContain('compactCollectibles');
-    expect(scanner).toContain('<CameraView key={capture.sessionId}');
+    expect(scanner).toContain('<SharedCaptureCamera sessionId={capture.sessionId}');
     expect(scanner).toContain('Start a new scan and clear the current identification');
     const camera = source('hooks/usePremiumCamera.ts');
     expect(camera).toContain('[capture.sessionId]');

@@ -40,13 +40,13 @@ describe('Numista original-face search policy', () => {
   });
   test('shared scanner and saved-photo re-ID use the same server-only gateway', () => {
     const edge = read('supabase/functions/swish-identify/index.ts');
-    expect(edge.indexOf('const visualPromise=coinMode')).toBeGreaterThan(edge.indexOf('const { isPremium, source: premiumSource'));
+    expect(edge.indexOf('let visualCatalogue: Record<string, any>[] = []')).toBeGreaterThan(edge.indexOf('const { isPremium, source: premiumSource'));
     expect(edge).toContain('shouldRunNumista(objectType)');
-    expect(edge).toContain('numistaVerification?.detailsForReview ?? visualCatalogue');
-    expect(edge).toContain('Number(candidate.id) === Number(reviewed.numistaTypeId)');
+    expect(edge).toContain('JSON.stringify(imageCatalogueReview(visualCatalogue');
+    expect(edge).toContain('candidate.id === Number(reviewed.numistaTypeId)');
     expect(edge).toContain('numistaPhysicalContradictions(detail ?? item.candidate');
-    expect(edge).toContain('[...querySet].slice(0, imageCatalogue.length ? 2 : 4)');
-    expect(edge).toContain('await Promise.all(queriesToTry.map');
+    expect(edge).toContain('const queriesToTry = imageCatalogue.length ? [] : [...querySet].slice(0, 4);');
+    expect(edge).toContain('for (const q of queriesToTry)');
     for(const file of ['components/feature/PremiumScanner.tsx','app/stock-listing/[id].tsx']) expect(read(file)).toContain('NumistaImageSearchCard');
     const client = read('services/numistaImagePreparationService.ts');
     expect(client).not.toMatch(/NUMISTA_API_KEY|Numista-API-Key|functions\.invoke|enhancedUri|\.studio/);

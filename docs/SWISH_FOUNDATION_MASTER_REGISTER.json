@@ -375,7 +375,7 @@
   ],
   "nicheCertification": {
     "source": "niche-modules.json",
-    "expectedNicheCount": 12,
+    "expectedNicheCount": 13,
     "records": {},
     "requiredAreas": [
       "brand-and-routes",

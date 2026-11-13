@@ -7,7 +7,7 @@ TOOLS="$(find "$SDK/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tai
 test -s "$APK"
 mkdir -p dist
 unzip -t "$APK" >/dev/null
-"$TOOLS/apksigner" verify --verbose --print-certs "$APK" > dist/unified-signature.txt
+"$TOOLS/apksigner" verify --verbose --print-certs "$APK" > dist/unified-signature.txt 2>&1
 "$TOOLS/aapt" dump badging "$APK" > dist/unified-badging.txt
 ACTUAL="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' dist/unified-signature.txt | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
 EXPECTED="$(printf '%s' "${SWISH_RELEASE_CERT_SHA256:?Original certificate SHA-256 required}" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"

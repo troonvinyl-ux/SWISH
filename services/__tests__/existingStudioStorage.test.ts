@@ -6,7 +6,7 @@ import { backgroundEraseQuality } from './fixtures/backgroundEraseFixture';
 const original='https://storage.test/item/originals/front.jpg';
 const studio:StudioResult={version:SMART_STUDIO_VERSION,status:'ready',originalUri:original,enhancedUri:'https://storage.test/studio/presentation.png',maskUri:'https://storage.test/studio/mask.png',confidence:0.91,warnings:[],quality:backgroundEraseQuality};
 const base={id:'item',tenant_id:'tenant',specialist_id:'vinyl_records',canonical_title:'March of the Mods',media:[original,'https://storage.test/rear.jpg'],attributes:{artist:'Various',ebay_listing_media:[original],_smart_studio_images:{rear:{...studio,originalUri:'https://storage.test/rear.jpg'}}},updated_at:'v1'};
-function query(result:any){const q:any={};for(const method of ['select','eq','in','update','maybeSingle'])q[method]=jest.fn(()=>q);q.abortSignal=jest.fn(()=>Promise.resolve(result));return q;}
+function query(result:any){const q:any={};for(const method of ['select','eq','in','update'])q[method]=jest.fn(()=>q);q.abortSignal=jest.fn(()=>q);q.maybeSingle=jest.fn(()=>Promise.resolve(result));return q;}
 const options=()=>({tenantId:'tenant',nicheId:'tunes_flip',itemId:'item',slotId:'existing_hash',originalUri:original,studio,signal:new AbortController().signal});
 const saved=()=>({...base,attributes:{...base.attributes,_smart_studio_images:{...base.attributes._smart_studio_images,existing_hash:studio}},updated_at:'v2'});
 function setup(rows:any[]){const queries=rows.map(data=>query({data,error:null}));const from=jest.fn();for(const q of queries)from.mockReturnValueOnce(q);(getSupabaseClient as jest.Mock).mockReturnValue({from});return {queries,from};}

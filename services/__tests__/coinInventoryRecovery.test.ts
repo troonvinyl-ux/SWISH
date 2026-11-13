@@ -9,9 +9,10 @@ import {getProductionNicheSpecialistIds} from '@/services/nicheRouting';
 import fs from 'node:fs';import path from 'node:path';
 const rawCoin=(index:number,status='listed')=>({id:`coin-${index}`,tenant_id:'existing-tenant',specialist_id:'coins',canonical_title:`Existing coin ${index}`,status,inventory_id:`KC-${index}`,ruler:'Victoria',denomination:'Crown',catalogue_number:'N#123',condition:'Fine',valuation_mid:'42.50',attributes:{numista_type_id:123},media:[`https://images.test/original-${index}.jpg`]});
 function mockClient(pages:any[]){
- const client:any={rpc:jest.fn().mockReturnValue({abortSignal:jest.fn().mockResolvedValue({data:true,error:null})}),from:jest.fn()};
- const q:any={};for(const name of ['select','eq','in','order','or','ilike','range'])q[name]=jest.fn(()=>q);
+ const client:any={rpc:jest.fn().mockResolvedValue({data:true,error:null}),from:jest.fn()};
+ const q:any={};for(const name of ['select','eq','in','order','or','ilike'])q[name]=jest.fn(()=>q);
  const pageQueue=[...pages];q.abortSignal=jest.fn().mockImplementation(()=>Promise.resolve(pageQueue.shift()??{data:[],error:null}));
+ q.range=jest.fn(()=>{const result=Promise.resolve(pageQueue.shift()??{data:[],error:null});return Object.assign(result,{abortSignal:()=>result});});
  client.from.mockReturnValue(q);(getSupabaseClient as jest.Mock).mockReturnValue(client);return {client,q};
 }
 beforeEach(()=>jest.clearAllMocks());
@@ -39,7 +40,7 @@ describe('Existing coin reads preserve canonical scope and original data',()=>{
   expect(client.rpc).toHaveBeenCalledWith('swish_inventory_tab_counts',{p_tenant_id:'existing-tenant',p_niche_id:'coins'});expect(client.rpc).toHaveBeenCalledTimes(1);
  });
  test('denied access never queries items or a different tenant',async()=>{
-  const {client}=mockClient([]);client.rpc.mockReturnValue({abortSignal:jest.fn().mockResolvedValue({data:false,error:null})});
+  const {client}=mockClient([]);client.rpc.mockResolvedValue({data:false,error:null});
   expect((await loadInventoryView('wrong-tenant','coins')).error).not.toBeNull();expect(client.from).not.toHaveBeenCalled();
  });
  test('coin search includes only registered coin specialist identities',async()=>{

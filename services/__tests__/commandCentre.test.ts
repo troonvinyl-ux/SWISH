@@ -37,8 +37,11 @@ describe('Command centre data and routing contracts',()=>{
  test('reporting migration explicitly checks caller, owner, membership and cached entitlements',()=>{
   const sql=source('supabase/migrations/20261105_command_snapshot.sql');
   for(const text of ['auth.uid() is null','swish_is_platform_owner()','p_platform and not v_owner','Tenant membership required','niche_entitlements','expires_at>now()','revoke all','to authenticated'])expect(sql).toContain(text);
-  const extension=source('supabase/migrations/20261106_tunes_registration.sql');
-  for(const id of Object.keys(registry.products))expect(sql+extension).toContain(`'${id}'`);
+  const extensions=[
+    source('supabase/migrations/20261106_tunes_registration.sql'),
+    source('supabase/migrations/20261126_stamps_registration.sql'),
+  ].join('\n');
+  for(const id of Object.keys(registry.products))expect(sql+extensions).toContain(`'${id}'`);
   expect(sql).not.toMatch(/alter table|create table|update public|delete from/i);
   expect(sql).toContain("at time zone 'Europe/London'");expect(sql).toContain('row_number() over');expect(sql).toContain("'partially_refunded'");
  });

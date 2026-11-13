@@ -2,7 +2,7 @@
 jest.mock('@/template',()=>({getSupabaseClient:jest.fn()}));
 jest.mock('@/services/sharedImagePreparationService',()=>({prepareObjectImage:jest.fn()}));
 jest.mock('@/services/smartStudioStorageService',()=>({saveExistingStudioImage:jest.fn()}));
-jest.mock('expo-crypto',()=>({digestStringAsync:jest.fn(async()=> 'source-url-hash'),CryptoDigestAlgorithm:{SHA256:'SHA256'}}),{virtual:true});
+jest.mock('expo-crypto',()=>({digestStringAsync:jest.fn(async()=> 'source-url-hash'),CryptoDigestAlgorithm:{SHA256:'SHA256'}}));
 import fs from 'node:fs';
 import registry from '../../niche-modules.json';
 import { getSupabaseClient } from '@/template';
@@ -15,7 +15,7 @@ import { backgroundEraseQuality } from './fixtures/backgroundEraseFixture';
 const original='https://storage.test/item/originals/front.jpg';
 const row={id:'item',tenant_id:'tenant',specialist_id:'vinyl_records',canonical_title:'March of the Mods',media:[original,'https://storage.test/item/originals/rear.jpg'],attributes:{artist:'Various',ebay_listing_media:[original]},updated_at:'v1'};
 const studio:StudioResult={version:SMART_STUDIO_VERSION,status:'ready',originalUri:original,enhancedUri:'https://storage.test/tenant/studio/presentation.png',maskUri:'https://storage.test/tenant/studio/mask.png',confidence:0.91,warnings:[],quality:backgroundEraseQuality};
-function query(data:unknown,error:unknown=null){const q:any={};for(const method of ['select','eq','in','maybeSingle'])q[method]=jest.fn(()=>q);q.abortSignal=jest.fn(()=>Promise.resolve({data,error}));return q;}
+function query(data:unknown,error:unknown=null){const q:any={};for(const method of ['select','eq','in'])q[method]=jest.fn(()=>q);q.abortSignal=jest.fn(()=>q);q.maybeSingle=jest.fn(()=>Promise.resolve({data,error}));return q;}
 function setup(value:any=row){const q=query(value);const client={auth:{getSession:jest.fn().mockResolvedValue({data:{session:{user:{id:'user'}}},error:null})},from:jest.fn(()=>q)};(getSupabaseClient as jest.Mock).mockReturnValue(client);return {client,q};}
 const request={tenantId:'tenant',nicheId:'tunes_flip',itemId:'item',userId:'user',originalUri:original};
 beforeEach(()=>{jest.clearAllMocks();(prepareObjectImage as jest.Mock).mockResolvedValue(studio);(saveExistingStudioImage as jest.Mock).mockResolvedValue({item:mapItem({...row,attributes:{...row.attributes,_smart_studio_images:{'existing_source-url-hash':studio}}}),error:null});});

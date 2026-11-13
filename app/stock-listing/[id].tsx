@@ -82,6 +82,7 @@ import { resolveProductionNiche } from '@/services/nicheRouting';
 import { NICHES } from '@/constants/niches';
 import { useItemMainImage } from '@/hooks/useItemMainImage';
 import { useItemSmartStudio } from '@/hooks/useItemSmartStudio';
+import { useInventoryGallery } from '@/hooks/useInventoryGallery';
 import { ItemPhotoGallery } from '@/components/feature/ItemPhotoGallery';
 import { StockListingToolbar, type StockListingAction } from '@/components/feature/StockListingToolbar';
 import { StockPricingSummary } from '@/components/feature/StockPricingSummary';
@@ -1925,6 +1926,7 @@ export default function StockListingScreen() {
   const photoRecovery = useInventoryPhotoRecovery(item, onPhotosRecovered);
   const mainImage = useItemMainImage(item, onPhotosRecovered);
   const smartStudio = useItemSmartStudio(item, onPhotosRecovered);
+  const galleryPhotos = useInventoryGallery(item, onPhotosRecovered);
   const niche = nicheId ? NICHES[nicheId] : NICHES.general;
   const nicheAccent = nicheId === 'antiques' ? Colors.specialistGold : niche.color;
   const selectedListing = listings.find(row => row.status === 'active' || row.status === 'live') ?? listings.find(row => row.status === 'draft' || row.status === 'pending') ?? listings.find(row => row.status === 'ended' && row.externalListingId);
@@ -2434,7 +2436,7 @@ export default function StockListingScreen() {
           attributes={item.attributes}
           accent={nicheAccent}
           tip={niche.captureInstructions[0] ?? 'Photograph the whole item clearly.'}
-          saving={mainImage.saving || smartStudio.busy}
+          saving={mainImage.saving || smartStudio.busy || galleryPhotos.busy}
           studio={smartStudio}
           error={mainImage.error}
           onSelectMain={url => { void mainImage.selectMain(url); }}
@@ -2443,6 +2445,7 @@ export default function StockListingScreen() {
           fetching={fetchingImage}
           fetchResult={fetchImageResult}
           onReconnect={() => router.push('/marketplaces' as any)}
+          photoActions={galleryPhotos}
         />
 
         {draftListings.length > 0 && !activeListings.length && !isSold ? <View style={s.listingCard}><SectionHeader icon="auto-awesome" label="Improve draft identification" color={nicheAccent}/><Text style={s.listingDescPreview}>Add more photos, close-ups, inscriptions or clues, then review a new identification on this same draft.</Text><Pressable accessibilityLabel="Re-identify draft with photos and clues" onPress={() => router.push(`/ebay-listing-editor?id=${draftListings[0].id}&reidentify=1` as any)} style={({pressed}) => [s.headerBtn, {width:'100%',flexDirection:'row',gap:Spacing.sm}, pressed ? {opacity:0.65} : null]}><MaterialIcons name="add-photo-alternate" size={22} color={nicheAccent}/><Text style={[s.headerTitle,{color:nicheAccent}]}>Re-identify · add photos & clues</Text></Pressable></View> : null}

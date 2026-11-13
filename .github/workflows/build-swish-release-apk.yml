@@ -12,6 +12,7 @@ on:
       - release/android-installed-baseline.json
       - .github/workflows/build-swish-unified.yml
       - .github/workflows/build-swish-release-apk.yml
+      - scripts/verify-unified-apk.sh
   workflow_dispatch:
     inputs:
       quick_test_apk:

@@ -33,8 +33,8 @@ test('CD preflight identifies the missing condition and supplies actual options'
   expect(result.conditionPolicy).toEqual(policy); expect(result.categoryId).toBe('176984');
   expect(result.error).not.toMatch(/refurbished/);
 });
-test('valid saved CD condition passes all supported draft checks', async () => {
-  setup({ source: { ...row, items: { ...item, attributes: { ...item.attributes, ebay_condition_id: '4000' } } } });
+test('valid saved CD condition and pressing review pass all supported draft checks', async () => {
+  setup({ source: { ...row, items: { ...item, attributes: { ...item.attributes, ebay_condition_id: '4000', pressing_reviewed: 'true' } } } });
   expect((await checkAntiqueListing('tenant', 'draft', 'tunes_flip')).ready).toBe(true);
 });
 test('missing specifics are not misreported as a missing condition', async () => {

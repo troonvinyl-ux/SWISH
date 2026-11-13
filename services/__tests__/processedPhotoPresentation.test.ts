@@ -56,12 +56,12 @@ test('capture keeps every view visible while preferring each available processed
  expect(visibleCapturedPhotos([{ uri:originals[1] }])).toEqual([{ uri:originals[1] }]);
 });
 test('processed cover selection reorders retained sources without deleting originals or publishing', async () => {
- const row = { id:'item',tenant_id:'tenant',specialist_id:'curiosities_collectibles',media:originals,attributes:{ ...attrs,ebay_listing_media:originals },updated_at:'v1' };
+ const row = { id:'item',tenant_id:'tenant',specialist_id:'collectibles',media:originals,attributes:{ ...attrs,ebay_listing_media:originals },updated_at:'v1' };
  const read:any = {}; const write:any = {};
- for (const q of [read,write]) for (const method of ['select','eq','in','update','single','maybeSingle']) q[method] = jest.fn(() => q);
- read.abortSignal = jest.fn().mockResolvedValue({ data:row,error:null });
+ for (const q of [read,write]) for (const method of ['select','eq','in','update']) q[method] = jest.fn(() => q);
+ read.abortSignal = jest.fn(() => read); read.single = jest.fn().mockResolvedValue({ data:row,error:null });
  const nextAttrs = row.attributes;
- write.abortSignal = jest.fn().mockResolvedValue({ data:{ ...row,media:[originals[1],originals[0]],attributes:nextAttrs },error:null });
+ write.abortSignal = jest.fn(() => write); write.maybeSingle = jest.fn().mockResolvedValue({ data:{ ...row,media:[originals[1],originals[0]],attributes:nextAttrs },error:null });
  (getSupabaseClient as jest.Mock).mockReturnValue({ from:jest.fn().mockReturnValueOnce(read).mockReturnValue(write) });
  const result = await selectMainItemImage('tenant','collectibles','item',clean[1],originals);
  expect(result.error).toBeNull();

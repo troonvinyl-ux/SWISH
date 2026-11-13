@@ -3,7 +3,7 @@ import { requirePaidNiche,NicheAccessError } from '../functions/_shared/paidNich
 function assert(value:unknown,message='Assertion failed'):asserts value { if(!value)throw new Error(message); }
 function mockAdmin(member:boolean,tier:string,grant:unknown=null) {
   const calls:string[]=[];
-  return { calls,from(table:string){ calls.push(table);const chain:any={ select:()=>chain,eq:()=>chain,gt:()=>chain,maybeSingle:()=>Promise.resolve({ data:table==='tenant_memberships' ? (member ? { id:'membership' } : null) : table==='tenants' ? { subscription_tier:tier } : grant,error:null }) };return chain; },rpc(){ throw new Error('Unexpected cache mutation'); } };
+  return { calls,from(table:string){ calls.push(table);const chain:any={ select:()=>chain,eq:()=>chain,gt:()=>chain,maybeSingle:()=>Promise.resolve({ data:table==='tenant_memberships' ? (member ? { id:'membership' } : null) : table==='tenants' ? { subscription_tier:tier } : grant,error:null }) };return chain; },rpc(name:string){ if(name==='swish_owner_for_user')return Promise.resolve({ data:false,error:null });throw new Error('Unexpected cache mutation'); } };
 }
 Deno.test('Lifetime authorization bypasses Stripe/cache and still requires tenant ownership',async()=>{
   const admin=mockAdmin(true,'lifetime');const result=await requirePaidNiche(admin,{ id:'u' },'00000000-0000-0000-0000-000000000001','trading_cards');

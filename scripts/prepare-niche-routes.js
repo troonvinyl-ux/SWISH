@@ -9,6 +9,7 @@ function prepareNicheRoutes(niche, root = path.resolve(__dirname, '..')) {
   if (!product) throw new Error('Unknown SWISH_NICHE: ' + niche);
   const shared = new Set(registry.sharedRoutes);
   const admin = new Set(registry.adminOnlyRoutes);
+  const unifiedOnly = new Set(registry.unifiedOnlyRoutes ?? []);
   const owners = new Map();
   for (const [id, config] of Object.entries(registry.products)) {
     for (const route of [config.entry, config.home, ...config.dedicatedRoutes].filter(Boolean)) {
@@ -16,7 +17,7 @@ function prepareNicheRoutes(niche, root = path.resolve(__dirname, '..')) {
       owners.set(route, id);
     }
   }
-  for (const route of shared) if (admin.has(route) || owners.has(route)) throw new Error('Conflicting route classification: ' + route);
+  for (const route of [...shared, ...unifiedOnly]) if (admin.has(route) || owners.has(route)) throw new Error('Conflicting route classification: ' + route);
   const selectedShared = product.buildSharedRoutes ?? registry.sharedRoutes;
   if (selectedShared.some(route => !shared.has(route))) throw new Error('Invalid shared subset for ' + niche);
   const allowed = new Set([...selectedShared, product.entry, product.home, ...product.dedicatedRoutes].filter(Boolean));
@@ -36,7 +37,7 @@ function prepareNicheRoutes(niche, root = path.resolve(__dirname, '..')) {
       const full = path.join(directory, entry.name);
       if (entry.isDirectory()) { walk(full); continue; }
       const relative = path.relative(source, full).split(path.sep).join('/');
-      if (!shared.has(relative) && !admin.has(relative) && !owners.has(relative)) throw new Error('Unclassified route: ' + relative);
+      if (!shared.has(relative) && !admin.has(relative) && !unifiedOnly.has(relative) && !owners.has(relative)) throw new Error('Unclassified route: ' + relative);
       if (!allowed.has(relative)) { removed.add(relative.replace(/\.tsx$/, '')); continue; }
       save(relative, fs.readFileSync(full, 'utf8'));
     }

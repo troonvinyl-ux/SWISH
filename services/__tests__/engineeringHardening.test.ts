@@ -56,11 +56,11 @@ describe('Build uses a physical route-tree boundary', () => {
       fs.cpSync(path.join(root, 'app'), path.join(temporary, 'app'), { recursive: true });
       const output = prepareNicheRoutes(niche, temporary);
       const home = fs.readFileSync(path.join(temporary, output, '(tabs)/index.tsx'), 'utf8');
-      expect(home).toContain('../' + NICHE_MODULES[niche as keyof typeof NICHE_MODULES].home!.replace('.tsx', ''));
+      expect(home).toContain('SharedNicheDashboard nicheId="' + niche + '"');
       for (const [id, product] of Object.entries(NICHE_MODULES)) {
         if (id === niche) continue;
         expect(fs.existsSync(path.join(temporary, output, product.entry))).toBe(false);
-        if (product.home) expect(home).not.toContain('../' + product.home.replace('.tsx', ''));
+        if (product.home) expect(fs.existsSync(path.join(temporary, output, product.home))).toBe(false);
       }
       expect(fs.existsSync(path.join(temporary, output, 'niche-select.tsx'))).toBe(false);
       expect(fs.existsSync(path.join(temporary, output, 'master-admin.tsx'))).toBe(false);

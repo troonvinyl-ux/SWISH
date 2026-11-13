@@ -85,14 +85,18 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: pnpm
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - name: Install dependencies without touching the lockfile
-        run: npm install --ignore-scripts --package-lock=false
+      - name: Install locked project dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Record source
         run: |
           mkdir -p verification-output
@@ -100,7 +104,7 @@ jobs:
       - name: Shared photo and lifecycle regressions (no seller requests)
         id: jest
         continue-on-error: true
-        run: npx jest --config jest.config.ci.js --runInBand services/__tests__/scannerToLiveTarget.test.ts services/__tests__/coinImageEnhancementService.test.ts services/__tests__/backgroundEraseReplay.test.ts services/__tests__/backgroundEraseBoundary.test.ts services/__tests__/existingImageStudio.test.ts services/__tests__/smartStudioIntegration.test.ts services/__tests__/quickListContracts.test.ts services/__tests__/stampsNiche.test.ts services/__tests__/registeredNicheAudit.test.ts services/__tests__/barcodeConfirmation.test.ts services/__tests__/aiBarcodeFlow.test.ts services/__tests__/barcodeLookupData.test.ts services/__tests__/barcodeScannerVisibility.test.ts services/__tests__/sellerPhotoChoices.test.ts services/__tests__/inventoryLifetimeGallery.test.ts services/__tests__/sharedSellerOrders.test.ts services/__tests__/itemMainImage.test.ts services/__tests__/processedPhotoPresentation.test.ts services/__tests__/studioPhotoPolicy.test.ts services/__tests__/photoCarryForwardIntegration.test.ts services/__tests__/shortListingFlow.test.ts --json --outputFile=verification-output/shared-seller-jest.json
+        run: pnpm exec jest --config jest.config.ci.js --runInBand services/__tests__/scannerToLiveTarget.test.ts services/__tests__/coinImageEnhancementService.test.ts services/__tests__/backgroundEraseReplay.test.ts services/__tests__/backgroundEraseBoundary.test.ts services/__tests__/existingImageStudio.test.ts services/__tests__/smartStudioIntegration.test.ts services/__tests__/quickListContracts.test.ts services/__tests__/stampsNiche.test.ts services/__tests__/registeredNicheAudit.test.ts services/__tests__/barcodeConfirmation.test.ts services/__tests__/aiBarcodeFlow.test.ts services/__tests__/barcodeLookupData.test.ts services/__tests__/barcodeScannerVisibility.test.ts services/__tests__/sellerPhotoChoices.test.ts services/__tests__/inventoryLifetimeGallery.test.ts services/__tests__/sharedSellerOrders.test.ts services/__tests__/itemMainImage.test.ts services/__tests__/processedPhotoPresentation.test.ts services/__tests__/studioPhotoPolicy.test.ts services/__tests__/photoCarryForwardIntegration.test.ts services/__tests__/shortListingFlow.test.ts --json --outputFile=verification-output/shared-seller-jest.json
       - name: Order and photo adapters (no provider requests)
         id: deno
         if: always()
@@ -115,7 +119,7 @@ jobs:
         id: types
         if: always()
         continue-on-error: true
-        run: npx tsc --noEmit > verification-output/app-types.txt 2>&1
+        run: pnpm exec tsc --noEmit > verification-output/app-types.txt 2>&1
       - name: Canonical deployment asset parity
         id: parity
         if: always()

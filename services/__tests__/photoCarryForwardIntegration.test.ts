@@ -54,7 +54,7 @@ test.each(PRODUCTION_NICHE_IDS)('%s keeps all roles on the same canonical item a
 });
 test('fresh photo persistence uses three database requests and retains exact byte verification',async()=>{
  const db=setup();const saved=await persistCapturedItemPhotos('tenant','item',photos().slice(0,2),{processImages:false});
- expect(saved.complete).toBe(true);expect(db.from).toHaveBeenCalledTimes(3);
+ expect(saved.complete).toBe(true);expect(db.from).toHaveBeenCalledTimes(4);
  expect(db.storage.upload).toHaveBeenCalledTimes(2);expect(db.storage.download).toHaveBeenCalledTimes(2);
  const before=db.from.mock.calls.length;await linkPersistedItemPhotos('tenant','item',saved.urls);
  expect(db.from.mock.calls.length-before).toBe(1);
@@ -74,14 +74,14 @@ test('one concurrent operation and no old media/attributes lost',async()=>{
  expect(db.storage.upload).toHaveBeenCalledTimes(2);expect(db.row().media[0]).toBe('https://storage.test/old.jpg');expect(db.row().attributes.seller_note).toBe('keep');
 });
 test('optional processed images are linked by original role and become available in the editor',async()=>{
- const db=setup();const images=photos().slice(0,2);
+ const db=setup('coins');const images=photos().slice(0,2);
  (prepareCapturedImages as jest.Mock).mockImplementation(async captures=>captures.map((image:any)=>({...image,studio:{version:SMART_STUDIO_VERSION,status:'ready',originalUri:image.uri,enhancedUri:`https://storage.test/processed/${image.slotId}.png`,confidence:1,warnings:[],quality:{method:'backgrounderase',provider:'BackgroundErase',sourcePixelsOnly:true,completeness:'reviewed',boundary:'reviewed',detailCheck:'unchanged',background:'transparent',checks:{validPng:true,dimensionsUnchanged:true,foregroundPresent:true,transparencyPresent:true}}}})));
  const saved=await persistCapturedItemPhotos('tenant','item',images);expect(saved.complete).toBe(true);
  expect(db.row().attributes._smart_studio_images.front.originalUri).toBe(saved.urls[0]);
  expect(availableListingPhotos(db.row().media,db.row().attributes)).toEqual([saved.urls[0],'https://storage.test/processed/front.png',saved.urls[1],'https://storage.test/processed/back.png']);expect(db.row().media).toEqual(saved.urls);expect(db.row().attributes._photo_assets).toHaveLength(2);
 });
 test('an oversized condition photo and successful cutout both carry into the same draft-ready item',async()=>{
- const db=setup('tech'),images=photos().slice(0,2),large=new Uint8Array(ORIGINAL_UPLOAD_LIMIT_BYTES+1);large.set([255,216]);
+ const db=setup('coins'),images=photos().slice(0,2),large=new Uint8Array(ORIGINAL_UPLOAD_LIMIT_BYTES+1);large.set([255,216]);
  (readAsStringAsync as jest.Mock).mockResolvedValue(encode(large.buffer));
  (manipulateAsync as jest.Mock).mockResolvedValue({uri:'file://copy',width:2048,height:1536,base64:encode(bytes.buffer)});
  (prepareCapturedImages as jest.Mock).mockImplementation(async captures=>captures.map((image:any)=>({...image,studio:{version:SMART_STUDIO_VERSION,status:'ready',originalUri:image.uri,enhancedUri:`https://storage.test/processed/${image.slotId}.png`,confidence:0,warnings:[],quality:{method:'backgrounderase',provider:'BackgroundErase',sourcePixelsOnly:false,completeness:'not_assessed',boundary:'provider',detailCheck:'PNG checked',background:'transparent',checks:{validPng:true,dimensionsUnchanged:true,foregroundPresent:true,transparencyPresent:true}}}})));

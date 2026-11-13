@@ -18,10 +18,10 @@ function check(directory: string) {
   return spawnSync(process.execPath, [gate], { cwd: directory, encoding: 'utf8' });
 }
 
-test('all 25 real Edge Functions have contained local dependencies and canonical asset parity', () => {
+test('all 28 real Edge Functions have contained local dependencies and canonical asset parity', () => {
   const result = check(root);
   expect(result.status).toBe(0);
-  expect(result.stdout).toContain('25 functions');
+  expect(result.stdout).toContain('28 functions');
   expect(result.stdout).toContain('not deployed-version or live acceptance certification');
 });
 

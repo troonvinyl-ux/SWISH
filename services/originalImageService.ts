@@ -1,6 +1,7 @@
 // Exact byte preservation: no resizing, re-encoding, masking or enhancement.
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system';
+import { CryptoDigestAlgorithm, digestStringAsync } from 'expo-crypto';
 import { decode, encode } from 'base64-arraybuffer';
 import { getSupabaseClient } from '@/template';
 import { readBinaryBlob } from './binaryBlobService';
@@ -24,7 +25,6 @@ export async function readOriginalBytes(uri:string):Promise<OriginalBytes> {
  if(!bytes.byteLength||bytes.byteLength>20*1024*1024)throw new Error('Original exceeds the 20 MB original-photo limit. It is retained unchanged; no automatic downsampling was performed.');
  const mime=originalMime(new Uint8Array(bytes));
  // Content-addressed SHA-256 of canonical base64 bytes (labelled, not a raw-file SHA).
- const {digestStringAsync,CryptoDigestAlgorithm}=await import('expo-crypto');
  const hash=await digestStringAsync(CryptoDigestAlgorithm.SHA256,encode(bytes));return {bytes,...mime,hash};
 }
 /** Verify orphaned originals against their content-addressed filename before recovery. */
@@ -35,7 +35,6 @@ export async function verifyStoredOriginal(path:string,expectedHash:string):Prom
  const bytes=await readBinaryBlob(read.data);
  if(!bytes.byteLength||bytes.byteLength>20*1024*1024)throw new Error('Stored original is empty or exceeds the 20 MB limit.');
  originalMime(new Uint8Array(bytes));
- const {digestStringAsync,CryptoDigestAlgorithm}=await import('expo-crypto');
  const hash=await digestStringAsync(CryptoDigestAlgorithm.SHA256,encode(bytes));
  if(hash!==expectedHash)throw new Error('Stored original fingerprint differs; no evidence link accepted.');
 }
