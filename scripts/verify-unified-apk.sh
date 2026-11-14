@@ -9,13 +9,13 @@ mkdir -p dist
 unzip -t "$APK" >/dev/null
 "$TOOLS/apksigner" verify --verbose --print-certs "$APK" > dist/unified-signature.txt 2>&1
 "$TOOLS/aapt" dump badging "$APK" > dist/unified-badging.txt
-# Android build-tools has used both `SHA-256` and `SHA256`, and some releases
-# indent the certificate diagnostics. Parse the verifier's certificate line,
+# Android build-tools has used both `Signer #1` and scheme-specific `V2 Signer`
+# labels, alongside both `SHA-256` and `SHA256`. Parse its certificate line,
 # rather than accepting a missing certificate or changing the expected identity.
 ACTUAL="$(awk '
-  tolower($0) ~ /^[[:space:]]*signer #[0-9]+ certificate sha-?256 digest:/ {
+  tolower($0) ~ /^[[:space:]]*(signer #[0-9]+|v[0-9.]+ signer): certificate sha-?256 digest:/ {
     value=$0
-    sub(/^[^:]*:[[:space:]]*/, "", value)
+    sub(/^.*:[[:space:]]*/, "", value)
     gsub(/[:[:space:]]/, "", value)
     print tolower(value)
     exit
@@ -25,10 +25,10 @@ EXPECTED="$(printf '%s' "${SWISH_RELEASE_CERT_SHA256:?Original certificate SHA-2
 if [ -z "$ACTUAL" ] || [ "$ACTUAL" != "$EXPECTED" ]; then
   echo "Original signing certificate mismatch: expected=$EXPECTED actual=${ACTUAL:-unavailable}"
   echo 'Signer diagnostics (public certificate fingerprints only):'
-  grep -Ei '^[[:space:]]*Signer #[0-9]+ certificate SHA-?256 digest:' dist/unified-signature.txt || true
+  grep -Ei '^[[:space:]]*(Signer #[0-9]+|V[0-9.]+ Signer): certificate SHA-?256 digest:' dist/unified-signature.txt || true
   exit 1
 fi
-test "$(grep -Eic '^[[:space:]]*Signer #[0-9]+ certificate SHA-?256 digest:' dist/unified-signature.txt)" = 1 || { echo 'Multiple signing certificates require manual original-identity review'; exit 1; }
+test "$(awk -F: 'tolower($1) ~ /^[[:space:]]*number of signers[[:space:]]*$/ { value=$2; gsub(/[[:space:]]/, "", value); print value; exit }' dist/unified-signature.txt)" = 1 || { echo 'Exactly one signing certificate is required for original-identity review'; exit 1; }
 cp "$APK" dist/swish-unified.apk
 sha256sum dist/swish-unified.apk > dist/swish-unified.sha256
 export SWISH_VERIFIED_CERT="$ACTUAL"
