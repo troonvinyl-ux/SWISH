@@ -1,5 +1,6 @@
 // Executable mocked regressions; no live sessions, inventory writes or marketplace requests.
 jest.mock('@/template', () => ({ getSupabaseClient: jest.fn() }));
+jest.mock('@/template/core', () => ({ getSupabaseClient: jest.fn() }));
 jest.mock('react-native', () => ({ Linking: { openURL: jest.fn() } }));
 jest.mock('expo-web-browser', () => ({ openBrowserAsync: jest.fn().mockResolvedValue({ type: 'opened' }) }));
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { extra: {} } } }));
@@ -14,7 +15,8 @@ jest.mock('@/services/backendRequestService', () => ({
   }),
 }));
 import fs from 'node:fs';
-import { getSupabaseClient } from '@/template';
+import { getSupabaseClient as getTemplateSupabaseClient } from '@/template';
+import { getSupabaseClient as getCoreSupabaseClient } from '@/template/core';
 import { clearLocalAuthentication, recoverAuthenticatedSession, isAuthenticationFailure, signInRequiredMessage, authConnectionMessage } from '@/services/authSessionRecoveryService';
 import { checkSubscription, startCheckout } from '@/services/subscriptionService';
 import { describeAccessFailure, isBackendUnavailable } from '@/services/backendAvailabilityService';
@@ -35,7 +37,8 @@ function setup() {
   };
   const functions = { invoke: jest.fn() };
   const client = { auth, functions, from: jest.fn(), rpc: jest.fn() };
-  (getSupabaseClient as jest.Mock).mockReturnValue(client);
+  (getTemplateSupabaseClient as jest.Mock).mockReturnValue(client);
+  (getCoreSupabaseClient as jest.Mock).mockReturnValue(client);
   return { client, auth, functions, unsubscribe, setSession: (next: any) => { session = next; }, emit: (event: string, next: any) => { session = next; listener?.(event, next); } };
 }
 const success = () => ({ data: { subscribed: true, product_id: 'prod_VQ0JxUCL29SZPQ', price_id: null, subscription_end: null, niche_entitlements: ['coins'], is_platform_owner: false }, error: null });

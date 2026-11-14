@@ -1,7 +1,7 @@
 jest.mock('react-native',()=>({Platform:{OS:'ios'}}));
 jest.mock('expo-file-system',()=>({readAsStringAsync:jest.fn(),EncodingType:{Base64:'base64'}}));
 jest.mock('expo-crypto',()=>({CryptoDigestAlgorithm:{SHA256:'SHA256'},digestStringAsync:jest.fn().mockResolvedValue('fixture-sha')}));
-jest.mock('@/template',()=>({getSupabaseClient:()=>({storage:{from:()=>mockStorage}})}));
+jest.mock('@/template/core',()=>({getSupabaseClient:()=>({storage:{from:()=>mockStorage}})}));
 import { readAsStringAsync } from 'expo-file-system';
 import { encode } from 'base64-arraybuffer';
 import { originalMime,readOriginalBytes,uploadUntouchedOriginal,verifyStoredOriginal,ORIGINAL_UPLOAD_LIMIT_BYTES } from '@/services/originalImageService';

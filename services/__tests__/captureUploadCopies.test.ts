@@ -4,11 +4,13 @@ jest.mock('expo-file-system',()=>({documentDirectory:'file://documents/',readAsS
 jest.mock('expo-image-manipulator',()=>({manipulateAsync:jest.fn(),SaveFormat:{JPEG:'jpeg'}}));
 jest.mock('expo-crypto',()=>({CryptoDigestAlgorithm:{SHA256:'SHA256'},digestStringAsync:jest.fn(async(_algorithm:string,value:string)=>require('node:crypto').createHash('sha256').update(value).digest('hex'))}));
 jest.mock('@/template',()=>({getSupabaseClient:jest.fn()}));
+jest.mock('@/template/core',()=>({getSupabaseClient:jest.fn()}));
 import fs from 'node:fs';
 import {encode} from 'base64-arraybuffer';
 import * as FileSystem from 'expo-file-system';
 import {manipulateAsync} from 'expo-image-manipulator';
-import {getSupabaseClient} from '@/template';
+import {getSupabaseClient as getTemplateSupabaseClient} from '@/template';
+import {getSupabaseClient as getCoreSupabaseClient} from '@/template/core';
 import {uploadCapturedPhoto} from '../captureUploadService';
 import {captureCopySize,jpegAt72Dpi} from '@/shared/captureUpload';
 import {ORIGINAL_UPLOAD_LIMIT_BYTES} from '../originalImageService';
@@ -20,7 +22,9 @@ function setup(source=small){
  (FileSystem.writeAsStringAsync as jest.Mock).mockImplementation(async(uri:string,value:string)=>{files.set(uri,value);});
  (manipulateAsync as jest.Mock).mockImplementation(async(_uri:string,actions:any[])=>({uri:'file://encoded.jpg',base64:encode(small.buffer),width:actions?.[0]?.resize?.width??4032,height:actions?.[0]?.resize?.height??3024}));
  const storage={upload:jest.fn(async(path:string,bytes:ArrayBuffer)=>{if(objects.has(path))return {error:{message:'Already exists'}};objects.set(path,bytes);return {error:null};}),download:jest.fn(async(path:string)=>({data:{arrayBuffer:async()=>objects.get(path)},error:null})),getPublicUrl:(path:string)=>({data:{publicUrl:`https://storage.test/item-images/${path}`}})};
- (getSupabaseClient as jest.Mock).mockReturnValue({storage:{from:()=>storage}});
+ const client={storage:{from:()=>storage}};
+ (getTemplateSupabaseClient as jest.Mock).mockReturnValue(client);
+ (getCoreSupabaseClient as jest.Mock).mockReturnValue(client);
  return {storage,objects,files};
 }
 beforeEach(()=>jest.clearAllMocks());

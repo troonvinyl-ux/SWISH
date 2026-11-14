@@ -54,7 +54,7 @@ export function withModuleScope(handler: Handler): Handler {
    const aliasIssue=moduleRequestAliasIssue({...body,specialistId:requestedSpecialistId,specialist_id:requestedSpecialistAlias});
    if(aliasIssue)return json(aliasIssue,403);
    if(body.route==='barcode_lookup'&&!nicheBarcodeAllowed(nicheId))return json('Retail barcode lookup is not enabled for this specialist. Use photographic identification.',403);
-   for(const value of [requestedSpecialistId,requestedSpecialistAlias])if(value!=null && !specialists.includes(value))return json('Specialist belongs to another module.',403);
+   for(const value of [requestedSpecialistId,requestedSpecialistAlias])if(value!=null && (typeof value!=='string'||!specialists.includes(value)))return json('Specialist belongs to another module.',403);
    if(body.specialistIds && (!Array.isArray(body.specialistIds) || body.specialistIds.some((id:unknown)=>typeof id!=='string'||!specialists.includes(id))))return json('Invalid specialist scope.',403);
    const allowed=await client.rpc('swish_can_access_niche',{p_tenant_id:tenant,p_niche_id:nicheId});
    if(allowed.error || allowed.data!==true)return json('Active module entitlement could not be verified.',403);

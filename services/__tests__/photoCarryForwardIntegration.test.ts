@@ -1,12 +1,14 @@
 // Executable integration regression with mocked storage/native I/O. NOT device/live acceptance.
 jest.mock('@/template',()=>({getSupabaseClient:jest.fn()}));
+jest.mock('@/template/core',()=>({getSupabaseClient:jest.fn()}));
 jest.mock('react-native',()=>({Platform:{OS:'android'}}));
 jest.mock('expo-file-system',()=>({readAsStringAsync:jest.fn(),EncodingType:{Base64:'base64'}}));
 jest.mock('expo-image-picker',()=>({}));
 jest.mock('expo-image-manipulator',()=>({manipulateAsync:jest.fn(),SaveFormat:{JPEG:'jpeg'}}));
 jest.mock('expo-crypto',()=>({CryptoDigestAlgorithm:{SHA256:'SHA256'},digestStringAsync:jest.fn(async(_algorithm:string,value:string)=>require('node:crypto').createHash('sha256').update(value).digest('hex'))}));
 jest.mock('@/services/sharedImagePreparationService',()=>({prepareCapturedImages:jest.fn(async images=>images)}));
-import {getSupabaseClient} from '@/template';
+import {getSupabaseClient as getTemplateSupabaseClient} from '@/template';
+import {getSupabaseClient as getCoreSupabaseClient} from '@/template/core';
 import {readAsStringAsync} from 'expo-file-system';
 import {encode} from 'base64-arraybuffer';
 import {manipulateAsync} from 'expo-image-manipulator';
@@ -34,7 +36,9 @@ function setup(niche:typeof PRODUCTION_NICHE_IDS[number]='collectibles'){
    return {data:JSON.parse(JSON.stringify(row)),error:null};
   });return q;
  });
- (getSupabaseClient as jest.Mock).mockReturnValue({from,storage:{from:jest.fn(()=>storage)}});
+ const client={from,storage:{from:jest.fn(()=>storage)}};
+ (getTemplateSupabaseClient as jest.Mock).mockReturnValue(client);
+ (getCoreSupabaseClient as jest.Mock).mockReturnValue(client);
  (readAsStringAsync as jest.Mock).mockResolvedValue(encode(bytes.buffer));
  return {storage,from,row:()=>row,change:(patch:any)=>{row={...row,...patch};}};
 }

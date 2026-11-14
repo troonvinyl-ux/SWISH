@@ -35,12 +35,13 @@ test('Quick List hides stale scoped state and fences post-review auto publicatio
 });
 test('valuation reads item media once and starts independent discovery before AI waits',()=>{
  const source=read('supabase/functions/swish-market-value/index.ts');
- const handler=source.split('serveModule(async')[1];
+ const handler=source.split("withEdgeFunctionLogging('swish-market-value', async")[1];
+ expect(handler).toBeDefined();
  expect(handler.match(/select\('media, specialist_id'\)/g)).toHaveLength(1);
  expect(handler).not.toContain("select('specialist_id')");
  expect(handler.indexOf("select('media, specialist_id')")).toBeLessThan(handler.indexOf('await getAndRefreshConnectorCreds'));
  expect(handler.indexOf('const visualPromise=')).toBeLessThan(handler.indexOf('const [gemini, appToken] = await Promise.all'));
- expect(handler.indexOf('const canoaPromise =')).toBeLessThan(handler.indexOf('const [gemini, appToken] = await Promise.all'));
+ expect(handler.indexOf('const canoaPromise=')).toBeLessThan(handler.indexOf('const [gemini, appToken] = await Promise.all'));
  for(const guard of ['requirePaidNiche','specialistNiche(owned.specialist_id) !== requestedNiche','itemProduct !== requestedProduct','valuation.insufficientSoldEvidence'])expect(source).toContain(guard);
  expect(source).toContain("model: 'google/gemini-2.5-flash'");
 });
