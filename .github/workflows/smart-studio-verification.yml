@@ -53,13 +53,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
         with: { deno-version: v2.x }
-      - run: deno check supabase/functions/swish-coin-image-enhance/index.ts
+      - run: deno check --node-modules-dir=none supabase/functions/swish-coin-image-enhance/index.ts
       - name: Mocked BackgroundErase provider contract (no credentials or credits)
-        run: deno test supabase/tests/backgrounderase.test.ts
+        run: deno test --node-modules-dir=none supabase/tests/backgrounderase.test.ts
       - name: Real photograph codec, source preservation and offline geometry
         if: ${{ !cancelled() }}
         shell: bash
-        run: deno test --allow-read --allow-write=verification-output supabase/tests/smartStudioFixtures.test.ts | tee studio-raster-results.txt
+        run: deno test --node-modules-dir=none --allow-read --allow-write=verification-output supabase/tests/smartStudioFixtures.test.ts | tee studio-raster-results.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
