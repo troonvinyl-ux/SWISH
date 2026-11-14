@@ -26,8 +26,8 @@ describe('Unified navigation regression contracts (not installed-device acceptan
  });
  test('collectibles dashboard actions resolve to registered shared workflows',()=>{
   for(const route of ['/capture','/opportunities','/ebay-import','/create-listing','/stock-listing/real-id','/inventory'])expect(isRouteAllowedForModule(route,'collectibles')).toBe(true);
-  expect(source('components/feature/ModuleHome.tsx')).toContain("nicheId==='collectibles'?<Collectibles/>");
-  expect(source('hooks/useCollectiblesDashboard.ts')).toContain('/create-listing?id=');
+  expect(source('components/feature/ModuleHome.tsx')).toContain("nicheId==='collectibles'?<Collectibles embedded/>");
+  expect(source('hooks/useCollectiblesDashboard.ts')).toContain("router.push({ pathname: '/create-listing', params: { id: itemId } }");
  });
  test('Antiques standard footer order is Home, Inventory, Camera, Listings, More',()=>{
   const tabs=source('app/(tabs)/_layout.tsx');const names=['index','inventory','scan','listings','account'];const offsets=names.map(name=>tabs.indexOf(`name="${name}"`));expect(offsets.every(value=>value>=0)).toBe(true);expect(offsets).toEqual([...offsets].sort((a,b)=>a-b));expect(tabs).not.toContain('<Tabs key=');

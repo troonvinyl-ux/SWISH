@@ -1,3 +1,4 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // SWISH — Image Download & Permanent Storage Edge Function v6
 //
 // ROOT CAUSE FIX (v6):
@@ -451,7 +452,7 @@ async function processItem(
 
 // ── Main Handler ───────────────────────────────────────────────────────────────
 
-serveModule(async (req: Request) => {
+serveModule(withEdgeFunctionLogging('swish-image-download', async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResp({ error: 'Method not allowed' }, 405);
 
@@ -661,4 +662,4 @@ serveModule(async (req: Request) => {
   };
   console.log(`[v6] COMPLETE: ${JSON.stringify(finalResult)}`);
   return jsonResp(finalResult);
-});
+}));

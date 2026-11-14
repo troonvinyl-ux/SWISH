@@ -15,6 +15,7 @@
   "entryRoute": "/entry/cards",
   "scannerRoute": "/capture",
   "dedicatedRoutes": [
+    "cards.tsx",
     "card-grading.tsx"
   ],
   "responsibilities": "Trading card identification, set/number/rarity, authenticity, grading evidence, condition and market value.",

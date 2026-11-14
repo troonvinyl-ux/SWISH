@@ -2,12 +2,15 @@ import { memo, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { PremiumField } from '@/components/ui/PremiumField';
+import { MarketValueSummary } from './MarketValueSummary';
+import { useBarcodeMarketValue } from '@/hooks/useBarcodeMarketValue';
 import type { ProductLead } from '@/shared/quickList';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 interface BarcodeProductConfirmationProps { lead: ProductLead; accent: string; busy: boolean; photoCount: number; error?: string; onConfirm: (lead: ProductLead) => void; onAddPhotos: (source: 'camera' | 'library') => void; onTryAnother: () => void; onOpenSource?: () => void }
 const fields = [['title','Product title'],['brand','Manufacturer'],['publisher','Publisher / label'],['releaseYear','Release year'],['releaseDate','Release date (YYYY-MM-DD)'],['format','Format'],['edition','Edition'],['region','Region'],['productCategory','Product category'],['suggestedEbayCategory','Suggested eBay category']] as const;
 export const BarcodeProductConfirmation = memo(function BarcodeProductConfirmation({ lead, accent, busy, photoCount, error, onConfirm, onAddPhotos, onTryAnother, onOpenSource }: BarcodeProductConfirmationProps) {
   const [editing,setEditing]=useState(false),[draft,setDraft]=useState<ProductLead>(lead);
+  const market=useBarcodeMarketValue(draft);
   useEffect(()=>{setDraft(lead);setEditing(lead.id.startsWith('manual:'));},[lead]);
   const changed=JSON.stringify(draft)!==JSON.stringify(lead);
   const manual=lead.id.startsWith('manual:');
@@ -25,6 +28,7 @@ export const BarcodeProductConfirmation = memo(function BarcodeProductConfirmati
     <Text style={s.body}>{[draft.publisher||draft.brand,draft.format,draft.releaseYear,draft.edition,draft.region].filter(Boolean).join(' · ')||'Product details need review'}</Text>
     <Text selectable style={s.code}>Barcode {lead.gtin}</Text>
     <Text style={s.caption}>{manual?'Enter known product details; no catalogue identity was found.':verified?'A retrieved catalogue ties this barcode to this product. AI-supplied fields remain suggestions.':changed?'These details were edited by you; the original source identity remains in the saved provenance.':'AI product knowledge is not independent evidence. Check the title, edition and details before confirming.'} Photos are optional now; price, condition and authenticity are not established.</Text>
+    {market.loading?<Text accessibilityLiveRegion="polite" style={s.caption}>Checking market value…</Text>:market.result?<MarketValueSummary result={market.result}/>:market.error?<View style={s.warning}><Text style={s.warningText}>{market.error}</Text><Pressable accessibilityLabel="Retry market value" onPress={market.retry} style={({pressed})=>[s.secondary,pressed?s.pressed:null]}><Text style={[s.buttonText,{color:accent}]}>Retry market value</Text></Pressable></View>:null}
     {lead.conflicts?.length?<View style={s.warning}><MaterialIcons name="error-outline" size={20} color={Colors.warning}/><Text style={s.warningText}>{lead.conflicts.join('\n')}</Text></View>:null}
     {editing?<View style={s.editor}><FlatList data={[...fields]} keyExtractor={entry=>entry[0]} scrollEnabled={false} renderItem={({item:[key,label]})=><View style={s.field}><PremiumField label={label} value={String(draft[key]??'')} onChange={value=>update(key,value)} disabled={busy} accent={accent}/>{lead.fieldSources?.[key]?<Text style={s.caption}>Original source: {lead.fieldSources[key]}</Text>:null}</View>}/><FlatList data={Object.keys(draft.specifics).filter(key=>!['Brand','Publisher','Release Year','Release Date','Format','Edition','Region Code'].includes(key))} keyExtractor={key=>key} scrollEnabled={false} renderItem={({item:key})=><PremiumField label={key} value={draft.specifics[key]} onChange={value=>setDraft(previous=>({...previous,specifics:{...previous.specifics,[key]:value}}))} disabled={busy} accent={accent}/>}/></View>:null}
     {lead.sourceUrls?.length?<Text style={s.caption}>Sources: {(lead.providers??[lead.source]).join(' + ')}. Field provenance is retained with the product.</Text>:<Text style={s.caption}>No independently retrieved source URL is available.</Text>}

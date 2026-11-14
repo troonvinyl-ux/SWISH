@@ -1,3 +1,4 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // Shared eBay sync: authoritative GetItem observations, bounded Hub batches,
 // canonical lifecycle commands and unchanged inventory on provider restrictions.
 import { serveModule } from '../_shared/moduleScope.ts';
@@ -37,7 +38,7 @@ async function getValidToken(client:ReturnType<typeof adminClient>,tenantId:stri
   const payload=await response.json().catch(()=>({}));
   if(!response.ok||!payload.access_token){
    if(payload.error==='invalid_grant'){
-    const saved=await client.from('marketplace_connectors').update({status:'requires_reauth',last_error:'Refresh consent revoked or expired'}).eq('id',conn.id).eq('credential_ref',conn.credential_ref);
+    const saved=await client.from('marketplace_connectors').update({status:'requires_reauth',last_error:'Refresh consent revoked or expired'}).eq('id',conn.id).eq('tenant_id',tenantId).eq('credential_ref',conn.credential_ref);
     if(saved.error)throw new Error('RETRY: Revoked consent state could not be persisted');
     throw new Error('REQUIRES_REAUTH: Refresh consent revoked or expired');
    }
@@ -45,7 +46,7 @@ async function getValidToken(client:ReturnType<typeof adminClient>,tenantId:stri
   }
   const updated={...creds,accessToken:payload.access_token,expiresAt:new Date(Date.now()+Number(payload.expires_in??7200)*1000).toISOString()};
   const reference=await encryptCredentials(updated);
-  const saved=await client.from('marketplace_connectors').update({credential_ref:reference,access_token_expires_at:updated.expiresAt,status:'connected',last_error:null}).eq('id',conn.id).eq('credential_ref',conn.credential_ref).select('id').maybeSingle();
+  const saved=await client.from('marketplace_connectors').update({credential_ref:reference,access_token_expires_at:updated.expiresAt,status:'connected',last_error:null}).eq('id',conn.id).eq('tenant_id',tenantId).eq('credential_ref',conn.credential_ref).select('id').maybeSingle();
   if(saved.error||!saved.data)throw new Error('RETRY: Connector changed while refreshing. Retry without reconnecting.');
   creds=updated;
  }
@@ -114,7 +115,7 @@ async function syncItemToSwish(client:ReturnType<typeof adminClient>,tenantId:st
  if(persisted.error||persisted.data?.status!==ebay.status||persisted.data?.external_listing_id!==ebay.externalId||!linked||media.some(url=>!linked.media?.includes(url)))throw new Error('SWISH sync persisted readback failed');
  return {images:Math.max(0,media.length-(item.media?.length??0)),titleFixed:patch.canonical_title?1:0,skippedWrites};
 }
-serveModule(async(req:Request)=>{
+serveModule(withEdgeFunctionLogging('swish-ebay-sync', async(req:Request)=>{
  if(req.method==='OPTIONS')return new Response(null,{headers:corsHeaders});
  if(req.method!=='POST')return json({success:false,error:'Method not allowed'},405);
  const body=await req.json().catch(()=>null);const {tenantId,nicheId,mode='full',itemIds}=body??{};
@@ -202,4 +203,4 @@ serveModule(async(req:Request)=>{
   const blocked=issues.length;
   return await finishResponse({success:failed.length===0&&blocked===0,partial:failed.length>0||blocked>0,batchComplete:failed.length===0,nextAfterListingId,processed:listings.length,updated,failed:failed.length+blocked,blocked,imagesFetched,titlesFixed,matchedListings:listings.length,orphansFixed:0,issues,failedEbayIds:[...failed,...issues.map(issue=>issue.externalListingId)].slice(0,20),...(failed.length?{error:`${failed.length} listing reconciliations were not confirmed. Reload inventory before retrying.`}:blocked?{error:`${blocked} listing(s) restricted by eBay policy (21920397). Unaffected listings were reconciled; restricted inventory and photos were preserved.`}:{})},failed.length?503:200);
  }catch(cause){const detail=safeFailure(cause);console.error(`[EbaySync] ${detail}`);return await finishResponse({success:false,batchComplete:false,error:`${detail}. Synchronisation not confirmed.`,requiresReauth:detail.startsWith('REQUIRES_REAUTH:'),partial:true},detail.startsWith('REQUIRES_REAUTH:')?401:503);}
-});
+}));

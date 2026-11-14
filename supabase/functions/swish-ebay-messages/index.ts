@@ -1,3 +1,4 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // SWISH eBay Messages Edge Function
 //
 // Handles all eBay message operations server-side.
@@ -361,7 +362,7 @@ async function handleSendReply(
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-serveModule(async (req: Request) => {
+serveModule(withEdgeFunctionLogging('swish-ebay-messages', async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
 
@@ -404,4 +405,4 @@ serveModule(async (req: Request) => {
     console.error('[SWISH] swish-ebay-messages request failed.', { route });
     return jsonResponse({ error: 'Unable to complete the eBay messages request. Please retry or contact support.' }, 500);
   }
-});
+}));

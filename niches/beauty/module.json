@@ -11,7 +11,9 @@
   "iosBundleIdentifier": "com.swish.beautyflipper",
   "entryRoute": "/entry/beauty",
   "scannerRoute": "/capture",
-  "dedicatedRoutes": [],
+  "dedicatedRoutes": [
+    "beauty.tsx"
+  ],
   "responsibilities": "Beauty product identification, brand/variant/size, batch/expiry/safety fields, condition and resale eligibility.",
   "sharedCapabilities": [
     "auth",

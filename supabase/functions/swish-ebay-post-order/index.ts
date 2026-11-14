@@ -1,3 +1,4 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // SWISH — eBay Fulfillment Dispatch Edge Function v2
 //
 // CRITICAL: This function performs the ACTUAL eBay fulfilment update.
@@ -744,7 +745,7 @@ async function handleSyncCases(
 
 // ── Main Handler ──────────────────────────────────────────────────────────────
 
-serveModule(async (req: Request) => {
+serveModule(withEdgeFunctionLogging('swish-ebay-post-order', async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
 
@@ -798,4 +799,4 @@ serveModule(async (req: Request) => {
     console.error(`[SWISH Dispatch] Request failed (route=${route}).`);
     return jsonResponse({ error: 'Unable to complete the eBay fulfilment request.' }, 500);
   }
-});
+}));

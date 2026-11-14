@@ -1,3 +1,4 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // SWISH Repricing Edge Function
 // Analyses stale/underperforming listings and suggests AI-driven price adjustments.
 // Considers: days listed, views, watchers, valuation range, floor price, market context.
@@ -32,7 +33,7 @@ interface RepriceResult {
   estimated_sale_probability_uplift: number;
 }
 
-serveModule(async (req) => {
+serveModule(withEdgeFunctionLogging('swish-reprice', async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -304,4 +305,4 @@ Respond ONLY with this JSON:
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-});
+}));

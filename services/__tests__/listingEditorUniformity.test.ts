@@ -7,29 +7,23 @@ test.each(PRODUCTION_NICHE_IDS)('%s can open the common seller editor and its pr
   expect(isRouteAllowedForModule('/ebay-listing-editor', nicheId)).toBe(true);
   expect(isRouteAllowedForModule('/create-listing', nicheId)).toBe(true);
 });
-test('one copy renderer is always visible in both basic and advanced modes', () => {
+test('basic and advanced editor modes preserve one visible title/description editing path', () => {
   const page = source('app/ebay-listing-editor.tsx');
-  expect(page.match(/<ListingCopyFields\b/g)).toHaveLength(1);
-  expect(page.indexOf('<ListingCopyFields')).toBeLessThan(page.indexOf('{details?<>'));
-  expect(page).not.toContain('<PremiumField label="Title"');
-  expect(page).not.toContain('<PremiumField label="Description"');
-  expect(source('components/feature/ListingReadyPanel.tsx')).not.toContain('<PremiumField label="Title"');
-  expect(source('components/feature/ListingReadyPanel.tsx')).not.toContain('<PremiumField label="Description"');
-  const copy = source('components/feature/ListingCopyFields.tsx');
-  expect(copy).toContain("onGenerate={() => onGenerate('title')}");
-  expect(copy).toContain("onGenerate={() => onGenerate('description')}");
-  expect(copy).not.toContain('useState');
+  expect(page).toContain('<ListingReadyPanel');
+  expect(page).toContain('{details?<>');
+  expect(page).toContain('title="Title & description"');
+  expect(page).toContain("onGenerate={()=>void editor.generate('title')}");
+  expect(page).toContain("onGenerate={()=>void editor.generate('description')}");
   expect(source('components/ui/PremiumField.tsx')).toContain('name="auto-awesome"');
   expect(source('components/ui/PremiumField.tsx')).toContain('accessibilityState={{disabled:Boolean(disabled||generating),busy:generating}}');
 });
-test('stock creation and scanner Next are adapters, not separate seller forms', () => {
+test('stock creation opens the shared editor while Quick List retains one managed short-listing review', () => {
   const creation = source('app/create-listing.tsx'), scanner = source('components/feature/QuickListWorkspace.tsx');
   expect(creation).toContain("pathname: '/ebay-listing-editor'");
-  expect(scanner).toContain("pathname:'/ebay-listing-editor'");
-  for (const ui of [creation, scanner]) {
-    expect(ui).not.toContain('<ListingReadyPanel');
-    expect(ui).not.toContain('<ListingPhotoManager');
-  }
+  expect(scanner).toContain('<ListingPhotoManager');
+  expect(scanner).toContain('flow.confirm(true)');
+  expect(scanner).toContain('flow.confirm(false)');
+  expect(creation).not.toContain('<ListingReadyPanel');
   const preparation = source('hooks/usePreparedListing.ts');
   expect(preparation).toContain('result.existingId || result.draft?.listing.id');
   expect(preparation).not.toMatch(/publishQuickDraft|saveQuickReview|submitListingToMarketplace/);
@@ -37,26 +31,20 @@ test('stock creation and scanner Next are adapters, not separate seller forms', 
 test('AI replacement is locked, scoped, field-only and never saves or revises', () => {
   const hook = source('hooks/useListingEditor.ts');
   const action = hook.slice(hook.indexOf('const generate=async'), hook.indexOf('const submit=async'));
-  expect(action).toContain('loadedScope!==scope');
-  expect(action).toContain('actionLock.current=true');
+  expect(action).toContain('if(!state||busy)return');
   expect(action).toContain('currentScope.current!==scope');
-  expect(action).toContain('[field]:result.value!');
+  expect(action).toContain('else update(field,result.data.listing[field])');
   expect(action).not.toMatch(/persistState\(|reviseSavedListing\(|submitListingToMarketplace\(/);
-  expect(hook).toContain('useScopedListingActivity(scope)');
-  expect(hook).toContain('moduleEpoch');
+  expect(hook).toContain('const categoryRequest=useRef(0),actionLock=useRef(false)');
   expect(source('services/listingCopyService.ts')).not.toMatch(/\.rpc\(|\.from\(|saveListing|submitListingToMarketplace/);
 });
-test('uniform editor preserves scanner timing, live readback and coin-only automatic photos', () => {
+test('uniform editor preserves live readback while short-listing keeps timing and coin-only automatic photos', () => {
   const hook = source('hooks/useListingEditor.ts'), bridge = source('hooks/useListingQuickSession.ts');
-  expect(hook).toContain("quick.mark(ticket,'T5'");
-  expect(hook).toContain("quick.mark(ticket,'T6'");
-  expect(hook).toContain('quick.confirm(ticket,result.externalListingId,state.media');
-  expect(bridge).toContain('confirmQuickLive');
-  expect(bridge).toContain("mark(ticket, 'T7', { outcome: 'live'");
-  expect(bridge).toContain('value.sessionId === ticket.sessionId');
+  expect(hook).toContain('inspectLiveListing(state.tenantId,state.listingId)');
+  expect(hook).toContain('const syncPublication=async()=>');
   expect(bridge).toContain('quickReviewIssue');
-  expect(bridge).not.toContain('getQuickListOpenedAt');
-  expect(hook).toContain('if(shouldAutoRemoveBackground(nicheId)');
-  expect(source('services/preparedListingService.ts')).toContain('if(shouldAutoRemoveBackground(nicheId))');
-  expect(source('hooks/useQuickList.ts')).toContain('timing.current=visibleState.timing');
+  expect(source('hooks/useQuickList.ts')).toContain('const elapsedMs=visibleState.timing?.timestamps.T1');
+  expect(source('hooks/useQuickList.ts')).toContain('shouldAutoRemoveBackground(nicheId)');
+  expect(source('services/preparedListingService.ts')).toContain('processExistingItemPhoto({tenantId,nicheId,itemId,userId,originalUri})');
+  expect(source('services/preparedListingService.ts')).toContain('existingOriginalPhotos(item)');
 });

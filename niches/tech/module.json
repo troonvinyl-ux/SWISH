@@ -13,7 +13,9 @@
   "iosBundleIdentifier": "com.swish.techflipper",
   "entryRoute": "/entry/tech",
   "scannerRoute": "/capture",
-  "dedicatedRoutes": [],
+  "dedicatedRoutes": [
+    "tech.tsx"
+  ],
   "responsibilities": "Consumer electronics and technology identification, manufacturer/model, generation, specifications, compatibility, condition, completeness, safety and resale value.",
   "sharedCapabilities": [
     "auth",

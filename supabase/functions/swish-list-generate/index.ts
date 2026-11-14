@@ -1,3 +1,4 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // SWISH Listing Generator Edge Function v2
 //
 // CRITICAL SAFETY RULES:
@@ -318,7 +319,7 @@ function buildSafetyFlags(item: any, provisional: boolean, priceGateBlocked: boo
 }
 
 
-serveModule(async (req) => {
+serveModule(withEdgeFunctionLogging('swish-list-generate', async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -797,4 +798,4 @@ Return ONLY this exact JSON:
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-});
+}));

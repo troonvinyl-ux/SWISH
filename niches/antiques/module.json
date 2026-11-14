@@ -15,6 +15,7 @@
   "entryRoute": "/entry/antiques",
   "scannerRoute": "/antique-capture",
   "dedicatedRoutes": [
+    "antiques.tsx",
     "antique-capture.tsx",
     "antique-guides.tsx",
     "antique-condition.tsx",

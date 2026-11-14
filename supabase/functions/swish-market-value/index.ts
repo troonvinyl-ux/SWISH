@@ -1,3 +1,4 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // SWISH Market Value & Pricing Intelligence Edge Function v8
 //
 // v8 — FIXES:
@@ -689,6 +690,7 @@ async function runEbayVisualSearch(imageInput: string, appToken: string): Promis
 
 interface GeminiMarketResult {
   available: boolean;
+  inputMode: 'vision' | 'text';
   searchTerms: string[];
   estimatedLow: number; estimatedMid: number; estimatedHigh: number;
   confidence: 'high' | 'medium' | 'low' | 'insufficient';
@@ -699,11 +701,11 @@ interface GeminiMarketResult {
 async function runGeminiMarketResearch(imageUrls: string[], title: string, specialistId: string, attributes: Record<string, any>, condition: string, inlineImageBase64 = ''): Promise<GeminiMarketResult> {
   const noResult: GeminiMarketResult = {
     available: false, searchTerms: [], estimatedLow: 0, estimatedMid: 0, estimatedHigh: 0,
-    confidence: 'insufficient', itemDescription: '', marketContext: '', valuationBasis: '', comparableDescription: '',
+    confidence: 'insufficient', inputMode: 'text', itemDescription: '', marketContext: '', valuationBasis: '', comparableDescription: '',
   };
   const apiKey = Deno.env.get('ONSPACE_AI_API_KEY');
   const baseUrl = Deno.env.get('ONSPACE_AI_BASE_URL');
-  if (!apiKey || !baseUrl || (imageUrls.length === 0 && !inlineImageBase64)) return { ...noResult, error: 'Gemini not configured or no images' };
+  if (!apiKey || !baseUrl) return { ...noResult, error: 'Gemini is not configured' };
 
   const nicheContext = specialistId === 'bicycles' ? 'bicycle or cycling component sold on eBay UK'
     : specialistId === 'motocross' ? 'motocross or off-road motorcycle sold on eBay UK'
@@ -716,8 +718,13 @@ async function runGeminiMarketResearch(imageUrls: string[], title: string, speci
     .filter(([key, v]) => !key.startsWith('_') && typeof v !== 'object' && v != null && String(v).trim() && !['Not established','Not supplied','Not legible','unknown'].includes(String(v)))
     .map(([k, v]) => `${k}: ${v}`).join(', ');
 
+  const hasVisualInput = Boolean(imageUrls.length || inlineImageBase64);
+  const inputDescription = hasVisualInput
+    ? 'Photographs were supplied as supporting context; their condition and authenticity remain unverified.'
+    : 'Product metadata only; no photographs were supplied. Do not infer physical item condition or authenticity.';
   const prompt = `You are an expert eBay UK reseller. This is a ${nicheContext}.
 ITEM: "${sanitiseTitle(title)}" | Condition: "${condition || 'Unknown'}" | ${knownInfo || 'No attributes'}
+${inputDescription}
 SPECIALIST PRICING RULES: ${profile?.valuationRules ?? 'Match exact identity and condition.'}
 This call has no browser/search grounding. Do not claim to have consulted sales, manufacturer catalogues or current listings. Numeric prices are model estimates only; demand, volume and time to sell are unknown unless supplied with evidence.
 Return ONLY valid JSON:
@@ -762,7 +769,7 @@ estimatedLow/Mid/High: explicitly unverified model estimates, not sold evidence.
       estimatedLow: Math.max(0, Number(parsed.estimatedLow ?? 0)),
       estimatedMid: Math.max(0, Number(parsed.estimatedMid ?? 0)),
       estimatedHigh: Math.max(0, Number(parsed.estimatedHigh ?? 0)),
-      confidence: ['high','medium','low','insufficient'].includes(parsed.confidence) ? parsed.confidence : 'low',
+      confidence: ['high','medium','low','insufficient'].includes(parsed.confidence) ? parsed.confidence : 'low', inputMode: hasVisualInput ? 'vision' : 'text',
       itemDescription: String(parsed.itemDescription ?? '').slice(0, 300),
       marketContext: String(parsed.marketContext ?? '').slice(0, 300),
       valuationBasis: String(parsed.valuationBasis ?? '').slice(0, 300),
@@ -1118,7 +1125,7 @@ function computeValuation(params: {
     const listPrice = isInsufficientConf ? 0 : Math.round(gemini.estimatedMid * 0.93 * 100) / 100;
     return {
       valuationLow: gemini.estimatedLow, valuationMid: gemini.estimatedMid, valuationHigh: gemini.estimatedHigh,
-      valuationConfidence: valConf, valuationMethod: 'ai_market_estimate_gemini_vision', valuationWarnings: warnings,
+      valuationConfidence: valConf, valuationMethod: gemini.inputMode === 'text' ? 'ai_market_estimate_gemini_text' : 'ai_market_estimate_gemini_vision', valuationWarnings: warnings,
       recommendedListingPrice: listPrice, recommendedListingFormat: 'BuyItNow_WithBestOffer',
       listingPriceRationale: isInsufficientConf
         ? 'AI confidence too low to recommend a listing price. Research on eBay Seller Hub for comparable sold items.'
@@ -1134,7 +1141,7 @@ function computeValuation(params: {
 // ══════════════════════════════════════════════════════════════════════════════
 // MAIN HANDLER
 // ══════════════════════════════════════════════════════════════════════════════
-serveModule(async (req: Request) => {
+serveModule(withEdgeFunctionLogging('swish-market-value', async (req: Request) => {
   try {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
@@ -1666,4 +1673,4 @@ serveModule(async (req: Request) => {
     console.error('[SWISH Market v8] Unhandled valuation error.');
     return jsonResponse({ error: 'Market valuation failed. Please retry.' }, 500);
   }
-});
+}));

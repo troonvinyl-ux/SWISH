@@ -16,6 +16,7 @@ import { AppUpdatesProvider } from '@/contexts/AppUpdatesContext';
 import { AppUpdateNotice } from '@/components/feature/AppUpdateNotice';
 import { Colors } from '@/constants/theme';
 import { NicheRouteBoundary } from '@/components/layout/NicheRouteBoundary';
+import { AppStartupBoundary } from '@/components/layout/AppStartupBoundary';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useCallback } from 'react';
 import { Platform, BackHandler } from 'react-native';
@@ -94,6 +95,7 @@ export default function RootLayout() {
 
   return (
     <AlertProvider>
+      <AppStartupBoundary>
       <SafeAreaProvider>
         <AuthProvider>
           <AppProvider>
@@ -194,6 +196,7 @@ export default function RootLayout() {
           </AppProvider>
         </AuthProvider>
       </SafeAreaProvider>
+      </AppStartupBoundary>
     </AlertProvider>
   );
 }

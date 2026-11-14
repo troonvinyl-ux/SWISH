@@ -14,6 +14,7 @@
   "entryRoute": "/entry/surplus-flip",
   "scannerRoute": "/capture",
   "dedicatedRoutes": [
+    "surplus.tsx",
     "surplus-flip.tsx"
   ],
   "responsibilities": "Wholesale, clearance and surplus lot analysis, manifest extraction, condition, quantity, fees, risk-adjusted purchase ceiling and resale value.",

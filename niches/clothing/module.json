@@ -17,6 +17,7 @@
   "entryRoute": "/entry/clothing",
   "scannerRoute": "/capture",
   "dedicatedRoutes": [
+    "threads.tsx",
     "threads-flip.tsx"
   ],
   "responsibilities": "Clothing and footwear identification, brand/style/size/material, condition, category specifics and resale value.",

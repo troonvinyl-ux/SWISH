@@ -74,7 +74,7 @@ describe('Confirmed music metadata and CD capture (fixture tests, not live verif
   expect(source('supabase/functions/swish-identify/index.ts')).toContain("captureMode === 'cd_box_set'");
  });
  test('review and canonical save share the same enriched result and scoped retention',()=>{
-  const hook=source('hooks/useGenericCapture.ts');expect(hook).toContain('musicCaptureResult(visible.result,musicRelease,visible.answers)');expect(hook).toContain('persistCaptureDraft(storageScope,draft)');expect(hook).not.toContain('readCaptureDraft');
+  const hook=source('hooks/useGenericCapture.ts');expect(hook).toContain('musicCaptureResult(visible.result,musicRelease,visible.answers)');expect(hook).toContain('persistCaptureDraft(storageScope,draft)');expect(hook).toContain('readCaptureDraft(storageScope)');expect(hook).toContain('if(current.current===scope)setRecovery');
   expect(hook).toContain('saveIdentifiedItem(tenant.id,result');expect(source('services/captureDraftService.ts')).toContain('musicRelease?: MusicRelease | null');
   expect(source('components/feature/PremiumScanner.tsx')).toContain('catalogueConfirmed={capture.catalogueConfirmed}');
   expect(source('components/feature/MusicCaptureControls.tsx')).toContain('Discs physically present');

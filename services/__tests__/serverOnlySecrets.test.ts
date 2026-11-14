@@ -128,7 +128,7 @@ describe('SWISH eBay Finances input and refresh safety', () => {
     expect(source).toContain(".eq('currency', currency)");
     expect(source).toContain("tx.bookingEntry === 'DEBIT' || tx.bookingEntry === 'CREDIT'");
     expect(source).toContain("select('transaction_type, amount, booking_entry')");
-    expect(source).toContain(".select('transaction_type, amount, booking_entry')\n              .eq('tenant_id', tenantId)");
+    expect(source).toMatch(/\.select\('transaction_type, amount, booking_entry'\)\s*\.eq\('tenant_id',\s*tenantId\)/);
     expect(source).toContain('const complete = !partialError && errors.length === 0;');
     expect(source).toContain('success: complete');
     expect(source).not.toContain('errors.push(e.message)');
@@ -137,7 +137,7 @@ describe('SWISH eBay Finances input and refresh safety', () => {
   });
 
   test('counts transaction updates only when an existing transaction was found', () => {
-    expect(source).toContain(".eq('tenant_id', tenantId)\n            .eq('ebay_transaction_id', txId)");
+    expect(source).toMatch(/\.eq\('tenant_id',\s*tenantId\)\s*\.eq\('ebay_transaction_id',\s*txId\)/);
     expect(source).toContain('else if (existingTx)');
     expect(source).toContain('transaction could not be persisted (database constraint).');
     expect(source).toContain('continue;');
@@ -163,8 +163,11 @@ describe('SWISH eBay finance scope refresh coordination', () => {
   });
 
   test('no-scope sync refresh preserves the existing broad finance consent', () => {
-    expect(sync).toContain('Omit scope: preserve the full consented permissions');
-    expect(sync).toContain('financeScopeRefreshedAt: new Date().toISOString()');
+    expect(sync).toContain("new URLSearchParams({grant_type:'refresh_token',refresh_token:creds.refreshToken})");
+    // Spreading the stored credentials retains the finance refresh marker; the
+    // refresh request deliberately supplies no restrictive replacement scope.
+    expect(sync).toContain('const updated={...creds,accessToken:payload.access_token');
+    expect(sync).not.toContain('financeScopeRefreshedAt:');
     expect(sync).not.toContain("scope: 'https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.fulfillment https://api.ebay.com/oauth/api_scope/sell.account'");
   });
 
@@ -250,7 +253,7 @@ describe('Subscription endpoint boundary regression', () => {
   });
 
   test('returns a generic client error instead of raw Stripe exception details', () => {
-    expect(checker).toContain('Subscription status could not be checked. Please retry.');
+    expect(checker).toContain('Subscription status temporarily unavailable. Please retry.');
     expect(checker).not.toContain('JSON.stringify({ error: msg })');
   });
 });
@@ -284,20 +287,21 @@ describe('SWISH eBay inventory sync tenant write isolation', () => {
   const sync = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-ebay-sync/index.ts'), 'utf8');
 
   test('threads the verified tenant ID through item sync and scopes item/listing writes', () => {
-    expect(sync).toContain('existingItem: any,\n  tenantId: string');
-    expect(sync).toContain(".eq('item_id', existingItem.id)\n      .eq('tenant_id', tenantId)\n      .eq('marketplace_id', 'ebay')");
-    expect(sync).toContain(".eq('id', existingItem.id).eq('tenant_id', tenantId)");
-    expect(sync).toContain("syncItemToSwish(supabase, ebay, existingItem, tenantId)");
+    expect(sync).toMatch(/syncItemToSwish\(client:ReturnType<typeof adminClient>,tenantId:string,listing:any,item:any,ebay:Observation\)/);
+    expect(sync).toContain(".eq('id',item.id).eq('tenant_id',tenantId)");
+    expect(sync).toContain(".eq('id',listing.id).eq('tenant_id',tenantId)");
+    expect(sync).toContain('syncItemToSwish(client,tenantId,listing,item,observations.get');
   });
 
   test('tenant-scopes orphan listing and item status transitions', () => {
-    expect(sync).toContain(".eq('id', l.id).eq('tenant_id', tenantId)");
-    expect(sync).toContain("rpc('swish_transition_item'");
+    expect(sync).toContain("rpc('swish_apply_ebay_listing_status'");
+    expect(sync).toContain("p_tenant_id:tenantId,p_listing_id:listing.id");
     expect(sync).not.toContain(".from('items').update({ status: newStatus");
   });
 
-  test('clears finance scope marker when the restricted eBay sync flow refreshes a token', () => {
-    expect(sync).toContain('financeScopeRefreshedAt: new Date().toISOString()');
+  test('does not replace the finance scope marker when a no-scope sync refreshes a token', () => {
+    expect(sync).toContain('const updated={...creds,accessToken:payload.access_token');
+    expect(sync).not.toContain('financeScopeRefreshedAt:');
   });
 });
 
@@ -313,7 +317,7 @@ describe('SWISH Stripe account binding', () => {
   });
 
   test('subscription check refuses a subscription explicitly linked to a different user', () => {
-    expect(subscription).toContain('refreshVerifiedNiches(admin,{ id:user.id,email:user.email })');
+    expect(subscription).toMatch(/refreshVerifiedNiches\(admin,\{id:user\.id,email:user\.email\}\)/);
     const rules = fs.readFileSync(path.join(projectRoot, 'shared/nicheAuthorization.ts'), 'utf8');
     expect(rules).toContain('sub.metadata?.user_id && sub.metadata.user_id !== userId');
     expect(rules).toContain("!['active', 'trialing'].includes(sub.status ?? '')");
@@ -343,7 +347,7 @@ describe('SWISH AI identification tenant and quota safeguards', () => {
 
   test('requires a tenant ID and verified membership before performing identification work', () => {
     expect(identify).toContain("typeof bodyTenantId !== 'string' || !bodyTenantId.trim() || bodyTenantId.length > 200");
-    expect(identify).toContain(".eq('tenant_id', tenantId)\n      .eq('user_id', user.id)");
+    expect(identify).toMatch(/\.eq\('tenant_id',\s*tenantId\)\s*\.eq\('user_id',\s*user\.id\)/);
     expect(identify).toContain('if (membershipError || !tenantMembership)');
     expect(identify).toContain("error: 'Access denied for this account.'");
   });
@@ -369,8 +373,8 @@ describe('SWISH AI identification tenant and quota safeguards', () => {
   });
 
   test('does not send raw unhandled or AI-provider errors back to the client', () => {
-    expect(identify).toContain("error: 'Identification request failed. Please retry.'");
-    expect(identify).toContain("error: 'Identification request failed. Please retry.'");
+    expect(identify).toContain("failure('Photo identification could not complete. Your photos are retained; retry Identify.'");
+    expect(identify).toContain("'IDENTIFICATION_FAILED'");
     expect(identify).not.toContain("JSON.stringify({ error: err.message ?? 'Internal error' })");
   });
 });
@@ -431,8 +435,8 @@ describe('SWISH eBay OAuth error boundary', () => {
   );
 
   test('does not return raw database error details from OAuth setup to clients', () => {
-    expect(oauth).toContain("error: 'Unable to save eBay connection setup. Please retry or contact support.'");
     expect(oauth).toContain("error: 'Unable to start eBay authorization. Please retry or contact support.'");
+    expect(oauth).toContain("error: 'The connection could not be completed. Existing authorisations are preserved.'");
     expect(oauth).not.toContain('error: `Database error: ${upsertErr.message}`');
     expect(oauth).not.toContain('error: `Could not create OAuth session: ${sessionErr.message}`');
   });
@@ -712,9 +716,9 @@ describe('Tenant-scoped eBay sync writes', () => {
       path.join(projectRoot, 'supabase/functions/swish-ebay-sync/index.ts'),
       'utf8',
     );
-    expect(source).toContain(".eq('item_id', existingItem.id)");
-    expect(source).toContain(".eq('tenant_id', tenantId)");
-    expect(source).toContain(".eq('id', existingItem.id).eq('tenant_id', tenantId)");
+    expect(source).toContain(".eq('id',item.id).eq('tenant_id',tenantId)");
+    expect(source).toContain(".eq('id',listing.id).eq('tenant_id',tenantId)");
+    expect(source).toContain(".eq('external_listing_id',ebay.externalId)");
   });
 });
 
@@ -731,7 +735,7 @@ describe('eBay credential refresh compare-and-swap guards', () => {
 
   test.each(refreshPaths)('%s only persists refreshed credentials against the version it read', (relativePath) => {
     const source = fs.readFileSync(path.join(projectRoot, relativePath), 'utf8');
-    expect(source).toContain(relativePath.endsWith('swish-ebay-orders/index.ts')?".eq('credential_ref',result.data.credential_ref)":".eq('credential_ref', conn.credential_ref)");
+    expect(source).toMatch(relativePath.endsWith('swish-ebay-orders/index.ts')?/\.eq\('credential_ref',\s*result\.data\.credential_ref\)/:/\.eq\('credential_ref',\s*conn\.credential_ref\)/);
     expect(source).toContain(".select('id')");
     expect(source).toContain('.maybeSingle()');
   });
@@ -745,8 +749,8 @@ describe('eBay credential refresh compare-and-swap guards', () => {
 
   test('sync retries after a concurrent refresh instead of marking the connector for reauthorisation', () => {
     const source = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-ebay-sync/index.ts'), 'utf8');
-    expect(source).toContain('RETRY: eBay credentials changed during refresh. Please retry.');
-    expect(source).toContain('Do not mark that newer valid state as requiring reauthorisation.');
+    expect(source).toContain('RETRY: Connector changed while refreshing. Retry without reconnecting.');
+    expect(source).toContain(".eq('tenant_id',tenantId).eq('credential_ref',conn.credential_ref)");
   });
 
   test('messages refresh failures do not log raw exception text', () => {
@@ -842,15 +846,14 @@ describe('eBay end lifecycle reconciliation', () => {
   const end = listing.indexOf('// ── Route: revise', start);
   const endRoute = listing.slice(start, end);
 
-  test('confirmed eBay end prefers the atomic RPC and falls back only when that RPC is absent', () => {
-    expect(endRoute).toContain("rpc('swish_transition_item'");
-    expect(endRoute).toContain("p_status: 'identified'");
-    expect(endRoute).toContain("transitionError.code === 'PGRST202'");
-    expect(endRoute).toContain("transitionError.code === '42883'");
-    expect(endRoute).toContain(".eq('id', ownedItem.id)");
+  test('confirmed eBay end uses the atomic listing-status RPC and retains inventory evidence', () => {
+    expect(endRoute).toContain("rpc('swish_apply_ebay_listing_status'");
+    expect(endRoute).toContain("p_status: 'ended'");
+    expect(endRoute).toContain("p_quantity_sold: observation.quantitySold");
+    expect(endRoute).toContain(".from('swish_listing_end_receipts').upsert");
     expect(endRoute).toContain(".eq('tenant_id', tenantId)");
     expect(endRoute).toContain(".select('id')");
-    expect(endRoute).toContain('transitioned !== true');
+    expect(endRoute).toContain('deletionRequiresSeparateConfirmation: true');
   });
 });
 
@@ -867,23 +870,19 @@ describe('SWISH eBay message body retrieval boundary', () => {
   const messageFunction = fs.readFileSync(path.join(projectRoot, 'supabase/functions/swish-ebay-messages/index.ts'), 'utf8');
   const messageHelpers = fs.readFileSync(path.join(projectRoot, 'supabase/functions/_shared/ebayMessagePagination.ts'), 'utf8');
 
-  test('uses the required GetMyMessages detail levels and documented Message XML elements', () => {
-    expect(messageHelpers).toContain('<DetailLevel>ReturnHeaders</DetailLevel>');
-    expect(messageHelpers).toContain('<DetailLevel>ReturnMessages</DetailLevel>');
-    expect(messageHelpers).toContain('<MessageIDs><MessageID>');
-    expect(messageHelpers).toContain('Message\\b');
-    expect(messageFunction).toContain('extractEbayMessageBlocks(responseXml)');
-    expect(messageFunction).toContain('extractEbayXmlTag(msgXml, \'ReceiveDate\')');
+  test('requests bounded summary pages and parses only documented MessageSummary XML elements', () => {
+    expect(messageHelpers).toContain('<FolderID>0</FolderID>');
+    expect(messageHelpers).toContain('<Pagination><EntriesPerPage>');
+    expect(messageHelpers).toContain('MessageSummary\\b');
+    expect(messageFunction).toContain('extractEbayMessageSummaryBlocks(responseXml)');
+    expect(messageFunction).toContain("msgXml.match(/<CreationDate>");
   });
 
-  test('loads message bodies only after tenant-scoped local message lookup', () => {
-    expect(messageFunction).toContain("route === 'get_message_body'");
-    expect(messageFunction).toContain(".select('id, ebay_message_id, body')");
-    expect(messageFunction).toContain(".eq('id', localMessageId)");
-    expect(messageFunction).toContain(".eq('tenant_id', tenantId)");
-    expect(messageFunction).toContain('buildGetEbayMessageBodyRequest(accessToken, message.ebay_message_id)');
-    expect(messageFunction).toContain('message.ebay_message_id.length > 200');
-    expect(messageFunction).toContain('extractEbayMessageBody(responseXml)');
+  test('does not fetch or expose remote message bodies from the summary-sync route', () => {
+    expect(messageFunction).toContain('bodyAvailable: false');
+    expect(messageFunction).not.toContain("route === 'get_message_body'");
+    expect(messageFunction).not.toContain('buildGetEbayMessageBodyRequest');
+    expect(messageFunction).not.toContain('extractEbayMessageBody');
   });
 
   test('does not log provider message bodies or expose credentials', () => {

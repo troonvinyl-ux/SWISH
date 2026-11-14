@@ -15,6 +15,7 @@
   "entryRoute": "/entry/bicycles",
   "scannerRoute": "/capture",
   "dedicatedRoutes": [
+    "bikes.tsx",
     "bike-flipper.tsx"
   ],
   "responsibilities": "Bicycle identification, frame/component specification, sizing, condition, compatibility and resale value.",

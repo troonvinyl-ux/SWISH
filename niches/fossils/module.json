@@ -11,7 +11,9 @@
   "iosBundleIdentifier": "com.swish.fossilflipper",
   "entryRoute": "/entry/fossils",
   "scannerRoute": "/capture",
-  "dedicatedRoutes": [],
+  "dedicatedRoutes": [
+    "fossils.tsx"
+  ],
   "responsibilities": "Fossil identification, species/formation context, dimensions, preservation, provenance and responsible-sale checks.",
   "sharedCapabilities": [
     "auth",

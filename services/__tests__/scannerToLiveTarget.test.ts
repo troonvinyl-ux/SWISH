@@ -21,6 +21,6 @@ test('UI displays the scanner timer and stops only on reconciled live status',()
 });
 test('manual cleanup remains a per-photo opt-in; Next and List now remain the main flow',()=>{
  const hook=fs.readFileSync('hooks/useQuickList.ts','utf8'),ui=fs.readFileSync('components/feature/QuickListWorkspace.tsx','utf8');
- expect(hook).toContain('!shouldAutoRemoveBackground(nicheId)');expect(hook).toContain('nicheId,manual:true');expect(ui).toContain('BG-remove');expect(ui).toContain("pathname:'/ebay-listing-editor'");expect(ui).toContain("'Next'");expect(fs.readFileSync('app/ebay-listing-editor.tsx','utf8')).toContain("?'Revise on eBay':'List now'");
+ expect(hook).toContain('!shouldAutoRemoveBackground(nicheId)');expect(hook).toContain('nicheId,manual:true');expect(ui).toContain('BG-remove');expect(ui).toContain('<BarcodeProductConfirmation');expect(fs.readFileSync('hooks/useBarcodeConfirmation.ts','utf8')).toContain("pathname: '/ebay-listing-editor'");expect(ui).toContain("'Next'");expect(fs.readFileSync('app/ebay-listing-editor.tsx','utf8')).toContain("?'Revise on eBay':'List now'");
  const bridge=fs.readFileSync('hooks/useListingQuickSession.ts','utf8');expect(bridge).toContain('confirmQuickLive');expect(bridge).toContain("mark(ticket, 'T7'");expect(bridge).toContain('row.timestamps[stage] == null');expect(bridge).not.toContain("mark(ticket, 'T1'");
 });

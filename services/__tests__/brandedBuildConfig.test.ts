@@ -54,7 +54,7 @@ describe('Branded Expo build configuration', () => {
     else process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = originalPublicBackendKey;
   });
 
-  test('keeps the existing OnSpace app identity when no branded profile is selected', () => {
+  test('uses the unified SWISH identity when no branded profile is selected', () => {
     delete process.env.SWISH_NICHE;
     delete process.env.SWISH_MASTER_ADMIN;
     // This base-case assertion intentionally removes deployment configuration:
@@ -64,7 +64,7 @@ describe('Branded Expo build configuration', () => {
     delete process.env.SWISH_OTA_PUBLISH;
     delete process.env.EXPO_PUBLIC_SUPABASE_URL;
     delete process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-    expect(configureApp({ config: BASE_CONFIG })).toBe(BASE_CONFIG);
+    expect(configureApp({ config: BASE_CONFIG })).toMatchObject({ name: 'SWISH', slug: 'onspace-app', scheme: 'onspaceapp', android: { package: 'com.swish.inventory' }, extra: { preserveMe: true, swishUnifiedBuild: true } });
   });
 
   test.each(Object.entries(BUILDS))(
@@ -87,20 +87,23 @@ describe('Branded Expo build configuration', () => {
     },
   );
 
-  test('creates a unique Master Admin native identity without a niche lock', () => {
+  test('keeps Master Admin on the unified native identity without a niche lock', () => {
     delete process.env.SWISH_NICHE;
     // This is a native identity test, not an OTA config test. OTA jobs set this
     // globally, so clear it to assert the installed app's branded slug.
     delete process.env.SWISH_OTA_PUBLISH;
     process.env.SWISH_MASTER_ADMIN = '1';
     const config = configureApp({ config: BASE_CONFIG });
-    expect(config.name).toBe('SWISH Master Admin');
-    expect(config.slug).toBe('swish-master-admin');
-    expect(config.scheme).toBe('swishmasteradmin');
+    expect(config.name).toBe('SWISH');
+    expect(config.slug).toBe('onspace-app');
+    expect(config.scheme).toBe('onspaceapp');
     expect(config.android.package).toBe('com.swish.inventory');
-    expect(config.ios.bundleIdentifier).toBe('com.swish.inventory');
-    expect(config.extra.swishMasterAdminBuild).toBe(true);
-    expect(config.plugins).toEqual(expect.arrayContaining([expect.arrayContaining(['expo-router', expect.objectContaining({ root: 'master-admin-app' })])]));
+    // Unified builds retain the host app's existing iOS identity.  The test
+    // fixture intentionally has no bundleIdentifier, so assert that its
+    // non-identity iOS configuration survives rather than inventing one.
+    expect(config.ios).toMatchObject({ supportsTablet: true });
+    expect(config.extra.swishUnifiedBuild).toBe(true);
+    expect(config.extra.swishReleaseChannel).toBe('preview-unified');
   });
 
   test('rejects combining Master Admin identity with a niche lock', () => {

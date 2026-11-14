@@ -24,6 +24,6 @@ describe('Shared unified five-area navigation contract',()=>{
   expect(source('app/(tabs)/account.tsx')).not.toContain('isSwishMasterAdmin(user?.email)');
  });
  test('listing context uses fixed build identity before active selection',()=>{
-  expect(source('app/(tabs)/listings.tsx')).toContain('fixedNicheId ?? activeNicheId');
+  expect(source('app/(tabs)/listings.tsx')).toContain('fixedNicheId??activeNicheId');
  });
 });

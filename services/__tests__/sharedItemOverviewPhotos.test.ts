@@ -27,18 +27,20 @@ describe('Shared item overview photo and layout contracts', () => {
     expect(gallery).toContain('gallery.exportPhoto');
     expect(gallery).not.toContain('getSupabaseClient');
     const editor = source('app/ebay-listing-editor.tsx');
-    expect(editor).toContain('<ListingPhotoPicker');
-    expect(editor).toContain('onMain={editor.setMainPhoto}');
+    expect(editor).toContain('<ListingPhotoManager');
+    expect(editor).toContain("onChange={urls=>editor.update('media',urls)}");
     expect(source('hooks/useListingEditor.ts')).toMatch(/media:\s*moveMainImageFirst\(photos,\s*uri\)/);
   });
   test('saving a cover remains scoped, version-protected, verified and non-publishing', () => {
     const service = source('services/itemPhotoService.ts');
-    expect(service).toContain("eq('tenant_id', tenantId)");
-    expect(service).toContain("in('specialist_id', specialists)");
-    expect(service).toContain("eq('updated_at', row.updated_at)");
+    expect(service).toMatch(/\.eq\('tenant_id',tenantId\)/);
+    expect(service).toMatch(/\.in\('specialist_id',specialists\)/);
+    expect(service).toMatch(/\.eq\('updated_at',row\.updated_at\)/);
     expect(service).toContain('Photos changed since this page loaded');
-    expect(service).toContain('mediaOrderMatches(data.media');
-    expect(service).toContain('ebay_listing_media: listingMedia');
+    expect(service).toContain('mediaOrderMatches(saved.data.media');
+    // This operation selects only the inventory cover.  Listing-specific
+    // original/cutout choices remain in the listing editor's attributes.
+    expect(service).not.toContain('ebay_listing_media');
     expect(service).not.toContain('functions.invoke');
     expect(service).not.toContain('SERVICE_ROLE');
     const hook = source('hooks/useItemMainImage.ts');

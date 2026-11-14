@@ -1,3 +1,4 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // KEENONCOINS eBay Browse & Seller Listings Edge Function
 // Route 1 (default): Fetches real-time views/watchers for a published eBay listing.
 // Route 2 (my_active_listings): Fetches all active seller listings for import.
@@ -335,7 +336,7 @@ function parseItemXml(itemXml: string, ebayStatus: string): Record<string, any> 
   };
 }
 
-serveModule(async (req: Request) => {
+serveModule(withEdgeFunctionLogging('swish-ebay-browse', async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
@@ -999,4 +1000,4 @@ serveModule(async (req: Request) => {
   }
 
   return json({ views, watchers });
-});
+}));

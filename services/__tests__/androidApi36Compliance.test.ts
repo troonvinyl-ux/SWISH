@@ -13,17 +13,16 @@ test('all Android prebuilds install the canonical API 36 config plugin', () => {
   expect(plugin).toContain("'android.buildToolsVersion': '36.0.0'");
 });
 
-test('isolated niche and Master Admin APK builds install and verify Android 16 SDK', () => {
-  for (const workflow of ['.github/workflows/_niche-android.yml', '.github/workflows/build-swish-suite.yml']) {
+test('unified and isolated niche APK builds install and verify Android 16 SDK', () => {
+  for (const workflow of ['.github/workflows/_niche-android.yml', '.github/workflows/build-swish-unified.yml']) {
     const source = read(workflow);
     expect(source).toContain('platforms;android-36');
     expect(source).toContain('build-tools;36.0.0');
     expect(source).toContain('scripts/verify-android-sdk-config.mjs');
   }
   expect(read('scripts/verify-apk.sh')).toContain("targetSdkVersion:'36'");
-  expect(read('scripts/verify-master-admin-apk.sh')).toContain("targetSdkVersion:'36'");
-  expect(read('.github/workflows/build-swish-suite.yml')).toContain("release/apk-suite-*");
-  expect(read('.github/workflows/build-swish-release-apk.yml')).toContain("release/master-admin-*");
+  expect(read('scripts/inspect-unified-apk.py')).toContain("'targetSdk': 36");
+  expect(read('.github/workflows/build-swish-unified.yml')).toContain('bash scripts/verify-unified-apk.sh');
 });
 
 test('generated Gradle properties are checked fail-closed before native compilation', () => {
@@ -44,25 +43,25 @@ test('EAS exposes isolated APK and Android App Bundle profiles for all ten niche
   expect(eas.build['master-admin']).toMatchObject({ env: { SWISH_MASTER_ADMIN: '1' }, android: { buildType: 'apk' } });
 });
 
-test('Android 16 native builds receive a new OTA runtime and native config cannot publish OTA alone', () => {
+test('Android native builds keep runtime compatibility explicit and OTA review cannot publish alone', () => {
   const config = read('app.config.js');
   expect(config).toContain('isolated-api36-v1');
-  expect(config).toContain('master-admin-api36-v1');
+  expect(config).toContain("runtimeVersion: { policy: 'fingerprint' }");
+  expect(config).toContain("updates: { ...(baseConfig.updates || {}), enabled: false, checkAutomatically: 'NEVER' }");
   const ota = read('.github/workflows/publish-ota-update.yml');
-  expect(ota).toContain("paths:");
-  expect(ota).toContain("'app/**'");
-  expect(ota).toContain("'niche-modules.json'");
-  expect(ota).not.toContain("'app.json'");
-  expect(ota).not.toContain("'plugins/**'");
+  expect(ota).toContain('workflow_dispatch:');
+  expect(ota).not.toContain('\n  push:');
+  expect(ota).toContain('no automatic publication');
 });
 
-test('Android SDK licence acceptance handles sdkmanager early exit without masking errors', () => {
-  for (const file of ['.github/workflows/_niche-android.yml', '.github/workflows/build-swish-suite.yml', '.github/workflows/build-swish-release-apk.yml']) {
+test('Android SDK licence acceptance tolerates sdkmanager acknowledgement exit without masking package installation errors', () => {
+  const niche = read('.github/workflows/_niche-android.yml');
+  expect(niche).toContain('set +o pipefail');
+  expect(niche).toContain('set -o pipefail');
+  for (const file of ['.github/workflows/build-swish-unified.yml', '.github/workflows/test-lab-apk.yml']) {
     const workflow = read(file);
-    expect(workflow).toContain('set +o pipefail');
-    expect(workflow).toContain('set -o pipefail');
+    expect(workflow).toContain('--licenses >/dev/null || true');
+    expect(workflow).toContain('platform-tools');
+    expect(workflow).toMatch(/SDK_MANAGER|sdkmanager/);
   }
-  const pkg = JSON.parse(read('package.json'));
-  const release = read('.github/workflows/build-swish-release-apk.yml');
-  expect(release).toContain('version: ' + pkg.packageManager.replace('pnpm@', ''));
 });

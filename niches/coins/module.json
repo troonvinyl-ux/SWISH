@@ -23,6 +23,7 @@
   "entryRoute": "/entry/coins",
   "scannerRoute": "/capture",
   "dedicatedRoutes": [
+    "coins.tsx",
     "coin-flipper.tsx",
     "keen-on-coins.tsx",
     "islamic-batch.tsx",

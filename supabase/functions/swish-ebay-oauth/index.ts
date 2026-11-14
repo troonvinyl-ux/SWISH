@@ -1,3 +1,4 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // SWISH eBay OAuth 2.0 Edge Function v2
 //
 // Routes:
@@ -578,7 +579,7 @@ function escapeHtml(s: string): string {
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withEdgeFunctionLogging('swish-ebay-oauth', async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   const url        = new URL(req.url);
@@ -608,4 +609,4 @@ Deno.serve(async (req: Request) => {
     }
     return jsonResponse({ error: 'The connection could not be completed. Existing authorisations are preserved.' }, 500);
   }
-});
+}));

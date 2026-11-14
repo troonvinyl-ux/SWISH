@@ -36,12 +36,12 @@ describe('Unified portfolio acceptance foundation',()=>{
  });
  test('listing dependency is packaged and marketplace writes have resource gates',()=>{
   expect(fs.existsSync('supabase/functions/_shared/edgeFunctionLogging.ts')).toBe(true);
-  expect(source('supabase/functions/swish-ebay-list/index.ts')).toContain("['publish', 'revise', 'end', 'revise_sku']");
+  expect(source('supabase/functions/swish-ebay-list/index.ts')).toContain("['publish', 'revise', 'end', 'revise_sku', 'inspect_live', 'revise_price'].includes(route)");
   expect(source('supabase/functions/swish-ebay-list/index.ts')).toContain('aspect.localizedAspectName');
  });
  test('native artifacts fail closed without approved persistent certificate',()=>{
-  expect(source('scripts/verify-apk.sh')).toContain('SWISH_RELEASE_CERT_SHA256');
-  expect(source('.github/workflows/build-swish-suite.yml')).toContain('tech, collectibles]');
-  expect(source('.github/workflows/_niche-android.yml')).toContain('configure-niche-signing.mjs');
+  expect(source('scripts/verify-unified-apk.sh')).toContain('SWISH_RELEASE_CERT_SHA256');
+  expect(source('.github/workflows/build-swish-unified.yml')).toContain('node scripts/configure-niche-signing.mjs');
+  expect(source('.github/workflows/build-swish-unified.yml')).toContain('bash scripts/verify-unified-apk.sh');
  });
 });

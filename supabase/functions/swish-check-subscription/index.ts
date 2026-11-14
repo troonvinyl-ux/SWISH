@@ -4,6 +4,7 @@ import modules from '../_shared/niche-modules.json' with { type:'json' };
 import { corsHeaders } from '../_shared/cors.ts';
 import { refreshVerifiedNiches,nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
 import { LEGACY_PREMIUM_TIERS,SWISH_SUBSCRIPTION_PRODUCT } from '../_shared/nicheAuthorization.ts';
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // Reuse the stateless service client in this isolate. No user's Authorization header is attached.
 // supabase-js uses HTTP requests, not checked-out PostgreSQL connections.
 const admin=createClient(Deno.env.get('SUPABASE_URL') ?? '',Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',{
@@ -44,7 +45,7 @@ async function verify(user:{id:string;email?:string},requestedTenant:unknown):Pr
     niche_entitlements:niches,is_platform_owner:owner===true,entitlement_source:source,
     verified_at:new Date().toISOString(),cache_max_age_seconds:300}};
 }
-Deno.serve(async(req:Request)=>{
+Deno.serve(withEdgeFunctionLogging('swish-check-subscription', async(req:Request)=>{
   if(req.method==='OPTIONS')return new Response(null,{headers:corsHeaders});
   const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...corsHeaders,'Content-Type':'application/json'}});
   if(!['POST','GET'].includes(req.method))return json({error:'Method not allowed'},405);
@@ -70,4 +71,4 @@ Deno.serve(async(req:Request)=>{
     console.error('[swish-check-subscription] Verified entitlement refresh failed.');
     return nicheAccessResponse(error)??json({error:'Subscription status temporarily unavailable. Please retry.'},503);
   }
-});
+}));

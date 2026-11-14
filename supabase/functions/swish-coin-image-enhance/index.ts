@@ -1,3 +1,4 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // Shared BackgroundErase endpoint, retaining the existing route for every niche/legacy caller.
 // Provider credentials are read only inside Edge shared modules; originals are never overwritten.
 import { serveModule } from '../_shared/moduleScope.ts';
@@ -9,7 +10,7 @@ import { BackgroundEraseError } from '../_shared/backgroundEraseService.ts';
 const jsonResponse=(body:Record<string,unknown>,status=200)=>new Response(JSON.stringify(body),{status,headers:{...corsHeaders,'Content-Type':'application/json'}});
 const flights=new Map<string,Promise<Record<string,unknown>>>();
 const rates=new Map<string,number[]>();
-serveModule(async req=>{
+serveModule(withEdgeFunctionLogging('swish-coin-image-enhance', async req=>{
  if(req.method==='OPTIONS')return new Response('ok',{headers:corsHeaders});
  if(req.method!=='POST')return jsonResponse({error:'POST required'},405);
  try{
@@ -55,4 +56,4 @@ serveModule(async req=>{
   console.error('[swish-coin-image-enhance] request failed.');
   return jsonResponse({error:'Background removal could not complete. Continue with the unchanged original photograph.',code:'STUDIO_FAILED'},503);
  }
-});
+}));

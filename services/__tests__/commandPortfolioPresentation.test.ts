@@ -15,7 +15,7 @@ describe('Master Minority Report presentation and count contract',()=>{
   expect(component).toContain('Show operational detail');
   expect(component).toContain('Hide operational detail');
   expect(component).toContain('accessibilityState={{expanded:showDetails}}');
-  expect(component).toContain('Open workspace');
+  expect(component).toContain('Open ${NICHE_MODULES[id].name} workspace');
   expect(component).not.toContain('CANONICAL WORKSPACE');
  });
  test('portfolio aggregates unique external listing identities and one draft per physical item',()=>{

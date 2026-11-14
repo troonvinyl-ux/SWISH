@@ -27,8 +27,8 @@ test.each(['tech', 'collectibles', 'tunes_flip', 'trading_cards'] as const)('%s 
   expect(JSON.stringify(lead)).toBe(before);
   expect(marketValueAmount(result.result)).toBe(6.5); // Same midpoint as listing UI, not the £7 selling recommendation.
 });
-test('invalid barcode/title and photo-only niche do not call pricing', async () => {
-  for (const entry of [{ ...input(), lead: { ...lead, gtin: 'invalid' } }, { ...input(), lead: { ...lead, title: '' } }, { ...input(), nicheId: 'coins' }, { ...input(), nicheId: 'unknown' }]) expect((await getBarcodeMarketValue(entry)).result).toBeNull();
+test('invalid barcode/title and barcode-disabled niche do not call pricing', async () => {
+  for (const entry of [{ ...input(), lead: { ...lead, gtin: 'invalid' } }, { ...input(), lead: { ...lead, title: '' } }, { ...input(), nicheId: 'stamps' }, { ...input(), nicheId: 'unknown' }]) expect((await getBarcodeMarketValue(entry)).result).toBeNull();
   expect(getMarketValue).not.toHaveBeenCalled();
 });
 test('completed pricing is not reused across requests and concurrent duplicate scans use one flight', async () => {

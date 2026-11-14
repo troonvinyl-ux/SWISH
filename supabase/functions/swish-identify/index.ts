@@ -1,3 +1,4 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // SWISH AI Item Identification — Edge Function v6
 //
 // v6 CHANGES — PREMIUM ENTITLEMENT FIX:
@@ -1586,7 +1587,7 @@ async function runCoinResearch(id: any, known: Record<string, any>, numista: Num
 }
 
 // ── Main handler ───────────────────────────────────────────────────────────────
-serveModule(async (req: Request) => {
+serveModule(withEdgeFunctionLogging('swish-identify', async (req: Request) => {
   const startedAt = Date.now();
   let requestId = crypto.randomUUID();
   const failure = (message: string, status: number, code: string) => new Response(JSON.stringify({ error: message, code, requestId }), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -2133,4 +2134,4 @@ The caller will use only the requested output (title or description). Do not inv
     console.error(JSON.stringify({ event: 'identify_failed', requestId, durationMs: Date.now() - startedAt }));
     return failure('Photo identification could not complete. Your photos are retained; retry Identify.', 500, 'IDENTIFICATION_FAILED');
   }
-});
+}));

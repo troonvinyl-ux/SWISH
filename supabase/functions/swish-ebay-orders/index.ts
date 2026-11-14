@@ -1,3 +1,4 @@
+import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // Shared eBay order sync: explicit payment + shipping evidence, atomic line ingestion, strict niche isolation.
 import { serveModule } from '../_shared/moduleScope.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -42,7 +43,7 @@ async function tradingOrders(token:string,clientId:string,days:number){
  return {lines,errors};
 }
 async function workers<T>(values:T[],work:(value:T)=>Promise<void>){let next=0;await Promise.all(Array.from({length:Math.min(4,values.length)},async()=>{for(;;){const index=next++;if(index>=values.length)return;await work(values[index]);}}));}
-serveModule(async(req:Request)=>{
+serveModule(withEdgeFunctionLogging('swish-ebay-orders', async(req:Request)=>{
  if(req.method==='OPTIONS')return new Response(null,{headers:corsHeaders});if(req.method!=='POST')return json({error:'Method not allowed'},405);
  let logId='';const db=adminClient();
  try{
@@ -95,4 +96,4 @@ serveModule(async(req:Request)=>{
   if(completed.error)return json({...result,success:false,partial:true,error:'Orders were processed, but sync outcome logging is pending. Refresh saved orders before retrying.'});
   console.log(`[SWISH shared orders] niche=${nicheId} imported=${imported} updated=${updated} skipped=${skipped} errors=${errors.length}`);return json({...result,error:partial?'Some order evidence could not be synchronized. Saved successful lines are retained; review the issues.':undefined});
  }catch(cause){const message=cause instanceof Error?cause.message:'Order sync failed';if(logId)await db.from('ebay_sync_log').update({status:'failed',error_message:message,completed_at:new Date().toISOString()}).eq('id',logId);console.error('[SWISH shared orders] Sync not confirmed');return json({success:false,error:message},503);}
-});
+}));

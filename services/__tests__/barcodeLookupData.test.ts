@@ -56,7 +56,7 @@ test('malformed and wrong-GTIN responses cannot become fabricated matches or emp
 });
 
 test('showing a model-free lead does not bypass photo or edition corroboration', () => {
-  const result: any = { specialistId: NICHE_MODULES.collectibles.defaultSpecialist, attributes: {}, attributesConfirmed: {}, evidenceContradictory: [], condition: 'Used', conditionNotes: '' };
+  const result: any = { specialistId: NICHE_MODULES.collectibles.defaultSpecialist, canonicalTitle: game.title, attributes: {}, attributesConfirmed: {}, evidenceContradictory: [], condition: 'Used', conditionNotes: '' };
   expect(barcodeAgreesWithPhotos(game, result)).toBe(false);
   const enriched = enrichQuickIdentification(result, 'collectibles', game, {});
   expect(enriched.attributesConfirmed.Platform).toBeUndefined();

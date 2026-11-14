@@ -4,7 +4,7 @@ import modules from './niche-modules.json' with { type: 'json' };
 export const REPRICE_NICHE_SPECIALISTS: Record<string, readonly string[]> = Object.fromEntries(
   Object.entries(modules.products).map(([nicheId, product]) => [
     nicheId,
-    [...product.specialists],
+    [...product.specialists, ...(product.legacySpecialists ?? [])],
   ]),
 );
 
