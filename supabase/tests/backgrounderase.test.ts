@@ -6,6 +6,7 @@ import { processStudioCopy, studioServerConfig, encodeStudioPng, attachStudioMet
 import { SMART_STUDIO_VERSION } from '../functions/_shared/smartStudio.ts';
 const fakeKey='fixture-server-key-not-a-credential';
 function raster(width=320,height=320){const data=new Uint8Array(width*height*4);for(let i=0;i<data.length;i+=4){data[i]=140;data[i+1]=160;data[i+2]=180;data[i+3]=255;}return {width,height,data};}
+const pngResponseBody=(bytes:Uint8Array)=>new Blob([Uint8Array.from(bytes)],{type:'image/png'});
 Deno.test('one server POST uses only multipart contract; output pixels survive metadata attachment',async()=>{
  const input=raster(),output=raster();output.data[3]=0;
  const source=encodeStudioPng(input),cutout=encodeStudioPng(output);
@@ -15,7 +16,7 @@ Deno.test('one server POST uses only multipart contract; output pixels survive m
   calls++;assertEquals(String(url),'https://api.backgrounderase.com/v2');assertEquals(options?.method,'POST');assertEquals((options?.headers as Record<string,string>)['x-api-key'],fakeKey);assertEquals(options?.redirect,'error');
   const form=options?.body as FormData;assert(form instanceof FormData);assert(form.get('image_file') instanceof Blob);
   assertEquals(form.get('format'),'png');assertEquals(form.get('channels'),'rgba');assertEquals(form.get('size'),'full');assertEquals(form.get('crop'),'false');assertEquals(form.get('despill'),'false');assertEquals(form.get('bg_color'),null);assertEquals(form.get('image_url'),null);
-  return new Response(cutout,{headers:{'Content-Type':'image/png'}});
+  return new Response(pngResponseBody(cutout),{headers:{'Content-Type':'image/png'}});
  });
  try{
   const data=`data:image/png;base64,${btoa(String.fromCharCode(...source))}`;
@@ -39,6 +40,6 @@ Deno.test('provider network rejection does not replay a paid call',async()=>{
 for(const failure of ['opaque','empty','dimensions','jpeg'])Deno.test(`reject ${failure} output instead of claiming a valid cutout`,async()=>{
  const source=encodeStudioPng(raster());const output=raster(failure==='dimensions'?321:320);if(failure==='empty')for(let i=3;i<output.data.length;i+=4)output.data[i]=0;else if(failure!=='opaque')output.data[3]=0;
  const png=failure==='jpeg'?new Uint8Array([255,216,255,217]):encodeStudioPng(output);
- const env=stub(Deno.env,'get',()=>fakeKey);const network=stub(globalThis,'fetch',async()=>new Response(png,{headers:{'Content-Type':'image/png'}}));
+ const env=stub(Deno.env,'get',()=>fakeKey);const network=stub(globalThis,'fetch',async()=>new Response(pngResponseBody(png),{headers:{'Content-Type':'image/png'}}));
  try{const data=`data:image/png;base64,${btoa(String.fromCharCode(...source))}`;await assertRejects(()=>processStudioCopy(data,'coins','','',[],studioServerConfig()),BackgroundEraseError);}finally{env.restore();network.restore();}
 });
