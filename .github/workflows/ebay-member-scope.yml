@@ -4,6 +4,9 @@ on:
     branches: [main]
     paths:
       - 'supabase/functions/_shared/moduleScope.ts'
+      - 'supabase/functions/swish-ebay-list/index.ts'
+      - 'supabase/functions/swish-ebay-listing-status/index.ts'
+      - 'services/__tests__/discogsListingAccess.test.ts'
       - 'supabase/functions/_shared/ebayAccount*.ts'
       - 'supabase/functions/_shared/ebayAuthorization*.ts'
       - 'supabase/functions/_shared/credentialCrypto.ts'
@@ -23,6 +26,6 @@ jobs:
         with:
           deno-version: v2.x
       - name: Check verified request scope and dependencies
-        run: deno check --no-config --node-modules-dir=none supabase/functions/_shared/moduleScope.ts
+        run: deno check --no-config --node-modules-dir=none supabase/functions/_shared/moduleScope.ts supabase/functions/swish-ebay-list/index.ts supabase/functions/swish-ebay-listing-status/index.ts
       - name: Category, member isolation and denial regressions
         run: deno test --no-config --node-modules-dir=none --allow-env --allow-net=deno.land,registry.npmjs.org supabase/tests/module_member_scope.test.ts
