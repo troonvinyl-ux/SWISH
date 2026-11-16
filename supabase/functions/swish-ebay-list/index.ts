@@ -2452,6 +2452,7 @@ async function handleRequest(req: Request): Promise<Response> {
           .map((value: any) => ({ localizedValue: typeof value === 'string' ? value : String(value?.localizedValue ?? '') }))
           .filter((value: { localizedValue: string }) => value.localizedValue),
         aspectConstraint: {
+          itemToAspectCardinality: String(aspect.aspectConstraint?.itemToAspectCardinality ?? aspect.itemToAspectCardinality ?? 'SINGLE'),
           aspectRequired: aspect.aspectConstraint?.aspectRequired === true || aspect.required === true,
           aspectUsage: aspect.aspectConstraint?.aspectUsage ?? aspect.usage ?? (aspect.required === true ? 'REQUIRED' : 'OPTIONAL'),
         },
