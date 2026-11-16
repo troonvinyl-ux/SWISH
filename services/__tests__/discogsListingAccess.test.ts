@@ -15,8 +15,13 @@ describe('Discogs provenance does not block music listing operations', () => {
     expect(source(`supabase/functions/${name}/index.ts`)).toContain('serveModule(');
   });
   test('authentication, entitlement and resource ownership still precede handler execution', () => {
-    const handler = scope.indexOf('return handler(new Request(');
-    expect(handler).toBeGreaterThan(-1);
+    const memberHandler = scope.indexOf('return runMemberEbayScope(');
+    const otherHandler = scope.indexOf('return handler(scopedRequest)');
+    expect(memberHandler).toBeGreaterThan(-1);
+    expect(otherHandler).toBeGreaterThan(memberHandler);
+    const handler = Math.min(memberHandler, otherHandler);
+    expect(scope).toContain('const scopedRequest=new Request(');
+    expect(scope).toContain("operation==='swish-ebay-list'||operation==='swish-ebay-listing-status'");
     // No provenance rewrites or client-side approval grants accompany removal.
     expect(scope).not.toContain('.update(');
     expect(scope).not.toContain('.insert(');
