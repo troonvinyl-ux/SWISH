@@ -429,7 +429,7 @@ async function getCachedOrFetchPolicies(
       store_category_tree: { ...existingObj, policies },
       policies_cached_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    }).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').then(() => {}).catch(() => {});
+    }).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').then(() => {}, () => {});
     return policies;
   } catch (e: any) {
     console.log(`[SWISH] Policy fetch error/timeout: ${e.message} — proceeding with ID-only validation`);
@@ -800,7 +800,7 @@ async function resolveLeafCategory(
             category_id: best.id, category_name: best.name, is_leaf: true, active: true,
             last_synced_at: now, updated_at: now },
           { onConflict: 'marketplace_id,category_id' }
-        ).then(() => {}).catch(() => {});
+        ).then(() => {}, () => {});
       }
       console.log(`[SWISH] Title-resolved to EBAY_GB leaf: categoryId=${best.id}, name="${best.name}", confidence=${best.confidence}, treeId=${treeId}, treeVersion=${treeVersion}`);
       return { resolvedId: best.id, resolvedName: best.name, categoryName: best.name, treeId, treeVersion, wasResolved: true, confidence: best.confidence };
@@ -823,7 +823,7 @@ async function resolveLeafCategory(
             category_id: labelMatch.id, category_name: labelMatch.name, is_leaf: true, active: true,
             last_synced_at: now, updated_at: now },
           { onConflict: 'marketplace_id,category_id' }
-        ).then(() => {}).catch(() => {});
+        ).then(() => {}, () => {});
       }
       console.log(`[SWISH] Saved-label-resolved to live EBAY_GB leaf: categoryId=${labelMatch.id}, name="${labelMatch.name}"`);
       return { resolvedId: labelMatch.id, resolvedName: labelMatch.name, categoryName: labelMatch.name,
@@ -2448,6 +2448,9 @@ async function handleRequest(req: Request): Promise<Response> {
     if (!cacheError && cacheIsRecent && Array.isArray(cachedAspectRow?.aspects)) {
       const cachedAspects = cachedAspectRow.aspects.map((aspect: any) => ({
         aspectName: String(aspect.localizedAspectName ?? aspect.aspectName ?? aspect.name ?? '').trim(),
+        aspectValues: (Array.isArray(aspect.aspectValues) ? aspect.aspectValues : Array.isArray(aspect.values) ? aspect.values : [])
+          .map((value: any) => ({ localizedValue: typeof value === 'string' ? value : String(value?.localizedValue ?? '') }))
+          .filter((value: { localizedValue: string }) => value.localizedValue),
         aspectConstraint: {
           aspectRequired: aspect.aspectConstraint?.aspectRequired === true || aspect.required === true,
           aspectUsage: aspect.aspectConstraint?.aspectUsage ?? aspect.usage ?? (aspect.required === true ? 'REQUIRED' : 'OPTIONAL'),

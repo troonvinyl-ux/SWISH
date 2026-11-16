@@ -10,7 +10,7 @@ export function specialistNiche(specialistId: string): string | null {
 export function canonicalSpecialist(specialistId: string): string | null {
   for (const config of Object.values(modules.products)) {
     if (config.specialists.includes(specialistId)) return specialistId;
-    if (config.legacySpecialists.includes(specialistId)) return config.defaultSpecialist;
+    if ((config.legacySpecialists as readonly string[]).includes(specialistId)) return config.defaultSpecialist;
   }
   // Preserve supported non-product specialist workflows, without granting another niche.
   return ['curiosities_collectibles','stamps','vinyl_records','cryptocurrency'].includes(specialistId) ? specialistId : null;
