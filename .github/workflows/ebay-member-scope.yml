@@ -1,0 +1,28 @@
+name: eBay member request scope
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/_shared/moduleScope.ts'
+      - 'supabase/functions/_shared/ebayAccount*.ts'
+      - 'supabase/functions/_shared/ebayAuthorization*.ts'
+      - 'supabase/functions/_shared/credentialCrypto.ts'
+      - 'supabase/tests/module_member_scope.test.ts'
+      - '.github/workflows/ebay-member-scope.yml'
+  pull_request:
+    paths: ['supabase/**', '.github/workflows/ebay-member-scope.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  request-scope:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Check verified request scope and dependencies
+        run: deno check supabase/functions/_shared/moduleScope.ts
+      - name: Category, member isolation and denial regressions
+        run: deno test --allow-env --allow-net=deno.land,registry.npmjs.org supabase/tests/module_member_scope.test.ts

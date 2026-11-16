@@ -36,7 +36,7 @@ async function getKey(): Promise<CryptoKey> {
     throw new Error('[CredentialCrypto] SWISH_CREDENTIAL_KEY must be exactly 32 bytes');
   }
 
-  return crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+  return crypto.subtle.importKey('raw', new Uint8Array(keyBytes).buffer, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
 }
 
 export async function encryptCredentials(credentials: Record<string, unknown>): Promise<string> {
@@ -77,7 +77,7 @@ export async function decryptCredentials(stored: string): Promise<Record<string,
   const key = await getKey();
   let plaintextBuffer: ArrayBuffer;
   try {
-    plaintextBuffer = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+    plaintextBuffer = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(iv) }, key, new Uint8Array(ciphertext).buffer);
   } catch {
     throw new Error('[CredentialCrypto] Decryption failed — wrong key or corrupted data');
   }

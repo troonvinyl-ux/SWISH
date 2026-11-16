@@ -5,6 +5,7 @@ import { normalizeIdentifySpecialist } from './identifySpecialistCompatibility.t
 import { moduleRequestAliasIssue, MODULE_RESOURCE_ALIASES } from './moduleRequestContract.ts';
 import { nicheBarcodeAllowed } from './nichePolicy.ts';
 import { withEdgeFunctionLogging, isEdgeFunctionLogged } from './edgeFunctionLogging.ts';
+import { runMemberEbayScope } from './ebayAccountScope.ts';
 type Handler = (request: Request) => Response | Promise<Response>;
 const json = (message: string, status: number) => new Response(JSON.stringify({ error: message }), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -84,7 +85,13 @@ export function withModuleScope(handler: Handler): Handler {
    const resourceAliases=Object.fromEntries(MODULE_RESOURCE_ALIASES.flatMap(([,left,right])=>body[left]!=null||body[right]!=null?[[left,body[left]??body[right]],[right,body[left]??body[right]]]:[]));
    const scoped={...body,...resourceAliases,...(itemIds!=null?{itemIds,item_ids:itemIds}:{}),...(listingIds!=null?{listingIds,listing_ids:listingIds}:{}),tenantId:tenant,tenant_id:tenant,nicheId,niche_id:nicheId,specialistIds:specialists,specialistId:requestedSpecialistId ?? requestedSpecialistAlias ?? product.defaultSpecialist,...(body.specialist_id!=null?{specialist_id:requestedSpecialistAlias}: {})};
    const headers=new Headers(request.headers);headers.set('Content-Type','application/json');headers.delete('Content-Length');
-   return handler(new Request(request.url,{method:request.method,headers,body:JSON.stringify(scoped)}));
+   const scopedRequest=new Request(request.url,{method:request.method,headers,body:JSON.stringify(scoped)});
+   // Establish the member context after all verified module/resource checks.
+   // Taxonomy uses no inherited seller; seller routes retain binding/session gates.
+   if(operation==='swish-ebay-list'||operation==='swish-ebay-listing-status'){
+    return runMemberEbayScope(scopedRequest,user.id,tenant,scoped,handler);
+   }
+   return handler(scopedRequest);
   }catch{console.error('[SWISH module scope] Authorization failed; no request payload logged.');return json('Module request could not be verified. Retry.',503);}
  };
 }
