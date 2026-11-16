@@ -1,5 +1,6 @@
 // Bounded, authenticated status-only reconciliation. Never creates listings or guesses sale prices.
 import { serveModule } from '../_shared/moduleScope.ts';
+import { ebayAdminClient, ebayFetch as fetch } from '../_shared/ebayAccountScope.ts';
 import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
@@ -24,7 +25,7 @@ serveModule(withEdgeFunctionLogging('swish-ebay-listing-status', async req => {
     const userClient=createClient(Deno.env.get('SUPABASE_URL')??'',Deno.env.get('SUPABASE_ANON_KEY')??'');
     const {data:{user},error:authError}=await userClient.auth.getUser(token);
     if(authError || !user) return response({error:'Sign in again to check eBay status'},401);
-    const db=createClient(Deno.env.get('SUPABASE_URL')??'',Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')??'');
+    const db=ebayAdminClient();
     const {data:membership,error:memberError}=await db.from('tenant_memberships').select('id').eq('tenant_id',tenantId).eq('user_id',user.id).maybeSingle();
     if(memberError || !membership) return response({error:'Account access denied'},403);
     const ids=[...new Set<string>(listingIds)]; const product=products[nicheId];

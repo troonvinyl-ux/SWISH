@@ -34,6 +34,7 @@ import { availableListingPhotos, selectedListingPhotos, processedListingPhotoIss
 import { photoPersistenceIssue } from '../_shared/photoPersistence.ts';
 import { readStudioMetadata } from '../_shared/smartStudioEngine.ts';
 import { serveModule } from '../_shared/moduleScope.ts';
+import { ebayAdminClient, ebayFetch as fetch } from '../_shared/ebayAccountScope.ts';
 import { descriptionXml, verifyRevisionContent } from '../_shared/ebayRevisionContract.ts';
 import { parseLiveContent } from '../_shared/ebayLiveContent.ts';
 import { parseEbayListingStatus } from '../_shared/listingStatus.ts';
@@ -104,12 +105,7 @@ async function getUkCategoryTreeId(token: string): Promise<{ treeId: string; ver
 
 // ── Admin client ──────────────────────────────────────────────────────────────
 
-function adminClient() {
-  return createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-  );
-}
+function adminClient() { return ebayAdminClient(); }
 
 function jsonResponse(body: unknown, status = 200) {
   // Preserve exact eBay detail while attaching an actionable clarification.
