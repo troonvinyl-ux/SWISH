@@ -26,7 +26,7 @@ jobs:
       - name: Shared service and existing publication/isolation regressions (mocked)
         run: npx --no-install jest --config jest.config.ci.js --runInBand services/__tests__/inventoryRemoval.test.ts services/__tests__/listingPublication.test.ts services/__tests__/nicheIsolation.test.ts
       - name: Seller end protocol tests (injected transport; no live requests)
-        run: deno test supabase/tests/ebay_end_policy.test.ts
-      - run: deno check supabase/functions/swish-ebay-list/index.ts
+        run: deno test --no-config --node-modules-dir=none supabase/tests/ebay_end_policy.test.ts
+      - run: deno check --no-config --node-modules-dir=none supabase/functions/swish-ebay-list/index.ts
       - run: node scripts/validate-edge-deployment.mjs
 # No provider keys, authenticated fixtures, inventory mutations, live eBay calls or deployment.
