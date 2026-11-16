@@ -23,6 +23,6 @@ jobs:
         with:
           deno-version: v2.x
       - name: Check verified request scope and dependencies
-        run: deno check supabase/functions/_shared/moduleScope.ts
+        run: deno check --no-config --node-modules-dir=none supabase/functions/_shared/moduleScope.ts
       - name: Category, member isolation and denial regressions
-        run: deno test --allow-env --allow-net=deno.land,registry.npmjs.org supabase/tests/module_member_scope.test.ts
+        run: deno test --no-config --node-modules-dir=none --allow-env --allow-net=deno.land,registry.npmjs.org supabase/tests/module_member_scope.test.ts
