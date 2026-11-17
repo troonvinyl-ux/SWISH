@@ -29,7 +29,7 @@ serveModule(withEdgeFunctionLogging('swish-ebay-listing-status', async req => {
     const {data:membership,error:memberError}=await db.from('tenant_memberships').select('id').eq('tenant_id',tenantId).eq('user_id',user.id).maybeSingle();
     if(memberError || !membership) return response({error:'Account access denied'},403);
     const ids=[...new Set<string>(listingIds)]; const product=products[nicheId];
-    const {data:rows,error:scopeError}=await db.from('listings').select('id,external_listing_id,items!inner(tenant_id,specialist_id)').eq('tenant_id',tenantId).eq('marketplace_id','ebay').eq('items.tenant_id',tenantId).in('items.specialist_id',[...product.specialists,...product.legacySpecialists]).in('id',ids);
+    const {data:rows,error:scopeError}=await db.from('listings').select('id,external_listing_id,items!inner(tenant_id,specialist_id)').eq('tenant_id',tenantId).in('marketplace_id',['ebay','ebay_gb']).eq('items.tenant_id',tenantId).in('items.specialist_id',[...product.specialists,...product.legacySpecialists]).in('id',ids);
     if(scopeError || rows?.length!==ids.length) return response({error:'Every listing must belong to this account and niche'},403);
     if(rows.some(row=>!/^\d+$/.test(row.external_listing_id??''))) return response({error:'A listing has no valid external eBay identity'},400);
     const {data:connector,error:connectorError}=await db.from('marketplace_connectors').select('credential_ref,status,access_token_expires_at').eq('tenant_id',tenantId).eq('marketplace_id','ebay').maybeSingle();
