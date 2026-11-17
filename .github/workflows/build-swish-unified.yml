@@ -224,11 +224,12 @@ jobs:
           mkdir -p dist
           npx expo config --type public --json > dist/unified-runtime-config.json
           node scripts/verify-unified-config.mjs dist/unified-runtime-config.json
-          npx --no-install expo-updates runtimeversion:resolve --platform android --workflow managed > dist/unified-android-runtime.json
       - name: Generate native project with preserved package identity
         run: npx expo prebuild --platform android --clean
       - run: node scripts/verify-android-sdk-config.mjs
       - run: node scripts/configure-niche-signing.mjs
+      - name: Resolve runtime fingerprint from final Android project
+        run: npx --no-install expo-updates runtimeversion:resolve --platform android --workflow generic > dist/unified-android-runtime.json
       - name: Compile single APK
         run: |
           set -euo pipefail
