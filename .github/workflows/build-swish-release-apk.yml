@@ -1,7 +1,7 @@
 name: Build SWISH unified signed testing APK
 on:
   push:
-    branches: [main]
+    branches: [main, 'fix/unified-apk-*']
     paths:
       - app.json
       - app.config.js
@@ -13,6 +13,7 @@ on:
       - .github/workflows/build-swish-unified.yml
       - .github/workflows/build-swish-release-apk.yml
       - scripts/verify-unified-apk.sh
+      - scripts/gradle-maven-central-mirror.init.gradle
   workflow_dispatch:
     inputs:
       quick_test_apk:
