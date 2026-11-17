@@ -10,7 +10,13 @@ export function parseLiveContent(xml: string, expectedId: string): LiveListingCo
   const item = root.Item;
   if (!item || scalar(item.ItemID).trim() !== expectedId) throw new Error('eBay returned a different listing identity.');
   const listingType = scalar(item.ListingType).trim();
-  const amount = item.StartPrice ?? (listingType === 'FixedPriceItem' ? item.SellingStatus?.CurrentPrice : undefined);
+  // Fixed-price listings expose the currently advertised seller price in
+  // SellingStatus.CurrentPrice. StartPrice may retain the original value after
+  // a seller changes the price, which would leave SWISH stale after a sync.
+  // For auctions, CurrentPrice is a buyer bid, so retain StartPrice instead.
+  const amount = ['FixedPriceItem', 'StoresFixedPrice'].includes(listingType)
+    ? item.SellingStatus?.CurrentPrice ?? item.StartPrice ?? item.BuyItNowPrice
+    : item.StartPrice ?? item.SellingStatus?.CurrentPrice;
   const sellerPrice = Number(scalar(amount));
   const currency = scalar(amount?.['@_currencyID']).trim();
   const description = scalar(item.Description);
