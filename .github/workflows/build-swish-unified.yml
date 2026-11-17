@@ -226,9 +226,21 @@ jobs:
           mkdir -p dist
           npx expo config --type public --json > dist/unified-runtime-config.json
           node scripts/verify-unified-config.mjs dist/unified-runtime-config.json
-          npx --no-install expo-updates runtimeversion:resolve --platform android --workflow managed > dist/unified-android-runtime.json
       - name: Generate native project with preserved package identity
         run: npx expo prebuild --platform android --clean
+      - name: Resolve Android runtime from the exact post-prebuild native tree
+        run: |
+          set -euo pipefail
+          # Expo's fingerprint input changes when prebuild generates android/
+          # and rewrites package.json scripts. The installed APK must be checked
+          # against the same post-prebuild tree used for the Gradle release.
+          npx --no-install expo-updates runtimeversion:resolve --platform android --workflow managed > dist/unified-android-runtime.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const resolved=JSON.parse(fs.readFileSync('dist/unified-android-runtime.json','utf8'));
+          if(!/^[a-f0-9]{40}$/.test(resolved.runtimeVersion||'')) throw Error('Missing post-prebuild Android runtime fingerprint');
+          console.log('Post-prebuild Android native runtime fingerprint: '+resolved.runtimeVersion);
+          NODE
       - run: node scripts/verify-android-sdk-config.mjs
       - run: node scripts/configure-niche-signing.mjs
       - name: Compile single APK (Maven mirror and bounded network retries)
