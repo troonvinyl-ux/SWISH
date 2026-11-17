@@ -42,11 +42,11 @@ test.each(PRODUCTION_NICHE_IDS)('%s uses the same publication evidence contract'
   const state = mapListingPublication({ ...live(), items: { ...live().items, specialist_id: NICHE_MODULES[niche].defaultSpecialist } });
   expect(state.nicheId).toBe(niche); expect(state.reconciled).toBe(true);
 });
-test('saved identities are read in the tenant and marketplace boundary', async () => {
+test('saved eBay and legacy eBay GB identities are read in the tenant boundary', async () => {
   const { queries } = setup();
   expect((await readListingPublication('tenant', 'draft')).error).toBeNull();
   expect(queries[0].eq).toHaveBeenCalledWith('tenant_id', 'tenant');
-  expect(queries[0].eq).toHaveBeenCalledWith('marketplace_id', 'ebay');
+  expect(queries[0].in).toHaveBeenCalledWith('marketplace_id', ['ebay', 'ebay_gb']);
 });
 test('mismatched tenant records cannot be used for status recovery', async () => {
   const { invoke } = setup([{ ...live(), items: { ...draft.items, tenant_id: 'other' } }]);
