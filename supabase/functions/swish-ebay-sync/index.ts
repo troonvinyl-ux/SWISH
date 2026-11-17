@@ -146,7 +146,8 @@ serveModule(withEdgeFunctionLogging('swish-ebay-sync', async(req:Request)=>{
   const specialists=[...products[nicheId].specialists,...products[nicheId].legacySpecialists];
   stageStart=Date.now();const listings:any[]=[];let nextAfterListingId:string|null=null;
   for(let offset=0;offset<5000;offset+=200){
-   let query=client.from('listings').select('id,item_id,external_listing_id,title,description,price,shipping_cost,watchers,views,category_id,updated_at,items!inner(*)').eq('tenant_id',tenantId).eq('items.tenant_id',tenantId).eq('marketplace_id','ebay').in('items.specialist_id',specialists).not('external_listing_id','is',null).neq('external_listing_id','').order('id');
+   // Imported ebay_gb rows use the same seller connection as normalized ebay rows.
+   let query=client.from('listings').select('id,item_id,external_listing_id,title,description,price,shipping_cost,watchers,views,category_id,updated_at,items!inner(*)').eq('tenant_id',tenantId).eq('items.tenant_id',tenantId).in('marketplace_id',['ebay','ebay_gb']).in('items.specialist_id',specialists).not('external_listing_id','is',null).neq('external_listing_id','').order('id');
    if(Array.isArray(itemIds))query=query.in('item_id',itemIds);
    if(afterListingId)query=query.gt('id',afterListingId);
    const links=await query.range(offset,offset+(batched?SYNC_BATCH_SIZE:199)).abortSignal(AbortSignal.timeout(10000));
