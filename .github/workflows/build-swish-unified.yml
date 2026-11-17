@@ -224,18 +224,17 @@ jobs:
           mkdir -p dist
           npx expo config --type public --json > dist/unified-runtime-config.json
           node scripts/verify-unified-config.mjs dist/unified-runtime-config.json
-          npx --no-install expo-updates runtimeversion:resolve --platform android --workflow managed > dist/unified-android-runtime.json
       - name: Generate native project with preserved package identity
         run: npx expo prebuild --platform android --clean
       - run: node scripts/verify-android-sdk-config.mjs
       - run: node scripts/configure-niche-signing.mjs
       - name: Compile single APK
-        env:
-          EXPO_UPDATES_WORKFLOW_OVERRIDE: managed
         run: |
           set -euo pipefail
           cd android
           ./gradlew assembleRelease --no-daemon --max-workers=1 --console=plain -Dorg.gradle.jvmargs="-Xmx5g -XX:MaxMetaspaceSize=1g" 2>&1 | tee ../dist/unified-android-build.log
+      - name: Resolve compiled Android runtime fingerprint
+        run: npx --no-install expo-updates runtimeversion:resolve --platform android --workflow generic > dist/unified-android-runtime.json
       - name: Verify actual APK, certificate and runtime; retain checksums
         run: bash scripts/verify-unified-apk.sh android/app/build/outputs/apk/release/app-release.apk
       - name: Retain compiled APK for signing investigation if verification fails
