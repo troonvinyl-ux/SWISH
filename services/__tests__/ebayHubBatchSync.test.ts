@@ -14,3 +14,10 @@ test('unconfirmed response stops without retrying',async()=>{const invoke=setup(
 test('workspace change stops before another request',async()=>{const invoke=setup([batch({nextAfterListingId:cursor})]);let active=true;const result=await runNicheEbayOperation('tenant','coins','sync',{isCurrent:()=>active,onProgress:()=>{active=false;}});expect(result.error).toContain('changed');expect(invoke).toHaveBeenCalledTimes(1);});
 test('repeated continuation cannot loop indefinitely',async()=>{const invoke=setup([batch({nextAfterListingId:cursor}),batch({nextAfterListingId:cursor})]);expect((await runNicheEbayOperation('tenant','coins','sync')).error).toContain('continuation');expect(invoke).toHaveBeenCalledTimes(2);});
 test('shared sync does not use whole-account selling history or mutate restricted rows',()=>{const edge=fs.readFileSync('supabase/functions/swish-ebay-sync/index.ts','utf8');expect(edge).not.toContain('fetchSellingPage(');expect(edge).toContain('SYNC_BATCH_SIZE');expect(edge).toContain('isRemovedPolicyListing(message)');expect(edge).toContain('if(!observations.has(String(listing.external_listing_id)))continue');expect(edge).toContain('swish_apply_ebay_listing_status');expect(edge).toContain('SWISH sync persisted readback failed');});
+
+test('sync and status recovery include legacy eBay GB listing rows',()=>{
+ const sync=fs.readFileSync('supabase/functions/swish-ebay-sync/index.ts','utf8');
+ const status=fs.readFileSync('supabase/functions/swish-ebay-listing-status/index.ts','utf8');
+ expect(sync).toContain(".in('marketplace_id',['ebay','ebay_gb'])");
+ expect(status).toContain(".in('marketplace_id',['ebay','ebay_gb'])");
+});
