@@ -5,6 +5,7 @@ import {getProductionNicheSpecialistIds} from '@/services/nicheRouting';
 import {PRODUCTION_NICHE_IDS} from '@/constants/niches';
 import {isLiveListing,isDraftListing} from '@/services/listingLifecycle';
 import {parseEbayListingStatus} from '../../supabase/functions/_shared/listingStatus';
+import fs from 'node:fs';
 const tabs=['stock','draft','live','sold'] as const;
 const xml=(state:string,quantity=1,sold=1,id='800434360561')=>`<GetItemResponse><Ack>Success</Ack><Item><ItemID>${id}</ItemID><Quantity>${quantity}</Quantity><SellingStatus><ListingStatus>${state}</ListingStatus><QuantitySold>${sold}</QuantitySold></SellingStatus><ListingDetails><EndTime>2026-10-05T18:27:00.000Z</EndTime></ListingDetails></Item></GetItemResponse>`;
 describe('Actual eBay status evidence',()=>{
@@ -54,4 +55,11 @@ describe('Every niche queries only its own tab at the server',()=>{
  test('counts use one RLS-enforced aggregate request with the same niche scope',async()=>{
   const result=await loadInventoryCounts('tenant','clothing');expect(result.counts).toEqual({stock:3,draft:3,live:3,sold:3});expect(client.rpc).toHaveBeenCalledWith('swish_inventory_tab_counts',{p_tenant_id:'tenant',p_niche_id:'clothing'});expect(client.rpc).toHaveBeenCalledTimes(1);expect(client.from).not.toHaveBeenCalled();
  });
+});
+
+test('canonical projection sorts one item by its latest confirmed eBay status, not an older active relationship',()=>{
+ const migration=fs.readFileSync('supabase/migrations/20261126_ebay_item_status_projection.sql','utf8');
+ expect(migration).toContain("when i.observed_ebay_status='active' and i.observed_ebay_id is not null then 'live'");
+ expect(migration).toContain("when i.observed_ebay_status in ('ended','sold') then 'stock'");
+ expect(migration).toContain('coalesce(x.updated_at,x.created_at) desc,x.id');
 });
