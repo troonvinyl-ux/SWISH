@@ -3,6 +3,9 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 import { getSupabaseClient } from '@/template';
 import { resolveProductionNiche } from './nicheRouting';
 
+// Imported eBay GB rows belong to the same seller connection as current eBay rows.
+const EBAY_LISTING_MARKETPLACES = ['ebay', 'ebay_gb'];
+
 export interface ListingPublication {
   listingId: string; itemId: string; nicheId: string; externalListingId: string;
   status: string; itemStatus: string; publishedAt?: string; endedAt?: string;
@@ -27,7 +30,7 @@ export async function readListingPublication(tenantId: string, listingId: string
   try {
     const { data, error } = await getSupabaseClient().from('listings')
       .select('id,item_id,status,external_listing_id,published_at,ended_at,publish_claim_id,items!inner(tenant_id,specialist_id,status,sold_at)')
-      .eq('id', listingId).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle();
+      .eq('id', listingId).eq('tenant_id', tenantId).in('marketplace_id', EBAY_LISTING_MARKETPLACES).maybeSingle();
     if (error || !data) return { publication: null, error: error?.message ?? 'Saved listing could not be checked.' };
     const item = Array.isArray(data.items) ? data.items[0] : data.items;
     if (item?.tenant_id !== tenantId || !resolveProductionNiche(item?.specialist_id)) return { publication: null, error: 'Listing is outside this verified workspace.' };
