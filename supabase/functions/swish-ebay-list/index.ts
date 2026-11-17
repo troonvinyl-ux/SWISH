@@ -60,6 +60,8 @@ const EBAY_TOKEN_URL       = 'https://api.ebay.com/identity/v1/oauth2/token';
 const EBAY_ACCOUNT_API     = 'https://api.ebay.com/sell/account/v1';
 const EBAY_TAXONOMY_API    = 'https://api.ebay.com/commerce/taxonomy/v1';
 const EBAY_UK_CATEGORY_TREE_ID = '3';
+// Imported eBay GB listing rows belong to the same seller connection as current eBay rows.
+const EBAY_LISTING_MARKETPLACES = ['ebay', 'ebay_gb'];
 
 // ── Dynamic category tree ID cache ───────────────────────────────────────────
 let _categoryTreeIdCache: { treeId: string; version: string; fetchedAt: number } | null = null;
@@ -1377,7 +1379,7 @@ async function handleRequest(req: Request): Promise<Response> {
     if (!body.listingId || !auth.userId) return jsonResponse({ error: 'Authenticated saved listing required.' }, 400);
     const { data: resource, error: resourceError } = await supabase.from('listings')
       .select('item_id, items!inner(tenant_id,specialist_id,attributes,media)')
-      .eq('id', body.listingId).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle();
+      .eq('id', body.listingId).eq('tenant_id', tenantId).in('marketplace_id', EBAY_LISTING_MARKETPLACES).maybeSingle();
     const ownedItem = (resource as any)?.items;
     const niche = specialistNiche(String(ownedItem?.specialist_id ?? ''));
     if (resourceError || !ownedItem || ownedItem.tenant_id !== tenantId || !niche || (body.nicheId && body.nicheId !== niche)) {
@@ -1883,7 +1885,7 @@ async function handleRequest(req: Request): Promise<Response> {
     const price = Math.round(newPrice * 100) / 100;
     const loaded = await supabase.from('listings')
       .select('id,item_id,external_listing_id,price,status,floor_price,ceiling_price,updated_at,items!inner(tenant_id,specialist_id,attributes)')
-      .eq('id', body.listingId).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle();
+      .eq('id', body.listingId).eq('tenant_id', tenantId).in('marketplace_id', EBAY_LISTING_MARKETPLACES).maybeSingle();
     const row = loaded.data as any;
     if (loaded.error || !row || row.items?.tenant_id !== tenantId || !['active','live','published'].includes(row.status) || !/^\d+$/.test(String(row.external_listing_id ?? ''))) return jsonResponse({ success: false, error: 'Open a live eBay listing in this workspace before repricing.' }, 409);
     if (Math.round(Number(row.price) * 100) !== Math.round(expectedPrice * 100)) return jsonResponse({ success: false, error: 'The saved price changed. Refresh inventory before applying this recommendation.' }, 409);
@@ -1928,7 +1930,7 @@ async function handleRequest(req: Request): Promise<Response> {
       .select('id, item_id, external_listing_id')
       .eq('id', listingId)
       .eq('tenant_id', tenantId)
-      .eq('marketplace_id', 'ebay')
+      .in('marketplace_id', EBAY_LISTING_MARKETPLACES)
       .maybeSingle();
     if (ownedListingError || !ownedListing) {
       return jsonResponse({ success: false, error: 'Listing not found or access denied.' }, 404);
@@ -2003,7 +2005,7 @@ async function handleRequest(req: Request): Promise<Response> {
       .select('id, item_id, external_listing_id')
       .eq('id', listingId)
       .eq('tenant_id', tenantId)
-      .eq('marketplace_id', 'ebay')
+      .in('marketplace_id', EBAY_LISTING_MARKETPLACES)
       .maybeSingle();
 
     if (ownedListingError || !ownedListing) {
@@ -2086,7 +2088,7 @@ async function handleRequest(req: Request): Promise<Response> {
     const { listingId } = body;
     const { data: ownedListing, error: ownershipError } = await supabase.from('listings')
       .select('id,item_id,external_listing_id,title,description,price,category_id,updated_at,items!inner(tenant_id,specialist_id,attributes,media,condition_notes,condition,quantity,sku)')
-      .eq('id', listingId).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle();
+      .eq('id', listingId).eq('tenant_id', tenantId).in('marketplace_id', EBAY_LISTING_MARKETPLACES).maybeSingle();
     const ownedItem: any = (ownedListing as any)?.items;
     const externalListingId = String(ownedListing?.external_listing_id ?? '').trim();
     if (ownershipError || !ownedListing || ownedItem?.tenant_id !== tenantId || !/^\d+$/.test(externalListingId) ||
