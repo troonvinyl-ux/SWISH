@@ -1,7 +1,7 @@
 name: Build SWISH unified signed testing APK
 on:
   push:
-    branches: [main]
+    branches: [main, fix/android-runtime-fingerprint-verifier]
     paths:
       - app.json
       - app.config.js
