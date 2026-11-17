@@ -40,3 +40,19 @@ test('EAS profiles select the unified shell without invalid empty environment va
   for(const value of Object.values(profile.env))assert.ok(typeof value==='string'&&value.length>0);
  }
 });
+
+test('APK and Android OTA resolve runtime only after regenerating the same native tree',()=>{
+ const build=read('build-swish-unified.yml').jobs.android.steps;
+ const generated=build.findIndex(step=>step.name?.startsWith('Generate native project'));
+ const runtime=build.findIndex(step=>step.name?.startsWith('Resolve Android runtime from the exact post-prebuild'));
+ const apk=build.findIndex(step=>step.name?.startsWith('Verify actual APK'));
+ assert.ok(generated>=0 && runtime>generated && apk>runtime, 'native APK runtime must be resolved after prebuild and verified after compilation');
+ assert.match(build[runtime].run,/runtimeversion:resolve --platform android --workflow managed/);
+ const ota=read('publish-swish-ota.yml').jobs.publish.steps;
+ const regen=ota.findIndex(step=>step.name?.startsWith('Recreate the Android CNG native fingerprint'));
+ const verify=ota.findIndex(step=>step.name?.startsWith('Verify actual selected-platform artifacts'));
+ const publish=ota.findIndex(step=>step.name?.startsWith('Publish one atomic'));
+ assert.ok(regen>=0 && verify>regen && publish>verify, 'native OTA fingerprint and baseline validation must precede publication');
+ assert.match(ota[regen].run,/expo prebuild --platform android --clean --no-install/);
+ assert.match(ota[regen].run,/runtimeversion:resolve --platform android --workflow managed/);
+});
