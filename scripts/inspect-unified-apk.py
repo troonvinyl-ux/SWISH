@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect compiled manifest/resources and signing certificate, never generated source."""
+"""Inspect compiled Android metadata and signing certificate without trusting generated source."""
 import hashlib
 import json
 import os
@@ -11,9 +11,38 @@ from androguard.core.apk import APK
 
 ANDROID = '{http://schemas.android.com/apk/res/android}'
 
+
+def _runtime_value(raw):
+    """Normalize Expo's runtime resource or fingerprint payload to its runtime ID.
+
+    expo-updates may encode a policy runtime as ``file:fingerprint`` in the
+    manifest while embedding the computed value as a plain string or JSON
+    fingerprint record in the APK assets. Only return explicit runtime/hash
+    fields; never substitute a guessed runtime or skip the compatibility gate.
+    """
+    if isinstance(raw, bytes):
+        raw = raw.decode('utf-8', errors='strict')
+    value = str(raw or '').strip().strip('"')
+    if not value:
+        return None
+    try:
+        record = json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        return value
+    if isinstance(record, str):
+        return record.strip()
+    if isinstance(record, dict):
+        for key in ('runtimeVersion', 'runtime_version', 'hash'):
+            candidate = record.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+    return value
+
+
 def inspect_apk(filename):
     apk = APK(filename)
     resources = apk.get_android_resources()
+
     def resolve(value):
         if value and value.startswith('@'):
             values = resources.get_resolved_res_configs(int(value[1:], 16))
@@ -22,13 +51,24 @@ def inspect_apk(filename):
                 raise ValueError('Ambiguous or missing compiled resource')
             return unique.pop()
         return value
+
     manifest = apk.get_android_manifest_xml()
     application = manifest.find('application')
     metadata = {row.get(ANDROID+'name'): resolve(row.get(ANDROID+'value')) for row in application.findall('meta-data')}
     prefix = 'expo.modules.updates.'
-    runtime = metadata.get(prefix+'EXPO_RUNTIME_VERSION')
-    if runtime == 'file:fingerprint':
-        runtime = apk.get_file('assets/fingerprint').decode('utf8').strip()
+    runtime = _runtime_value(metadata.get(prefix+'EXPO_RUNTIME_VERSION'))
+    if runtime and runtime.startswith('file:'):
+        # Expo SDK plugins have used a manifest file reference plus an APK
+        # asset; look for the canonical asset and its URI basename.
+        references = [runtime[5:].lstrip('/'), 'assets/fingerprint']
+        runtime = None
+        for reference in references:
+            asset = reference if reference.startswith('assets/') else 'assets/' + reference
+            payload = apk.get_file(asset)
+            if payload:
+                runtime = _runtime_value(payload)
+                if runtime:
+                    break
     certs = apk.get_certificates_der_v2() or apk.get_certificates_der_v3()
     return {
         'package': apk.get_package(), 'versionName': apk.get_androidversion_name(),
@@ -48,6 +88,7 @@ def inspect_apk(filename):
         'apkSha256': hashlib.sha256(Path(filename).read_bytes()).hexdigest(),
     }
 
+
 def verify_binary(actual, config, baseline, expected_cert, expected_runtime):
     expected = {
         'package': baseline['package'], 'versionName': config['version'],
@@ -59,7 +100,7 @@ def verify_binary(actual, config, baseline, expected_cert, expected_runtime):
     }
     for key, value in expected.items():
         if not value or actual.get(key) != value:
-            raise ValueError('Compiled APK mismatch: '+key)
+            raise ValueError(f'Compiled APK mismatch: {key} (expected={value!r}, actual={actual.get(key)!r})')
     if not actual['launchableActivity'] or baseline['scheme'] not in actual['schemes']:
         raise ValueError('Original scheme or launcher missing')
     if not baseline['versionCode'] < actual['versionCode'] <= 2100000000:
@@ -70,6 +111,7 @@ def verify_binary(actual, config, baseline, expected_cert, expected_runtime):
         if permission not in actual['permissions']:
             raise ValueError('Required APK permission missing: '+permission)
     return actual
+
 
 if __name__ == '__main__':
     actual = inspect_apk(sys.argv[1])

@@ -14,6 +14,10 @@ class BinaryGateTests(unittest.TestCase):
         return m.verify_binary(actual,self.config,baseline,baseline['certificateSha256'],'native')
     def test_valid_binary_metadata(self):
         self.verify(self.actual)
+    def test_runtime_fingerprint_payload_formats(self):
+        self.assertEqual(m._runtime_value(b'native\n'),'native')
+        self.assertEqual(m._runtime_value(b'{"hash":"native","version":1}'),'native')
+        self.assertEqual(m._runtime_value('{"runtimeVersion":"native"}'),'native')
     def test_rejects_certificate_configuration_and_runtime_tampering(self):
         for key,value in [('certificateSha256','0'*64),('updatesEnabled',False),('channel','other'),('runtimeVersion','other'),('updateUrl','https://other.example'),('versionCode',1794427891),('versionName','9.0.0'),('antiBrickingEnabled',False),('hasEmbeddedUpdate',False),('launchableActivity',None),('permissions',[]),('schemes',[])]:
             with self.subTest(key=key),self.assertRaises(ValueError):

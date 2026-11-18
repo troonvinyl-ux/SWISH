@@ -1,0 +1,36 @@
+// CI-only fallback for Maven Central rate limiting (HTTP 429).
+// Expo generates android/settings.gradle during prebuild, so configure repositories
+// before it and React Native's included Gradle builds evaluate settings/plugins.
+// Google's public mirror: https://maven-central.storage-download.googleapis.com/maven2/
+// Keep the existing Google Maven, Maven Central, and Gradle Plugin Portal repositories.
+def swishCentralMirror = 'https://maven-central.storage-download.googleapis.com/maven2/'
+
+gradle.beforeSettings { settings ->
+    settings.pluginManagement.repositories {
+        maven {
+            name = 'SWISHCentralMirrorPlugins'
+            url = uri(swishCentralMirror)
+        }
+    }
+    settings.dependencyResolutionManagement.repositories {
+        maven {
+            name = 'SWISHCentralMirrorDependencies'
+            url = uri(swishCentralMirror)
+        }
+    }
+}
+
+gradle.beforeProject { project ->
+    project.buildscript.repositories {
+        maven {
+            name = 'SWISHCentralMirrorBuildscript'
+            url = uri(swishCentralMirror)
+        }
+    }
+    project.repositories {
+        maven {
+            name = 'SWISHCentralMirrorProjects'
+            url = uri(swishCentralMirror)
+        }
+    }
+}

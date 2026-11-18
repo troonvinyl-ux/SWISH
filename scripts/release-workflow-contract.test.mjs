@@ -40,3 +40,21 @@ test('EAS profiles select the unified shell without invalid empty environment va
   for(const value of Object.values(profile.env))assert.ok(typeof value==='string'&&value.length>0);
  }
 });
+
+test('unified APK pins EAS-managed fingerprint into Gradle and OTA validates managed source',()=>{
+ const android=read('build-swish-unified.yml').jobs.android.steps;
+ const generated=android.findIndex(step=>step.name?.startsWith('Generate native project'));
+ const runtime=android.findIndex(step=>step.name?.startsWith('Resolve Android runtime from the exact post-prebuild'));
+ const apk=android.findIndex(step=>step.name?.startsWith('Verify actual APK'));
+ assert.ok(generated>=0 && runtime>generated && apk>runtime, 'native APK fingerprint is resolved after prebuild and verified after compilation');
+ assert.match(android[runtime].run,/runtimeversion:resolve --platform android --workflow managed/);
+ assert.match(android[runtime].run,/EXPO_UPDATES_FINGERPRINT_OVERRIDE/);
+ assert.match(android[runtime].run,/EXPO_UPDATES_WORKFLOW_OVERRIDE=managed/);
+ assert.match(android[runtime].run,/fs\.appendFileSync\(process\.env\.GITHUB_ENV/);
+ const ota=read('publish-swish-ota.yml').jobs.publish.steps;
+ assert.ok(!ota.some(step=>step.run?.includes('expo prebuild')), 'OTA is verified from clean managed checkout, not regenerated native source');
+ const verify=ota.findIndex(step=>step.name?.startsWith('Verify actual selected-platform artifacts'));
+ const publish=ota.findIndex(step=>step.name?.startsWith('Publish one atomic'));
+ assert.ok(verify>=0 && publish>verify, 'runtime and native artifact verification must precede OTA publication');
+ assert.match(ota[verify].run,/verify-unified-ota\.mjs/);
+});
