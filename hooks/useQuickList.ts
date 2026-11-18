@@ -71,6 +71,9 @@ export function useQuickList(nicheId:QuickListNiche){
   catch{if(validFor(version))patch({connectionError:'eBay connection could not be checked. Retry before publishing.'});}
  },[scope,nicheId,tenant?.id,setState,patch,stamp,checkpoint,validFor,tunes.reset]);
  const startRef=useRef(start);startRef.current=start;
+ // Camera callbacks retain this identity so a late native completion cannot affect a new scan.
+ const renderVersion=serial.current;
+ const isCurrentSession=useCallback(()=>validFor(renderVersion)&&current.current.sessionId===visibleState.sessionId,[validFor,renderVersion,visibleState.sessionId]);
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;serial.current++;barcodeSerial.current++;};},[]);
  // Fresh physical item on every scanner visit; previous captures are resumed explicitly.
  useFocusEffect(useCallback(()=>{if(scope)void startRef.current();return()=>{serial.current++;barcodeSerial.current++;};},[scope,app.moduleEpoch]));
@@ -221,5 +224,5 @@ export function useQuickList(nicheId:QuickListNiche){
  },[scope,tenant?.id,action,patch,validFor,fail,triggerInventoryReload,preparePhotoStudio]);
  const answerEvidence=useCallback((key:string,value:string)=>{if(operation.current||current.current.liveId)return;trackEdit(`evidence:${key}`);patch({measurements:{...current.current.measurements,[key]:value},reviewed:false});},[trackEdit,patch]);
  const elapsedMs=visibleState.timing?.timestamps.T1!=null?Math.max(0,(visibleState.timing.timestamps.T7??clock)-visibleState.timing.timestamps.T1):null;
- return {state:visibleState,scope,barcodeLookup,config:NICHES[nicheId],slots,nextSlot,missing,captureProfile,barcodeSupported:quickBarcodeSupported(nicheId),elapsedMs,answerEvidence,captureStart,changeCapture,removeBackground,removePhoto,addPhoto,barcode,tryAnotherBarcodeMatch,selectLead,openBarcodeSource,useBarcode,useVisual,start,build,edit,setSpecific,confirm,publish:()=>{action();void publish();},checkLive,toggleAuto,chooseCategory,action,patch,recovery,resume,recoveryAvailable,retryPhotos};
+ return {isCurrentSession,state:visibleState,scope,barcodeLookup,config:NICHES[nicheId],slots,nextSlot,missing,captureProfile,barcodeSupported:quickBarcodeSupported(nicheId),elapsedMs,answerEvidence,captureStart,changeCapture,removeBackground,removePhoto,addPhoto,barcode,tryAnotherBarcodeMatch,selectLead,openBarcodeSource,useBarcode,useVisual,start,build,edit,setSpecific,confirm,publish:()=>{action();void publish();},checkLive,toggleAuto,chooseCategory,action,patch,recovery,resume,recoveryAvailable,retryPhotos};
 }

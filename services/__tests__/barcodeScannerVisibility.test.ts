@@ -37,12 +37,12 @@ test('barcode mode, manual entry and product candidates are visible before More 
 
 test('camera scanning is focus, permission, session and mode gated on native and web', () => {
   const camera = source('hooks/useQuickListCamera.ts');
-  expect(camera).toContain('focused&&ready&&permission?.granted&&!taking&&flow.scope&&flow.state.sessionId');
-  expect(camera).toContain('!flow.state.visual&&!flow.state.lead&&!flow.state.leads.length');
-  expect(camera).toContain('!flow.state.barcodeBusy&&!flow.state.processing&&!flow.state.draft&&!flow.state.itemId');
-  expect(camera).toContain('if(!scanningRef.current)return');
+  expect(camera).toContain('focused && foreground && ready && permission?.granted && !taking && flow.scope && flow.state.sessionId');
+  expect(camera).toContain('!flow.state.visual && !flow.state.lead && !flow.state.leads.length');
+  expect(camera).toContain('!flow.state.barcodeBusy && !flow.state.processing && !flow.state.draft && !flow.state.itemId');
+  expect(camera).toContain('if (!scanningRef.current) return;');
   expect(camera).toContain("import('@zxing/browser')");
-  expect(camera).toContain('scanning,flow.state.sessionId]');
+  expect(camera).toContain('[scanning, flow.state.sessionId, flow.isCurrentSession]');
   expect(source('components/feature/QuickListWorkspace.tsx')).toContain("onBarcodeScanned={camera.scanning && Platform.OS !== 'web' ? camera.onBarcode : undefined}");
 });
 
