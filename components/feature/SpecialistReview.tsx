@@ -6,6 +6,8 @@ import type { SpecialistProfile } from '@/shared/specialistIntelligence';
 import { Colors,Spacing,Typography,Radius } from '@/constants/theme';
 interface SpecialistReviewProps { catalogueConfirmed?:boolean; result:AIIdentificationResult; profile:SpecialistProfile|null; answers:Record<string,string>; disabled:boolean; onAnswer:(key:string,value:string)=>void; onTitle:(value:string)=>void }
 export const SpecialistReview=memo(function SpecialistReview({ result,profile,answers,disabled,catalogueConfirmed=false,onAnswer,onTitle }:SpecialistReviewProps) {
+  const musicCatalogue=catalogueConfirmed&&profile?.nicheId==='tunes_flip';
+  if(musicCatalogue)return <MusicDraftReview result={result} profile={profile} answers={answers} disabled={disabled} onAnswer={onAnswer} onTitle={onTitle}/>;
   const analysis=result.specialistAnalysis;
   return <View style={s.card}>
     <View style={s.row}><MaterialIcons name="fact-check" size={24} color={Colors.primary}/><Text style={s.title}>{catalogueConfirmed?'Review confirmed release':'Review the evidence'}</Text></View>
@@ -42,4 +44,17 @@ export const SpecialistReview=memo(function SpecialistReview({ result,profile,an
     {profile ? <><Text style={s.label}>Specialist verification destinations</Text><Text style={s.body}>{catalogueConfirmed?'Discogs catalogue details above were retrieved and confirmed by you. Other links are manual verification destinations.':'These are reference links, not sources automatically consulted for this item.'}</Text>{profile.sources.map(source=><Pressable key={source.url} onPress={()=>{ void Linking.openURL(source.url); }} style={({ pressed })=>[s.link,pressed ? s.pressed : null]} accessibilityRole="link"><Text style={s.linkText}>{source.label}</Text><MaterialIcons name="open-in-new" size={18} color={Colors.info}/></Pressable>)}</> : null}
   </View>;
 });
+const musicFields=['artist','release_title','format','label','catalogue_number','year','country','barcode','edition'];
+function MusicDraftReview({result,profile,answers,disabled,onAnswer,onTitle}:Omit<SpecialistReviewProps,'catalogueConfirmed'>){
+  const labels=new Map(profile?.fields.map(field=>[field.key,field.label])??[]);
+  const fields=musicFields.filter(key=>answers[key]?.trim()||typeof result.attributes[key]==='string');
+  return <View style={s.card}>
+    <View style={s.row}><MaterialIcons name="album" size={24} color={Colors.primary}/><Text style={s.title}>Listing details</Text></View>
+    <Text style={s.body}>Your selected Discogs release has filled this editable draft. It is the closest match you chose, not a claim that the photos or barcode prove an exact pressing.</Text>
+    {typeof result.attributes.discogs_release_url==='string'?<Pressable accessibilityRole="link" onPress={()=>void Linking.openURL(result.attributes.discogs_release_url).catch(()=>{})} style={({pressed})=>[s.link,pressed?s.pressed:null]}><Text style={s.linkText}>Data provided by Discogs. · Release #{result.attributes.discogs_release_id}</Text><MaterialIcons name="open-in-new" size={18} color={Colors.info}/></Pressable>:null}
+    <View style={s.field}><Text style={s.label}>Item title · edit before saving</Text><TextInput accessibilityLabel="Review item title" value={result.canonicalTitle} onChangeText={onTitle} editable={!disabled} style={s.input} multiline maxLength={300}/></View>
+    {fields.map(key=>{const value=answers[key]??(typeof result.attributes[key]==='string'?result.attributes[key]:'');return <View key={key} style={s.field}><Text style={s.label}>{labels.get(key)??key.replace(/_/g,' ')}</Text><TextInput accessibilityLabel={`Correct ${labels.get(key)??key}`} style={s.input} value={value} onChangeText={next=>onAnswer(key,next)} editable={!disabled} maxLength={500}/></View>;})}
+    <Text style={s.body}>Original photos remain attached to your listing. Add the condition you have personally checked when you save the draft; no photo, matrix or barcode mismatch will veto this release choice.</Text>
+  </View>;
+}
 const s=StyleSheet.create({ card:{ padding:Spacing.base,borderRadius:Radius.xl,backgroundColor:Colors.surfaceElevated,gap:Spacing.md,borderWidth:1,borderColor:Colors.surfaceBorder },title:{ color:Colors.textPrimary,fontSize:Typography.size.lg,fontWeight:Typography.weight.bold },body:{ color:Colors.textSecondary,fontSize:Typography.size.base,lineHeight:26,includeFontPadding:false },label:{ color:Colors.textPrimary,fontSize:Typography.size.base,fontWeight:Typography.weight.semibold },input:{ minHeight:48,borderWidth:1,borderColor:Colors.surfaceBorder,borderRadius:Radius.md,padding:Spacing.md,backgroundColor:Colors.surfaceHighlight,color:Colors.textPrimary,fontSize:Typography.size.base,includeFontPadding:false },row:{ flexDirection:'row',gap:Spacing.sm,alignItems:'flex-start' },flex:{ flex:1 },field:{ gap:Spacing.sm,padding:Spacing.base,borderWidth:1,borderColor:Colors.surfaceBorder,borderRadius:Radius.lg,backgroundColor:Colors.surface },quality:{ backgroundColor:Colors.infoDim,padding:Spacing.md,borderRadius:Radius.md,gap:Spacing.sm },link:{ minHeight:48,flexDirection:'row',justifyContent:'space-between',alignItems:'center',gap:Spacing.md },linkText:{ color:Colors.info,fontSize:Typography.size.base,flex:1 },pressed:{ opacity:0.7 } });

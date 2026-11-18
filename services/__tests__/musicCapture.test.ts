@@ -1,7 +1,7 @@
 // Pure fixtures and source contracts only. No Discogs, AI, inventory or seller requests.
 import fs from 'node:fs';
 import path from 'node:path';
-import { normalizeMusicRelease, confirmedMusicAttributes } from '@/shared/musicRelease';
+import { normalizeMusicRelease, selectedMusicAttributes } from '@/shared/musicRelease';
 import { getSpecialistProfile, mappedSpecialistSpecifics } from '@/shared/specialistIntelligence';
 import { musicCaptureResult, musicCaptureSlots, musicDiscCount, switchMusicCaptureMode, retainedMusicSlots } from '@/services/musicCaptureService';
 import type { CaptureDraft } from '@/services/captureDraftService';
@@ -9,12 +9,12 @@ const fixture={id:123,title:'Fixture Compilation',artists:[{name:'Various'}],yea
 const release=()=>normalizeMusicRelease(fixture);
 const source=(name:string)=>fs.readFileSync(path.resolve(process.cwd(),name),'utf8');
 const draft=():CaptureDraft=>({mode:'item',specialistId:'vinyl_records',result:null,savedId:null,answers:{media_grade:'VG+',sleeve_grade:'VG'},musicRelease:release(),images:[{uri:'file://front.jpg',slotId:'front_sleeve',slotLabel:'Front Sleeve'},{uri:'file://disc1.jpg',slotId:'label_a',slotLabel:'Label A'},{uri:'file://disc2.jpg',slotId:'label_b',slotLabel:'Label B'},{uri:'file://hub.jpg',slotId:'matrix',slotLabel:'Matrix / Runout'}]});
-describe('Confirmed music metadata and CD capture (fixture tests, not live verification)',()=>{
+describe('Seller-selected music metadata and CD capture (fixture tests, not live verification)',()=>{
  test('preserves catalogue compilation, CD, UK, 2012, label, reference and count',()=>{
-  const data=release();const attrs=confirmedMusicAttributes(data,true);
+  const data=release();const attrs=selectedMusicAttributes(data,true);
   expect(data.discCount).toBe(3);expect(attrs.release_type).toBe('Compilation');expect(attrs.expected_disc_count).toBe('3');expect(attrs.barcode).toBe('5012345678900');
   expect(attrs.year).toBe('2012');expect(attrs.country).toBe('UK');expect(attrs.catalogue_number).toBe('FIX-3CD');
-  expect(attrs).not.toHaveProperty('observed_disc_count');expect(JSON.stringify(attrs)).not.toContain('restricted');expect(attrs).not.toHaveProperty('lowest_price');
+  expect(attrs).not.toHaveProperty('observed_disc_count');expect(attrs.discogs_release_selected).toBe(true);expect(attrs.discogs_pressing_confirmed).toBe(false);expect(JSON.stringify(attrs)).not.toContain('restricted');expect(attrs).not.toHaveProperty('lowest_price');expect(attrs).not.toHaveProperty('discogs_tracklist');
  });
  test('does not invent a catalogue count when Discogs qty is absent or invalid',()=>{
   expect(normalizeMusicRelease({...fixture,formats:[{name:'CD'}]}).discCount).toBeNull();
@@ -45,10 +45,10 @@ describe('Confirmed music metadata and CD capture (fixture tests, not live verif
   const answers={label:'Corrected Label',_title:'My reviewed title',media_grade:'VG+',sleeve_grade:'VG',play_test:'Disc 2 skips',observed_disc_count:'2'};
   const result=musicCaptureResult(musicCaptureResult(null,release(),{})!,release(),answers)!;
   expect(result.attributes.label).toBe('Corrected Label');expect(result.specialistAnalysis?.fields.label.reason).toContain('manual review');expect(result.canonicalTitle).toBe('My reviewed title');
-  expect(result.condition).toContain('Disc 2 skips');expect(result.attributes.expected_disc_count).toBe('3');expect(result.attributes.observed_disc_count).toBe('2');expect(result.warnings.join(' ')).toContain('Disc count mismatch');
+  expect(result.condition).toContain('Disc 2 skips');expect(result.attributes.expected_disc_count).toBe('3');expect(result.attributes.observed_disc_count).toBe('2');expect(result.warnings.join(' ')).toContain('Catalogue lists 3 disc(s)');
   expect(mappedSpecialistSpecifics(getSpecialistProfile('tunes_flip')!,result.attributes)['Number of Discs']).toBeUndefined();
  });
- test('a manual negative pressing review revokes confirmed identity for save gating',()=>{expect(musicCaptureResult(null,release(),{pressing_reviewed:'no'})!.attributes.discogs_pressing_confirmed).toBe(false);});
+ test('a manual review cannot manufacture an exact-pressing claim',()=>{expect(musicCaptureResult(null,release(),{pressing_reviewed:'yes'})!.attributes.discogs_pressing_confirmed).toBe(false);expect(musicCaptureResult(null,release(),{pressing_reviewed:'no'})!.attributes.discogs_pressing_confirmed).toBe(false);});
  test('the catalogue reference cannot be substituted by a manual release-ID field',()=>{expect(musicCaptureResult(null,release(),{discogs_release_id:'999'})!.attributes.discogs_release_id).toBe('123');});
  test('a 3-CD capture contains covers, contents and all three numbered disc labels',()=>{
   const slots=musicCaptureSlots('cd_box_set',3);expect(slots.map(slot=>slot.id)).toEqual(['front_sleeve','back_sleeve','disc_count','disc_1','disc_2','disc_3']);

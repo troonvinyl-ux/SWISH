@@ -1,5 +1,5 @@
 import { getSupabaseClient } from '@/template';
-import { confirmedMusicAttributes, type MusicRelease } from '@/shared/musicRelease';
+import { selectedMusicAttributes, type MusicRelease } from '@/shared/musicRelease';
 import { mapItem, createItem, type Item } from './itemService';
 import { backendRead } from './backendRequestService';
 export interface MusicCollectionFilter {field:string;query:string;status:string;sort:string;minValue:string;maxValue:string}
@@ -21,16 +21,16 @@ export async function listMusicPage(tenantId:string,filter:MusicCollectionFilter
  const {data,error}=await backendRead(`music:${tenantId}:${JSON.stringify(filter)}:${page}`,signal=>query.range(page*50,page*50+49).abortSignal(signal));
  if(error)throw new Error('Music collection could not be read. Retry.');return {items:(data??[]).map(mapItem),more:(data?.length??0)===50};
 }
-export async function addCatalogueMusic(tenantId:string,release:MusicRelease,confirmed:boolean){
- const attrs=confirmedMusicAttributes(release,confirmed);
- const created=await createItem(tenantId,{canonicalTitle:release.title,specialistId:'vinyl_records',identificationSource:'user_confirmed',identificationConfidence:0,status:'review_required',catalogueNumber:attrs.catalogue_number,yearMade:release.year,countryOfOrigin:release.country,attributes:attrs,warnings:['Catalogue identity confirmed by user; original photos, media/sleeve grades and playback review still required.'],valuationConfidence:'unknown',media:[]});
+export async function addCatalogueMusic(tenantId:string,release:MusicRelease,selected:boolean){
+ const attrs=selectedMusicAttributes(release,selected);
+ const created=await createItem(tenantId,{canonicalTitle:release.title,specialistId:'vinyl_records',identificationSource:'user_confirmed',identificationConfidence:0,status:'review_required',catalogueNumber:attrs.catalogue_number,yearMade:release.year,countryOfOrigin:release.country,attributes:attrs,warnings:['Closest Discogs release selected by seller; original photos, condition and playback notes remain editable.'],valuationConfidence:'unknown',media:[]});
  if(created.error||!created.item)return created;
  const client=getSupabaseClient();const readback=await client.from('items').select('attributes').eq('tenant_id',tenantId).eq('id',created.item.id).eq('specialist_id','vinyl_records').maybeSingle();
  if(readback.error||readback.data?.attributes?.discogs_release_id!==String(release.id))return {item:created.item,error:'Item created, but catalogue reference readback failed. Open the saved item; do not add it again.'};
  return created;
 }
-export async function attachMusicRelease(tenantId:string,itemId:string,release:MusicRelease,confirmed:boolean){
- const client=getSupabaseClient();const attrs=confirmedMusicAttributes(release,confirmed);
+export async function attachMusicRelease(tenantId:string,itemId:string,release:MusicRelease,selected:boolean){
+ const client=getSupabaseClient();const attrs=selectedMusicAttributes(release,selected);
  const {data:row,error}=await client.from('items').select('attributes,updated_at').eq('tenant_id',tenantId).eq('id',itemId).eq('specialist_id','vinyl_records').maybeSingle();
  if(error||!row)throw new Error('Music item was not found in this account.');
  const attributes={...row.attributes,...attrs,_valuation_needs_review:true};

@@ -24,11 +24,12 @@ export function TunesProvider({children}:{children:ReactNode}){
  const search=useCallback(async(page=1,barcode?:string)=>{
   await run(async()=>({search:!barcode&&state.search?.masterId?await getDiscogsVersions(app.tenant!.id,state.search.masterId,page):await searchDiscogs(app.tenant!.id,barcode??state.query,barcode?'barcode':state.mode,page,state.artist),release:null,confirmed:false,...(barcode?{query:barcode,mode:'barcode' as const}:{})}));
  },[run,app.tenant?.id,state.query,state.mode,state.artist,state.search?.masterId]);
- const select=useCallback(async(id:number)=>{commit({confirmed:false});await run(async()=>({release:await getDiscogsRelease(app.tenant!.id,id),confirmed:false}));},[run,app.tenant?.id,commit]);
+ // Choosing a release is enough to prefill an editable music draft. It is not an exact-pressing certification.
+ const select=useCallback(async(id:number)=>{commit({confirmed:false});await run(async()=>({release:await getDiscogsRelease(app.tenant!.id,id),confirmed:true}));},[run,app.tenant?.id,commit]);
  const versions=useCallback(async()=>{const master=state.release?.masterId;if(!master)return;await run(async()=>({search:await getDiscogsVersions(app.tenant!.id,master),release:null,confirmed:false}));},[state.release?.masterId,run,app.tenant?.id]);
  const save=useCallback(async(itemId?:string)=>{
   let id:string|null=null;await run(async()=>{
-   if(!state.confirmed||!isFreshMusicRelease(state.release))throw new Error('Retrieve and confirm the exact pressing before saving.');
+   if(!state.confirmed||!isFreshMusicRelease(state.release))throw new Error('Choose a current Discogs release to prefill the draft before saving.');
    if(itemId){await attachMusicRelease(app.tenant!.id,itemId,state.release,true);id=itemId;}
    else if(state.savedId)throw new Error('This catalogue item is already saved. Open it or start a new release search.');
    else{const result=await addCatalogueMusic(app.tenant!.id,state.release,true);if(result.item){id=result.item.id;commit({savedId:id});}if(result.error||!result.item)throw new Error(result.error??'Inventory creation was not confirmed.');}
@@ -37,5 +38,5 @@ export function TunesProvider({children}:{children:ReactNode}){
  },[run,state.confirmed,state.release,state.savedId,app.tenant?.id,scope,app.triggerInventoryReload,commit]);
  const inspectSetup=useCallback(async()=>{await run(async()=>({setup:await getDiscogsSetup()}));},[run]);
  const testConnection=useCallback(async()=>{await run(async()=>{const result=await checkDiscogsConnection();return {connection:`${result.connectivity} · ${result.checkedAt} · reference ${result.releaseId} · read-only`};});},[run]);
- return <TunesContext.Provider value={{state,ready,setQuery:v=>commit({query:v,search:null}),setArtist:v=>commit({artist:v,search:null}),setMode:v=>commit({mode:v,search:null}),search,select,versions,confirm:()=>{if(isFreshMusicRelease(state.release))commit({confirmed:true,error:null});else commit({error:'Catalogue result expired. Retrieve the release again.'});},reset:()=>{if(!state.busy)commit(empty(scope));},save,inspectSetup,testConnection}}>{children}</TunesContext.Provider>;
+ return <TunesContext.Provider value={{state,ready,setQuery:v=>commit({query:v,search:null}),setArtist:v=>commit({artist:v,search:null}),setMode:v=>commit({mode:v,search:null}),search,select,versions,confirm:()=>{if(isFreshMusicRelease(state.release))commit({confirmed:true,error:null});else commit({error:'Catalogue result expired. Choose the release again.'});},reset:()=>{if(!state.busy)commit(empty(scope));},save,inspectSetup,testConnection}}>{children}</TunesContext.Provider>;
 }

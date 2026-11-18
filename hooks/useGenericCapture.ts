@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useApp } from './useApp';
 import { useTunesCatalogue } from './useTunesCatalogue';
-import { musicGrade, isFreshMusicRelease } from '@/shared/musicRelease';
+import { isFreshMusicRelease } from '@/shared/musicRelease';
 import { musicCaptureResult, musicDiscCount, retainedMusicSlots, switchMusicCaptureMode } from '@/services/musicCaptureService';
 import { useAuth, useAlert } from '@/template';
 import { captureFromCamera, pickFromLibrary, identifyItemWithAI, saveIdentifiedItem, saveCoinReferenceImages, prepareImageForAI, type AIIdentificationResult, type CapturedImage } from '@/services/aiIdentificationService';
@@ -140,7 +140,6 @@ export function useGenericCapture(){
  const save=useCallback(async()=>{
   if(!isCurrentSession())return;
   const result=reviewedResult();
-  if(music&&result&&(!musicGrade(String(result.attributes.media_grade))||!musicGrade(String(result.attributes.sleeve_grade))||(result.attributes.discogs_pressing_confirmed!==true&&!/^yes$/i.test(String(result.attributes.pressing_reviewed))))){setError('Confirm the exact pressing (Discogs or manual review) and separate media/sleeve grades before saving.');return;}
   if(result&&!activeNiche.specialists.includes(result.specialistId)){setError('This result belongs to another specialist. Nothing was saved.');return;}
   if(!tenant||!result||lock.current||!ready||!result.canonicalTitle.trim())return;
   if(!visible.savedId){

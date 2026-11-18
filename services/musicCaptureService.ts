@@ -1,8 +1,8 @@
-// Pure shared-scanner logic. Catalogue identity is user-confirmed, never fabricated AI evidence.
+// Pure shared-scanner logic. Catalogue selection is seller-chosen, never fabricated AI evidence.
 import type { AIIdentificationResult, CapturedImage } from './aiIdentificationService';
 import type { CaptureDraft } from './captureDraftService';
 import { SPECIALISTS, type CaptureRequirement } from '@/constants/specialists';
-import { confirmedMusicAttributes, isFreshMusicRelease, musicGrade, type MusicRelease } from '@/shared/musicRelease';
+import { selectedMusicAttributes, isFreshMusicRelease, musicGrade, type MusicRelease } from '@/shared/musicRelease';
 import { getSpecialistProfile, normalizeSpecialistAnalysis, usefulText } from '@/shared/specialistIntelligence';
 
 export function musicDiscCount(value: unknown): number | null {
@@ -32,8 +32,8 @@ export function retainedMusicSlots(slots:CaptureRequirement[],images:CapturedIma
 }
 
 export function musicCaptureResult(base:AIIdentificationResult|null,release:MusicRelease|null|undefined,answers:Record<string,string>):AIIdentificationResult|null {
-  const confirmed=isFreshMusicRelease(release);
-  if(!base&&!confirmed)return null;
+  const selected=isFreshMusicRelease(release);
+  if(!base&&!selected)return null;
   const profile=getSpecialistProfile('tunes_flip')!;
   const initial:AIIdentificationResult=base??{
     canonicalTitle:release!.title,specialistId:'vinyl_records',confidence:0,confidenceTier:'unknown',identificationState:'candidate',identificationSource:'user_confirmed',
@@ -44,24 +44,24 @@ export function musicCaptureResult(base:AIIdentificationResult|null,release:Musi
     warnings:[...initial.warnings],evidenceSupporting:[...initial.evidenceSupporting],
     specialistAnalysis:normalizeSpecialistAnalysis(initial.specialistAnalysis,profile,initial.confidence)};
   const analysis=result.specialistAnalysis!;
-  if(!confirmed){result.attributes.discogs_pressing_confirmed=false;}
-  if(confirmed){
-    const catalogue=confirmedMusicAttributes(release,true);
+  if(!selected){result.attributes.discogs_pressing_confirmed=false;}
+  if(selected){
+    const catalogue=selectedMusicAttributes(release,true);
     result.attributes={...result.attributes,...catalogue};
     result.canonicalTitle=release.title;result.identificationSource='user_confirmed';
     result.objectType=release.format.some(value=>/^CD$/i.test(value))?'CD':result.objectType;
     for(const field of profile.fields){
       const value=usefulText((catalogue as Record<string,unknown>)[field.key]);
       if(!value)continue;
-      analysis.fields[field.key]={value,basis:'user_supplied',reason:`Data provided by Discogs. Release #${release.id}, confirmed by you; not physical authentication.`};
+      analysis.fields[field.key]={value,basis:'user_supplied',reason:`Data provided by Discogs. Release #${release.id}, selected by you as the closest match; editable before publishing.`};
       delete result.attributes[`_inferred_${field.key}`];delete result.attributesInferred[field.key];
       delete result.attributesConfirmed[field.key]; // Catalogue data is not an observed image fact.
     }
-    const evidence=`User-confirmed Discogs release #${release.id}: ${release.title}`;
+    const evidence=`Seller-selected Discogs release #${release.id}: ${release.title}`;
     if(!result.evidenceSupporting.includes(evidence))result.evidenceSupporting.push(evidence);
   }
   for(const field of profile.fields){
-    const value=answers[field.key]?.trim();if(!value||(confirmed&&field.key==='discogs_release_id'))continue;
+    const value=answers[field.key]?.trim();if(!value||(selected&&field.key==='discogs_release_id'))continue;
     result.attributes[field.key]=value;
     delete result.attributes[`_inferred_${field.key}`];delete result.attributesInferred[field.key];
     analysis.fields[field.key]={value,basis:'user_supplied',reason:'Your manual review / correction; not independently verified.'};
@@ -70,10 +70,11 @@ export function musicCaptureResult(base:AIIdentificationResult|null,release:Musi
   // An inferred AI grade cannot replace an explicit physical review.
   const media=musicGrade(answers.media_grade??'');const sleeve=musicGrade(answers.sleeve_grade??'');
   result.attributes.media_grade=media??'';result.attributes.sleeve_grade=sleeve??'';
-  result.attributes.pressing_reviewed=answers.pressing_reviewed?.trim()||(confirmed?'yes':'no');
-  if(answers.pressing_reviewed?.trim()&& !/^(yes|true)$/i.test(answers.pressing_reviewed.trim()))result.attributes.discogs_pressing_confirmed=false;
+  result.attributes.pressing_reviewed=answers.pressing_reviewed?.trim()||'not reviewed';
+  // Choosing a catalogue row, or adding a free-text review, never certifies a pressing.
+  result.attributes.discogs_pressing_confirmed=false;
   const present=musicDiscCount(answers.observed_disc_count);const expected=musicDiscCount(result.attributes.expected_disc_count);
-  if(present&&expected&&present!==expected)result.warnings.push(`Disc count mismatch: catalogue ${expected}, physically present ${present}. Review missing or extra discs before listing.`);
+  if(present&&expected&&present!==expected)result.warnings.push(`Catalogue lists ${expected} disc(s); you entered ${present}. The draft stays editable — amend the listing details if needed.`);
   result.condition=answers._condition?.trim()||`Media ${media??'unassessed'} / Packaging ${sleeve??'unassessed'}; playback ${answers.play_test?.trim()||'not tested'}`;
   if(answers._condition_notes?.trim())result.conditionNotes=answers._condition_notes.trim();
   analysis.followUps=analysis.followUps.filter(question=>!analysis.fields[question.key]||analysis.fields[question.key].basis==='inferred');
