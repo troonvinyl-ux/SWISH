@@ -238,8 +238,16 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const resolved=JSON.parse(fs.readFileSync('dist/unified-android-runtime.json','utf8'));
-          if(!/^[a-f0-9]{40}$/.test(resolved.runtimeVersion||'')) throw Error('Missing post-prebuild Android runtime fingerprint');
-          console.log('Post-prebuild Android native runtime fingerprint: '+resolved.runtimeVersion);
+          if(!/^[a-f0-9]{40}$/.test(resolved.runtimeVersion||'')) throw Error('Missing canonical Android runtime fingerprint');
+          // EAS Build passes the managed/CNG fingerprint into its Gradle build.
+          // Without this, Gradle redetects a bare workflow after prebuild and
+          // embeds a different (often changing) fingerprint in the APK.
+          // Pin the compiled runtime to Expo's canonical managed resolver.
+          if(!process.env.GITHUB_ENV) throw Error('GitHub Actions environment file is required');
+          fs.appendFileSync(process.env.GITHUB_ENV,
+            'EXPO_UPDATES_FINGERPRINT_OVERRIDE='+resolved.runtimeVersion+'\\n'+
+            'EXPO_UPDATES_WORKFLOW_OVERRIDE=managed\\n');
+          console.log('Pinned managed Expo runtime fingerprint for Gradle: '+resolved.runtimeVersion);
           NODE
       - run: node scripts/verify-android-sdk-config.mjs
       - run: node scripts/configure-niche-signing.mjs
