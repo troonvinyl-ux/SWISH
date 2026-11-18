@@ -87,6 +87,7 @@ import { ItemPhotoGallery } from '@/components/feature/ItemPhotoGallery';
 import { StockListingToolbar, type StockListingAction } from '@/components/feature/StockListingToolbar';
 import { StockPricingSummary } from '@/components/feature/StockPricingSummary';
 import { EbayListingLiveCheck } from '@/components/feature/EbayListingLiveCheck';
+import { reconcileListingPublication } from '@/services/listingPublicationService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const GALLERY_HEIGHT = 320;
@@ -1915,6 +1916,7 @@ export default function StockListingScreen() {
   const [fetchingImage, setFetchingImage] = useState(false);
   const [fetchImageResult, setFetchImageResult] = useState<{ downloaded: number; failed: number; requiresReauth?: boolean } | null>(null);
   const [syncingEbay, setSyncingEbay] = useState(false);
+  const [checkingEbayStatus, setCheckingEbayStatus] = useState(false);
   const [pushingToEbay, setPushingToEbay] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -2065,6 +2067,29 @@ export default function StockListingScreen() {
     } catch (e: any) { showAlert('Sync Failed', e?.message ?? 'Unknown error'); }
     finally { setSyncingEbay(false); }
   }, [tenant, item, showAlert]);
+
+  const handleCheckEbayStatus = useCallback(async () => {
+    if (!tenant?.id || !item || !selectedListing?.externalListingId) return;
+    setCheckingEbayStatus(true);
+    try {
+      const result = await reconcileListingPublication(tenant.id, selectedListing.id, item.specialistId);
+      if (result.error || !result.publication) {
+        showAlert('Status check not confirmed', result.error ?? 'eBay status reconciliation could not be confirmed. Nothing was republished.');
+        return;
+      }
+      const publication = result.publication;
+      setItem(previous => previous ? { ...previous, status: publication.itemStatus || previous.status } : previous);
+      triggerInventoryReload();
+      const message = publication.status === 'active'
+        ? 'eBay confirms this saved listing is live.'
+        : publication.status === 'sold'
+          ? 'eBay confirms this listing sold. It has been moved out of Live inventory.'
+          : 'eBay confirms this listing ended. It has been moved out of Live inventory.';
+      showAlert('eBay status checked', message);
+    } finally {
+      setCheckingEbayStatus(false);
+    }
+  }, [tenant?.id, item, selectedListing?.id, selectedListing?.externalListingId, showAlert, triggerInventoryReload]);
 
   const handlePushToEbay = useCallback(async () => {
     if (!tenant || !item) return;
@@ -2398,6 +2423,7 @@ export default function StockListingScreen() {
     { id: 'research', label: 'Research item', detail: 'Review relevant references and marketplace evidence.', icon: 'manage-search', onPress: () => router.push(`/research?q=${encodeURIComponent(item.canonicalTitle)}` as any) },
     { id: 'photos', label: 'Fetch eBay photos', detail: 'Retrieve photos from the linked marketplace listing.', icon: 'cloud-download', onPress: handleFetchImage, busy: fetchingImage },
     ...(hasLiveLink ? [
+      { id: 'status', label: 'Check eBay status', detail: 'Read the saved eBay listing status and move a confirmed ended listing out of Live.', icon: 'fact-check' as const, onPress: handleCheckEbayStatus, busy: checkingEbayStatus },
       { id: 'sync', label: 'Sync from eBay', detail: 'Import listing details into this inventory record.', icon: 'sync' as const, onPress: handleSyncFromEbay, busy: syncingEbay },
       { id: 'push', label: 'Revise on eBay', detail: 'Review or confirm changes, including the new main photo.', icon: 'cloud-upload' as const, onPress: handlePushToEbay, busy: pushingToEbay },
       { id: 'end', label: 'End live listing', detail: 'Confirmation required; the inventory item is retained.', icon: 'stop-circle' as const, onPress: () => { void handleEndListing(activeListings[0]); }, disabled: endingId !== null, destructive: true },
