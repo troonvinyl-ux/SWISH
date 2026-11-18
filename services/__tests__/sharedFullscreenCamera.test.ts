@@ -13,7 +13,7 @@ test('Android full-screen camera starts after modal presentation and never dupli
  expect(ui).toContain('onShow={() => setModalPresented(true)}');
  expect(ui).toContain("(Platform.OS !== 'android' || modalPresented)");
  expect(ui).toContain('setModalPresented(false)');
- expect(ui.match(/<CameraView\\b/g)).toHaveLength(1);
+ expect(ui.split('<CameraView').length - 1).toBe(1);
  expect(ui).toContain('!expanded ? <View style={s.inlinePreview}');
  expect(ui).not.toContain('<View style={s.inlinePreview}>{viewfinder()}</View>');
  expect(ui).toContain('Starting camera preview…');
