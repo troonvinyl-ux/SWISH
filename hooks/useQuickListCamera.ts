@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import type { useQuickList } from './useQuickList';
 export function useQuickListCamera(flow:ReturnType<typeof useQuickList>,nicheId:string){
  const cameraRef=useRef<CameraView>(null),[permission,requestPermission]=useCameraPermissions();const [focused,setFocused]=useState(false),[ready,setReady]=useState(false),[taking,setTaking]=useState(false),[error,setError]=useState('');const flowRef=useRef(flow);flowRef.current=flow;
@@ -16,6 +17,21 @@ export function useQuickListCamera(flow:ReturnType<typeof useQuickList>,nicheId:
  void scan();return()=>{active=false;if(timer)clearTimeout(timer);};
  },[focused,ready,permission?.granted,scanning,flow.state.sessionId]);
  const photoFlight=useRef(false);
+ const systemCamera=useCallback(async()=>{
+  if(photoFlight.current||taking||!focused||flowRef.current.state.sessionId||flowRef.current.state.processing||flowRef.current.state.itemId)return;
+  const sessionId=flowRef.current.state.sessionId;
+  photoFlight.current=true;setTaking(true);setError('');flowRef.current.captureStart();
+  try{
+   const permission=await ImagePicker.requestCameraPermissionsAsync();
+   if(!permission.granted)throw new Error('Camera permission is required for the phone camera.');
+   const result=await ImagePicker.launchCameraAsync({mediaTypes:['images'],quality:1,allowsEditing:false});
+   if(flowRef.current.state.sessionId!==sessionId||result.canceled||!result.assets?.[0])return;
+   const photo=result.assets[0];
+   await flowRef.current.addPhoto({uri:photo.uri,width:photo.width,height:photo.height});
+  }catch(cause){if(flowRef.current.state.sessionId===sessionId)setError(cause instanceof Error?cause.message:'Phone camera failed. Use photo library.');}
+  finally{photoFlight.current=false;setTaking(false);}
+ },[taking,focused]);
+
  const take=useCallback(async()=>{if(photoFlight.current||taking||!ready||!focused||flowRef.current.state.processing)return;const sessionId=flowRef.current.state.sessionId;photoFlight.current=true;setTaking(true);setError('');flowRef.current.captureStart();try{const photo=await cameraRef.current?.takePictureAsync({quality:1});if(flowRef.current.state.sessionId!==sessionId)return;if(!photo?.uri)throw new Error('No photo returned. Retake this view.');await flowRef.current.addPhoto(photo);}catch(cause){if(flowRef.current.state.sessionId===sessionId)setError(cause instanceof Error?cause.message:'Camera unavailable. Use the photo library.');}finally{photoFlight.current=false;setTaking(false);}},[taking,ready,focused]);
- return {cameraRef,permission,requestPermission,focused,ready,taking,scanning,onBarcode,take,error,onReset:()=>{setReady(false);setError('');},onReady:()=>{setReady(true);setError('');},onError:(message?:string)=>{setReady(false);setError(message ? `Camera could not start: ${message}. You can use the photo library.` : 'Camera could not start. Retry or use the photo library.');}};
+ return {cameraRef,permission,requestPermission,focused,ready,taking,scanning,onBarcode,take,systemCamera,error,onReset:()=>{setReady(false);setError('');},onReady:()=>{setReady(true);setError('');},onError:(message?:string)=>{setReady(false);setError(message ? `Camera could not start: ${message}. You can use the photo library.` : 'Camera could not start. Retry or use the photo library.');}};
 }
