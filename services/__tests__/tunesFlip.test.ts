@@ -40,4 +40,7 @@ describe('Tunes Flip source and pure contracts — not live acceptance',()=>{
   const hook=source('hooks/useGenericCapture.ts');expect(hook).toContain('musicCaptureResult');expect(source('services/musicCaptureService.ts')).toContain('selectedMusicAttributes');expect(hook).not.toContain('separate media/sleeve grades before saving');expect(hook).toContain('saveIdentifiedItem');expect(hook).toContain('persistCapturedItemPhotos');
   expect(source('services/tunesService.ts')).toContain(".eq('specialist_id','vinyl_records')");expect(source('app/_layout.tsx')).toContain('<TunesProvider>');
  });
+ test('release variations use one compact picker with physical comparison details',()=>{
+  const panel=source('components/feature/MusicCataloguePanel.tsx');expect(panel).toContain("from '@react-native-picker/picker'");expect(panel).toContain('Choose Discogs release');expect(panel).toContain('candidateLabel');expect(panel).toContain('catalogueNumbers');expect(panel).not.toContain('style={{height:compact?260:340}}');
+ });
 });
