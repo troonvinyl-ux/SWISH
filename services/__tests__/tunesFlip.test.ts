@@ -43,4 +43,7 @@ describe('Tunes Flip source and pure contracts — not live acceptance',()=>{
  test('release variations use one compact picker with physical comparison details',()=>{
   const panel=source('components/feature/MusicCataloguePanel.tsx');expect(panel).toContain("from '@react-native-picker/picker'");expect(panel).toContain('Choose Discogs release');expect(panel).toContain('candidateLabel');expect(panel).toContain('catalogueNumbers');expect(panel).not.toContain('style={{height:compact?260:340}}');
  });
+ test('Tunes Flip opens its dedicated Discogs-capable scanner instead of generic Quick List',()=>{
+  const scan=source('app/(tabs)/scan.tsx');expect(scan).toContain("const tunesFlip=niche==='tunes_flip';const useSpecialist=tunesFlip||advanced;");expect(scan).toContain('!tunesFlip?<View style={s.modes}');
+ });
 });
