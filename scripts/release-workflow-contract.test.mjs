@@ -23,6 +23,7 @@ test('tools are initialized before release scripts and OTA publication remains o
  assert.equal(ota.on.workflow_dispatch.inputs.platform.default,'android');
  const steps=ota.jobs.publish.steps;
  const publish=steps.findIndex(step=>step.name?.startsWith('Publish one atomic'));
+ assert.ok(steps.some(step=>step.name?.startsWith('Resolve approved public backend configuration') && step.run?.includes("EXPO_PUBLIC_SUPABASE_URL")), 'OTA publisher must resolve the same approved public backend configuration as its APK baseline');
  assert.ok(steps.findIndex(step=>step.run?.includes('verify-ota-owner-approval.mjs'))<publish);
  assert.ok(steps.findIndex(step=>step.run?.includes('verify-unified-ota.mjs'))<publish);
 });

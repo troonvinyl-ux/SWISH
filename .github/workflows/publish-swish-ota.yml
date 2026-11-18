@@ -53,6 +53,24 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Resolve approved public backend configuration from checked-in .env
+        # The installed APK baseline was built with these public values. Load
+        # the same values when repository settings are absent, then the
+        # existing policy check proves the OTA targets that same backend.
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const source = fs.readFileSync('.env', 'utf8');
+          const values = Object.fromEntries(source.split(/\r?\n/).filter(line => /^[A-Za-z_][A-Za-z0-9_]*=/.test(line)).map(line => {
+            const index = line.indexOf('=');
+            return [line.slice(0, index), line.slice(index + 1).trim().replace(/^["']|["']$/g, '')];
+          }));
+          for (const key of ['EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_ANON_KEY']) {
+            const value = process.env[key] || values[key];
+            if (!value || /[\r\n]/.test(value)) throw Error('Missing valid public backend configuration: ' + key);
+            fs.appendFileSync(process.env.GITHUB_ENV, key + '=' + value + '\n');
+          }
+          NODE
       - uses: pnpm/action-setup@v4
         with:
           version: 9.15.9
