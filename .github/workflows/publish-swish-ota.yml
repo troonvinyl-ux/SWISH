@@ -86,16 +86,6 @@ jobs:
       - run: npx tsc --noEmit
       - run: npx expo lint
       - run: npx --yes jest@29.7.0 --config jest.config.ci.js --runInBand
-      - name: Recreate the Android CNG native fingerprint used by the installed APK
-        if: inputs.platform != 'ios'
-        run: |
-          set -euo pipefail
-          # The native APK is built after expo prebuild. Resolve the OTA hash
-          # from that same generated tree rather than publishing an incompatible
-          # fingerprint calculated against a managed-only checkout.
-          npx expo prebuild --platform android --clean --no-install
-          mkdir -p dist
-          npx --no-install expo-updates runtimeversion:resolve --platform android --workflow managed > dist/ota-android-native-runtime.json
       - name: Verify actual selected-platform artifacts and unchanged native fingerprint
         run: npx --yes eas-cli@27.2.0 env:exec "$SWISH_EAS_ENVIRONMENT" --non-interactive 'mkdir -p dist && npx expo config --type public --json > dist/ota-resolved-config.json && node scripts/verify-unified-config.mjs dist/ota-resolved-config.json && node scripts/verify-unified-ota.mjs'
       - uses: actions/upload-artifact@v4
