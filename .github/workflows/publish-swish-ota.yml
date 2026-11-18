@@ -126,9 +126,18 @@ jobs:
           if-no-files-found: error
       - name: Publish one atomic runtime-compatible bundle only after approval
         run: |
+          set -euo pipefail
           test -n "$EXPO_TOKEN" && test -n "$EXPO_PROJECT_ID"
           test -n "$OTA_MESSAGE" && test "${#OTA_MESSAGE}" -le 120
-          npx --yes eas-cli@27.2.0 update --environment "$SWISH_EAS_ENVIRONMENT" --platform "$SWISH_OTA_PLATFORM" --channel "$SWISH_RELEASE_CHANNEL" --message "$OTA_MESSAGE" --non-interactive --json > dist/unified-ota-publication.json
+          # EAS exports the bundle into dist/ and clears that directory during
+          # export. Keep the CLI receipt outside dist until the publish has
+          # completed, then copy it into the evidence location for verification.
+          receipt_dir="$RUNNER_TEMP/swish-ota-publication"
+          receipt_file="$receipt_dir/unified-ota-publication.json"
+          mkdir -p "$receipt_dir" dist
+          npx --yes eas-cli@27.2.0 update --environment "$SWISH_EAS_ENVIRONMENT" --platform "$SWISH_OTA_PLATFORM" --channel "$SWISH_RELEASE_CHANNEL" --message "$OTA_MESSAGE" --non-interactive --json > "$receipt_file"
+          test -s "$receipt_file" || { echo 'EAS reported success without a JSON publication receipt'; exit 1; }
+          cp "$receipt_file" dist/unified-ota-publication.json
       - run: node scripts/verify-ota-publication.mjs
       - name: Retain publisher receipts without claiming installed-device acceptance
         if: always() && hashFiles('dist/unified-ota-publication.json') != ''
