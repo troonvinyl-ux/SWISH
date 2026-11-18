@@ -18,7 +18,7 @@ export function useQuickListCamera(flow:ReturnType<typeof useQuickList>,nicheId:
  },[focused,ready,permission?.granted,scanning,flow.state.sessionId]);
  const photoFlight=useRef(false);
  const systemCamera=useCallback(async()=>{
-  if(photoFlight.current||taking||!focused||flowRef.current.state.sessionId||flowRef.current.state.processing||flowRef.current.state.itemId)return;
+  if(photoFlight.current||taking||!focused||!flowRef.current.state.sessionId||flowRef.current.state.processing||flowRef.current.state.itemId)return;
   const sessionId=flowRef.current.state.sessionId;
   photoFlight.current=true;setTaking(true);setError('');flowRef.current.captureStart();
   try{
