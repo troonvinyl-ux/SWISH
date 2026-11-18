@@ -245,8 +245,8 @@ jobs:
           // Pin the compiled runtime to Expo's canonical managed resolver.
           if(!process.env.GITHUB_ENV) throw Error('GitHub Actions environment file is required');
           fs.appendFileSync(process.env.GITHUB_ENV,
-            'EXPO_UPDATES_FINGERPRINT_OVERRIDE='+resolved.runtimeVersion+'\\n'+
-            'EXPO_UPDATES_WORKFLOW_OVERRIDE=managed\\n');
+            'EXPO_UPDATES_FINGERPRINT_OVERRIDE='+resolved.runtimeVersion+'\n'+
+            'EXPO_UPDATES_WORKFLOW_OVERRIDE=managed\n');
           console.log('Pinned managed Expo runtime fingerprint for Gradle: '+resolved.runtimeVersion);
           NODE
       - run: node scripts/verify-android-sdk-config.mjs
