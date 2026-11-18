@@ -130,14 +130,19 @@ jobs:
           test -n "$EXPO_TOKEN" && test -n "$EXPO_PROJECT_ID"
           test -n "$OTA_MESSAGE" && test "${#OTA_MESSAGE}" -le 120
           # EAS exports the bundle into dist/ and clears that directory during
-          # export. Keep the CLI receipt outside dist until the publish has
-          # completed, then copy it into the evidence location for verification.
+          # export. Keep both compatibility evidence and the CLI receipt
+          # outside dist, then restore them together for final verification.
           receipt_dir="$RUNNER_TEMP/swish-ota-publication"
           receipt_file="$receipt_dir/unified-ota-publication.json"
+          impact_file="$receipt_dir/unified-ota-impact.json"
           mkdir -p "$receipt_dir" dist
+          test -s dist/unified-ota-impact.json || { echo 'Compatibility impact evidence is missing before publication'; exit 1; }
+          cp dist/unified-ota-impact.json "$impact_file"
           npx --yes eas-cli@27.2.0 update --environment "$SWISH_EAS_ENVIRONMENT" --platform "$SWISH_OTA_PLATFORM" --channel "$SWISH_RELEASE_CHANNEL" --message "$OTA_MESSAGE" --non-interactive --json > "$receipt_file"
           test -s "$receipt_file" || { echo 'EAS reported success without a JSON publication receipt'; exit 1; }
+          test -s "$impact_file" || { echo 'Compatibility impact evidence was not preserved'; exit 1; }
           cp "$receipt_file" dist/unified-ota-publication.json
+          cp "$impact_file" dist/unified-ota-impact.json
       - run: node scripts/verify-ota-publication.mjs
       - name: Retain publisher receipts without claiming installed-device acceptance
         if: always() && hashFiles('dist/unified-ota-publication.json') != ''

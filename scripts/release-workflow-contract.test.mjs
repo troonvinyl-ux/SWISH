@@ -59,5 +59,6 @@ test('unified APK pins EAS-managed fingerprint into Gradle and OTA validates man
  assert.ok(verify>=0 && publish>verify, 'runtime and native artifact verification must precede OTA publication');
  assert.match(ota[verify].run,/verify-unified-ota\.mjs/);
  assert.match(ota[publish].run,/RUNNER_TEMP\/swish-ota-publication/, 'publication receipt must survive EAS clearing dist during export');
+ assert.match(ota[publish].run,/impact_file=.*unified-ota-impact\.json/, 'baseline compatibility evidence must survive EAS clearing dist during export');
  assert.match(ota[publish].run,/test -s "\$receipt_file"/, 'successful publication must leave a non-empty JSON receipt');
 });
