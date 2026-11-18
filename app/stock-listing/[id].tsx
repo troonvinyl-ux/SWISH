@@ -2078,7 +2078,8 @@ export default function StockListingScreen() {
         return;
       }
       const publication = result.publication;
-      setItem(previous => previous ? { ...previous, status: publication.itemStatus || previous.status } : previous);
+      const refreshedItem = await getItem(item.id);
+      if (!refreshedItem.error && refreshedItem.item?.tenantId === tenant.id) setItem(refreshedItem.item);
       triggerInventoryReload();
       const message = publication.status === 'active'
         ? 'eBay confirms this saved listing is live.'
