@@ -2086,6 +2086,8 @@ export default function StockListingScreen() {
           ? 'eBay confirms this listing sold. It has been moved out of Live inventory.'
           : 'eBay confirms this listing ended. It has been moved out of Live inventory.';
       showAlert('eBay status checked', message);
+    } catch (error: any) {
+      showAlert('Status check not confirmed', error?.message ?? 'eBay status reconciliation could not be confirmed. Nothing was republished.');
     } finally {
       setCheckingEbayStatus(false);
     }
