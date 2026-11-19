@@ -1,4 +1,4 @@
-name: Build Tunes Flip Android APK
+name: Build Tunes Flip Android testing APK
 on:
   workflow_dispatch:
 permissions:
@@ -10,4 +10,8 @@ jobs:
       # Keep this release route deliberately single-product.  The reusable
       # workflow creates a physical isolated route tree before compilation.
       niche: tunes_flip
+      # Reuse the reviewed Expo public testing certificate. This is deliberately
+      # separate from the owner's private production certificate, while keeping
+      # successive tester APKs installable as updates to one another.
+      testing_signing: true
     secrets: inherit

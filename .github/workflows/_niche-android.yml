@@ -5,6 +5,10 @@ on:
       niche:
         required: true
         type: string
+      testing_signing:
+        required: false
+        default: false
+        type: boolean
 permissions:
   contents: read
 jobs:
@@ -13,6 +17,9 @@ jobs:
     timeout-minutes: 60
     env:
       SWISH_NICHE: ${{ inputs.niche }}
+      # The public Expo testing certificate is permitted only for an explicit
+      # testing build. Production callers must still provide the owner's key.
+      SWISH_RELEASE_CHANNEL: ${{ inputs.testing_signing && 'preview-unified' || 'production-unified' }}
       EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
       SWISH_RELEASE_KEYSTORE_BASE64: ${{ secrets.SWISH_RELEASE_KEYSTORE_BASE64 }}
       SWISH_KEYSTORE_STORE_PASSWORD: ${{ secrets.SWISH_KEYSTORE_STORE_PASSWORD }}
@@ -115,7 +122,10 @@ jobs:
             ~/.gradle/wrapper
           key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'pnpm-lock.yaml', 'package-lock.json', 'app.config.js') }}
           restore-keys: ${{ runner.os }}-gradle-
-      - name: Configure existing persistent production signing
+      - name: Resolve stable public testing signing identity
+        if: inputs.testing_signing
+        run: bash scripts/resolve-android-signing.sh
+      - name: Configure approved APK signing
         run: node scripts/configure-niche-signing.mjs
       - name: Compile APK and retain compiler evidence
         working-directory: android
