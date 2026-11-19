@@ -98,8 +98,8 @@ module.exports = ({ config }) => {
   });
   if (!plugins.some(plugin => (Array.isArray(plugin) ? plugin[0] : plugin) === 'expo-router')) plugins.push(['expo-router', { root: routeRoot }]);
   const webBaseUrl = process.env['SWISH_WEB_BASE_URL'];
-  const artworkFiles = { coins: 'coin-flipper.jpeg', motocross: 'mx-flipper.jpeg', bicycles: 'bike-flipper.jpeg', clothing: 'threads-flip.jpeg', trading_cards: 'card-flipper.jpeg', antiques: 'antique-flipper.jpeg', fossils: 'fossil-flipper.jpeg', beauty: 'beauty-flipper.jpeg', tech: 'tech-flipper.jpeg', surplus_flip: 'surplus-flip.png', collectibles: 'collectibles-flipper.png' };
-  const productArtwork = './assets/images/brands/' + artworkFiles[selected];
+  const artworkFiles = { coins: 'coin-flipper.jpeg', motocross: 'mx-flipper.jpeg', bicycles: 'bike-flipper.jpeg', clothing: 'threads-flip.jpeg', trading_cards: 'card-flipper.jpeg', antiques: 'antique-flipper.jpeg', fossils: 'fossil-flipper.jpeg', beauty: 'beauty-flipper.jpeg', tech: 'tech-flipper.jpeg', surplus_flip: 'surplus-flip.png', tunes_flip: './assets/images/logo.png', collectibles: 'collectibles-flipper.png' };
+  const productArtwork = artworkFiles[selected]?.startsWith('./') ? artworkFiles[selected] : './assets/images/brands/' + artworkFiles[selected];
   if (!artworkFiles[selected]) throw new Error('Missing product launcher artwork: ' + selected);
   const brandedPlugins = plugins.map(plugin => {
     const name = Array.isArray(plugin) ? plugin[0] : plugin;

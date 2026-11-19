@@ -1,19 +1,13 @@
-name: Legacy niche APK migration only (not a release route)
+name: Build Tunes Flip Android APK
 on:
   workflow_dispatch:
-    inputs:
-      niche:
-        description: Canonical branded application
-        required: true
-        type: choice
-        default: collectibles
-        options: [coins, motocross, bicycles, clothing, surplus_flip, trading_cards, antiques, fossils, beauty, tech, collectibles]
 permissions:
   contents: read
 jobs:
   build-apk:
-    if: vars.SWISH_ENABLE_LEGACY_MIGRATION_BUILDS == 'true'
     uses: ./.github/workflows/_niche-android.yml
     with:
-      niche: ${{ inputs.niche }}
+      # Keep this release route deliberately single-product.  The reusable
+      # workflow creates a physical isolated route tree before compilation.
+      niche: tunes_flip
     secrets: inherit
