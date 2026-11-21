@@ -16,7 +16,11 @@ const list = (v:unknown):string[] => Array.isArray(v) ? v.map(x=>text(x)).filter
 /** Normalise accepted seller-facing Discogs/Goldmine grade notation without inventing a grade. */
 export function musicGrade(value:string):MusicGrade|null { const v=value.trim().toUpperCase();return MUSIC_GRADE_ALIASES[v]??MUSIC_GRADE_ALIASES[v.replace(/[.\s]/g,'')]??null; }
 export function musicGradeLabel(value:string):string { const grade=musicGrade(value);return grade?MUSIC_GRADE_LABELS[grade]:''; }
-/** Keep the Edge mirror aligned with the app: use only a condition exposed by this category's live policy. */
+/**
+ * eBay condition policies are category-specific. Match a saved music grade to
+ * an option the policy actually exposes, preferring an exact expanded label and
+ * only then a conservative broader eBay description (for example VG+ -> VG).
+ */
 export function musicEbayConditionId(policy:{itemConditions?:Array<{conditionId:string|number;conditionDescription:string}>},value:string):string {
  const grade=musicGrade(value);if(!grade)return '';
  const descriptions:Record<MusicGrade,string[]>={

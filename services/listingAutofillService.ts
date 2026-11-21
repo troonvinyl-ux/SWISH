@@ -25,7 +25,7 @@ export function automaticCondition(policy:AntiqueConditionPolicy,condition:strin
   // live policy before falling back to the generic inventory condition.
   const musicCondition=musicEbayConditionId(policy,musicGradeValue);if(musicCondition)return musicCondition;
  const raw=condition.trim().toLowerCase();
- if(!raw||/cannot|unknown|not assessed|not established|unconfirmed/.test(raw))return '';
+ if(!raw||/cannot|unknown|unassessed|not assessed|not established|unconfirmed/.test(raw))return '';
  const exact=choices.find(row=>row.conditionDescription.trim().toLowerCase()===raw);if(exact)return String(exact.conditionId);
  const desired=/for parts|not working|non.running|project/.test(raw)?'7000':/new other|open.box|unused.*open/.test(raw)?'1500':/refurbished/.test(raw)?'2500':/like new|near mint/.test(raw)?'2750':/very good/.test(raw)?'4000':/acceptable|poor/.test(raw)?'6000':/\bgood\b/.test(raw)?'5000':/\bnew\b|sealed/.test(raw)?'1000':/used|fair|excellent|worn/.test(raw)?'3000':'';
  const matching=choices.find(row=>String(row.conditionId)===desired);if(matching)return String(matching.conditionId);
