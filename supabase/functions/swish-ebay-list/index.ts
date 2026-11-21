@@ -48,6 +48,7 @@ import { requirePaidNiche, nicheAccessResponse } from '../_shared/paidNicheAutho
 import { specialistNiche } from '../_shared/specialistRegistry.ts';
 import { evaluateSpecialistSafety } from '../_shared/specialistIntelligence.ts';
 import { normalizeAntiqueAspects, validateAntiqueSpecifics, selectAntiqueCondition, validateAntiqueListingBasics, type AntiqueConditionPolicy } from '../_shared/antiqueListingPolicy.ts';
+import { musicEbayConditionId } from '../_shared/musicRelease.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -2411,7 +2412,21 @@ async function handleRequest(req: Request): Promise<Response> {
     let policy: AntiqueConditionPolicy;
     try { policy = await getItemConditionPolicy(taxonomyToken, resolvedCategoryId); }
     catch (cause) { return jsonResponse({ error: cause instanceof Error ? cause.message : 'eBay condition metadata unavailable. Retry requirements.', code: 'CONDITION_REQUIREMENTS_UNAVAILABLE', notSubmitted: true }, 503); }
-    const selected = selectAntiqueCondition(policy, String(attrs.ebay_condition_id ?? ''));
+    let selected = selectAntiqueCondition(policy, String(attrs.ebay_condition_id ?? ''));
+    // Tunes Flip persists Discogs/Goldmine grades separately from eBay's
+    // category-specific condition ID. Older drafts can therefore have a
+    // reviewed VG+ but no eBay ID. Translate only against the live policy and
+    // persist the resulting ID so the editor and a retry show the same choice.
+    if (selected.error && specialistNiche(specialistId) === 'tunes_flip') {
+      const mappedId = musicEbayConditionId(policy, String(attrs.media_grade ?? attrs.media_condition ?? ''));
+      if (mappedId) {
+        const { error: mappedSaveError } = await supabase.from('items').update({ attributes: { ...attrs, ebay_condition_id: mappedId } })
+          .eq('id', item.id).eq('tenant_id', tenantId);
+        if (mappedSaveError) return jsonResponse({ error: 'SWISH matched the saved music grade to an eBay condition, but could not persist that choice. Reload the draft before publishing.', code: 'CONDITION_MAPPING_SAVE_FAILED', notSubmitted: true }, 409);
+        attrs.ebay_condition_id = mappedId;
+        selected = selectAntiqueCondition(policy, mappedId);
+      }
+    }
     if (selected.error) return jsonResponse({ error: `Which eBay condition matches this item? Choose ${policy.itemConditions.map(choice => choice.conditionDescription).join(' / ')} in Condition, then save and retry.`, code: 'CONDITION_SELECTION_REQUIRED', notSubmitted: true, conditionPolicy: policy }, 422);
     conditionId = selected.id;
     conditionRequired = policy.itemConditionRequired;

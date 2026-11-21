@@ -58,7 +58,7 @@ export function useListingEditor(listingId:string) {
     if(currentScope.current!==scope||request!==categoryRequest.current)return;
     if(response.error||response.data?.success!==true||!response.data?.policy){setError(response.error??'eBay condition requirements unavailable. Retry category lookup.');return;}
     setConditionPolicy(response.data.policy);
-    setState(previous=>previous&&previous.categoryId===categoryId&&!previous.conditionId?{...previous,conditionId:automaticCondition(response.data.policy,previous.condition)}:previous);
+    setState(previous=>previous&&previous.categoryId===categoryId&&!previous.conditionId?{...previous,conditionId:automaticCondition(response.data.policy,previous.condition,'',String(previous.itemAttributes?.media_grade??previous.itemAttributes?.media_condition??''))}:previous);
    }
    setRequirementsReady(true);
   }catch(cause){if(currentScope.current===scope&&request===categoryRequest.current)setError(cause instanceof Error?cause.message:'Category requirements failed.');}

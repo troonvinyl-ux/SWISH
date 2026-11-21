@@ -3,12 +3,34 @@ export const MUSIC_NICHE_ID = 'tunes_flip' as const;
 export const MUSIC_SPECIALIST_ID = 'vinyl_records' as const;
 export const MUSIC_GRADES = ['M','NM','VG+','VG','G+','G','F','P'] as const;
 export type MusicGrade = typeof MUSIC_GRADES[number];
+const MUSIC_GRADE_LABELS:Record<MusicGrade,string>={M:'Mint',NM:'Near Mint', 'VG+':'Very Good Plus',VG:'Very Good','G+':'Good Plus',G:'Good',F:'Fair',P:'Poor'};
+const MUSIC_GRADE_ALIASES:Record<string,MusicGrade>={
+ M:'M',MINT:'M',NM:'NM','NEARMINT':'NM','M-':'NM',VGPLUS:'VG+','VG+':'VG+','VERYGOODPLUS':'VG+','VERYGOOD+':'VG+',
+ VG:'VG','VERYGOOD':'VG',GPLUS:'G+','G+':'G+','GOODPLUS':'G+','GOOD+':'G+',G:'G',GOOD:'G',F:'F',FAIR:'F',P:'P',POOR:'P',
+};
 export interface MusicCandidate { id:number; title:string; year:string; country:string; format:string[]; labels:string[]; catalogueNumbers:string[]; url:string }
 export interface MusicRelease extends MusicCandidate { discCount?:number|null; artist:string; releaseTitle:string; released:string; masterId:number|null; genres:string[]; styles:string[]; identifiers:Array<{type:string;value:string;description:string}>; tracks:Array<{position:string;title:string;duration:string}>; fetchedAt:string; expiresAt:string }
 const record = (v:unknown):Record<string,any> => v && typeof v==='object' && !Array.isArray(v) ? v as Record<string,any> : {};
 const text = (v:unknown,max=180):string => typeof v==='string'||typeof v==='number' ? String(v).trim().slice(0,max) : '';
 const list = (v:unknown):string[] => Array.isArray(v) ? v.map(x=>text(x)).filter(Boolean).slice(0,30) : [];
-export function musicGrade(value:string):MusicGrade|null { const v=value.trim().toUpperCase();return (MUSIC_GRADES as readonly string[]).includes(v)?v as MusicGrade:v==='M-'?'NM':null; }
+/** Normalise accepted seller-facing Discogs/Goldmine grade notation without inventing a grade. */
+export function musicGrade(value:string):MusicGrade|null { const v=value.trim().toUpperCase();return MUSIC_GRADE_ALIASES[v]??MUSIC_GRADE_ALIASES[v.replace(/[.\s]/g,'')]??null; }
+export function musicGradeLabel(value:string):string { const grade=musicGrade(value);return grade?MUSIC_GRADE_LABELS[grade]:''; }
+/**
+ * eBay condition policies are category-specific. Match a saved music grade to
+ * an option the policy actually exposes, preferring an exact expanded label and
+ * only then a conservative broader eBay description (for example VG+ -> VG).
+ */
+export function musicEbayConditionId(policy:{itemConditions?:Array<{conditionId:string|number;conditionDescription:string}>},value:string):string {
+ const grade=musicGrade(value);if(!grade)return '';
+ const descriptions:Record<MusicGrade,string[]>={
+  M:['mint','near mint','like new'],NM:['near mint','like new'], 'VG+':['very good plus','very good+','very good'],VG:['very good'],
+  'G+':['good plus','good+','good'],G:['good'],F:['fair','acceptable'],P:['poor','acceptable'],
+ };
+ const choices=Array.isArray(policy.itemConditions)?policy.itemConditions:[];
+ for(const description of descriptions[grade]){const key=description.replace(/[^a-z0-9]/g,'');const match=choices.find(choice=>String(choice.conditionDescription??'').toLowerCase().replace(/[^a-z0-9]/g,'').includes(key));if(match)return String(match.conditionId);}
+ return '';
+}
 export function musicReleaseUrl(id:number):string { if(!Number.isSafeInteger(id)||id<1)throw new Error('Valid individual release ID required.');return `https://www.discogs.com/release/${id}`; }
 export function normalizeMusicCandidate(input:unknown):MusicCandidate|null {
  const row=record(input);const id=Number(row.id);if(!Number.isSafeInteger(id)||id<1||row.type==='master')return null;

@@ -6,6 +6,14 @@ const market=(mid:number,recommended?:number):any=>({valuation:{valuationMid:mid
 test('one market value is the retained midpoint, not the selling price or a midpoint of rounded ranges',()=>{expect(marketValueAmount(market(12.34,15))).toBe(12.34);expect(marketValueAmount(null,12.34)).toBe(12.34);expect(marketValueAmount(market(0,15))).toBeNull();expect(marketValueAmount(null)).toBeNull();});
 test('listing price is prefilled from actual research without inventing unavailable amounts',()=>{expect(automaticListingPrice(market(12.34,15.126))).toBe(15.13);expect(automaticListingPrice(market(12.34))).toBe(12.34);expect(automaticListingPrice(null)).toBe(0);expect(automaticListingPrice(market(-5,-20))).toBe(0);});
 test('condition matches category metadata and never treats unknown or used stock as new',()=>{expect(automaticCondition(policy,'Used','1000')).toBe('3000');expect(automaticCondition(policy,'Very Good')).toBe('4000');expect(automaticCondition(policy,'Not assessed','1000')).toBe('');expect(automaticCondition(policy,'New sealed')).toBe('1000');expect(automaticCondition({...policy,itemConditions:[],itemConditionRequired:false},'Used')).toBe('');});
+test('Tunes Flip keeps the canonical grade while selecting the current eBay label without a second choice',()=>{
+ const exact={categoryId:'music',itemConditionRequired:true,itemConditions:[{conditionId:'2750',conditionDescription:'Very Good Plus'},{conditionId:'3000',conditionDescription:'Very Good'}]};
+ const broad={categoryId:'music',itemConditionRequired:true,itemConditions:[{conditionId:'3000',conditionDescription:'Very Good'}]};
+ expect(automaticCondition(exact,'Media unassessed','', 'VG+')).toBe('2750');
+ expect(automaticCondition(exact,'Media unassessed','', 'Very Good Plus')).toBe('2750');
+ expect(automaticCondition(broad,'Media unassessed','', 'VG+')).toBe('3000');
+ expect(automaticCondition(broad,'Media unassessed','', 'Unverified')).toBe('');
+});
 test('all supported known fields seed together while unknown and inferred claims stay blank',()=>{
  const aspects=normalizeAntiqueAspects([{name:'Brand',required:true},{name:'Model',required:true},{name:'Material',required:true},{name:'Year',required:false},{name:'MPN',required:true}]);
  const result:any={attributes:{_inferred_material:'Visual appearance'},attributesInferred:{material:'Silver'},attributesConfirmed:{brand:'Maker',model:'ABC',material:'Silver',year:2020},specialistAnalysis:undefined};

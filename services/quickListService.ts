@@ -46,9 +46,29 @@ export function quickInventoryIdentification(result:AIIdentificationResult):AIId
  return {...result,numistaVerification:undefined,numistaImageSearch:undefined,numistaTitle:undefined,attributes};
 }
 const requirementReuse=createQuickReuse<QuickRequirements>(5*60_000);
-export async function quickRequirements(tenantId:string,title:string,lead:ProductLead|null,nicheId?:QuickListNiche):Promise<QuickRequirements>{
+function tunesCategoryQueries(title:string,attributes:Record<string,unknown>):string[]{
+ const format=String(attributes.format??attributes.media_format??attributes.release_format??'').toLowerCase();
+ const prefix=/\b(cd|compact disc)\b/.test(format)?'music CD':/\bcassette\b/.test(format)?'audio cassette':/\b(vinyl|lp|record|single)\b/.test(format)?'vinyl record':'music recording';
+ return [...new Set([`${prefix} ${title}`.trim(),`${prefix}s`])];
+}
+function isTunesLeaf(row:any):boolean{
+ if(row?.isLeaf!==true)return false;
+ const evidence=`${row.categoryPath??''} ${row.name??''}`.toLowerCase();
+ return /\b(music|vinyl|records?|cds?|compact discs?|cassettes?)\b/.test(evidence)&&!/\b(clothing|merchandise|t-?shirts?)\b/.test(evidence);
+}
+export async function quickRequirements(tenantId:string,title:string,lead:ProductLead|null,nicheId?:QuickListNiche,attributes:Record<string,unknown>={}):Promise<QuickRequirements>{
  let categoryId=lead?.categoryId??'',categoryName=lead?.categoryName??'';
- if(!categoryId){const search=await invokeListingOperation({route:'get_category_suggestions',tenantId,query:title.slice(0,100)},'swish-ebay-category');if(search.error)throw new Error(search.error);const rows=(search.data?.suggestions??[]).filter((row:any)=>row.isLeaf===true);if(!rows.length)throw new Error('No matching eBay category was returned.');categoryId=String(rows[0].id);categoryName=String(rows[0].name);}
+ if(!categoryId){
+  const queries=nicheId==='tunes_flip'?tunesCategoryQueries(title,attributes):[title.slice(0,100)];let firstError='';let selected:any;
+  for(const query of queries){
+   const search=await invokeListingOperation({route:'get_category_suggestions',tenantId,nicheId,query:query.slice(0,100)},'swish-ebay-category');
+   if(search.error){firstError=search.error;continue;}
+   const rows=(search.data?.suggestions??[]).filter((row:any)=>nicheId==='tunes_flip'?isTunesLeaf(row):row.isLeaf===true);
+   if(rows.length){selected=rows[0];break;}
+  }
+  if(!selected)throw new Error(firstError|| (nicheId==='tunes_flip'?'No matching eBay music leaf category was returned. Confirm the format (vinyl, CD or cassette) on the saved item and retry.':'No matching eBay category was returned.'));
+  categoryId=String(selected.id);categoryName=String(selected.name);
+ }
  const session=await getSupabaseClient().auth.getSession();const userId=session.data.session?.user.id;if(session.error||!userId)throw new Error('A verified account is required for category lookup.');
  const result=await requirementReuse.get(`${userId}:${tenantId}:${nicheId??''}:EBAY_GB:${categoryId}`,async()=>{
   const [aspects,conditions]=await Promise.all([invokeListingOperation({route:'get_category_aspects',tenantId,categoryId,forceLive:true}),invokeListingOperation({route:'get_condition_policies',tenantId,categoryId})]);
@@ -76,6 +96,9 @@ export async function prepareQuickDraft(tenantId:string,nicheId:QuickListNiche,i
  const researchPromise=valuePromise.then(response=>{if(!response.error&&response.result)onValue();return response;});
  const requirementsResult=requirementsPromise.catch(cause=>({categoryId:'',categoryName:'',aspects:[],conditions:{categoryId:'',itemConditionRequired:false,itemConditions:[]},error:cause instanceof Error?cause.message:'Category requirements unavailable.'} as QuickRequirements));
  const [copy,research,requirements,photos]=await Promise.all([generatedPromise,researchPromise,requirementsResult,photosPromise]);if(copy.error||!copy.listing)throw new Error(copy.error??'Listing copy unavailable.');
+ // A category lookup failure must not leave an apparently-listable draft with
+ // no eBay leaf category. The caller can retry the same saved inventory item.
+ if(requirements.error||!requirements.categoryId)throw new Error(requirements.error??'A verified eBay category is required before creating a draft.');
  const market=research.error?null:research.result,evidencePrice=automaticListingPrice(market);
  const generated={...copy.listing,recommended_price:evidencePrice,floor_price:0,ceiling_price:0};
  const canonical=await getItem(itemId);

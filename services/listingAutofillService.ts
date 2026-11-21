@@ -5,6 +5,7 @@ import type { GeneratedListing } from './listingService';
 import type { AntiqueAspect, AntiqueConditionPolicy } from '@/shared/antiqueListingPolicy';
 import { seedAntiqueSpecifics, validateAntiqueSpecifics } from '@/shared/antiqueListingPolicy';
 import { getSpecialistProfile, mappedSpecialistSpecifics } from '@/shared/specialistIntelligence';
+import { musicEbayConditionId } from '@/shared/musicRelease';
 import type { MarketValueResult } from './marketValueService';
 const key = (value:string) => value.toLowerCase().replace(/[^a-z0-9]/g,'');
 const text = (value:unknown) => (typeof value==='string'||typeof value==='number') && !/^(unknown|not established|not supplied|not visible|n\/a)$/i.test(String(value).trim()) ? String(value).trim() : '';
@@ -16,9 +17,13 @@ export function automaticListingPrice(result:MarketValueResult|null|undefined):n
  const value=Number(result?.valuation?.recommendedListingPrice);
  return Number.isFinite(value)&&value>0 ? Math.round(value*100)/100 : marketValueAmount(result) ?? 0;
 }
-export function automaticCondition(policy:AntiqueConditionPolicy,condition:string,generatedId=''):string {
+export function automaticCondition(policy:AntiqueConditionPolicy,condition:string,generatedId='',musicGradeValue=''):string {
  const choices=policy.itemConditions;
  if(!choices.length)return '';
+  // Tunes Flip stores an evidence-backed media grade separately from the
+  // marketplace's category-specific condition label. Resolve it against the
+  // live policy before falling back to the generic inventory condition.
+  const musicCondition=musicEbayConditionId(policy,musicGradeValue);if(musicCondition)return musicCondition;
  const raw=condition.trim().toLowerCase();
  if(!raw||/cannot|unknown|not assessed|not established|unconfirmed/.test(raw))return '';
  const exact=choices.find(row=>row.conditionDescription.trim().toLowerCase()===raw);if(exact)return String(exact.conditionId);

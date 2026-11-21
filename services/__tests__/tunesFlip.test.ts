@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import registry from '../../niche-modules.json';
-import { normalizeMusicRelease,normalizeMusicCandidate,selectedMusicAttributes,musicGrade,isFreshMusicRelease } from '../../shared/musicRelease';
+import { normalizeMusicRelease,normalizeMusicCandidate,selectedMusicAttributes,musicGrade,musicGradeLabel,musicEbayConditionId,isFreshMusicRelease } from '../../shared/musicRelease';
 import { resolveProductionNiche,isRouteAllowedForModule,getProductionNicheSpecialistIds } from '../nicheRouting';
 import { evaluateSpecialistSafety,mappedSpecialistSpecifics,getSpecialistProfile } from '../../shared/specialistIntelligence';
 const source=(name:string)=>fs.readFileSync(path.resolve(__dirname,'../..',name),'utf8');
@@ -23,6 +23,12 @@ describe('Tunes Flip source and pure contracts — not live acceptance',()=>{
  });
  test.each(['M','NM','VG+','VG','G+','G','F','P'])('independent grade %s is supported',grade=>expect(musicGrade(grade)).toBe(grade));
  test('unsupported audio-grade claims are not normalized into Mint',()=>{expect(musicGrade('excellent sound')).toBeNull();expect(musicGrade('M-')).toBe('NM');});
+test('expanded and shorthand grades share one canonical eBay condition mapping',()=>{
+ const policy={itemConditions:[{conditionId:'2750',conditionDescription:'Very Good Plus'},{conditionId:'3000',conditionDescription:'Very Good'}]};
+ expect(musicGrade('Very Good Plus')).toBe('VG+');expect(musicGradeLabel('VG+')).toBe('Very Good Plus');
+ expect(musicEbayConditionId(policy,'VG+')).toBe('2750');expect(musicEbayConditionId(policy,'Very Good Plus')).toBe('2750');
+ expect(musicEbayConditionId({itemConditions:[{conditionId:'3000',conditionDescription:'Very Good'}]},'VG+')).toBe('3000');
+});
  test('shared listing gate does not treat a Discogs choice or grades as a publication veto',()=>{
   expect(evaluateSpecialistSafety('tunes_flip',{}).blocked).toBe(false);
   expect(evaluateSpecialistSafety('tunes_flip',{pressing_reviewed:'yes',media_grade:'VG+',sleeve_grade:'VG'}).blocked).toBe(false);
