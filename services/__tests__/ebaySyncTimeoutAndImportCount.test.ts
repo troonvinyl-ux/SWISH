@@ -1,6 +1,7 @@
 jest.mock('@/template',()=>({getSupabaseClient:jest.fn()}));
 import {getSupabaseClient} from '@/template';
 import {runNicheEbayOperation} from '../ebaySyncService';
+import {importCanonicalEbayInventory} from '../ebayInventoryImportService';
 import {isIsolatedGetItemTimeout} from '../../supabase/functions/_shared/ebaySyncPolicy';
 import fs from 'node:fs';
 const cursor='00000000-0000-4000-8000-000000000108';
@@ -78,4 +79,25 @@ test('Edge sync and eBay import preserve exact scope and expose incomplete-pagin
  expect(browse).toContain("return json({ error: 'eBay active listing pages were not fully confirmed.");
  expect(importUi).toContain('eBay active');
  expect(importUi).toContain('already linked');
+ expect(importUi).toContain("error.startsWith('SWISH_IMPORT_UNCONFIRMED:')");
+ expect(importUi).toContain('setImportProgress({ current: attempted, total: selected.length })');
+ expect(importUi).toContain('finally {');
+ const atomic=fs.readFileSync('services/ebayInventoryImportService.ts','utf8');
+ expect(atomic).toContain('Promise.race([request,timeout])');
+ expect(atomic).toContain('controller.abort()');
+});
+
+test('native import stops after bounded 30s instead of hanging forever at 108/118 or replaying an uncertain write',async()=>{
+ jest.useFakeTimers();
+ try{
+  const abortSignal=jest.fn().mockReturnValue(new Promise(()=>{}));
+  const rpc=jest.fn().mockReturnValue({abortSignal});
+  (getSupabaseClient as jest.Mock).mockReturnValue({rpc});
+  const operation=importCanonicalEbayInventory('tenant','coins','123456789012',{},{}); 
+  jest.advanceTimersByTime(30000);
+  await expect(operation).rejects.toThrow('SWISH_IMPORT_UNCONFIRMED');
+  expect(rpc).toHaveBeenCalledTimes(1);
+  expect(abortSignal).toHaveBeenCalledTimes(1);
+  expect(abortSignal.mock.calls[0][0].aborted).toBe(true);
+ }finally{jest.useRealTimers();}
 });
