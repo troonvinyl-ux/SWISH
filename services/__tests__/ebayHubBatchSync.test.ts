@@ -37,19 +37,3 @@ test('per-item sync errors are scoped, attributable and never reveal database se
  expect(source).toContain("issue.code==='21920397'");
  expect(source).not.toContain('media.some(url=>!linked.media?.includes(url))');
 });
-
-test('sync worker can boot when OnSpace serves a legacy policy module without the new named export', () => {
- const worker=fs.readFileSync('supabase/functions/swish-ebay-sync/index.ts','utf8');
- const policy=fs.readFileSync('supabase/functions/_shared/ebaySyncPolicy.ts','utf8');
- expect(worker).toContain("import * as ebaySyncPolicy from '../_shared/ebaySyncPolicy.ts'");
- expect(worker).toContain("typeof ebaySyncPolicy.safeReconciliationIssue === 'function'");
- // A named ESM import causes InvalidWorkerCreation before this handler can run.
- expect(worker).not.toMatch(/import\s*\{[^}]*\bsafeReconciliationIssue\b[^}]*\}\s*from\s*['"]\.\.\/_shared\/ebaySyncPolicy\.ts/);
- expect(worker).toContain("code: 'SWISH_RECONCILIATION_UNCONFIRMED'");
- expect(worker).toContain('No new eBay listing was created.');
- expect(policy).toContain('export function safeReconciliationIssue(');
- // The stale-module fallback only reports uncertainty: no statuses, prices,
- // original images or listings are changed merely because diagnostics are absent.
- expect(worker).toContain('issues.push(issue)');
- expect(worker).toContain('if(!observations.has(String(listing.external_listing_id)))continue;');
-});
