@@ -1589,7 +1589,7 @@ async function runCoinResearch(id: any, known: Record<string, any>, numista: Num
 // ── Main handler ───────────────────────────────────────────────────────────────
 serveModule(withEdgeFunctionLogging('swish-identify', async (req: Request) => {
   const startedAt = Date.now();
-  let requestId = crypto.randomUUID();
+  let requestId: string = crypto.randomUUID();
   const failure = (message: string, status: number, code: string) => new Response(JSON.stringify({ error: message, code, requestId }), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return new Response(JSON.stringify({ error: 'Method not allowed.' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
