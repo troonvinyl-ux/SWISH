@@ -608,6 +608,7 @@ export default function EbayImportScreen() {
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [activeSellerCoverage, setActiveSellerCoverage] = useState<{ reported: number | null; fetched: number } | null>(null);
 
   // ── Image import state ────────────────────────────────────────────────────
   const [imageImporting, setImageImporting] = useState(false);
@@ -680,6 +681,7 @@ export default function EbayImportScreen() {
     if (!tenant) return;
     setLoading(true);
     setFetchError(null);
+    setActiveSellerCoverage(null);
     setCandidates([]);
 
     try {
@@ -700,6 +702,10 @@ export default function EbayImportScreen() {
       }
 
       const listings: any[] = data?.listings ?? [];
+      setActiveSellerCoverage({
+        reported: Number.isSafeInteger(data?.activeReported) ? Number(data.activeReported) : null,
+        fetched: Number.isSafeInteger(data?.activeFetched) ? Number(data.activeFetched) : 0,
+      });
 
       if (listings.length === 0) {
         setFetchError('No eBay listings found. If your eBay account is connected but this shows empty, your active listings may have ended. Try clicking Fetch again — sold and ended listings are also fetched.');
@@ -915,7 +921,8 @@ export default function EbayImportScreen() {
             </Text>
           ) : candidates.length > 0 ? (
             <Text style={s.subtitle}>
-              {candidates.length} found · {duplicateCount} duplicate · {selectedCount} selected
+              {candidates.length} candidates · {duplicateCount} already linked · {selectedCount} selected
+              {activeSellerCoverage ? ` · eBay active ${activeSellerCoverage.reported ?? 'unconfirmed'}, fetched ${activeSellerCoverage.fetched}` : ''}
             </Text>
           ) : (
             <Text style={s.subtitle}>Import your existing eBay listings as inventory records</Text>
