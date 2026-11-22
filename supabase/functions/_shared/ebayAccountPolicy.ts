@@ -6,6 +6,15 @@ export function parseEbayIdentity(value: unknown): EbayIdentity {
  return { userId: row.userId.trim(), username: row.username.trim() };
 }
 export function identityMatches(saved: string | null, next: string, purpose: string) { return !saved || saved === next || purpose === 'switch'; }
+/** No caller-provided account name may silently replace the identity proved
+ * by the actual encrypted OAuth token and eBay's identity endpoint. */
+export function assertVerifiedLegacySeller(identity: EbayIdentity, savedSeller: unknown, savedUserId: unknown): void {
+ const existingSeller=typeof savedSeller==='string'?savedSeller.trim():'';
+ const existingUserId=typeof savedUserId==='string'?savedUserId.trim():'';
+ if((existingUserId&&existingUserId!==identity.userId) ||
+    (existingSeller&&existingSeller!==identity.username&&existingSeller!==identity.userId))throw new Error(ebayMismatchMessage);
+}
+
 export function requiresSellerBinding(operation: string, route: unknown): boolean {
  if (operation === 'swish-ebay-browse' && route === 'barcode_lookup') return false;
  if (operation === 'swish-ebay-category') return false;
