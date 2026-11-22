@@ -42,7 +42,7 @@ run('unified_registry','node',['scripts/validate-unified-modules.mjs']);
 const functions=fs.readdirSync('supabase/functions',{withFileTypes:true}).filter(entry=>entry.isDirectory()&&entry.name!=='_shared'&&fs.existsSync(`supabase/functions/${entry.name}/index.ts`)).map(entry=>`supabase/functions/${entry.name}/index.ts`);
 run('edge_types','deno',['check',...functions]);
 const tests=fs.readdirSync('supabase/tests').filter(name=>name.endsWith('.test.ts')).map(name=>'supabase/tests/'+name);
-run('edge_tests','deno',['test','--allow-read','--allow-env',...tests]); // No runtime --allow-net, no live provider calls.
+run('edge_tests','deno',['test','--allow-read','--allow-env','--allow-write=verification-output/studio',...tests]); // Scoped offline Smart Studio fixture outputs only; no --allow-net or live provider calls.
 run('web_build','npx',['--no-install','expo','export','--platform','web','--output-dir','dist/production-acceptance/web'],1200000);
 run('production_build','npx',['--no-install','expo','export','--platform','android','--output-dir','dist/production-acceptance/android-js'],1200000);
 const report={schemaVersion:1,sourceSha,checkedAt:new Date().toISOString(),mode:'AUTOMATED_ONLY',results,automatedPassed:results.every(row=>row.result==='PASS'),productionReady:false,notCovered:['real account integration','per-niche 14-step user journeys','capture-to-live speed','native APK installation/signing','live provider calls','hosted/deployed revision','two-subscriber isolation']};
