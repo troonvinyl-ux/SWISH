@@ -27,7 +27,7 @@ test('24 linked listings are handled in three disjoint, confirmed requests when 
  expect(received.data.updated).toBe(24);
  expect(invoke).toHaveBeenCalledTimes(3);
  const bodies=invoke.mock.calls.map(call=>call[1].body);
- expect(bodies.map(body=>body.batchSize)).toEqual([6,8,10]);
+ expect(bodies.map(body=>body.batchSize)).toEqual([undefined,8,10]);
  expect(bodies.map(body=>body.afterListingId??null)).toEqual([null,ids[0],ids[1]]);
  expect(updates.map(row=>row.processed)).toEqual([6,14,24]);
  expect(bodies.every(body=>body.batch===true&&body.mode==='full')).toBe(true);

@@ -39,7 +39,7 @@ export async function runNicheEbayOperation(tenantId: string, nicheId: string, o
    const snapshot = () => ({ ...last, ...totals, issues: [...issues], partial: totals.failed > 0 });
    for (let batch = 0; batch < 834; batch++) {
     if (options.isCurrent?.() === false || await backendDataScope() !== captured) return { data: snapshot(), error: 'Workspace or login changed. Sync stopped before starting the next batch; completed items are retained.', requiresReauth: false };
-    const response = await invokeOperation('swish-ebay-sync', { tenantId, nicheId: niche, mode: 'full', batch: true, batchSize, ...(totals.failed > 0 ? { previousIssues: true } : {}), ...(cursor ? { afterListingId: cursor } : {}) }, 105000);
+    const response = await invokeOperation('swish-ebay-sync', { tenantId, nicheId: niche, mode: 'full', batch: true, ...(batchSize!==6 ? {batchSize} : {}), ...(totals.failed > 0 ? { previousIssues: true } : {}), ...(cursor ? { afterListingId: cursor } : {}) }, 105000);
     last = response.data;
     if (!last) return { ...response, data: snapshot() };
     for (const key of Object.keys(totals) as Array<keyof typeof totals>) { const value = Number(last[key] ?? 0); if (Number.isFinite(value) && value >= 0) totals[key] += value; }

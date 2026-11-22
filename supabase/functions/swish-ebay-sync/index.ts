@@ -239,7 +239,7 @@ const batchSize=batched?(desiredSize??SYNC_BATCH_SIZE):SYNC_BATCH_SIZE;
       return reconcileOne(row,previous);
      },1);
   for(const outcome of outcomes){
-   if(outcome.issue){failed.push(outcome.id);issues.push(outcome.issue);console.error(`[EbaySync] Scoped item reconciliation not confirmed: ${outcome.issue.code}`);}
+   if(outcome.issue){const issue=outcome.issue;failed.push(outcome.id);issues.push(issue);console.error(`[EbaySync] Scoped item reconciliation not confirmed: ${issue.code}`);}
    else if(outcome.result){updated++;imagesFetched+=outcome.result.images;titlesFixed+=outcome.result.titleFixed;metrics.metadataWritesSkipped+=outcome.result.skippedWrites;}
   }
   metrics.reconciliationMs=Date.now()-stageStart;
