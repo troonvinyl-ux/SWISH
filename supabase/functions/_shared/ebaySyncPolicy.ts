@@ -2,6 +2,12 @@
 export function isRemovedPolicyListing(message: string): boolean {
  return /^eBay Trading HTTP 200; error codes 21920397$/.test(message);
 }
+/** A per-listing read-only GetItem request reached its own 20-second
+ * transport deadline. Never treat auth, provider HTTP failures, malformed
+ * observations or uncertain database writes as isolated timeouts. */
+export function isIsolatedGetItemTimeout(cause: unknown): boolean {
+ return cause instanceof Error && cause.name === 'TimeoutError';
+}
 export const SYNC_BATCH_SIZE = 6;
 export interface SyncListingIssue { externalListingId: string; code: string; message: string }
 
