@@ -26,6 +26,8 @@ import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
+import { readEbayIdentity } from '../_shared/ebayAccountEngine.ts';
+import { assertVerifiedLegacySeller } from '../_shared/ebayAccountPolicy.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -343,7 +345,7 @@ async function handleCallback(url: URL): Promise<Response> {
   // Retrieve stored credentials
   const { data: connectorRow, error: fetchErr } = await supabase
     .from('marketplace_connectors')
-    .select('credential_ref')
+    .select('credential_ref,seller_account_id')
     .eq('tenant_id', tenantId)
     .eq('marketplace_id', 'ebay')
     .maybeSingle();
@@ -437,6 +439,20 @@ async function handleCallback(url: URL): Promise<Response> {
     ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString()
     : null;
 
+  // Verify the actual authorised eBay identity, not a browser/staged label.
+  // A different account cannot silently take over an existing tenant connector.
+  let verifiedIdentity: {userId:string;username:string};
+  try {
+    verifiedIdentity = await readEbayIdentity(tokenData.access_token);
+    assertVerifiedLegacySeller(verifiedIdentity,sellerAccountId,null);
+    if(connectorRow?.credential_ref){
+      const previous = await decryptCredentials(connectorRow.credential_ref);
+      assertVerifiedLegacySeller(verifiedIdentity,connectorRow.seller_account_id,previous.ebayUserId);
+    }
+  } catch {
+    return htmlResponse(errorPage('eBay Identity Not Confirmed','The seller account could not be verified or does not match the existing linked account.','Return to SWISH and check the linked eBay account before trying again.'),409);
+  }
+
   // Store tokens encrypted
   const updatedCredentialRef = await encryptCredentials({
     clientId:     clientId.trim(),
@@ -445,7 +461,8 @@ async function handleCallback(url: URL): Promise<Response> {
     accessToken:  tokenData.access_token,
     refreshToken: tokenData.refresh_token ?? null,
     expiresAt,
-    sellerAccountId: sellerAccountId ?? '',
+    sellerAccountId: verifiedIdentity.username,
+    ebayUserId: verifiedIdentity.userId,
     hasAnalyticsScope: true,
   });
 
@@ -459,7 +476,7 @@ async function handleCallback(url: URL): Promise<Response> {
       status:                   'connected',
       credential_ref:           updatedCredentialRef,
       access_token_expires_at:  expiresAt,
-      seller_account_id:        sellerAccountId ?? '',
+      seller_account_id:        verifiedIdentity.username,
       can_list:                 true,
       can_publish:              true,
       can_reprice:              true,
