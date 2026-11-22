@@ -446,7 +446,7 @@ function buildKnownAttributesContext(attrs: Record<string, any>): string {
 }
 
 // ── Learning layer ────────────────────────────────────────────────────────────
-async function fetchLearningCorrections(supabaseAdmin: ReturnType<typeof createClient>, tenantId: string, specialistId: string): Promise<string> {
+async function fetchLearningCorrections(supabaseAdmin: ReturnType<typeof createClient<any>>, tenantId: string, specialistId: string): Promise<string> {
   try {
     const { data } = await supabaseAdmin
       .from('ai_id_feedback')
@@ -1393,7 +1393,7 @@ function currentMonthKey(): string {
  * Returns null if tenantId is missing or DB lookup fails.
  */
 async function resolveTenantTier(
-  admin: ReturnType<typeof createClient>,
+  admin: ReturnType<typeof createClient<any>>,
   userId: string,
   tenantId: string,
 ): Promise<string | null> {
@@ -1468,7 +1468,7 @@ async function checkStripeSubscription(userId: string, userEmail: string, nicheI
  * Tenant tier always wins. Stripe is secondary for users without a qualifying tier.
  */
 async function determineIsPremium(
-  admin: ReturnType<typeof createClient>,
+  admin: ReturnType<typeof createClient<any>>,
   userId: string,
   userEmail: string | undefined,
   tenantId: string,
@@ -1479,7 +1479,7 @@ async function determineIsPremium(
 }
 
 async function incrementUsage(
-  admin: ReturnType<typeof createClient>,
+  admin: ReturnType<typeof createClient<any>>,
   tenantId: string,
   userId: string,
   monthKey: string,
@@ -1497,7 +1497,7 @@ async function incrementUsage(
 }
 
 async function getUsage(
-  admin: ReturnType<typeof createClient>,
+  admin: ReturnType<typeof createClient<any>>,
   tenantId: string,
   userId: string,
   monthKey: string,
