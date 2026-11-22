@@ -215,6 +215,47 @@ async function handleSubscriberAuthorization(
   return jsonResponse({ consentUrl, callbackUrl: CALLBACK_URL });
 }
 
+// Existing-seller identity recovery: requires verified member owner/admin, no new
+// OAuth consent and no eBay listing request. Only reconciles the current token.
+async function handleVerifyConnectedIdentity(
+  body: {tenantId?: string}, authHeader: string | null,
+): Promise<Response> {
+ const tenantId=typeof body.tenantId==='string'?body.tenantId:'';
+ if(!tenantId)return jsonResponse({error:'A SWISH account is required.'},400);
+ const db=adminClient();
+ const auth=await verifyUserAndTenant(authHeader,tenantId,db,true);
+ if(!auth.ok)return jsonResponse({error:auth.error},auth.status??403);
+ const {data:connector,error:readError}=await db.from('marketplace_connectors')
+  .select('id,credential_ref,status,seller_account_id,access_token_expires_at')
+  .eq('tenant_id',tenantId).eq('marketplace_id','ebay').maybeSingle();
+ if(readError)return jsonResponse({error:'The linked eBay account could not be read.'},503);
+ if(!connector||connector.status!=='connected'||!connector.credential_ref)
+  return jsonResponse({error:'Connect and verify your existing eBay account before reading seller identity.'},409);
+ let creds:Record<string,unknown>;
+ try{creds=await decryptCredentials(connector.credential_ref);}
+ catch{return jsonResponse({error:'Stored eBay authorization could not be verified securely.'},409);}
+ const accessToken=typeof creds.accessToken==='string'?creds.accessToken:'';
+ const expiry=Date.parse(String(creds.expiresAt??connector.access_token_expires_at??''));
+ if(!accessToken||!Number.isFinite(expiry)||expiry<=Date.now()+30000)
+  return jsonResponse({error:'The eBay token needs a verified refresh before seller identity can be checked. Do not reconnect solely for this label.'},409);
+ let identity:{userId:string;username:string};
+ try{
+  identity=await readEbayIdentity(accessToken);
+  assertVerifiedLegacySeller(identity,connector.seller_account_id,creds.ebayUserId);
+ }catch{return jsonResponse({error:'Verified eBay seller identity could not be confirmed or does not match the account already linked.'},409);}
+ if(connector.seller_account_id===identity.username&&creds.ebayUserId===identity.userId)
+  return jsonResponse({success:true,sellerAccountId:identity.username,verified:true,persisted:true});
+ const encrypted=await encryptCredentials({...creds,ebayUserId:identity.userId,sellerAccountId:identity.username});
+ let update=db.from('marketplace_connectors')
+  .update({seller_account_id:identity.username,credential_ref:encrypted,updated_at:new Date().toISOString()})
+  .eq('id',connector.id).eq('tenant_id',tenantId).eq('marketplace_id','ebay')
+  .eq('status','connected').eq('credential_ref',connector.credential_ref);
+ update=connector.seller_account_id==null?update.is('seller_account_id',null):update.eq('seller_account_id',connector.seller_account_id);
+ const {data:confirmed,error:writeError}=await update.select('id').maybeSingle();
+ if(writeError||!confirmed)return jsonResponse({error:'The eBay connector changed while checking identity. Reload account health; no replacement connection was created.'},409);
+ return jsonResponse({success:true,sellerAccountId:identity.username,verified:true,persisted:true});
+}
+
 // ════════════════════════════════════════════════════════════════════════════════
 // ACTION: authorize (admin/developer custom credentials flow — unchanged)
 // ════════════════════════════════════════════════════════════════════════════════
@@ -611,6 +652,9 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-oauth', async (req: Request) => {
 
       if (body.action === 'start_subscriber_authorization') {
         return await handleSubscriberAuthorization(body, authHeader);
+      }
+      if (body.action === 'verify_connected_identity') {
+        return await handleVerifyConnectedIdentity(body, authHeader);
       }
       if (body.action === 'authorize') {
         return await handleAuthorize(body, authHeader);
