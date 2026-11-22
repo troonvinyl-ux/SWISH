@@ -15,7 +15,18 @@ async function invokeOperation(endpoint: string, body: Record<string, unknown>, 
   return { data: payload, error: payload?.success === true ? null : String(payload?.error ?? 'eBay operation was not confirmed.'), requiresReauth: payload?.requiresReauth === true };
  } catch (cause) { return { data: null, error: cause instanceof Error ? cause.message : 'eBay connection unavailable. Existing inventory is preserved.', requiresReauth: false }; }
 }
-/** Continue new, disjoint six-listing batches; NEVER replay a failed/unknown request. */
+/** Adapt only after verified, fully reported batches: short batches can grow to
+ * ten items, while slow batches shrink to three. Never infer provider success
+ * from elapsed time, change the requested cursor, or replay a failed batch. */
+export function nextSyncBatchSize(current: number, response: any): number {
+ const size=Number.isSafeInteger(current)?Math.max(3,Math.min(10,current)):6;
+ const elapsed=Number(response?.performance?.totalMs),processed=Number(response?.processed);
+ if(!Number.isFinite(elapsed)||elapsed<1||!Number.isSafeInteger(processed)||processed<1)return size;
+ if(elapsed>=50000)return Math.max(3,size-2);
+ if(elapsed<=22000&&processed>=size&&response?.batchComplete===true&&response?.success===true)return Math.min(10,size+2);
+ return size;
+}
+/** Continue new, disjoint bounded listing batches; NEVER replay a failed/unknown request. */
 export async function runNicheEbayOperation(tenantId: string, nicheId: string, operation: 'sync' | 'token' | 'images', options: EbaySyncOptions = {}): Promise<OperationResult> {
  const niche = resolveProductionNiche(nicheId);
  if (!tenantId || !niche) return { data: null, error: 'Open a verified specialist workspace before syncing.', requiresReauth: false };
@@ -24,11 +35,11 @@ export async function runNicheEbayOperation(tenantId: string, nicheId: string, o
   const captured = await backendDataScope();
   return await shareBackendRequest(`ebay-hub-batches:${tenantId}:${niche}`, async () => {
    const totals = { processed: 0, updated: 0, failed: 0, imagesFetched: 0, titlesFixed: 0, blocked: 0 };
-   const issues: any[] = []; const seen = new Set<string>(); let cursor: string | null = null; let last: any = null;
+   const issues: any[] = []; const seen = new Set<string>(); let cursor: string | null = null; let last: any = null; let batchSize = 6;
    const snapshot = () => ({ ...last, ...totals, issues: [...issues], partial: totals.failed > 0 });
    for (let batch = 0; batch < 834; batch++) {
     if (options.isCurrent?.() === false || await backendDataScope() !== captured) return { data: snapshot(), error: 'Workspace or login changed. Sync stopped before starting the next batch; completed items are retained.', requiresReauth: false };
-    const response = await invokeOperation('swish-ebay-sync', { tenantId, nicheId: niche, mode: 'full', batch: true, ...(totals.failed > 0 ? { previousIssues: true } : {}), ...(cursor ? { afterListingId: cursor } : {}) }, 105000);
+    const response = await invokeOperation('swish-ebay-sync', { tenantId, nicheId: niche, mode: 'full', batch: true, batchSize, ...(totals.failed > 0 ? { previousIssues: true } : {}), ...(cursor ? { afterListingId: cursor } : {}) }, 105000);
     last = response.data;
     if (!last) return { ...response, data: snapshot() };
     for (const key of Object.keys(totals) as Array<keyof typeof totals>) { const value = Number(last[key] ?? 0); if (Number.isFinite(value) && value >= 0) totals[key] += value; }
@@ -41,6 +52,9 @@ export async function runNicheEbayOperation(tenantId: string, nicheId: string, o
     const next = last.nextAfterListingId;
     if (next == null) return { data: { ...snapshot(), success: totals.failed === 0 }, error: totals.failed ? `${totals.updated} listing(s) reconciled; ${totals.failed} need attention${totals.blocked ? ' (eBay policy 21920397)' : ''}. Restricted/unconfirmed records and photos are retained. Review the listing issues before retrying.` : response.error, requiresReauth: response.requiresReauth };
     if (last.batchComplete !== true || typeof next !== 'string' || !/^[0-9a-f-]{36}$/i.test(next) || seen.has(next) || Number(last.processed) < 1) return { data: snapshot(), error: 'Sync continuation could not be verified. Completed items are retained; reload before retrying.', requiresReauth: false };
+    // Only decide the *next* batch after this one has completed and its cursor
+    // has been verified. A slow/unknown batch is never automatically repeated.
+    batchSize = nextSyncBatchSize(batchSize, last);
     seen.add(next); cursor = next;
    }
    return { data: snapshot(), error: 'Sync exceeded the supported collection limit. Select a smaller group; completed items are retained.', requiresReauth: false };
