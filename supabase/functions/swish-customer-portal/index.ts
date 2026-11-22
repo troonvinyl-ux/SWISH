@@ -49,17 +49,17 @@ serve(withEdgeFunctionLogging('swish-customer-portal', async (req) => {
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
     const customers = await stripe.customers.list({ email: user.email, limit: 100 });
-    let customer = customers.data.find((candidate) => candidate.metadata?.user_id === user.id);
+    let customer = customers.data.find((candidate: { metadata?: Record<string, string>; id: string }) => candidate.metadata?.user_id === user.id);
 
     // Recover a legacy customer only when a verified account has one unambiguous
     // customer whose active SWISH subscription already identifies this user.
     if (!customer && user.email_confirmed_at) {
       const eligibleLegacyCustomers = [];
-      for (const candidate of customers.data.filter((entry) => !entry.metadata?.user_id)) {
+      for (const candidate of customers.data.filter((entry: { metadata?: Record<string, string>; id: string }) => !entry.metadata?.user_id)) {
         const legacySubs = await stripe.subscriptions.list({ customer: candidate.id, status: "all", limit: 100 });
-        const ownsSwishSubscription = legacySubs.data.some((sub) => sub.metadata?.user_id === user.id &&
+        const ownsSwishSubscription = legacySubs.data.some((sub: { metadata?: Record<string, string>; status: string; items: { data: Array<{ price: { product: string } }> } }) => sub.metadata?.user_id === user.id &&
           (sub.status === "active" || sub.status === "trialing") &&
-          sub.items.data.some((item) => item.price.product === "prod_VQ0JxUCL29SZPQ"));
+          sub.items.data.some((item: { price: { product: string } }) => item.price.product === "prod_VQ0JxUCL29SZPQ"));
         if (ownsSwishSubscription) eligibleLegacyCustomers.push(candidate);
       }
       if (eligibleLegacyCustomers.length === 1) {
