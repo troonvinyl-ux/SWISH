@@ -194,8 +194,9 @@ async function handleDispatch(
       const orderData = await orderResp.json();
       if (orderData.orderPaymentStatus !== 'PAID' || orderData.cancelStatus?.cancelState === 'CANCELED') return jsonResponse({success:false,error:'eBay has not confirmed payment or the order is cancelled. No dispatch was sent.'},409);
       const linked = await supabase.from('listings').select('external_listing_id').eq('id',orderRow.listing_id).eq('tenant_id',tenantId).eq('item_id',orderRow.item_id).maybeSingle();
-      if(linked.error||!linked.data)return jsonResponse({success:false,error:'Saved order listing identity could not be verified.'},403);
-      const matching=(orderData.lineItems??[]).filter((li:any)=>String(li.legacyItemId)===String(linked.data.external_listing_id)&&(!orderRow.ebay_line_item_id||String(li.lineItemId)===orderRow.ebay_line_item_id));
+      const verifiedListingId=linked.data?.external_listing_id;
+      if(linked.error||!verifiedListingId)return jsonResponse({success:false,error:'Saved order listing identity could not be verified.'},403);
+      const matching=(orderData.lineItems??[]).filter((li:any)=>String(li.legacyItemId)===String(verifiedListingId)&&(!orderRow.ebay_line_item_id||String(li.lineItemId)===orderRow.ebay_line_item_id));
       if(matching.length!==1||!matching[0].lineItemId||!Number.isSafeInteger(matching[0].quantity)||matching[0].quantity<1)return jsonResponse({success:false,error:'Select and sync the exact order line before dispatch. Other lines and niches will not be shipped.'},409);
       if(['FULFILLED','IN_PROGRESS'].includes(matching[0].lineItemFulfillmentStatus))return jsonResponse({success:false,unconfirmed:true,error:'This line already has a shipping fulfillment. Sync or review its existing package on eBay; do not submit another.'},409);
       lineItems = [{lineItemId:matching[0].lineItemId,quantity:matching[0].quantity}];
