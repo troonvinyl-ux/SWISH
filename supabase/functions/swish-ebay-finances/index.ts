@@ -88,7 +88,7 @@ async function getToken(
         },
         body: new URLSearchParams({
           grant_type: 'refresh_token',
-          refresh_token: creds.refreshToken,
+          refresh_token: creds.refreshToken ?? '',
         }).toString(),
         signal: AbortSignal.timeout(12000),
       });
