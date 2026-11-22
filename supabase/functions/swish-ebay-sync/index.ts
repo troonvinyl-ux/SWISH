@@ -10,6 +10,7 @@ import { parseLiveContent } from '../_shared/ebayLiveContent.ts';
 import { parseEbayListingStatus } from '../_shared/listingStatus.ts';
 import { readListingTraffic, type ListingTraffic } from '../_shared/ebayTraffic.ts';
 import { mapSyncReads, syncPatchChanged, photoMediaReadbackComplete } from '../_shared/syncConcurrency.ts';
+import * as syncConcurrency from '../_shared/syncConcurrency.ts';
 import { tradingDiagnostic } from '../_shared/ebaySellingRequest.ts';
 import { isRemovedPolicyListing, SYNC_BATCH_SIZE, type SyncListingIssue } from '../_shared/ebaySyncPolicy.ts';
 import * as ebaySyncPolicy from '../_shared/ebaySyncPolicy.ts';
@@ -134,6 +135,11 @@ serveModule(withEdgeFunctionLogging('swish-ebay-sync', async(req:Request)=>{
  const products=registry.products as Record<string,{specialists:string[];legacySpecialists:string[]}>;
  if(!tenantId||!products[nicheId]||!['full','data_only','refresh_token_only'].includes(mode))return json({success:false,error:'Valid authorized tenant and niche required'},400);
  const batched=body?.batch===true;const afterListingId=body?.afterListingId;const previousIssues=body?.previousIssues===true;
+// Legacy callers still get six; newer clients may request 3–10 based on actual
+// previous batch timings. Never trust unbounded batch sizes from the caller.
+const desiredSize=body?.batchSize;
+if(desiredSize!=null&&(!batched||!Number.isSafeInteger(desiredSize)||desiredSize<3||desiredSize>10))return json({success:false,error:'Valid bounded sync batch size required'},400);
+const batchSize=batched?(desiredSize??SYNC_BATCH_SIZE):SYNC_BATCH_SIZE;
  if(body?.previousIssues!=null&&typeof body.previousIssues!=='boolean')return json({success:false,error:'Valid batch history required'},400);
  if(afterListingId!=null&&(!batched||typeof afterListingId!=='string'||!uuid.test(afterListingId)))return json({success:false,error:'Valid sync continuation required'},400);
  if(itemIds!=null&&(!Array.isArray(itemIds)||!itemIds.length||itemIds.length>200||itemIds.some((id:unknown)=>typeof id!=='string'||!uuid.test(id))))return json({success:false,error:'Valid bounded item selection required'},400);
@@ -161,10 +167,10 @@ serveModule(withEdgeFunctionLogging('swish-ebay-sync', async(req:Request)=>{
    let query=client.from('listings').select('id,item_id,external_listing_id,title,description,price,shipping_cost,watchers,views,category_id,updated_at,items!inner(*)').eq('tenant_id',tenantId).eq('items.tenant_id',tenantId).eq('marketplace_id','ebay').in('items.specialist_id',specialists).not('external_listing_id','is',null).neq('external_listing_id','').order('id');
    if(Array.isArray(itemIds))query=query.in('item_id',itemIds);
    if(afterListingId)query=query.gt('id',afterListingId);
-   const links=await query.range(offset,offset+(batched?SYNC_BATCH_SIZE:199)).abortSignal(AbortSignal.timeout(10000));
+   const links=await query.range(offset,offset+(batched?batchSize:199)).abortSignal(AbortSignal.timeout(10000));
    if(links.error)throw new Error('SWISH scoped listings could not be loaded');
    const rows=links.data??[];
-   if(batched){listings.push(...rows.slice(0,SYNC_BATCH_SIZE));nextAfterListingId=rows.length>SYNC_BATCH_SIZE?String(listings[listings.length-1].id):null;break;}
+   if(batched){listings.push(...rows.slice(0,batchSize));nextAfterListingId=rows.length>batchSize?String(listings[listings.length-1].id):null;break;}
    listings.push(...rows);if(rows.length<200)break;
    if(offset===4800)throw new Error('Sync selection exceeds the safe bound; select fewer items.');
   }
@@ -194,22 +200,45 @@ serveModule(withEdgeFunctionLogging('swish-ebay-sync', async(req:Request)=>{
    for(const [id,value]of traffic){const observation=observations.get(id);if(observation){observation.views=value.views;observation.traffic=value;}}
   }
   metrics.trafficMs=Date.now()-stageStart;
-  let updated=0,imagesFetched=0,titlesFixed=0;const failed:string[]=[];const touchedItems=new Set<string>();
+  let updated=0,imagesFetched=0,titlesFixed=0;const failed:string[]=[];
   stageStart=Date.now();
-  for(const listing of listings){
-   // Never infer status, remove inventory or overwrite photos on a restriction.
-   if(!observations.has(String(listing.external_listing_id)))continue;
-   if(Date.now()-started>90000){const id=String(listing.external_listing_id);failed.push(id);issues.push(safeReconciliationIssue(id,new Error('SWISH sync deadline reached')));continue;}
+  // Only separate physical items can be reconciled concurrently. All of one
+  // item's linked listings remain strictly ordered, with fresh item readback
+  // after its first link. No retries and no parallel writes to the same item.
+  const eligible=listings.filter(row=>observations.has(String(row.external_listing_id)));
+  const reconcileOne=async(listing:any,previousInItem:boolean)=>{
+   const id=String(listing.external_listing_id);
+   if(Date.now()-started>75000)return {id,issue:safeReconciliationIssue(id,new Error('SWISH sync deadline reached'))};
    let item=Array.isArray(listing.items)?listing.items[0]:listing.items;
-   if(touchedItems.has(listing.item_id)){
+   if(previousInItem){
     const fresh=await client.from('items').select('*').eq('id',listing.item_id).eq('tenant_id',tenantId).in('specialist_id',specialists).abortSignal(AbortSignal.timeout(10000)).maybeSingle();
-    if(fresh.error||!fresh.data){const id=String(listing.external_listing_id);failed.push(id);issues.push(safeReconciliationIssue(id,new Error('SWISH scoped item reload unavailable')));continue;}item=fresh.data;
+    if(fresh.error||!fresh.data)return {id,issue:safeReconciliationIssue(id,new Error('SWISH scoped item reload unavailable'))};
+    item=fresh.data;
    }
-   touchedItems.add(listing.item_id);
-   try{const result=await syncItemToSwish(client,tenantId,listing,item,observations.get(String(listing.external_listing_id))!);updated++;imagesFetched+=result.images;titlesFixed+=result.titleFixed;metrics.metadataWritesSkipped+=result.skippedWrites;}
-   catch(cause){const id=String(listing.external_listing_id);failed.push(id);const issue=safeReconciliationIssue(id,cause);issues.push(issue);console.error(`[EbaySync] Scoped item reconciliation not confirmed: ${issue.code}`);}
+   try{
+    const result=await syncItemToSwish(client,tenantId,listing,item,observations.get(id)!);
+    return {id,result};
+   }catch(cause){
+    return {id,issue:safeReconciliationIssue(id,cause)};
+   }
+  };
+  // An older OnSpace _shared snapshot may not yet have the new scheduler.
+  // Namespace capability detection preserves worker boot compatibility; it
+  // safely falls back to the prior sequential path until both deploy together.
+  const parallel=typeof syncConcurrency.mapDistinctSyncItems==='function';
+  const earlier=new Set<string>();
+  const outcomes=parallel
+   ? await syncConcurrency.mapDistinctSyncItems(eligible,(row:any)=>String(row.item_id),reconcileOne,2)
+   : await mapSyncReads(eligible,async row=>{
+      const key=String(row.item_id),previous=earlier.has(key);earlier.add(key);
+      return reconcileOne(row,previous);
+     },1);
+  for(const outcome of outcomes){
+   if(outcome.issue){failed.push(outcome.id);issues.push(outcome.issue);console.error(`[EbaySync] Scoped item reconciliation not confirmed: ${outcome.issue.code}`);}
+   else if(outcome.result){updated++;imagesFetched+=outcome.result.images;titlesFixed+=outcome.result.titleFixed;metrics.metadataWritesSkipped+=outcome.result.skippedWrites;}
   }
   metrics.reconciliationMs=Date.now()-stageStart;
+  metrics.reconciliationWorkers=parallel?2:1;
   // A clean final batch must not advertise a fully successful sync when an
   // earlier batch explicitly reported restrictions or unconfirmed records.
   if(!failed.length&&!issues.length&&!nextAfterListingId&&!previousIssues){
