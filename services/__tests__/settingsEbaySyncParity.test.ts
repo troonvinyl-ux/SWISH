@@ -25,7 +25,7 @@ test('Settings requests only confirmed tenant-and-niche linked eBay count',()=>{
 test('an uncertain provider outcome is not shown as success or blindly reissued',()=>{
  expect(handler).toContain("if(outcome.error||outcome.data?.success!==true)");
  expect(handler).toContain("state:'error'");
- expect(handler).toContain('Last confirmed');
+ expect(source).toContain('Last confirmed: {ebaySync.current} of {ebaySync.total}');
  // The button stays hidden in error state; explicit review is required first.
  expect(source).toContain("{ebaySync.state === 'idle' ? (");
  expect(source).toContain("router.push('/ebay-hub' as any)");
