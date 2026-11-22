@@ -11,7 +11,17 @@ import { parseEbayListingStatus } from '../_shared/listingStatus.ts';
 import { readListingTraffic, type ListingTraffic } from '../_shared/ebayTraffic.ts';
 import { mapSyncReads, syncPatchChanged, photoMediaReadbackComplete } from '../_shared/syncConcurrency.ts';
 import { tradingDiagnostic } from '../_shared/ebaySellingRequest.ts';
-import { isRemovedPolicyListing, safeReconciliationIssue, SYNC_BATCH_SIZE, type SyncListingIssue } from '../_shared/ebaySyncPolicy.ts';
+import { isRemovedPolicyListing, SYNC_BATCH_SIZE, type SyncListingIssue } from '../_shared/ebaySyncPolicy.ts';
+import * as ebaySyncPolicy from '../_shared/ebaySyncPolicy.ts';
+// OnSpace can deploy a newer worker entrypoint while retaining an older _shared
+// snapshot. A named import of the newer classifier prevents Deno from booting.
+// Keep exact item-specific diagnostics when available; otherwise fail closed
+// with a generic tenant-safe issue rather than crashing or leaking raw errors.
+const safeReconciliationIssue = (externalListingId: string, cause: unknown): SyncListingIssue =>
+ typeof ebaySyncPolicy.safeReconciliationIssue === 'function'
+  ? ebaySyncPolicy.safeReconciliationIssue(externalListingId, cause)
+  : { externalListingId, code: 'SWISH_RECONCILIATION_UNCONFIRMED',
+      message: 'A saved listing reconciliation could not be confirmed. No new eBay listing was created.' };
 const TRADING_API='https://api.ebay.com/ws/api.dll';
 const TOKEN_URL='https://api.ebay.com/identity/v1/oauth2/token';
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
