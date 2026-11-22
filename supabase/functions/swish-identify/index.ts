@@ -14,7 +14,7 @@ import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 
 import { serveModule } from '../_shared/moduleScope.ts';
 import { guardStampIdentification } from '../_shared/stampIdentification.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { requirePaidNiche,nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
 import { canonicalSpecialist, specialistNiche, profileForSpecialist } from '../_shared/specialistRegistry.ts';
@@ -1529,7 +1529,7 @@ async function searchSpecialistCatalogue(source: 'OCRE' | 'CRRO' | 'RPC', base: 
       const link = decodeCatalogueXml(item.match(/<link\b[^>]*>([\s\S]*?)<\/link>/i)?.[1] ?? '');
       const desc = decodeCatalogueXml(item.match(/<description\b[^>]*>([\s\S]*?)<\/description>/i)?.[1] ?? '');
       return /^https:\/\/numismatics\.org\//i.test(link) && title ? { source, title: title.slice(0, 180), url: link, snippet: desc.slice(0, 220) } : null;
-    }).filter((item): item is CoinResearchCandidate => Boolean(item));
+    }).filter((item): item is Exclude<typeof item, null> => item !== null);
   } catch { return []; }
 }
 async function searchCanoaCatalogue(query: string): Promise<CoinResearchCandidate[]> {
@@ -1942,7 +1942,7 @@ The caller will use only the requested output (title or description). Do not inv
       constrained.numistaStatus = 'unavailable';
       constrained.warnings = constrained.warnings ?? [];
       if (objectType === 'medal') constrained.warnings.push('Object classified as MEDAL — Numista coin verification not applicable.');
-      else if (objectType !== 'coin') constrained.warnings.push(`Object classified as ${objectType.replace(/_/g, ' ').toUpperCase()} — coin catalogue verification not applicable.`);
+      else constrained.warnings.push(`Object classified as ${objectType.replace(/_/g, ' ').toUpperCase()} — coin catalogue verification not applicable.`);
     }
 
     // ── COIN SECOND-PASS ADJUDICATION ──────────────────────────────────────────
