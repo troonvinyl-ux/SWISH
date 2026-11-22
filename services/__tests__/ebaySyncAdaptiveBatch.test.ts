@@ -56,7 +56,7 @@ test('worker enforces bounded requested batch sizes and protects same-item readb
  expect(worker).toContain('return reconcileOne(row,previous)');
  expect(worker).toContain('swish_apply_ebay_listing_status');
  expect(worker).toContain('SWISH sync persisted readback failed');
- expect(worker).toContain('listings.filter(row=>observations.has(String(row.external_listing_id)))');
+ expect(worker).toContain('if(!observations.has(String(listing.external_listing_id)))continue');
  expect(worker).not.toContain('fetchSellingPage(');
  expect(helper).toContain('await Promise.all');
  expect(helper).toContain('if(failed)throw failure');

@@ -205,7 +205,12 @@ const batchSize=batched?(desiredSize??SYNC_BATCH_SIZE):SYNC_BATCH_SIZE;
   // Only separate physical items can be reconciled concurrently. All of one
   // item's linked listings remain strictly ordered, with fresh item readback
   // after its first link. No retries and no parallel writes to the same item.
-  const eligible=listings.filter(row=>observations.has(String(row.external_listing_id)));
+  const eligible:any[]=[];
+  for(const listing of listings){
+   // Never infer status, remove inventory or overwrite photos on a restriction.
+   if(!observations.has(String(listing.external_listing_id)))continue;
+   eligible.push(listing);
+  }
   const reconcileOne=async(listing:any,previousInItem:boolean)=>{
    const id=String(listing.external_listing_id);
    if(Date.now()-started>75000)return {id,issue:safeReconciliationIssue(id,new Error('SWISH sync deadline reached'))};
