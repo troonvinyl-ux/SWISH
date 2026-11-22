@@ -184,7 +184,20 @@ const batchSize=batched?(desiredSize??SYNC_BATCH_SIZE):SYNC_BATCH_SIZE;
    if(Date.now()-started>65000)throw new Error('Sync deadline reached; retry a smaller item selection. Statuses preserved.');
    metrics.getItemCalls++;
    try{observations.set(id,await getItemObservation(id,token,clientId));}
-   catch(cause){const message=safeFailure(cause);if(!isRemovedPolicyListing(message)){
+   catch(cause){
+    // A GetItem transport timeout is a read-only failure for this listing.
+    // Record it as unverified and keep its inventory untouched; do not stop
+    // verified sibling listings, or retry the unknown provider request.
+    // A stale OnSpace shared snapshot may lack the new classifier, hence the
+    // namespace guard. Never classify HTTP, auth or database failures here.
+    const isolatedTimeout=typeof ebaySyncPolicy.isIsolatedGetItemTimeout==='function'
+     ? ebaySyncPolicy.isIsolatedGetItemTimeout(cause)
+     : cause instanceof Error&&cause.name==='TimeoutError';
+    if(isolatedTimeout){
+     issues.push({externalListingId:id,code:'EBAY_ITEM_READ_TIMEOUT',message:'eBay did not confirm this listing before its read deadline. Its stock and photos were left untouched; review this listing before retrying.'});
+     return;
+    }
+    const message=safeFailure(cause);if(!isRemovedPolicyListing(message)){
     // Identify the specific failing read without retrying or making up a status.
     if(message.startsWith('REQUIRES_REAUTH:'))throw cause;
     throw new Error(`GetItem ${id}: ${message}`);
@@ -251,6 +264,7 @@ const batchSize=batched?(desiredSize??SYNC_BATCH_SIZE):SYNC_BATCH_SIZE;
    if(saved.error)return await finishResponse({success:false,batchComplete:false,partial:true,updated,error:'SWISH sync timestamp could not be saved. Item outcomes were reconciled.'},503);
   }
   const blocked=issues.filter(issue=>issue.code==='21920397').length;
-  return await finishResponse({success:failed.length===0&&blocked===0,partial:failed.length>0||blocked>0,batchComplete:failed.length===0,nextAfterListingId,processed:listings.length,updated,failed:failed.length+blocked,blocked,imagesFetched,titlesFixed,matchedListings:listings.length,orphansFixed:0,issues,failedEbayIds:[...new Set([...failed,...issues.map(issue=>issue.externalListingId)])].slice(0,20),...(failed.length?{error:`${failed.length} listing reconciliations were not confirmed. Reload inventory before retrying.`}:blocked?{error:`${blocked} listing(s) restricted by eBay policy (21920397). Unaffected listings were reconciled; restricted inventory and photos were preserved.`}:{})},failed.length?503:200);
+   const readSkipped=issues.filter(issue=>issue.code==='EBAY_ITEM_READ_TIMEOUT').length;
+  return await finishResponse({success:failed.length===0&&blocked===0&&readSkipped===0,partial:failed.length>0||blocked>0||readSkipped>0,batchComplete:failed.length===0,nextAfterListingId,processed:listings.length,updated,failed:failed.length+blocked+readSkipped,blocked,readSkipped,imagesFetched,titlesFixed,matchedListings:listings.length,orphansFixed:0,issues,failedEbayIds:[...new Set([...failed,...issues.map(issue=>issue.externalListingId)])].slice(0,20),...(failed.length?{error:`${failed.length} listing reconciliations were not confirmed. Reload inventory before retrying.`}:readSkipped?{error:`${readSkipped} eBay item read(s) timed out. No stock or photos were changed for these listings; other confirmed listings were processed.`}:blocked?{error:`${blocked} listing(s) restricted by eBay policy (21920397). Unaffected listings were reconciled; restricted inventory and photos were preserved.`}:{})},failed.length?503:200);
  }catch(cause){const detail=safeFailure(cause);console.error(`[EbaySync] ${detail}`);return await finishResponse({success:false,batchComplete:false,error:`${detail}. Synchronisation not confirmed.`,requiresReauth:detail.startsWith('REQUIRES_REAUTH:'),partial:true},detail.startsWith('REQUIRES_REAUTH:')?401:503);}
 }));
