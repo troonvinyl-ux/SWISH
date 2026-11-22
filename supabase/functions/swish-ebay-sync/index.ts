@@ -1,4 +1,5 @@
 import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
+// ONSPACE_SYNC_PROBE_20261122_01: Comment-only GitHub main -> OnSpace sync test; no runtime behavior changed.
 // Shared eBay sync: authoritative GetItem observations, bounded Hub batches,
 // canonical lifecycle commands and unchanged inventory on provider restrictions.
 import { serveModule } from '../_shared/moduleScope.ts';
