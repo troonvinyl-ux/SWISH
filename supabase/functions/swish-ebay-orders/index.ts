@@ -12,17 +12,18 @@ const escape=(v:string)=>v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>
 async function credentials(tenantId:string){
  const db=adminClient();const result=await db.from('marketplace_connectors').select('id,status,credential_ref').eq('tenant_id',tenantId).eq('marketplace_id','ebay').maybeSingle();
  if(result.error||!result.data?.credential_ref||result.data.status!=='connected')throw new Error('Connect eBay in Marketplaces.');
- let creds=await decryptCredentials(result.data.credential_ref);
- if(!creds.accessToken)throw new Error('Re-authorise eBay.');
+ let creds=await decryptCredentials(result.data.credential_ref) as {accessToken?:string;expiresAt?:string;refreshToken?:string;clientId?:string;clientSecret?:string};
+ if(!creds.accessToken||!creds.clientId)throw new Error('Re-authorise eBay: verified seller credentials are incomplete.');
  if(!creds.expiresAt||Date.parse(creds.expiresAt)<Date.now()+300000){
-  if(!creds.refreshToken)throw new Error('eBay consent needs renewal.');
+  if(!creds.refreshToken||!creds.clientSecret)throw new Error('eBay consent needs renewal.');
   const response=await fetch('https://api.ebay.com/identity/v1/oauth2/token',{method:'POST',headers:{Authorization:`Basic ${btoa(`${creds.clientId}:${creds.clientSecret}`)}`,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'refresh_token',refresh_token:creds.refreshToken}).toString(),signal:AbortSignal.timeout(15000)});
   const payload=await response.json();if(!response.ok||!payload.access_token)throw new Error('eBay token refresh failed. Re-authorise only if consent was revoked.');
   creds={...creds,accessToken:payload.access_token,expiresAt:new Date(Date.now()+Number(payload.expires_in??7200)*1000).toISOString()};
   const saved=await db.from('marketplace_connectors').update({credential_ref:await encryptCredentials(creds),access_token_expires_at:creds.expiresAt}).eq('id',result.data.id).eq('credential_ref',result.data.credential_ref).select('id').maybeSingle();
   if(saved.error||!saved.data)throw new Error('Refreshed consent could not be saved securely.');
  }
- return creds;
+ if(!creds.accessToken||!creds.clientId)throw new Error('eBay credentials were not confirmed.');
+ return {...creds,accessToken:creds.accessToken,clientId:creds.clientId};
 }
 const headers=(token:string)=>({Authorization:`Bearer ${token}`,Accept:'application/json','X-EBAY-C-MARKETPLACE-ID':'EBAY_GB'});
 async function restGet(url:string,token:string){const response=await fetch(url,{headers:headers(token),signal:AbortSignal.timeout(15000)});if(!response.ok)throw new Error(`eBay Fulfillment HTTP ${response.status}`);return response.json();}
