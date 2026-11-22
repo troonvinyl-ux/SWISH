@@ -30,7 +30,7 @@ export async function ebayFinancesSignatureHeaders(
 
   const privateKey = await crypto.subtle.importKey(
     'pkcs8',
-    pemToBytes(privateKeyPem),
+    (() => { const source = pemToBytes(privateKeyPem); const copy = new Uint8Array(new ArrayBuffer(source.length)); copy.set(source); return copy; })(),
     { name: 'Ed25519' },
     false,
     ['sign'],

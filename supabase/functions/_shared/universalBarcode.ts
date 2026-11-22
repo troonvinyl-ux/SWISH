@@ -11,7 +11,7 @@ export function createUniversalBarcodeEngine() {
     const gtin = catalogueGtin(value), start = Date.now();
     const empty = (status: UniversalBarcodeResult['status'], message: string): UniversalBarcodeResult => ({ gtin: gtin ?? '', products: [], status, message, warnings: [], cached: false, durationMs: Date.now() - start });
     if (!gtin) return Promise.resolve(empty('invalid', 'Barcode check digit is invalid. Rescan or edit the code.'));
-    const key = `${BARCODE_ENGINE_VERSION}:${scope}:${dependencies.ai.provider ?? 'gemini'}:${dependencies.ai.webResearch === true}:${gtin.padStart(14, '0')}`;
+    const key = `${BARCODE_ENGINE_VERSION}:${scope}:${dependencies.ai.provider ?? 'gemini'}:${gtin.padStart(14, '0')}`;
     const cached = cache.get(key);
     if (cached && cached.until > Date.now()) return Promise.resolve({ ...cached.result, cached: true, durationMs: 0 });
     if (cached) cache.delete(key);

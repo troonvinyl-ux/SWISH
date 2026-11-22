@@ -15,3 +15,11 @@ function stable(value:unknown):unknown {
 export function syncPatchChanged(row:Record<string,unknown>,patch:Record<string,unknown>):boolean {
  return Object.entries(patch).some(([key,value])=>JSON.stringify(stable(row[key]))!==JSON.stringify(stable(value)));
 }
+
+/** JSON persistence returns *new objects*, not the in-memory media references.
+ * Preserve original structured photos and compare values, not object identity. */
+export function photoMediaReadbackComplete(expected: readonly unknown[], persisted: unknown): boolean {
+ if(!Array.isArray(persisted))return expected.length===0;
+ const saved=new Set(persisted.map(value=>JSON.stringify(stable(value))));
+ return expected.every(value=>saved.has(JSON.stringify(stable(value))));
+}

@@ -1,7 +1,8 @@
 jest.mock('@/template',()=>({getSupabaseClient:jest.fn()}));
 import {getSupabaseClient} from '@/template';
 import {runNicheEbayOperation} from '../ebaySyncService';
-import {isRemovedPolicyListing} from '../../supabase/functions/_shared/ebaySyncPolicy';
+import {isRemovedPolicyListing,safeReconciliationIssue} from '../../supabase/functions/_shared/ebaySyncPolicy';
+import {photoMediaReadbackComplete} from '../../supabase/functions/_shared/syncConcurrency';
 import fs from 'node:fs';
 const cursor='00000000-0000-4000-8000-000000000010';
 const batch=(patch:any={})=>({data:{success:true,batchComplete:true,processed:6,updated:6,failed:0,nextAfterListingId:null,...patch},error:null});
@@ -14,3 +15,25 @@ test('unconfirmed response stops without retrying',async()=>{const invoke=setup(
 test('workspace change stops before another request',async()=>{const invoke=setup([batch({nextAfterListingId:cursor})]);let active=true;const result=await runNicheEbayOperation('tenant','coins','sync',{isCurrent:()=>active,onProgress:()=>{active=false;}});expect(result.error).toContain('changed');expect(invoke).toHaveBeenCalledTimes(1);});
 test('repeated continuation cannot loop indefinitely',async()=>{const invoke=setup([batch({nextAfterListingId:cursor}),batch({nextAfterListingId:cursor})]);expect((await runNicheEbayOperation('tenant','coins','sync')).error).toContain('continuation');expect(invoke).toHaveBeenCalledTimes(2);});
 test('shared sync does not use whole-account selling history or mutate restricted rows',()=>{const edge=fs.readFileSync('supabase/functions/swish-ebay-sync/index.ts','utf8');expect(edge).not.toContain('fetchSellingPage(');expect(edge).toContain('SYNC_BATCH_SIZE');expect(edge).toContain('isRemovedPolicyListing(message)');expect(edge).toContain('if(!observations.has(String(listing.external_listing_id)))continue');expect(edge).toContain('swish_apply_ebay_listing_status');expect(edge).toContain('SWISH sync persisted readback failed');});
+
+test('the 109th item with structured photo metadata is not falsely marked failed after JSON persistence',()=>{
+ const originals=[{url:'https://example.test/front.jpg',original:true,order:1},'https://example.test/reverse.jpg'];
+ const fromDatabase=JSON.parse(JSON.stringify(originals));
+ expect(originals[0]).not.toBe(fromDatabase[0]);
+ expect(photoMediaReadbackComplete(originals,fromDatabase)).toBe(true);
+ expect(photoMediaReadbackComplete(originals,[fromDatabase[0]])).toBe(false);
+ expect(photoMediaReadbackComplete(originals,[{url:'https://example.test/other.jpg'},fromDatabase[1]])).toBe(false);
+});
+test('per-item sync errors are scoped, attributable and never reveal database secrets',()=>{
+ const result=safeReconciliationIssue('123456789012',new Error('SWISH photo readback mismatch'));
+ expect(result.code).toBe('SWISH_PHOTO_READBACK');
+ expect(result.externalListingId).toBe('123456789012');
+ const unknown=safeReconciliationIssue('123456789012',new Error('sensitive internal error'));
+ expect(unknown.code).toBe('SWISH_RECONCILIATION_UNCONFIRMED');
+ expect(unknown.message).not.toContain('sensitive internal error');
+ const source=fs.readFileSync('supabase/functions/swish-ebay-sync/index.ts','utf8');
+ expect(source).toContain('photoMediaReadbackComplete(media,linked.media)');
+ expect(source).toContain('issues.push(issue)');
+ expect(source).toContain("issue.code==='21920397'");
+ expect(source).not.toContain('media.some(url=>!linked.media?.includes(url))');
+});

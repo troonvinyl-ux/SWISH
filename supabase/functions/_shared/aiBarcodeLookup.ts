@@ -8,6 +8,7 @@ interface AIBarcodeProduct {
   categoryId: string; categoryName: string; specifics: Record<string, string>;
   source: 'OnSpace AI'; url: string; sourceUrls: string[]; summary: string; confidence: number;
   verificationStatus: 'ai_suggested'; releaseDate: string; region: string;
+  publisher?: string; releaseYear?: string; format?: string; edition?: string;
 }
 interface AIBarcodeResult {
   products: AIBarcodeProduct[]; status: 'candidates' | 'no_match' | 'unavailable' | 'invalid';
@@ -81,6 +82,8 @@ export function parseAIBarcodeResult(payload: unknown, gtin: string): AIBarcodeR
     source: 'OnSpace AI', url: sourceUrls[0] ?? '', sourceUrls, summary,
     confidence: Math.min(0.79, confidence), verificationStatus: 'ai_suggested',
     releaseDate: text(product.releaseDate, 32), region: text(product.region, 32),
+    publisher: text(product.publisher, 65), releaseYear: /^\d{4}$/.test(text(product.releaseYear, 16)) ? text(product.releaseYear, 16) : '',
+    format: text(product.format, 60), edition: text(product.edition, 65),
   };
   return output('candidates', 'AI barcode result · check against your item photos.', [lead]);
 }

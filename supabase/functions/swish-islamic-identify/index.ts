@@ -91,6 +91,7 @@ interface CandidateIdentification {
   candidateId: string; // A, B, C...
   label: string; // Brief label
   dynasty?: string;
+  coinFamily?: string;
   ruler?: string;
   denomination?: string;
   mint?: string;
@@ -1261,7 +1262,7 @@ serveModule(withEdgeFunctionLogging('swish-islamic-identify', async (req: Reques
       // Increment before expensive AI call
       await adminClient.rpc('upsert_ai_usage', {
         p_tenant_id: tenantId, p_user_id: user.id, p_feature: FEATURE_KEY_ISLAMIC, p_month_key: monthKey,
-      }).catch(() => {});
+      }).then(() => {}, () => {});
     }
     console.log(`[swish-islamic-identify] isPremium=${isPremiumIslamic} tenant=${tenantId ?? 'none'}`);
     // ── END ENTITLEMENT CHECK ──────────────────────────────────────────────────

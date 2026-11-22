@@ -14,7 +14,7 @@ import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 
 import { serveModule } from '../_shared/moduleScope.ts';
 import { guardStampIdentification } from '../_shared/stampIdentification.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { requirePaidNiche,nicheAccessResponse } from '../_shared/paidNicheAuthorization.ts';
 import { canonicalSpecialist, specialistNiche, profileForSpecialist } from '../_shared/specialistRegistry.ts';
@@ -446,7 +446,7 @@ function buildKnownAttributesContext(attrs: Record<string, any>): string {
 }
 
 // ── Learning layer ────────────────────────────────────────────────────────────
-async function fetchLearningCorrections(supabaseAdmin: ReturnType<typeof createClient>, tenantId: string, specialistId: string): Promise<string> {
+async function fetchLearningCorrections(supabaseAdmin: ReturnType<typeof createClient<any>>, tenantId: string, specialistId: string): Promise<string> {
   try {
     const { data } = await supabaseAdmin
       .from('ai_id_feedback')
@@ -1393,7 +1393,7 @@ function currentMonthKey(): string {
  * Returns null if tenantId is missing or DB lookup fails.
  */
 async function resolveTenantTier(
-  admin: ReturnType<typeof createClient>,
+  admin: ReturnType<typeof createClient<any>>,
   userId: string,
   tenantId: string,
 ): Promise<string | null> {
@@ -1468,7 +1468,7 @@ async function checkStripeSubscription(userId: string, userEmail: string, nicheI
  * Tenant tier always wins. Stripe is secondary for users without a qualifying tier.
  */
 async function determineIsPremium(
-  admin: ReturnType<typeof createClient>,
+  admin: ReturnType<typeof createClient<any>>,
   userId: string,
   userEmail: string | undefined,
   tenantId: string,
@@ -1479,7 +1479,7 @@ async function determineIsPremium(
 }
 
 async function incrementUsage(
-  admin: ReturnType<typeof createClient>,
+  admin: ReturnType<typeof createClient<any>>,
   tenantId: string,
   userId: string,
   monthKey: string,
@@ -1497,7 +1497,7 @@ async function incrementUsage(
 }
 
 async function getUsage(
-  admin: ReturnType<typeof createClient>,
+  admin: ReturnType<typeof createClient<any>>,
   tenantId: string,
   userId: string,
   monthKey: string,
@@ -1529,7 +1529,7 @@ async function searchSpecialistCatalogue(source: 'OCRE' | 'CRRO' | 'RPC', base: 
       const link = decodeCatalogueXml(item.match(/<link\b[^>]*>([\s\S]*?)<\/link>/i)?.[1] ?? '');
       const desc = decodeCatalogueXml(item.match(/<description\b[^>]*>([\s\S]*?)<\/description>/i)?.[1] ?? '');
       return /^https:\/\/numismatics\.org\//i.test(link) && title ? { source, title: title.slice(0, 180), url: link, snippet: desc.slice(0, 220) } : null;
-    }).filter((item): item is CoinResearchCandidate => Boolean(item));
+    }).filter((item): item is Exclude<typeof item, null> => item !== null);
   } catch { return []; }
 }
 async function searchCanoaCatalogue(query: string): Promise<CoinResearchCandidate[]> {
@@ -1589,7 +1589,7 @@ async function runCoinResearch(id: any, known: Record<string, any>, numista: Num
 // ── Main handler ───────────────────────────────────────────────────────────────
 serveModule(withEdgeFunctionLogging('swish-identify', async (req: Request) => {
   const startedAt = Date.now();
-  let requestId = crypto.randomUUID();
+  let requestId: string = crypto.randomUUID();
   const failure = (message: string, status: number, code: string) => new Response(JSON.stringify({ error: message, code, requestId }), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return new Response(JSON.stringify({ error: 'Method not allowed.' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -1942,7 +1942,7 @@ The caller will use only the requested output (title or description). Do not inv
       constrained.numistaStatus = 'unavailable';
       constrained.warnings = constrained.warnings ?? [];
       if (objectType === 'medal') constrained.warnings.push('Object classified as MEDAL — Numista coin verification not applicable.');
-      else if (objectType !== 'coin') constrained.warnings.push(`Object classified as ${objectType.replace(/_/g, ' ').toUpperCase()} — coin catalogue verification not applicable.`);
+      else constrained.warnings.push(`Object classified as ${objectType.replace(/_/g, ' ').toUpperCase()} — coin catalogue verification not applicable.`);
     }
 
     // ── COIN SECOND-PASS ADJUDICATION ──────────────────────────────────────────
