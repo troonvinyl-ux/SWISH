@@ -2,7 +2,7 @@
 // Primary sections: Account, eBay Connection, Currency/Region, Shipping, Data & Sync, Sign Out
 // Advanced section (collapsed by default): Capital targets, Autonomy controls, Prediction/automation
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Switch,
   Modal, TextInput, ActivityIndicator, LayoutAnimation, Platform, UIManager,
@@ -31,6 +31,8 @@ import { getSupabaseClient } from '@/template';
 import { NICHES, NICHE_LIST, NicheId } from '@/constants/niches';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { reviseSavedListing } from '@/services/ebayRevisionService';
+import { runNicheEbayOperation } from '@/services/ebaySyncService';
+import { resolveProductionNiche, getProductionNicheSpecialistIds } from '@/services/nicheRouting';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -943,6 +945,7 @@ interface EbaySyncAllProgress {
   failed: number;
   errorMsg?: string;
   requiresReauth?: boolean;
+  failedEbayIds?: string[];
 }
 
 interface TitleFixProgress {
@@ -955,7 +958,7 @@ interface TitleFixProgress {
   requiresReauth?: boolean;
 }
 
-function DataSyncCard({ tenantId, onSyncComplete }: { tenantId: string; onSyncComplete?: () => void }) {
+function DataSyncCard({ tenantId, nicheId, accessReady, onSyncComplete }: { tenantId: string; nicheId: string; accessReady: boolean; onSyncComplete?: () => void }) {
   const router = useRouter();
   const [syncProgress, setSyncProgress] = useState<SyncProgress>({ state: 'idle' });
   const [ebaySync, setEbaySync] = useState<EbaySyncAllProgress>({ state: 'idle', current: 0, total: 0, updated: 0, failed: 0 });
@@ -973,6 +976,8 @@ function DataSyncCard({ tenantId, onSyncComplete }: { tenantId: string; onSyncCo
   }>({ checkState: 'idle', count: 0, itemIds: [], downloaded: 0, failed: 0 });
   const [pushAll, setPushAll] = useState<PushAllProgress>({ state: 'idle', current: 0, total: 0, updated: 0, skipped: 0, failed: 0 });
   const supabase = getSupabaseClient();
+  const syncScopeRef = useRef(`${tenantId}:${nicheId}`);
+  syncScopeRef.current = `${tenantId}:${nicheId}`;
 
   // ── Repair Partial Images ────────────────────────────────────────────────────
   const handleCheckPartial = useCallback(async () => {
@@ -1216,137 +1221,64 @@ function DataSyncCard({ tenantId, onSyncComplete }: { tenantId: string; onSyncCo
     setTitleFix({ state: 'idle', current: 0, total: 0, fixed: 0, failed: 0 })
   , []);
 
-  // ── Sync All from eBay ──────────────────────────────────────────────────────
+  // Settings delegates to the same scoped, acknowledged Edge batches as eBay Hub.
+  // Never use the old one-GetItem-per-row client loop or unverified client writes.
   const handleSyncAllFromEbay = useCallback(async () => {
     if (ebaySync.state === 'running') return;
-    setEbaySync({ state: 'running', current: 0, total: 0, updated: 0, failed: 0 });
-
-    try {
-      // Fetch all listings with external eBay IDs
-      const { data: listingRows, error: listErr } = await supabase
-        .from('listings')
-        .select('item_id, external_listing_id')
-        .eq('tenant_id', tenantId)
-        .eq('marketplace_id', 'ebay')
-        .not('external_listing_id', 'is', null)
-        .neq('external_listing_id', '');
-
-      if (listErr || !listingRows?.length) {
-        setEbaySync({ state: 'done', current: 0, total: 0, updated: 0, failed: 0 });
-        return;
-      }
-
-      // Deduplicate by item_id (keep first listing per item)
-      const seen = new Set<string>();
-      const targets = listingRows.filter(r => {
-        if (seen.has(r.item_id)) return false;
-        seen.add(r.item_id);
-        return true;
-      });
-
-      const total = targets.length;
-      setEbaySync({ state: 'running', current: 0, total, updated: 0, failed: 0 });
-
-      let updated = 0;
-      let failed = 0;
-
-      for (let i = 0; i < targets.length; i++) {
-        const { item_id, external_listing_id } = targets[i];
-        setEbaySync(prev => ({ ...prev, current: i + 1 }));
-
-        try {
-          const { data, error } = await supabase.functions.invoke('swish-ebay-browse', {
-            body: { route: 'get_item_full', tenantId, ebayItemId: external_listing_id },
-          });
-
-          if (error || !data?.item) {
-            failed++;
-            // Check if it's a re-auth error
-            let msg = error?.message ?? '';
-            try { const t = await (error as any)?.context?.text?.(); if (t) msg = t; } catch {}
-            if (msg.includes('re-authoris') || msg.includes('requiresReauth') || msg.includes('401')) {
-              setEbaySync(prev => ({ ...prev, state: 'error', errorMsg: 'eBay re-authorisation required', requiresReauth: true, failed: prev.failed + 1 }));
-              return;
-            }
-            continue;
-          }
-
-          const ebay = data.item;
-
-          // Build attributes from item specifics
-          const { data: itemRow } = await supabase
-            .from('items')
-            .select('attributes, ruler, denomination, year_made, country_of_origin, material, period, mint')
-            .eq('id', item_id)
-            .maybeSingle();
-
-          const existingAttrs: Record<string, string> = itemRow?.attributes ?? {};
-          const newAttributes: Record<string, string> = { ...existingAttrs };
-          if (ebay.itemSpecifics) {
-            for (const spec of ebay.itemSpecifics) {
-              if (spec.name && spec.value) newAttributes[spec.name] = spec.value;
-            }
-          }
-          if (ebay.conditionDisplayName) newAttributes['eBay Condition'] = ebay.conditionDisplayName;
-          if (ebay.categoryName) newAttributes['eBay Category'] = ebay.categoryName;
-
-          const findSpec = (names: string[]) => {
-            if (!ebay.itemSpecifics) return '';
-            for (const name of names) {
-              const f = ebay.itemSpecifics.find((s: any) => s.name?.toLowerCase() === name.toLowerCase());
-              if (f) return f.value;
-            }
-            return '';
-          };
-
-          const itemUpdates: Record<string, any> = { attributes: newAttributes, updated_at: new Date().toISOString() };
-
-          if (ebay.description && ebay.description.trim().length > 5) itemUpdates.description = ebay.description;
-          if (ebay.conditionDisplayName) itemUpdates.condition = ebay.conditionDisplayName;
-          if (ebay.conditionDescription) itemUpdates.condition_notes = ebay.conditionDescription;
-          if (ebay.quantity) itemUpdates.quantity = ebay.quantity;
-
-          // Only fill coin fields if they're currently empty
-          const ruler = findSpec(['Ruler', 'Monarch', 'Emperor', 'King']);
-          if (ruler && !itemRow?.ruler) itemUpdates.ruler = ruler;
-          const denomination = findSpec(['Denomination', 'Face Value', 'Value']);
-          if (denomination && !itemRow?.denomination) itemUpdates.denomination = denomination;
-          const yearMade = findSpec(['Year', 'Date', 'Year of Issue', 'Mint Year']);
-          if (yearMade && !itemRow?.year_made) itemUpdates.year_made = yearMade;
-          const countryOfOrigin = findSpec(['Country/Region of Manufacture', 'Country', 'Origin', 'Empire']);
-          if (countryOfOrigin && !itemRow?.country_of_origin) itemUpdates.country_of_origin = countryOfOrigin;
-          const material = findSpec(['Metal', 'Material', 'Composition']);
-          if (material && !itemRow?.material) itemUpdates.material = material;
-          const period = findSpec(['Era', 'Period', 'Dynasty']);
-          if (period && !itemRow?.period) itemUpdates.period = period;
-          const mint = findSpec(['Mint', 'Mint Mark']);
-          if (mint && !itemRow?.mint) itemUpdates.mint = mint;
-
-          await supabase.from('items').update(itemUpdates).eq('id', item_id);
-
-          // Also refresh listing stats
-          await supabase.from('listings').update({
-            views: ebay.hitCount ?? undefined,
-            watchers: ebay.watchCount ?? undefined,
-            updated_at: new Date().toISOString(),
-          }).eq('item_id', item_id).eq('marketplace_id', 'ebay');
-
-          updated++;
-          setEbaySync(prev => ({ ...prev, updated }));
-        } catch {
-          failed++;
-          setEbaySync(prev => ({ ...prev, failed: prev.failed + 1 }));
-        }
-
-        // Small delay to avoid rate limits (100ms between calls)
-        await new Promise(r => setTimeout(r, 100));
-      }
-
-      setEbaySync({ state: 'done', current: total, total, updated, failed });
-    } catch (e: any) {
-      setEbaySync(prev => ({ ...prev, state: 'error', errorMsg: e?.message ?? 'Sync failed' }));
+    const niche = resolveProductionNiche(nicheId);
+    if (!accessReady || !niche) {
+      setEbaySync({state:'error',current:0,total:0,updated:0,failed:0,errorMsg:'Open an authorised specialist workspace before syncing eBay links.'});
+      return;
     }
-  }, [tenantId, ebaySync.state, supabase]);
+    const scope = `${tenantId}:${niche}`;
+    const isCurrent = () => syncScopeRef.current === scope;
+    setEbaySync({state:'running',current:0,total:0,updated:0,failed:0});
+    try {
+      const specialists=getProductionNicheSpecialistIds(niche);
+      if(!specialists.length)throw new Error('Select an authorised specialist workspace.');
+      // Exact saved, linked listings in the selected niche; not all seller listings.
+      const {count,error:countError}=await supabase.from('listings')
+        .select('id,items!inner(tenant_id,specialist_id)',{count:'exact',head:true})
+        .eq('tenant_id',tenantId).eq('marketplace_id','ebay')
+        .eq('items.tenant_id',tenantId).in('items.specialist_id',specialists)
+        .not('external_listing_id','is',null).neq('external_listing_id','');
+      if(!isCurrent())return;
+      if(countError||count==null||!Number.isInteger(count))throw new Error('Could not verify linked eBay listings. No sync started.');
+      if(count===0){setEbaySync({state:'done',current:0,total:0,updated:0,failed:0});return;}
+      setEbaySync(prev=>({...prev,total:count}));
+      const outcome=await runNicheEbayOperation(tenantId,niche,'sync',{
+        isCurrent,
+        onProgress:progress=>{
+          if(!isCurrent())return;
+          const processed=Number(progress?.processed),updated=Number(progress?.updated),failed=Number(progress?.failed);
+          setEbaySync(prev=>({...prev,
+            current:Number.isFinite(processed)?Math.max(prev.current,Math.min(count,processed)):prev.current,
+            updated:Number.isFinite(updated)?updated:prev.updated,
+            failed:Number.isFinite(failed)?failed:prev.failed,
+            failedEbayIds:Array.isArray(progress?.failedEbayIds)?progress.failedEbayIds.slice(0,20):prev.failedEbayIds,
+          }));
+        },
+      });
+      if(!isCurrent())return;
+      const processed=Number(outcome.data?.processed??0),updated=Number(outcome.data?.updated??0),failed=Number(outcome.data?.failed??0);
+      const result={
+        current:Number.isFinite(processed)?Math.min(count,processed):0,total:count,
+        updated:Number.isFinite(updated)?updated:0,failed:Number.isFinite(failed)?failed:0,
+        failedEbayIds:Array.isArray(outcome.data?.failedEbayIds)?outcome.data.failedEbayIds.slice(0,20):[],
+        requiresReauth:outcome.requiresReauth,
+      };
+      if(outcome.error||outcome.data?.success!==true){
+        setEbaySync(prev=>({...prev,...result,current:Math.max(prev.current,result.current),
+          state:'error',errorMsg:outcome.error??'Listing outcomes were not confirmed. Review in eBay Hub before retrying.'}));
+        if(result.updated>0)onSyncComplete?.();
+      }else{
+        setEbaySync({state:'done',...result});
+        onSyncComplete?.();
+      }
+    }catch(cause){
+      if(isCurrent())setEbaySync(prev=>({...prev,state:'error',errorMsg:cause instanceof Error?cause.message:'eBay sync not confirmed.'}));
+    }
+  },[tenantId,nicheId,accessReady,ebaySync.state,supabase,onSyncComplete]);
 
   const resetEbaySync = useCallback(() =>
     setEbaySync({ state: 'idle', current: 0, total: 0, updated: 0, failed: 0 })
@@ -1985,10 +1917,13 @@ function DataSyncCard({ tenantId, onSyncComplete }: { tenantId: string; onSyncCo
           <MaterialIcons name="sync" size={18} color={Colors.accent} />
         </View>
         <View style={syncStyles.flex}>
-          <Text style={syncStyles.cardTitle}>Sync All from eBay</Text>
+          <Text style={syncStyles.cardTitle}>Sync linked eBay listings</Text>
           <Text style={syncStyles.cardDesc}>
-            Updates description, condition, item specifics and coin fields for every linked eBay listing
+            Refreshes saved links in this specialist, not your entire eBay seller account. Missing eBay listings must be imported separately.
           </Text>
+          <Pressable accessibilityRole="button" onPress={() => router.push('/ebay-import' as any)} hitSlop={8}>
+            <Text style={syncStyles.retryText}>Import missing eBay listings</Text>
+          </Pressable>
         </View>
       </View>
 
@@ -2047,27 +1982,35 @@ function DataSyncCard({ tenantId, onSyncComplete }: { tenantId: string; onSyncCo
       ) : ebaySync.state === 'error' ? (
         <View style={syncStyles.errorWrap}>
           <MaterialIcons name="error" size={14} color={Colors.danger} />
-          <Text style={syncStyles.errorText} numberOfLines={2}>{ebaySync.errorMsg}</Text>
+          <View style={syncStyles.flex}>
+            <Text style={syncStyles.errorText}>{ebaySync.errorMsg}</Text>
+            {ebaySync.total > 0 ? (
+              <Text style={syncStyles.cardDesc}>Last confirmed: {ebaySync.current} of {ebaySync.total} linked listings. A timed-out batch may have an uncertain outcome, so it was not automatically replayed.</Text>
+            ) : null}
+            {ebaySync.failedEbayIds?.length ? (
+              <Text style={syncStyles.cardDesc}>Review eBay IDs: {ebaySync.failedEbayIds.slice(0, 5).join(', ')}</Text>
+            ) : null}
+          </View>
           {ebaySync.requiresReauth ? (
             <Pressable onPress={() => router.push('/marketplaces' as any)} hitSlop={8}>
               <Text style={syncStyles.reconnectText}>Reconnect</Text>
             </Pressable>
           ) : (
-            <Pressable onPress={resetEbaySync} hitSlop={8}>
-              <Text style={syncStyles.retryText}>Retry</Text>
+            <Pressable onPress={() => router.push('/ebay-hub' as any)} hitSlop={8}>
+              <Text style={syncStyles.retryText}>Review in eBay Hub</Text>
             </Pressable>
           )}
         </View>
       ) : null}
 
       {/* Sync All button */}
-      {ebaySync.state === 'idle' || ebaySync.state === 'error' ? (
+      {ebaySync.state === 'idle' ? (
         <Pressable
           onPress={handleSyncAllFromEbay}
           style={({ pressed }) => [syncStyles.btn, { backgroundColor: Colors.accent }, pressed && { opacity: 0.8 }]}
         >
           <MaterialIcons name="cloud-sync" size={16} color={Colors.background} />
-          <Text style={syncStyles.btnText}>Sync All from eBay</Text>
+          <Text style={syncStyles.btnText}>Sync linked eBay listings</Text>
         </Pressable>
       ) : ebaySync.state === 'running' ? (
         <View style={[syncStyles.btn, { backgroundColor: Colors.accent }, syncStyles.btnRunning]}>
@@ -3060,7 +3003,7 @@ const nichStyles = StyleSheet.create({
 export default function SettingsScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { tenant, businessConfig, reloadBusinessConfig, triggerInventoryReload, activeNiche, activeNicheId, setActiveNiche, canSwitchNiche, isMasterAdmin } = useApp();
+  const { tenant, businessConfig, reloadBusinessConfig, triggerInventoryReload, activeNiche, activeNicheId, setActiveNiche, canSwitchNiche, isMasterAdmin, accessReady, moduleLoading } = useApp();
   const { logout, user } = useAuth();
   const { showAlert } = useAlert();
 
@@ -3397,7 +3340,7 @@ export default function SettingsScreen({ embedded = false }: { embedded?: boolea
         {tenant ? (
           <>
             <SectionHead title="Data & Sync" />
-            <DataSyncCard tenantId={tenant.id} onSyncComplete={triggerInventoryReload} />
+            <DataSyncCard tenantId={tenant.id} nicheId={activeNicheId} accessReady={accessReady && !moduleLoading} onSyncComplete={triggerInventoryReload} />
           </>
         ) : null}
 
