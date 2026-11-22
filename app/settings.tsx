@@ -1917,10 +1917,13 @@ function DataSyncCard({ tenantId, nicheId, accessReady, onSyncComplete }: { tena
           <MaterialIcons name="sync" size={18} color={Colors.accent} />
         </View>
         <View style={syncStyles.flex}>
-          <Text style={syncStyles.cardTitle}>Sync All from eBay</Text>
+          <Text style={syncStyles.cardTitle}>Sync linked eBay listings</Text>
           <Text style={syncStyles.cardDesc}>
-            Updates description, condition, item specifics and coin fields for every linked eBay listing
+            Refreshes saved links in this specialist, not your entire eBay seller account. Missing eBay listings must be imported separately.
           </Text>
+          <Pressable accessibilityRole="button" onPress={() => router.push('/ebay-import' as any)} hitSlop={8}>
+            <Text style={syncStyles.retryText}>Import missing eBay listings</Text>
+          </Pressable>
         </View>
       </View>
 
@@ -1979,27 +1982,35 @@ function DataSyncCard({ tenantId, nicheId, accessReady, onSyncComplete }: { tena
       ) : ebaySync.state === 'error' ? (
         <View style={syncStyles.errorWrap}>
           <MaterialIcons name="error" size={14} color={Colors.danger} />
-          <Text style={syncStyles.errorText} numberOfLines={2}>{ebaySync.errorMsg}</Text>
+          <View style={syncStyles.flex}>
+            <Text style={syncStyles.errorText}>{ebaySync.errorMsg}</Text>
+            {ebaySync.total > 0 ? (
+              <Text style={syncStyles.cardDesc}>Last confirmed: {ebaySync.current} of {ebaySync.total} linked listings. A timed-out batch may have an uncertain outcome, so it was not automatically replayed.</Text>
+            ) : null}
+            {ebaySync.failedEbayIds?.length ? (
+              <Text style={syncStyles.cardDesc}>Review eBay IDs: {ebaySync.failedEbayIds.slice(0, 5).join(', ')}</Text>
+            ) : null}
+          </View>
           {ebaySync.requiresReauth ? (
             <Pressable onPress={() => router.push('/marketplaces' as any)} hitSlop={8}>
               <Text style={syncStyles.reconnectText}>Reconnect</Text>
             </Pressable>
           ) : (
-            <Pressable onPress={resetEbaySync} hitSlop={8}>
-              <Text style={syncStyles.retryText}>Retry</Text>
+            <Pressable onPress={() => router.push('/ebay-hub' as any)} hitSlop={8}>
+              <Text style={syncStyles.retryText}>Review in eBay Hub</Text>
             </Pressable>
           )}
         </View>
       ) : null}
 
       {/* Sync All button */}
-      {ebaySync.state === 'idle' || ebaySync.state === 'error' ? (
+      {ebaySync.state === 'idle' ? (
         <Pressable
           onPress={handleSyncAllFromEbay}
           style={({ pressed }) => [syncStyles.btn, { backgroundColor: Colors.accent }, pressed && { opacity: 0.8 }]}
         >
           <MaterialIcons name="cloud-sync" size={16} color={Colors.background} />
-          <Text style={syncStyles.btnText}>Sync All from eBay</Text>
+          <Text style={syncStyles.btnText}>Sync linked eBay listings</Text>
         </Pressable>
       ) : ebaySync.state === 'running' ? (
         <View style={[syncStyles.btn, { backgroundColor: Colors.accent }, syncStyles.btnRunning]}>
