@@ -107,7 +107,7 @@ serve(withEdgeFunctionLogging('swish-create-checkout', async (req) => {
 
     // Only reuse a Stripe customer explicitly bound to this authenticated user.
     const customers = await stripe.customers.list({ email: user.email, limit: 100 });
-    let customerId = customers.data.find((candidate) => candidate.metadata?.user_id === user.id)?.id;
+    let customerId = customers.data.find((candidate: { metadata?: Record<string, string>; id: string }) => candidate.metadata?.user_id === user.id)?.id;
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: user.email, metadata: { user_id: user.id, swish_customer: "true" },
