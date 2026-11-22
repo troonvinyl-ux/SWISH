@@ -398,7 +398,7 @@ async function getLeafDescendants(
             category_id: catId, category_name: catName, parent_category_id: pid,
             is_leaf: true, active: true, category_path: catPath,
             last_synced_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-          }, { onConflict: 'marketplace_id,category_id' }).then(() => {}).catch(() => {});
+          }, { onConflict: 'marketplace_id,category_id' }).then(() => {}, () => {});
         } else if (leaves.length < maxResults) {
           queue.push([catId, catPath]);
         }
@@ -472,7 +472,7 @@ async function getCategorySuggestions(
       }));
       if (toCache.length > 0) {
         supabase.from('ebay_categories').upsert(toCache, { onConflict: 'marketplace_id,category_id' })
-          .then(() => {}).catch(() => {});
+          .then(() => {}, () => {});
       }
 
       // Return leaf categories only
@@ -612,7 +612,7 @@ async function getCategoryChildren(
     }));
     if (toUpsert.length > 0) {
       supabase.from('ebay_categories').upsert(toUpsert, { onConflict: 'marketplace_id,category_id' })
-        .then(() => {}).catch(() => {});
+        .then(() => {}, () => {});
     }
     return { children, source: 'ebay_live' };
   } catch (e: any) {
