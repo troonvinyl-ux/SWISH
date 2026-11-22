@@ -47,10 +47,18 @@ export async function runNicheEbayOperation(tenantId: string, nicheId: string, o
     if (options.isCurrent?.() !== false) options.onProgress?.(snapshot());
     // Only explicitly accounted-for policy restrictions allow a new batch.
     // An arbitrary batchComplete flag cannot turn transport/readback failure into success.
-    const restrictionOnly = last.batchComplete === true && response.requiresReauth === false && Number(last.blocked) > 0 && Number(last.failed) === Number(last.blocked) && Array.isArray(last.issues) && last.issues.length === Number(last.blocked) && last.issues.every((issue: any) => issue?.code === '21920397');
-    if (response.error && !restrictionOnly) return { ...response, data: snapshot() };
+    // Only verified, item-specific no-write outcomes can be skipped. A scoped
+    // read TimeoutError never changes inventory. An unknown DB/transport/write
+    // failure remains an immediate hard stop, even if a server flag says done.
+    const accountedNoWrite = last.batchComplete === true && response.requiresReauth === false
+      && Number(last.failed) > 0
+      && Number.isSafeInteger(Number(last.failed))
+      && Number(last.failed) === Number(last.blocked ?? 0) + Number(last.readSkipped ?? 0)
+      && Array.isArray(last.issues) && last.issues.length === Number(last.failed)
+      && last.issues.every((issue: any) => issue?.code === '21920397' || issue?.code === 'EBAY_ITEM_READ_TIMEOUT');
+    if (response.error && !accountedNoWrite) return { ...response, data: snapshot() };
     const next = last.nextAfterListingId;
-    if (next == null) return { data: { ...snapshot(), success: totals.failed === 0 }, error: totals.failed ? `${totals.updated} listing(s) reconciled; ${totals.failed} need attention${totals.blocked ? ' (eBay policy 21920397)' : ''}. Restricted/unconfirmed records and photos are retained. Review the listing issues before retrying.` : response.error, requiresReauth: response.requiresReauth };
+    if (next == null) return { data: { ...snapshot(), success: totals.failed === 0 }, error: totals.failed ? `${totals.updated} listing(s) reconciled; ${totals.failed} need attention${totals.blocked ? ' (eBay policy 21920397)' : ''}. Restricted or unverified listings and photos are retained. Review the listed eBay item IDs before retrying.` : response.error, requiresReauth: response.requiresReauth };
     if (last.batchComplete !== true || typeof next !== 'string' || !/^[0-9a-f-]{36}$/i.test(next) || seen.has(next) || Number(last.processed) < 1) return { data: snapshot(), error: 'Sync continuation could not be verified. Completed items are retained; reload before retrying.', requiresReauth: false };
     // Only decide the *next* batch after this one has completed and its cursor
     // has been verified. A slow/unknown batch is never automatically repeated.

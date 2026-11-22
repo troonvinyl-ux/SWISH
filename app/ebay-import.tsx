@@ -608,6 +608,7 @@ export default function EbayImportScreen() {
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [activeSellerCoverage, setActiveSellerCoverage] = useState<{ reported: number | null; fetched: number } | null>(null);
 
   // ── Image import state ────────────────────────────────────────────────────
   const [imageImporting, setImageImporting] = useState(false);
@@ -680,6 +681,7 @@ export default function EbayImportScreen() {
     if (!tenant) return;
     setLoading(true);
     setFetchError(null);
+    setActiveSellerCoverage(null);
     setCandidates([]);
 
     try {
@@ -700,6 +702,10 @@ export default function EbayImportScreen() {
       }
 
       const listings: any[] = data?.listings ?? [];
+      setActiveSellerCoverage({
+        reported: Number.isSafeInteger(data?.activeReported) ? Number(data.activeReported) : null,
+        fetched: Number.isSafeInteger(data?.activeFetched) ? Number(data.activeFetched) : 0,
+      });
 
       if (listings.length === 0) {
         setFetchError('No eBay listings found. If your eBay account is connected but this shows empty, your active listings may have ended. Try clicking Fetch again — sold and ended listings are also fetched.');
@@ -835,15 +841,26 @@ export default function EbayImportScreen() {
             let skipped = 0;
             const errors: string[] = [];
             const importedItemIds: string[] = [];
-
+            let attempted = 0;
+            let uncertainListingId = '';
+            try {
             for (let i = 0; i < selected.length; i++) {
-              setImportProgress({ current: i + 1, total: selected.length });
+              // Show confirmed completions, not an in-flight RPC as saved.
+              setImportProgress({ current: attempted, total: selected.length });
               const candidate = selected[i];
 
               const { itemId, inventoryId, error } = await importEbayCandidate(tenant.id, candidate);
               if (error) {
                 errors.push(`${candidate.title.slice(0, 30)}: ${error}`);
                 skipped++;
+                if (error.startsWith('SWISH_IMPORT_UNCONFIRMED:')) {
+                  // This atomic write may have completed server-side after a
+                  // device timeout. Never auto-replay it or silently skip on.
+                  uncertainListingId = candidate.ebayItemId;
+                  attempted++;
+                  setImportProgress({ current: attempted, total: selected.length });
+                  break;
+                }
               } else {
                 imported++;
                 if (itemId) importedItemIds.push(itemId);
@@ -853,10 +870,12 @@ export default function EbayImportScreen() {
                     : c,
                 ));
               }
+              attempted++;
+              setImportProgress({ current: attempted, total: selected.length });
             }
 
             await logImportRun(tenant.id, {
-              totalProcessed: selected.length,
+              totalProcessed: attempted,
               totalImported: imported,
               totalMatched: imported,
               totalReview: 0,
@@ -864,8 +883,11 @@ export default function EbayImportScreen() {
               errors,
             });
 
-            setImporting(false);
-            setImportProgress(null);
+            if (uncertainListingId) {
+              showAlert('Import paused — save not confirmed',
+                `${imported} saved; ${selected.length - attempted} not attempted. eBay #${uncertainListingId} timed out and may have been saved by OnSpace. Refresh the imported links before manually restarting; nothing has been automatically retried.`);
+              return;
+            }
 
             // Image downloads are deliberately manual to avoid unexpected eBay API
             // calls after every import. Use the explicit Import eBay Images action
@@ -882,6 +904,12 @@ export default function EbayImportScreen() {
                 'Import Finished',
                 `${imported} imported, ${skipped} failed.${imported > 0 ? ' Gallery images are being fetched automatically.' : ''}\n\nErrors:\n${errors.slice(0, 5).join('\n')}`,
               );
+            }
+            } catch (cause) {
+              showAlert('Import stopped — check saved links', cause instanceof Error ? cause.message : 'The import outcome was not confirmed. Previously saved items are retained.');
+            } finally {
+              setImporting(false);
+              setImportProgress(null);
             }
           },
         },
@@ -915,7 +943,8 @@ export default function EbayImportScreen() {
             </Text>
           ) : candidates.length > 0 ? (
             <Text style={s.subtitle}>
-              {candidates.length} found · {duplicateCount} duplicate · {selectedCount} selected
+              {candidates.length} candidates · {duplicateCount} already linked · {selectedCount} selected
+              {activeSellerCoverage ? ` · eBay active ${activeSellerCoverage.reported ?? 'unconfirmed'}, fetched ${activeSellerCoverage.fetched}` : ''}
             </Text>
           ) : (
             <Text style={s.subtitle}>Import your existing eBay listings as inventory records</Text>

@@ -644,7 +644,7 @@ serveModule(withEdgeFunctionLogging('swish-ebay-browse', async (req: Request) =>
     }
 
     // Helper: fetch one page of GetMyeBaySelling
-    async function fetchSellingPage(listSection: string, pageNum: number): Promise<{ items: any[]; totalPages: number }> {
+    async function fetchSellingPage(listSection: string, pageNum: number): Promise<{ items: any[]; totalPages: number; reportedCount: number | null }> {
       // Use ReturnAll to get descriptions, item specifics, condition, shipping
       const xmlBody = `<?xml version="1.0" encoding="utf-8"?>
 <GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents">
@@ -678,12 +678,23 @@ serveModule(withEdgeFunctionLogging('swish-ebay-browse', async (req: Request) =>
       });
 
       const xmlText = await tradingRes.text();
-      const totalPages = parseInt(xmlText.match(/<TotalNumberOfPages>(\d+)<\/TotalNumberOfPages>/)?.[1] ?? '1');
+      const ack = xmlText.match(/<Ack>([^<]+)<\/Ack>/)?.[1];
+      // Never return a seemingly complete seller inventory if the ActiveList
+      // page actually contains an eBay Trading error or malformed response.
+      if (!tradingRes.ok || (ack !== 'Success' && ack !== 'Warning')) {
+        throw new Error('eBay did not confirm the seller listing page');
+      }
+      const pagesText = xmlText.match(/<TotalNumberOfPages>(\d+)<\/TotalNumberOfPages>/)?.[1];
+      if (!pagesText) throw new Error('eBay seller listing pagination was not confirmed');
+      const totalPages = Number(pagesText);
+      if (!Number.isSafeInteger(totalPages) || totalPages < 0) throw new Error('eBay seller listing page count was invalid');
+      const countText = xmlText.match(/<TotalNumberOfEntries>(\d+)<\/TotalNumberOfEntries>/)?.[1];
+      const reportedCount = countText == null ? null : Number(countText);
       const ebayStatus =
         listSection === 'ActiveList' ? 'active'
         : listSection === 'SoldList' ? 'sold'
         : 'ended';
-      return { items: parseListingItems(xmlText, ebayStatus), totalPages };
+      return { items: parseListingItems(xmlText, ebayStatus), totalPages, reportedCount };
     }
 
     // For items where GetMyeBaySelling returned empty description,
@@ -776,20 +787,30 @@ serveModule(withEdgeFunctionLogging('swish-ebay-browse', async (req: Request) =>
     }
 
     const listings: any[] = [];
+    let activeReported: number | null = null;
+    let activeFetched = 0;
 
-    // Fetch active listings (all pages)
+    // Active listings are paginated and must be verified end-to-end. In
+    // particular, do not silently return SoldList as a complete inventory if
+    // an active seller page timed out or was rejected by eBay.
     try {
       let pageNum = 1;
       let hasMore = true;
-      while (hasMore && listings.length < fetchLimit) {
-        const { items, totalPages } = await fetchSellingPage('ActiveList', pageNum);
+      while (hasMore && activeFetched < fetchLimit) {
+        const { items, totalPages, reportedCount } = await fetchSellingPage('ActiveList', pageNum);
+        if (pageNum === 1) activeReported = reportedCount;
         listings.push(...items);
-        hasMore = pageNum < totalPages && items.length > 0;
+        activeFetched += items.length;
+        hasMore = pageNum < totalPages;
+        if (hasMore && items.length === 0) throw new Error('eBay active seller page was incomplete');
         pageNum++;
-        if (items.length === 0) hasMore = false;
+      }
+      if (activeReported != null && activeFetched < activeReported && activeFetched < fetchLimit) {
+        throw new Error('eBay active seller list was incomplete');
       }
     } catch (e: any) {
-      console.error('ActiveList fetch error:', e.message);
+      console.error('[eBay Import] ActiveList page not confirmed:', e?.message);
+      return json({ error: 'eBay active listing pages were not fully confirmed. No partial list was imported. Retry Fetch; your existing SWISH inventory is unchanged.' }, 503);
     }
 
     // Fetch sold listings (page 1 only for speed)
@@ -812,7 +833,7 @@ serveModule(withEdgeFunctionLogging('swish-ebay-browse', async (req: Request) =>
     const enriched = await enrichDescriptions(listings);
 
     const scoped = body.nicheId ? enriched.filter(item => inferImportNiche(item.categoryName,item.title) === body.nicheId) : enriched;
-    return json({ listings: scoped, total: scoped.length, excludedForReview: enriched.length-scoped.length });
+    return json({ listings: scoped, total: scoped.length, activeReported, activeFetched, excludedForReview: enriched.length-scoped.length });
   }
 
   // ── Route: search_by_image — eBay Browse API visual search ─────────────────
