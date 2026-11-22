@@ -841,15 +841,26 @@ export default function EbayImportScreen() {
             let skipped = 0;
             const errors: string[] = [];
             const importedItemIds: string[] = [];
-
+            let attempted = 0;
+            let uncertainListingId = '';
+            try {
             for (let i = 0; i < selected.length; i++) {
-              setImportProgress({ current: i + 1, total: selected.length });
+              // Show confirmed completions, not an in-flight RPC as saved.
+              setImportProgress({ current: attempted, total: selected.length });
               const candidate = selected[i];
 
               const { itemId, inventoryId, error } = await importEbayCandidate(tenant.id, candidate);
               if (error) {
                 errors.push(`${candidate.title.slice(0, 30)}: ${error}`);
                 skipped++;
+                if (error.startsWith('SWISH_IMPORT_UNCONFIRMED:')) {
+                  // This atomic write may have completed server-side after a
+                  // device timeout. Never auto-replay it or silently skip on.
+                  uncertainListingId = candidate.ebayItemId;
+                  attempted++;
+                  setImportProgress({ current: attempted, total: selected.length });
+                  break;
+                }
               } else {
                 imported++;
                 if (itemId) importedItemIds.push(itemId);
@@ -859,10 +870,12 @@ export default function EbayImportScreen() {
                     : c,
                 ));
               }
+              attempted++;
+              setImportProgress({ current: attempted, total: selected.length });
             }
 
             await logImportRun(tenant.id, {
-              totalProcessed: selected.length,
+              totalProcessed: attempted,
               totalImported: imported,
               totalMatched: imported,
               totalReview: 0,
@@ -870,8 +883,11 @@ export default function EbayImportScreen() {
               errors,
             });
 
-            setImporting(false);
-            setImportProgress(null);
+            if (uncertainListingId) {
+              showAlert('Import paused — save not confirmed',
+                `${imported} saved; ${selected.length - attempted} not attempted. eBay #${uncertainListingId} timed out and may have been saved by OnSpace. Refresh the imported links before manually restarting; nothing has been automatically retried.`);
+              return;
+            }
 
             // Image downloads are deliberately manual to avoid unexpected eBay API
             // calls after every import. Use the explicit Import eBay Images action
@@ -888,6 +904,12 @@ export default function EbayImportScreen() {
                 'Import Finished',
                 `${imported} imported, ${skipped} failed.${imported > 0 ? ' Gallery images are being fetched automatically.' : ''}\n\nErrors:\n${errors.slice(0, 5).join('\n')}`,
               );
+            }
+            } catch (cause) {
+              showAlert('Import stopped — check saved links', cause instanceof Error ? cause.message : 'The import outcome was not confirmed. Previously saved items are retained.');
+            } finally {
+              setImporting(false);
+              setImportProgress(null);
             }
           },
         },
