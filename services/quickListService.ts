@@ -21,6 +21,7 @@ import { resolveProductionNiche } from './nicheRouting';
 import { nicheBarcodeAllowed } from '@/shared/nichePolicy';
 import { captureCanonicalId } from './captureIdentityService';
 import { automaticListingPrice, automaticSpecifics } from './listingAutofillService';
+import { musicContentsEvidence, protectMusicListingCopy } from '@/shared/listingEvidence';
 import { preferredListingPhotos, availableListingPhotos, processedListingPhotoIssue } from '@/shared/smartStudio';
 export interface QuickRequirements {categoryId:string;categoryName:string;aspects:AntiqueAspect[];conditions:AntiqueConditionPolicy;error?:string}
 export interface QuickDraft {listing:SavedListing;generated:GeneratedListing;requirements:QuickRequirements;market:MarketValueResult|null;specifics:Array<{name:string;value:string}>;photos:string[];itemId:string;warnings?:string[];quantity?:number;specificEvidence?:QuickAttributeEvidence[]}
@@ -35,7 +36,7 @@ export async function warmQuickList(tenantId:string){
 export async function identifyQuickPhotos(tenantId:string,nicheId:QuickListNiche,images:CapturedImage[],lead:ProductLead|null,measurements:Record<string,string>,options:{specialistId?:SpecialistId;mode?:string;allowPhotoWarnings?:boolean}={}){
  if(lead&&!nicheBarcodeAllowed(nicheId))return {result:null,error:'This specialist uses photographic identification, not retail barcode matching.'};
  const notes=Object.entries(measurements).filter(([name,value])=>!name.startsWith('_')&&value.trim()).map(([name,value])=>`${name}: ${value} (seller supplied; cross-check against photographs)`).join('\n');
- const known={weight:Number(measurements.weight)||undefined,diameter:Number(measurements.diameter)||undefined,material:measurements.material||undefined,customNotes:[notes,lead?`Barcode product LEAD, not confirmed: ${JSON.stringify(lead)}. Compare brand, model, edition and variant against both physical photographs. Report all contradictions. A barcode never proves physical condition.`:null].filter(Boolean).join('\n')};
+ const known={weight:Number(measurements.weight)||undefined,diameter:Number(measurements.diameter)||undefined,material:measurements.material||undefined,customNotes:['Classify the actual physical object being offered. A book depicting Greek coins is a book, not an ancient coin. Depicted artwork is not evidence of physical item type.',notes,lead?`Barcode product LEAD, not confirmed: ${JSON.stringify(lead)}. Compare brand, model, edition and variant against both physical photographs. Report all contradictions. A barcode never proves physical condition.`:null].filter(Boolean).join('\n')};
  const specialistId=options.specialistId??NICHE_MODULES[nicheId].defaultSpecialist as SpecialistId;
  if(!NICHE_MODULES[nicheId].specialists.includes(specialistId))return {result:null,error:'Specialist does not belong to this workspace.'};
  return identifyItemWithAI(images,specialistId,undefined,known,{tenantId,presentationInParallel:true,...(options.mode?{captureMode:options.mode}:{}),...(options.allowPhotoWarnings?{allowPhotoWarnings:true}:{})});
@@ -99,8 +100,22 @@ export async function prepareQuickDraft(tenantId:string,nicheId:QuickListNiche,i
  // A category lookup failure must not leave an apparently-listable draft with
  // no eBay leaf category. The caller can retry the same saved inventory item.
  if(requirements.error||!requirements.categoryId)throw new Error(requirements.error??'A verified eBay category is required before creating a draft.');
- const market=research.error?null:research.result,evidencePrice=automaticListingPrice(market);
- const generated={...copy.listing,recommended_price:evidencePrice,floor_price:0,ceiling_price:0};
+ const market=research.error?null:research.result;
+ const contents=nicheId==='tunes_flip'?musicContentsEvidence(result.attributes.expected_disc_count,result.attributes.observed_disc_count,String(result.attributes.format??'')):null;
+ // A whole-release valuation is not price evidence for an incomplete or
+ // physically uncounted set. Preserve research internally but do not autofill.
+ const evidencePrice=contents && (contents.status==='incomplete'||contents.status==='unknown')?0:automaticListingPrice(market);
+ // A complete Discogs tracklist is not proof that the seller has every record.
+ // For an incomplete set, replace unverified whole-release copy before it can
+ // become a canonical draft or enter the existing eBay publication pipeline.
+ const honestDescription=contents?.status==='incomplete'?[
+  'Item',String(result.attributes.artist??'Music recording')+' — '+String(result.attributes.release_title??'Individual music item'),
+  '', 'Included contents',contents.disclosure,'Which disc is missing is not established by the catalogue reference. No complete-set tracklisting is asserted as included.',
+  '', 'Condition and faults',result.condition||'Condition unknown; inspect the seller photographs.',result.conditionNotes||'Any further faults should be added by the seller during review.',
+  '', 'Unknowns','Exact physical pressing and identity of missing discs are not independently established. Playback not tested unless the seller reports otherwise.',
+ ] .join('\n'):String(copy.listing.description??'');
+ const protectedCopy=contents?protectMusicListingCopy(String(copy.listing.title??result.canonicalTitle),honestDescription,contents):null;
+ const generated={...copy.listing,...(protectedCopy??{}),recommended_price:evidencePrice,floor_price:0,ceiling_price:0};
  const canonical=await getItem(itemId);
  if(canonical.error||!canonical.item||canonical.item.tenantId!==tenantId||!NICHE_MODULES[nicheId].specialists.includes(canonical.item.specialistId))throw new Error(canonical.error??'Canonical photos could not be reopened.');
  const photoIssue=photoPersistenceIssue(canonical.item.media,canonical.item.attributes);if(photoIssue)throw new Error(photoIssue);
@@ -110,7 +125,7 @@ export async function prepareQuickDraft(tenantId:string,nicheId:QuickListNiche,i
  const profile=getSpecialistProfile(nicheId);
  const evidence=Array.isArray(result.attributes._quick_attribute_sources)?result.attributes._quick_attribute_sources as QuickAttributeEvidence[]:[];
  const specificEvidence=specifics.map(row=>{const descriptor=profile?.fields.find(field=>field.specific===row.name);const claims=evidence.filter(entry=>(entry.key===row.name||entry.key===descriptor?.key)&&entry.value===row.value&&entry.accepted);return {key:row.name,value:row.value,sources:[...new Set(claims.flatMap(entry=>entry.sources))],accepted:claims.length>0,note:claims.map(entry=>entry.note).join(' ')};});
- return {listing:saved.listing,generated,requirements,market,specifics,photos:preferredListingPhotos(canonical.item.media,canonical.item.attributes),itemId,quantity,specificEvidence,warnings:[...(requirements.error?[requirements.error]:[]),...(research.error?['Market value unavailable. Enter a price or save for later.']:[])]};
+ return {listing:saved.listing,generated,requirements,market,specifics,photos:preferredListingPhotos(canonical.item.media,canonical.item.attributes),itemId,quantity,specificEvidence,warnings:[...(requirements.error?[requirements.error]:[]),...(research.error?['Market value unavailable. Enter a price or save for later.']:[]),...(contents && (contents.status==='incomplete'||contents.status==='unknown')?['No automatic whole-release price for incomplete or unverified physical contents; enter a supported manual price.']:[])]};
 }
 export interface QuickReviewInput {title:string;description:string;price:string;conditionId:string;conditionNotes:string;specifics:Array<{name:string;value:string}>;reviewedResult?:AIIdentificationResult}
 /** Draft persistence accepts incomplete fields; publication still requires every existing safety check. */
@@ -128,7 +143,9 @@ export async function saveQuickReview(tenantId:string,nicheId:QuickListNiche,dra
   if(input.reviewedResult){if(!NICHE_MODULES[nicheId].specialists.includes(input.reviewedResult.specialistId))return {error:'Reviewed specialist scope differs from this item.'};const safety=evaluateSpecialistSafety(nicheId,input.reviewedResult.attributes);if(safety.blocked)return {error:safety.reasons.join(' ')};}
  }
  const supported=draft.requirements.conditions.itemConditions.find(row=>String(row.conditionId)===input.conditionId);
- const saved=await saveListingEditor({tenantId,listingId:draft.listing.id,nicheId,title:input.title,description:input.description,price:input.price||'0',shippingCost:String(draft.listing.shippingCost),floorPrice:'0',ceilingPrice:'0',categoryId:draft.requirements.categoryId,categoryName:draft.requirements.categoryName,condition:supported?.conditionDescription??canonical.item.condition,conditionId:supported?input.conditionId:'',conditionDescription:input.conditionNotes,quantity:String(draft.quantity??1),sku:canonical.item.sku||canonical.item.inventoryId||'',itemSpecifics:input.specifics.filter(row=>row.value.trim()),media:photos});
+ const currentContents=nicheId==='tunes_flip'?musicContentsEvidence(canonical.item.attributes.expected_disc_count,canonical.item.attributes.observed_disc_count,String(canonical.item.attributes.format??'')):null;
+ const safeInput=currentContents?protectMusicListingCopy(input.title,input.description,currentContents):{title:input.title,description:input.description};
+ const saved=await saveListingEditor({tenantId,listingId:draft.listing.id,nicheId,title:safeInput.title,description:safeInput.description,price:input.price||'0',shippingCost:String(draft.listing.shippingCost),floorPrice:'0',ceilingPrice:'0',categoryId:draft.requirements.categoryId,categoryName:draft.requirements.categoryName,condition:supported?.conditionDescription??canonical.item.condition,conditionId:supported?input.conditionId:'',conditionDescription:input.conditionNotes,quantity:String(draft.quantity??1),sku:canonical.item.sku||canonical.item.inventoryId||'',itemSpecifics:input.specifics.filter(row=>row.value.trim()),media:photos});
  if(saved.error)return saved;
  if(mode==='draft')return {error:null};
  const item=await getItem(draft.itemId);if(item.error||!item.item||item.item.tenantId!==tenantId||!NICHE_MODULES[nicheId].specialists.includes(item.item.specialistId))return {error:'Review provenance ownership could not be verified.'};

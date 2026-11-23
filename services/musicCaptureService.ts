@@ -4,6 +4,7 @@ import type { CaptureDraft } from './captureDraftService';
 import { SPECIALISTS, type CaptureRequirement } from '@/constants/specialists';
 import { selectedMusicAttributes, isFreshMusicRelease, musicGrade, type MusicRelease } from '@/shared/musicRelease';
 import { getSpecialistProfile, normalizeSpecialistAnalysis, usefulText } from '@/shared/specialistIntelligence';
+import { musicContentsEvidence } from '@/shared/listingEvidence';
 
 export function musicDiscCount(value: unknown): number | null {
   const text=String(value??'').trim();
@@ -74,7 +75,22 @@ export function musicCaptureResult(base:AIIdentificationResult|null,release:Musi
   // Choosing a catalogue row, or adding a free-text review, never certifies a pressing.
   result.attributes.discogs_pressing_confirmed=false;
   const present=musicDiscCount(answers.observed_disc_count);const expected=musicDiscCount(result.attributes.expected_disc_count);
-  if(present&&expected&&present!==expected)result.warnings.push(`Catalogue lists ${expected} disc(s); you entered ${present}. The draft stays editable — amend the listing details if needed.`);
+  const contents=musicContentsEvidence(expected,present,String(result.attributes.format??release?.format.join(' ')??''));
+  // Persist the actual reported count separately from the catalogue estimate.
+  // A missing count is unknown, never silently defaulted to a complete set.
+  result.attributes.observed_disc_count=present===null?'':String(present);
+  result.attributes._music_contents_status=contents.status;
+  result.attributes._music_contents_disclosure=contents.disclosure;
+  if(contents.status==='incomplete'||contents.status==='extra'||contents.status==='unknown')
+    result.warnings.push(contents.disclosure);
+  // Retain the established capture discrepancy notice as additional context.
+  // The detailed physical-contents disclosure above remains the buyer-copy
+  // safeguard applied during draft preparation and review saving.
+  if(present&&expected&&present!==expected)
+    result.warnings.push(`Catalogue lists ${expected} disc(s); you entered ${present}. The draft stays editable — amend the listing details if needed.`);
+  // Keep the canonical inventory title as the seller's reviewed title. Buyer-facing
+  // copy is protected in prepareQuickDraft/saveQuickReview, immediately before it
+  // is persisted to the existing listing/publication route.
   result.condition=answers._condition?.trim()||`Media ${media??'unassessed'} / Packaging ${sleeve??'unassessed'}; playback ${answers.play_test?.trim()||'not tested'}`;
   if(answers._condition_notes?.trim())result.conditionNotes=answers._condition_notes.trim();
   analysis.followUps=analysis.followUps.filter(question=>!analysis.fields[question.key]||analysis.fields[question.key].basis==='inferred');
