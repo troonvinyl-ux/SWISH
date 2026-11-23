@@ -53,7 +53,7 @@ export function musicContentsEvidence(expected: unknown, observed: unknown, form
  */
 export function protectMusicListingCopy(title: string, description: string, evidence: MusicContentsEvidence): {title: string; description: string} {
   const prefix = evidence.status === 'incomplete' ? evidence.disclosure : '';
-  const cleanTitle = title.trim().replace(/^Incomplete\s*[—-]\s*\d+\s+of\s+\d+\s+(?:records|discs)\s+included\s*[|:-]?\s*/i, '');
+  const cleanTitle = title.trim().replace(/^Incomplete\s*[—-]\s*\d+\s+of\s+\d+\s+(?:records|discs)\s+included(?:\s*[|:—-]\s*)?/i, '');
   const combined = prefix ? `${prefix} — ${cleanTitle}` : cleanTitle;
   const safeTitle = combined.length <= 80 ? combined : combined.slice(0, 81).replace(/\s+\S*$/, '').slice(0, 80);
   const line = `Included contents: ${evidence.disclosure}`;
