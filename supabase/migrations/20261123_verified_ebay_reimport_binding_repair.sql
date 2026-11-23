@@ -52,8 +52,6 @@ begin
     or (v_item.ebay_account_id is not null and v_item.ebay_account_id<>v_binding.ebay_account_id)
     or (v_item.ebay_member_id is not null and v_item.ebay_member_id<>p_user_id)
     or (v_listing.ebay_binding_id is not null and v_listing.ebay_binding_id<>v_binding.id)
-    or (v_listing.ebay_account_id is not null and v_listing.ebay_account_id<>v_binding.ebay_account_id)
-    or (v_listing.ebay_member_id is not null and v_listing.ebay_member_id<>p_user_id)
     or (nullif(btrim(v_item.attributes->>'_ebay_item_id'),'') is not null
       and btrim(v_item.attributes->>'_ebay_item_id')<>v_external)
   then
@@ -61,15 +59,14 @@ begin
   end if;
   if v_item.ebay_binding_id=v_binding.id and v_item.ebay_account_id=v_binding.ebay_account_id
      and v_item.ebay_member_id=p_user_id and v_listing.ebay_binding_id=v_binding.id
-     and v_listing.ebay_account_id=v_binding.ebay_account_id
-     and v_listing.ebay_member_id=p_user_id
   then v_already:=v_already+1;continue;end if;
 
   update public.items set ebay_binding_id=v_binding.id,
     ebay_account_id=v_binding.ebay_account_id,ebay_member_id=p_user_id
     where id=v_item.id and tenant_id=p_tenant_id;
-  update public.listings set ebay_binding_id=v_binding.id,
-    ebay_account_id=v_binding.ebay_account_id,ebay_member_id=p_user_id
+  -- listings is secured by its verified binding UUID; the three member
+  -- provenance fields live on the parent items table.
+  update public.listings set ebay_binding_id=v_binding.id
     where id=v_listing.id and tenant_id=p_tenant_id;
   v_updated:=v_updated+1;
  end loop;
