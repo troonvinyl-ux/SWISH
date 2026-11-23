@@ -101,3 +101,31 @@ test('native import stops after bounded 30s instead of hanging forever at 108/11
   expect(abortSignal.mock.calls[0][0].aborted).toBe(true);
  }finally{jest.useRealTimers();}
 });
+
+test('legacy coin local archive is owner-controlled, does not call eBay and preserves historical identity',()=>{
+ const sync=fs.readFileSync('supabase/functions/swish-ebay-sync/index.ts','utf8');
+ const begin=sync.indexOf("if(mode==='exclude_local_legacy')");
+ const finish=sync.indexOf("if(mode==='exclude_policy_removed')",begin);
+ expect(begin).toBeGreaterThan(0);
+ expect(finish).toBeGreaterThan(begin);
+ const archive=sync.slice(begin,finish);
+ expect(archive).toContain("membership.role==='owner'||membership.role==='admin'");
+ expect(archive).toContain(".eq('tenant_id',tenantId).eq('id',itemId)");
+ expect(archive).toContain("String(row.external_listing_id??'')!==expectedExternalId");
+ expect(archive).toContain("item.sold_at!=null||item.sold_price!=null");
+ expect(archive).toContain("for(const table of ['sales','orders','ebay_returns'])");
+ expect(archive).toContain("table!=='ebay_returns'&&listingIds.length");
+ expect(archive).toContain("status:'held'");
+ expect(archive).toContain("_swish_ebay_sync_excluded:expectedExternalId");
+ expect(archive).toContain("_swish_ebay_sync_exclusion_code:'LOCAL_OWNER_ARCHIVE'");
+ expect(archive).not.toContain('getItemObservation(');
+ expect(archive).not.toContain('EndFixedPriceItem');
+ expect(archive).not.toContain("from('swish_ebay_bindings')");
+ expect(archive).not.toContain("from('listings').delete()");
+ expect(archive).not.toContain("from('items').delete()");
+ expect(archive).not.toContain('ebay_binding_id:');
+ const projection=fs.readFileSync('supabase/migrations/20261111_canonical_inventory_identity.sql','utf8');
+ expect(projection).toContain("when lower(btrim(i.status)) in ('held'");
+ expect(sync).toContain("listings.push(...page.filter(row=>!excludedFromSync(row)))");
+ expect(sync).toContain("nextAfterListingId=page.length===batchSize?String(page[page.length-1].id):null");
+});
