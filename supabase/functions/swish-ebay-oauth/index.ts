@@ -248,6 +248,29 @@ async function handleSubscriberAuthorization(
   return jsonResponse({ consentUrl, callbackUrl: CALLBACK_URL });
 }
 
+// Read-only status of the CURRENT SWISH member's independently verified eBay
+// binding. A tenant connector is deliberately not considered member consent.
+async function handleMemberConnectionStatus(
+ body:{tenantId?:string},authHeader:string|null,
+):Promise<Response>{
+ const tenantId=typeof body.tenantId==='string'?body.tenantId:'';
+ if(!tenantId)return jsonResponse({error:'A SWISH account is required.'},400);
+ const db=adminClient();
+ const auth=await verifyUserAndTenant(authHeader,tenantId,db);
+ if(!auth.ok)return jsonResponse({error:auth.error},auth.status??403);
+ const result=await db.from('swish_ebay_bindings')
+  .select('id,status,seller_account_id,ebay_account_id,last_verified_at')
+  .eq('tenant_id',tenantId).eq('user_id',auth.userId!).neq('status','replaced').maybeSingle();
+ if(result.error)return jsonResponse({error:'Member eBay binding status is unavailable. Your existing account was not changed.'},503);
+ const row=result.data;
+ return jsonResponse({
+  success:true,
+  connected:Boolean(row&&row.status==='connected'&&row.ebay_account_id&&row.seller_account_id),
+  sellerAccountId:row?.status==='connected'?row.seller_account_id:null,
+  lastVerifiedAt:row?.status==='connected'?row.last_verified_at:null,
+ });
+}
+
 // Existing-seller identity recovery: requires verified member owner/admin, no new
 // OAuth consent and no eBay listing request. Only reconciles the current token.
 async function handleVerifyConnectedIdentity(
@@ -785,6 +808,9 @@ Deno.serve(withEdgeFunctionLogging('swish-ebay-oauth', async (req: Request) => {
 
       if (body.action === 'start_subscriber_authorization') {
         return await handleSubscriberAuthorization(body, authHeader);
+      }
+      if (body.action === 'member_binding_status') {
+        return await handleMemberConnectionStatus(body, authHeader);
       }
       if (body.action === 'verify_connected_identity') {
         return await handleVerifyConnectedIdentity(body, authHeader);
