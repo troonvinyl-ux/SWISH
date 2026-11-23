@@ -356,6 +356,53 @@ async function handleAuthorize(
   return jsonResponse({ consentUrl, callbackUrl: CALLBACK_URL });
 }
 
+// Each member receives their OWN consent-bound eBay identity. Do not derive
+// a member binding from a previously connected tenant-level seller account.
+// This function is invoked only after a fresh OAuth code exchange, a verified
+// eBay identity and a membership check bound to encrypted OAuth state.
+// Existing OnSpace table and member lease are reused: no alternate backend.
+async function persistVerifiedMemberBinding(
+ db:ReturnType<typeof adminClient>,tenantId:string,userId:string,
+ identity:{userId:string;username:string},
+ tokens:{clientId:string;clientSecret:string;ruName:string;accessToken:string;refreshToken:string|null;expiresAt:string|null},
+):Promise<{ok:boolean;error?:string}>{
+ const member=await db.from('tenant_memberships').select('id').eq('tenant_id',tenantId).eq('user_id',userId).maybeSingle();
+ if(member.error||!member.data)return {ok:false,error:'SWISH membership could not be verified before binding this eBay account.'};
+ const result=await db.from('swish_ebay_bindings').select('id,user_id,tenant_id,ebay_account_id,revision,status,credential_ref')
+  .eq('tenant_id',tenantId).eq('user_id',userId).neq('status','replaced').maybeSingle();
+ if(result.error)return {ok:false,error:'Existing member eBay binding could not be checked. No seller identity was transferred.'};
+ const existing=result.data;
+ if(existing && existing.ebay_account_id!==identity.userId)
+  return {ok:false,error:'This SWISH member is already bound to a different eBay account. Explicit account-switch approval is required.'};
+ const revision=existing?Number(existing.revision)+1:1;
+ if(!Number.isSafeInteger(revision)||revision<1)
+  return {ok:false,error:'The existing eBay binding revision could not be verified.'};
+ const bindingId=existing?.id??crypto.randomUUID();
+ const credentialRef=await encryptCredentials({
+  ...tokens,
+  bindingId,userId,tenantId,ebayUserId:identity.userId,sellerAccountId:identity.username,
+ });
+ const common={
+  ebay_account_id:identity.userId,seller_account_id:identity.username,status:'connected',
+  revision,credential_ref:credentialRef,access_token_expires_at:tokens.expiresAt,
+  last_verified_at:new Date().toISOString(),
+ };
+ if(existing){
+  let update=db.from('swish_ebay_bindings').update(common)
+   .eq('id',bindingId).eq('tenant_id',tenantId).eq('user_id',userId)
+   .eq('revision',existing.revision).neq('status','replaced');
+  update=existing.credential_ref==null?update.is('credential_ref',null):update.eq('credential_ref',existing.credential_ref);
+  const written=await update.select('id').maybeSingle();
+  if(written.error||!written.data)return {ok:false,error:'Your eBay binding changed while signing in. Reload and verify before retrying.'};
+ }else{
+  const written=await db.from('swish_ebay_bindings').insert({
+   id:bindingId,tenant_id:tenantId,user_id:userId,...common,
+  }).select('id').maybeSingle();
+  if(written.error||!written.data)return {ok:false,error:'The verified member eBay binding could not be saved. No tenant credentials were replaced.'};
+ }
+ return {ok:true};
+}
+
 // ════════════════════════════════════════════════════════════════════════════════
 // CALLBACK HANDLER — unchanged, works for both flows
 // ════════════════════════════════════════════════════════════════════════════════
@@ -550,20 +597,36 @@ async function handleCallback(url: URL): Promise<Response> {
     ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString()
     : null;
 
-  // Verify the actual authorised eBay identity, not a browser/staged label.
-  // A different account cannot silently take over an existing tenant connector.
+  // Never trust a browser label: verify the seller identity from the token
+  // returned by THIS member's fresh, state-bound eBay login.
   let verifiedIdentity: {userId:string;username:string};
   try {
     verifiedIdentity = await readEbayIdentity(tokenData.access_token);
     assertVerifiedLegacySeller(verifiedIdentity,sellerAccountId,null);
-    if(connectorRow?.credential_ref){
-      const previous = await decryptCredentials(connectorRow.credential_ref);
-      assertVerifiedLegacySeller(verifiedIdentity,connectorRow.seller_account_id,previous.ebayUserId);
-    }
   } catch {
-    return htmlResponse(errorPage('eBay Identity Not Confirmed','The seller account could not be verified or does not match the existing linked account.','Return to SWISH and check the linked eBay account before trying again.'),409);
+    return htmlResponse(errorPage('eBay Identity Not Confirmed','eBay identity could not be verified or did not match the seller explicitly requested. No member account was connected.','Return to SWISH and check which eBay account you signed into.'),409);
   }
 
+  // Do not replace a shared legacy connector with another member's eBay
+  // account. Distinct members get independently bound seller credentials.
+  let matchesLegacy = !connectorRow?.credential_ref;
+  if(connectorRow?.credential_ref){
+    try{
+      const previous=await decryptCredentials(connectorRow.credential_ref);
+      assertVerifiedLegacySeller(verifiedIdentity,connectorRow.seller_account_id,previous.ebayUserId);
+      matchesLegacy=true;
+    }catch{matchesLegacy=false;}
+  }
+  const memberBinding=await persistVerifiedMemberBinding(supabase,tenantId,memberUserId,verifiedIdentity,{
+    clientId:clientId.trim(),clientSecret:clientSecret.trim(),ruName:ruName.trim(),
+    accessToken:tokenData.access_token,refreshToken:tokenData.refresh_token??null,expiresAt,
+  });
+  if(!memberBinding.ok)return htmlResponse(errorPage('Member eBay Binding Failed',memberBinding.error??'SWISH could not save this verified member account.','Your existing connection and listings were preserved.'),409);
+  // If a different SWISH member owns the tenant legacy connector, leave it
+  // entirely untouched. The initiating member's verified binding is complete.
+  if(!matchesLegacy)return htmlResponse(successPage());
+
+  // Keep the established tenant connector only for the same verified seller.
   // Store tokens encrypted
   const updatedCredentialRef = await encryptCredentials({
     clientId:     clientId.trim(),
