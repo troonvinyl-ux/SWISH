@@ -418,11 +418,27 @@ async function repairSellerImportBindings(args:{
     p_tenant_id:tenantId,p_user_id:userId,p_binding_id:member.id,
     p_niche_id:nicheId,p_external_ids:batchIds,
    });
-   if(save.error||!save.data)return json({success:false,
-    error:'The verified re-import database repair is unavailable or failed. Completed earlier batches remain saved; deploy the SWISH migration or retry after checking backend health.',
-    section,page,partial:result.updated+result.alreadyLinked+result.unlinked+result.otherNiche+result.conflicts>0,
-    updated:result.updated,alreadyLinked:result.alreadyLinked,unlinked:result.unlinked,
-    otherNiche:result.otherNiche,conflicts:result.conflicts},503);
+   if(save.error||!save.data){
+    // PostgREST/SQL errors must not all be reported as "migration missing".
+    // Surface only an allowlisted diagnosis; never return raw SQL, credentials,
+    // schema data or customer IDs to the browser.
+    const code=String(save.error?.code??'').trim();
+    const diagnostics:Record<string,{kind:string;message:string}>={
+     PGRST202:{kind:'missing_rpc',message:'The verified eBay repair database function is not installed or PostgREST has not reloaded its schema. Apply migration 20261123_verified_ebay_reimport_binding_repair.sql to the existing OnSpace database, then reload the API schema.'},
+     '42883':{kind:'missing_rpc',message:'The verified eBay repair database function or one of its required SQL functions is missing. Apply the SWISH repair migration in the existing database and verify its dependencies.'},
+     '42703':{kind:'schema_mismatch',message:'The verified eBay repair function references a database column that is unavailable in this OnSpace schema. Review the migration against the existing items, listings and binding columns; no account identity was reassigned.'},
+     '42P01':{kind:'schema_mismatch',message:'The verified eBay repair function references a database table that is unavailable. Restore the existing SWISH schema dependency before repairing.'},
+     '42501':{kind:'permission_denied',message:'The database rejected the trusted seller repair permissions or verified member binding. Check the service-role RPC grant and the current verified seller; do not use another member\'s connection.'},
+     '57014':{kind:'database_timeout',message:'The verified eBay database repair timed out. The write outcome is unconfirmed; refresh the links before retrying. Do not re-list or re-import the items.'},
+     PGRST203:{kind:'ambiguous_rpc',message:'Multiple incompatible eBay repair functions exist. Check the migration signature and reload the PostgREST schema.'},
+    };
+    const diagnosis=diagnostics[code]??{kind:'database_unavailable',message:'Verified eBay database repair was not confirmed. Check the existing OnSpace backend function logs and the SWISH repair migration before retrying.'};
+    console.warn('[eBay seller repair] Scoped database operation not confirmed',diagnosis.kind,code.slice(0,20));
+    return json({success:false,error:diagnosis.message,diagnostic:diagnosis.kind,
+     section,page,partial:result.updated+result.alreadyLinked+result.unlinked+result.otherNiche+result.conflicts>0,
+     updated:result.updated,alreadyLinked:result.alreadyLinked,unlinked:result.unlinked,
+     otherNiche:result.otherNiche,conflicts:result.conflicts},503);
+   }
    const done=save.data as Record<string,unknown>;
    const fields=['updated','alreadyLinked','unlinked','otherNiche','conflicts'] as const;
    const numbers=fields.map(key=>Number(done[key]));
