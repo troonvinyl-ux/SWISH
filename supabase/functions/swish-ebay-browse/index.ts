@@ -1,5 +1,6 @@
 import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // KEENONCOINS eBay Browse & Seller Listings Edge Function
+// OnSpace Git sync refresh 2026-11-23: deploy the verified seller-section parser and bounded eBay link-repair batches from SWISH main. No marketplace write behavior changed.
 // Route 1 (default): Fetches real-time views/watchers for a published eBay listing.
 // Route 2 (my_active_listings): Fetches all active seller listings for import.
 // Uses eBay OAuth user token for seller operations; App token for public browse.
