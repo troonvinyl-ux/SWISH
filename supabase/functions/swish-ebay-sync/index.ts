@@ -181,7 +181,7 @@ const batchSize=batched?(desiredSize??SYNC_BATCH_SIZE):SYNC_BATCH_SIZE;
    if(links.some((row:any)=>!['ebay','ebay_gb'].includes(String(row.marketplace_id??'').toLowerCase())))
     return json({success:false,error:'This item has another marketplace relationship. Review it before local archival.'},409);
    if(['sold','fulfilled','completed'].includes(String(item.status??'').toLowerCase())||
-      item.sold_at!=null||item.sold_price!=null||
+      item.sold_at!=null||(item.sold_price!=null&&Number(item.sold_price)>0)||
       /^[0-9]*[1-9][0-9]*$/.test(String(attrs._ebay_quantity_sold??'0')))
     return json({success:false,error:'This coin has sale evidence and cannot be locally archived as unsold.'},409);
    const listingIds=links.map((row:any)=>String(row.id));
