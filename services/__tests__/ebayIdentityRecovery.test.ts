@@ -51,3 +51,22 @@ test('OAuth entrypoint boots against older OnSpace policy snapshots missing name
  expect(source).toContain("assertVerifiedLegacySeller(identity,connector.seller_account_id,creds.ebayUserId)");
  expect(source).toContain("assertVerifiedLegacySeller(verifiedIdentity,connectorRow.seller_account_id,previous.ebayUserId)");
 });
+
+test('first-use eBay login is fresh and links only the signed-in SWISH member',()=>{
+ const oauth=fs.readFileSync('supabase/functions/swish-ebay-oauth/index.ts','utf8');
+ expect(oauth).toContain("prompt:        'login'");
+ expect(oauth).toContain("swishMemberUserId: memberUserId");
+ expect(oauth).toContain("swishTenantId: tenantId");
+ expect(oauth).toContain("verify.userId!");
+ expect(oauth).toContain("credentials.swishTenantId!==tenantId");
+ expect(oauth).toContain(".eq('user_id',memberUserId).maybeSingle()");
+ expect(oauth).toContain("persistVerifiedMemberBinding(supabase,tenantId,memberUserId,verifiedIdentity");
+ expect(oauth).toContain(".from('swish_ebay_bindings')");
+ expect(oauth).toContain(".eq('user_id',userId)");
+ expect(oauth).toContain("bindingId,userId,tenantId,ebayUserId:identity.userId");
+ expect(oauth).toContain("existing.ebay_account_id!==identity.userId");
+ expect(oauth).toContain("if(!matchesLegacy)return htmlResponse(successPage())");
+ expect(oauth).toContain("if (body.action === 'member_binding_status')");
+ expect(oauth).toContain("verifyUserAndTenant(authHeader,tenantId,db)");
+ expect(oauth).not.toContain("memberUserId=req.headers.get('x-swish-user')");
+});
