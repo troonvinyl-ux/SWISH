@@ -36,3 +36,18 @@ test('seller verification refreshes existing consent rather than making a new OA
  expect(verify).not.toContain("start_subscriber_authorization");
  expect(verify).not.toContain("swish_ebay_bindings");
 });
+
+test('OAuth entrypoint boots against older OnSpace policy snapshots missing named legacy-seller export',()=>{
+ const source=fs.readFileSync('supabase/functions/swish-ebay-oauth/index.ts','utf8');
+ expect(source).toContain("import * as ebayAccountPolicy from '../_shared/ebayAccountPolicy.ts'");
+ expect(source).not.toContain("import { assertVerifiedLegacySeller } from '../_shared/ebayAccountPolicy.ts'");
+ expect(source).toContain("typeof ebayAccountPolicy.assertVerifiedLegacySeller === 'function'");
+ expect(source).toContain("ebayAccountPolicy.assertVerifiedLegacySeller(identity,savedSeller,savedUserId)");
+ // The compatibility path must fail closed for an unverified identity or a
+ // different linked stable account; it is never an account-switch override.
+ expect(source).toContain("if(!verifiedId||!verifiedName||verifiedId.length>256||verifiedName.length>256)");
+ expect(source).toContain("previousId&&previousId!==verifiedId");
+ expect(source).toContain("previousSeller&&previousSeller!==verifiedName&&previousSeller!==verifiedId");
+ expect(source).toContain("assertVerifiedLegacySeller(identity,connector.seller_account_id,creds.ebayUserId)");
+ expect(source).toContain("assertVerifiedLegacySeller(verifiedIdentity,connectorRow.seller_account_id,previous.ebayUserId)");
+});
