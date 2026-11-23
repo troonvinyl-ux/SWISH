@@ -134,7 +134,7 @@ serveModule(withEdgeFunctionLogging('swish-ebay-sync', async(req:Request)=>{
  if(req.method!=='POST')return json({success:false,error:'Method not allowed'},405);
  const body=await req.json().catch(()=>null);const {tenantId,nicheId,mode='full',itemIds}=body??{};
  const products=registry.products as Record<string,{specialists:string[];legacySpecialists:string[]}>;
- if(!tenantId||!products[nicheId]||!['full','data_only','refresh_token_only','exclude_policy_removed'].includes(mode))return json({success:false,error:'Valid authorized tenant and niche required'},400);
+ if(!tenantId||!products[nicheId]||!['full','data_only','refresh_token_only','exclude_policy_removed','exclude_local_legacy'].includes(mode))return json({success:false,error:'Valid authorized tenant and niche required'},400);
  const batched=body?.batch===true;const afterListingId=body?.afterListingId;const previousIssues=body?.previousIssues===true;
 // Legacy callers still get six; newer clients may request 3–10 based on actual
 // previous batch timings. Never trust unbounded batch sizes from the caller.
@@ -144,6 +144,74 @@ const batchSize=batched?(desiredSize??SYNC_BATCH_SIZE):SYNC_BATCH_SIZE;
  if(body?.previousIssues!=null&&typeof body.previousIssues!=='boolean')return json({success:false,error:'Valid batch history required'},400);
  if(afterListingId!=null&&(!batched||typeof afterListingId!=='string'||!uuid.test(afterListingId)))return json({success:false,error:'Valid sync continuation required'},400);
  if(itemIds!=null&&(!Array.isArray(itemIds)||!itemIds.length||itemIds.length>200||itemIds.some((id:unknown)=>typeof id!=='string'||!uuid.test(id))))return json({success:false,error:'Valid bounded item selection required'},400);
+
+ // A tenant owner may archive their own legacy coin out of SWISH and eBay
+ // sync without a new eBay GetItem call. This does NOT assert marketplace
+ // status or establish/change eBay account ownership. A policy-removed item
+ // may no longer be readable from eBay, so seller verification is not a
+ // prerequisite for this deliberately local-only archival operation.
+ if(mode==='exclude_local_legacy'){
+  const itemId=body?.itemId,expectedExternalId=body?.externalListingId;
+  if(nicheId!=='coins'||typeof itemId!=='string'||!uuid.test(itemId)||
+     typeof expectedExternalId!=='string'||!/^\d{6,20}$/.test(expectedExternalId))
+   return json({success:false,error:'Choose one existing coin and confirm its saved eBay item number.'},400);
+  try{
+   const bearer=req.headers.get('Authorization')?.replace(/^Bearer\s+/i,'')??'';
+   const userClient=createClient(Deno.env.get('SUPABASE_URL')??'',Deno.env.get('SUPABASE_ANON_KEY')??'',{auth:{persistSession:false}});
+   const {data:{user},error:authError}=await userClient.auth.getUser(bearer);
+   if(authError||!user)return json({success:false,error:'Sign in again before archiving a linked coin.'},401);
+   const db=adminClient();
+   const {data:membership,error:memberError}=await db.from('tenant_memberships').select('id,role,is_owner')
+    .eq('tenant_id',tenantId).eq('user_id',user.id).maybeSingle();
+   if(memberError||!membership||!(membership.is_owner===true||membership.role==='owner'||membership.role==='admin'))
+    return json({success:false,error:'The workspace owner or administrator must approve this local-only archival.'},403);
+   const product=products.coins;
+   const {data:item,error:itemError}=await db.from('items').select('*').eq('tenant_id',tenantId).eq('id',itemId)
+    .in('specialist_id',[...product.specialists,...product.legacySpecialists]).maybeSingle();
+   if(itemError||!item)return json({success:false,error:'This coin could not be verified in the selected workspace.'},404);
+   const attrs=item.attributes&&typeof item.attributes==='object'&&!Array.isArray(item.attributes)?item.attributes:{};
+   const attrId=String(attrs._ebay_item_id??attrs.ebay_item_id??'');
+   const {data:links,error:linksError}=await db.from('listings')
+    .select('id,external_listing_id,marketplace_id').eq('tenant_id',tenantId).eq('item_id',itemId);
+   if(linksError||!links)return json({success:false,error:'All linked marketplace records could not be checked. Nothing was archived.'},503);
+   const ebayLinks=links.filter((row:any)=>['ebay','ebay_gb'].includes(String(row.marketplace_id??'').toLowerCase()));
+   if(!ebayLinks.length||ebayLinks.some((row:any)=>String(row.external_listing_id??'')!==expectedExternalId)||
+      (attrId&&attrId!==expectedExternalId))
+    return json({success:false,error:'The saved eBay item numbers are missing or inconsistent. Review duplicates before archiving.'},409);
+   if(links.some((row:any)=>!['ebay','ebay_gb'].includes(String(row.marketplace_id??'').toLowerCase())))
+    return json({success:false,error:'This item has another marketplace relationship. Review it before local archival.'},409);
+   if(['sold','fulfilled','completed'].includes(String(item.status??'').toLowerCase())||
+      item.sold_at!=null||item.sold_price!=null||
+      /^[0-9]*[1-9][0-9]*$/.test(String(attrs._ebay_quantity_sold??'0')))
+    return json({success:false,error:'This coin has sale evidence and cannot be locally archived as unsold.'},409);
+   const listingIds=links.map((row:any)=>String(row.id));
+   for(const table of ['sales','orders','ebay_returns']){
+    const direct=await db.from(table).select('id').eq('tenant_id',tenantId).eq('item_id',itemId).limit(1);
+    if(direct.error)return json({success:false,error:'Sale, order or return history could not be verified. Nothing was archived.'},503);
+    if(direct.data?.length)return json({success:false,error:'A sale, order or return is linked to this coin. Nothing was archived.'},409);
+    if(table!=='ebay_returns'&&listingIds.length){
+     const byListing=await db.from(table).select('id').eq('tenant_id',tenantId).in('listing_id',listingIds).limit(1);
+     if(byListing.error)return json({success:false,error:'Listing transaction history could not be verified. Nothing was archived.'},503);
+     if(byListing.data?.length)return json({success:false,error:'A linked listing has transaction history and cannot be archived here.'},409);
+    }
+   }
+   if(attrs._swish_ebay_sync_excluded===expectedExternalId&&String(item.status).toLowerCase()==='held')
+    return json({success:true,archived:true,alreadyArchived:true,itemId,externalListingId:expectedExternalId,
+     message:'Coin is already locally archived and excluded from SWISH eBay sync.'});
+   const updated=await db.from('items').update({
+    status:'held',attributes:{...attrs,_swish_ebay_sync_excluded:expectedExternalId,
+      _swish_ebay_sync_exclusion_code:'LOCAL_OWNER_ARCHIVE',
+      _swish_ebay_sync_excluded_at:new Date().toISOString()}
+   }).eq('tenant_id',tenantId).eq('id',itemId).eq('updated_at',item.updated_at).select('id,status,attributes').maybeSingle();
+   if(updated.error||!updated.data||
+      updated.data.status!=='held'||updated.data.attributes?._swish_ebay_sync_excluded!==expectedExternalId)
+    return json({success:false,error:'SWISH did not confirm the local archive. Reload before repeating; no eBay action was sent.'},409);
+   return json({success:true,archived:true,itemId,externalListingId:expectedExternalId,
+    message:'Coin archived locally and excluded from future SWISH eBay sync. Its old listing and seller binding remain intact; eBay status was not assumed.'});
+  }catch{
+   return json({success:false,error:'Local archive could not be verified. No eBay command was sent.'},503);
+  }
+ }
 
  // Explicit local-only quarantine for an item eBay has actually removed for
  // policy error 21920397. Never ends a provider listing, transfers a seller
@@ -228,7 +296,7 @@ const batchSize=batched?(desiredSize??SYNC_BATCH_SIZE):SYNC_BATCH_SIZE;
    const links=await query.range(offset,offset+(batched?batchSize:199)).abortSignal(AbortSignal.timeout(10000));
    if(links.error)throw new Error('SWISH scoped listings could not be loaded');
    const rows=links.data??[];
-   if(batched){const page=rows.slice(0,batchSize);scanned+=page.length;listings.push(...page.filter(row=>!excludedFromSync(row)));nextAfterListingId=rows.length>batchSize?String(page[page.length-1].id):null;break;}
+   if(batched){const page=rows.slice(0,batchSize);scanned+=page.length;listings.push(...page.filter(row=>!excludedFromSync(row)));nextAfterListingId=page.length===batchSize?String(page[page.length-1].id):null;break;}
    scanned+=rows.length;listings.push(...rows.filter(row=>!excludedFromSync(row)));if(rows.length<200)break;
    if(offset===4800)throw new Error('Sync selection exceeds the safe bound; select fewer items.');
   }
