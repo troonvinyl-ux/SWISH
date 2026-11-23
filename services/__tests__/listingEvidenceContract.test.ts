@@ -51,6 +51,8 @@ test('native capture and saved listing route retain physical contents disclosure
  expect(music).toContain('_music_contents_disclosure');
  expect(quick).toContain('protectMusicListingCopy');
  expect(quick).toContain('No complete-set tracklisting');
+ expect(quick).toContain("contents.status==='incomplete'||contents.status==='unknown'");
+ expect(quick).toContain('No automatic whole-release price for incomplete');
  expect(quick).toContain('submitListingToMarketplace');
  expect(quick).toContain('confirmQuickLive');
  expect(quick).toContain('mode===\'draft\'');
