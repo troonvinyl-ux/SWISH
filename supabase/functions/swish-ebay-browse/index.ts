@@ -412,8 +412,8 @@ async function repairSellerImportBindings(args:{
       return json({success:false,error:'eBay returned an empty seller page before pagination completed. No bindings changed.'},503);
   }
   if(ids.length>100)return json({success:false,error:'Seller page exceeded the safe 100-listing batch.'},409);
-  let result:{updated:number;alreadyLinked:number;unlinked:number;conflicts:number;conflictEbayIds:string[]}={
-   updated:0,alreadyLinked:0,unlinked:0,conflicts:0,conflictEbayIds:[],
+  let result:{updated:number;alreadyLinked:number;unlinked:number;otherNiche:number;conflicts:number;conflictEbayIds:string[]}={
+   updated:0,alreadyLinked:0,unlinked:0,otherNiche:0,conflicts:0,conflictEbayIds:[],
   };
   if(ids.length){
    const save=await adminClient().rpc('swish_repair_verified_ebay_import',{
@@ -427,7 +427,7 @@ async function repairSellerImportBindings(args:{
    nextPage:single||page>=totalPages?null:page+1,
    verifiedSeller:verified.username,observed:ids.length,
    updated:Number(result.updated)||0,alreadyLinked:Number(result.alreadyLinked)||0,
-   unlinked:Number(result.unlinked)||0,conflicts:Number(result.conflicts)||0,
+   unlinked:Number(result.unlinked)||0,otherNiche:Number(result.otherNiche)||0,conflicts:Number(result.conflicts)||0,
    conflictEbayIds:Array.isArray(result.conflictEbayIds)?result.conflictEbayIds:[],
    message:'Verified eBay seller listings were matched to existing SWISH IDs; listing status, price and photos were not changed.'});
  }catch(cause){
