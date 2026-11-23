@@ -388,15 +388,23 @@ async function repairSellerImportBindings(args:{
     ids=[itemId];
   }else{
     const pagesText=xml.match(/<TotalNumberOfPages>(\d+)<\/TotalNumberOfPages>/)?.[1];
-    if(pagesText==null||!Number.isSafeInteger(Number(pagesText)))
-     return json({success:false,error:'eBay seller pagination was not confirmed; no records changed.'},503);
-    totalPages=Number(pagesText);
+    const sectionBody=xml.match(new RegExp('<'+section+'(?:\\s[^>]*)?>([\\s\\S]*?)<\\/'+section+'>'))?.[1]??'';
+    const sectionCountText=sectionBody.match(/<TotalNumberOfEntries>(\d+)<\/TotalNumberOfEntries>/)?.[1];
+    const reportedCount=sectionCountText==null?NaN:Number(sectionCountText);
+    // Some zero-entry Sold/Unsold responses omit pagination entirely.
+    // Absence is valid ONLY when the named section explicitly reports zero.
+    if(pagesText==null&&reportedCount!==0)return json({success:false,error:'eBay seller pagination was not confirmed; no records changed.'},503);
+    totalPages=pagesText==null?0:Number(pagesText);
+    if(!Number.isSafeInteger(totalPages)||totalPages<0)
+     return json({success:false,error:'Invalid eBay seller page count; no records changed.'},503);
     if(totalPages>50)return json({success:false,error:'This eBay section exceeds the 50-page safety limit. Existing records remain untouched; use a bounded seller date range before repair.',section,page,totalPages},409);
     const itemMatches=[...xml.matchAll(/<Item(?:\s[^>]*)?>([\s\S]*?)<\/Item>/g)];
-    ids=[...new Set(itemMatches.map(m=>m[1].match(/<ItemID>(\d+)<\/ItemID>/)?.[1]??'').filter(id=>/^\d{6,20}$/.test(id)))];
-    if(page<=totalPages && itemMatches.length>0 && ids.length!==itemMatches.length)
-      return json({success:false,error:'Some eBay seller item identities were incomplete; this page was not applied.'},503);
-    const reportedCount=Number(xml.match(/<TotalNumberOfEntries>(\d+)<\/TotalNumberOfEntries>/)?.[1]??NaN);
+    const parsedIds=itemMatches.map(m=>m[1].match(/<ItemID>(\d+)<\/ItemID>/)?.[1]??'');
+    // SoldList can contain multiple transactions for one eBay item ID.
+    // Duplicate IDs are safe to coalesce, but missing IDs are not.
+    if(parsedIds.some(id=>!/^\d{6,20}$/.test(id)))
+     return json({success:false,error:'Some eBay seller item identities were incomplete; this page was not applied.'},503);
+    ids=[...new Set(parsedIds)];
     if(page<=totalPages && totalPages>0 && ids.length===0 &&
        (!Number.isSafeInteger(reportedCount)||reportedCount>0))
       return json({success:false,error:'eBay returned an empty seller page before pagination completed. No bindings changed.'},503);
