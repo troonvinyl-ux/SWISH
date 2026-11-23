@@ -50,7 +50,9 @@ test('worker enforces bounded requested batch sizes and protects same-item readb
  const helper=fs.readFileSync('supabase/functions/_shared/syncConcurrency.ts','utf8');
  expect(worker).toContain('desiredSize<3||desiredSize>10');
  expect(worker).toContain('rows.slice(0,batchSize)');
- expect(worker).toContain('nextAfterListingId=rows.length>batchSize');
+ // A full bounded page must always expose a continuation; otherwise a
+ // caller could silently skip the next seller page without over-fetching.
+ expect(worker).toContain('nextAfterListingId=page.length===batchSize?String(page[page.length-1].id):null');
  expect(worker).toContain('mapDistinctSyncItems(eligible');
  expect(worker).toContain('typeof syncConcurrency.mapDistinctSyncItems');
  expect(worker).toContain('return reconcileOne(row,previous)');
