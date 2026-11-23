@@ -234,20 +234,47 @@ async function handleVerifyConnectedIdentity(
  let creds:Record<string,unknown>;
  try{creds=await decryptCredentials(connector.credential_ref);}
  catch{return jsonResponse({error:'Stored eBay authorization could not be verified securely.'},409);}
- const accessToken=typeof creds.accessToken==='string'?creds.accessToken:'';
- const expiry=Date.parse(String(creds.expiresAt??connector.access_token_expires_at??''));
- if(!accessToken||!Number.isFinite(expiry)||expiry<=Date.now()+30000)
-  return jsonResponse({error:'The eBay token needs a verified refresh before seller identity can be checked. Do not reconnect solely for this label.'},409);
+ // The native app and web use the same legacy encrypted connector for
+ // existing seller consent. Refresh that consent server-side rather than
+ // forcing a second eBay login just to recover an unrecorded seller name.
+ let accessToken=typeof creds.accessToken==='string'?creds.accessToken:'';
+ let expiresAt=String(creds.expiresAt??connector.access_token_expires_at??'');
+ let refreshed=false;
+ if(!accessToken||!Number.isFinite(Date.parse(expiresAt))||Date.parse(expiresAt)<=Date.now()+300000){
+  const refreshToken=typeof creds.refreshToken==='string'?creds.refreshToken:'';
+  const clientId=typeof creds.clientId==='string'?creds.clientId:'';
+  const clientSecret=typeof creds.clientSecret==='string'?creds.clientSecret:'';
+  if(!refreshToken||!clientId||!clientSecret)
+   return jsonResponse({error:'This eBay connection has no valid refresh consent. Re-authorise the SAME seller account to verify identity; existing records are retained.'},409);
+  let tokenResult:Response;
+  try{
+   tokenResult=await fetch(EBAY_TOKEN_URL,{
+    method:'POST',
+    headers:{Authorization:`Basic ${btoa(`${clientId}:${clientSecret}`)}`,'Content-Type':'application/x-www-form-urlencoded'},
+    body:new URLSearchParams({grant_type:'refresh_token',refresh_token:refreshToken}).toString(),
+    signal:AbortSignal.timeout(12000),
+   });
+  }catch{return jsonResponse({error:'eBay token refresh could not be reached. Existing authorisation was preserved; try verification again later.'},503);}
+  const tokenPayload=await tokenResult.json().catch(()=>({}));
+  if(!tokenResult.ok||typeof tokenPayload.access_token!=='string'||!tokenPayload.access_token){
+   return jsonResponse({error:tokenPayload.error==='invalid_grant'
+    ? 'Existing eBay consent has expired or been revoked. Re-authorise the SAME seller account.'
+    : 'eBay did not confirm a token refresh. Existing authorisation was preserved.'},tokenPayload.error==='invalid_grant'?401:503);
+  }
+  accessToken=tokenPayload.access_token;
+  expiresAt=new Date(Date.now()+Math.max(1,Number(tokenPayload.expires_in)||7200)*1000).toISOString();
+  refreshed=true;
+ }
  let identity:{userId:string;username:string};
  try{
   identity=await readEbayIdentity(accessToken);
   assertVerifiedLegacySeller(identity,connector.seller_account_id,creds.ebayUserId);
- }catch{return jsonResponse({error:'Verified eBay seller identity could not be confirmed or does not match the account already linked.'},409);}
- if(connector.seller_account_id===identity.username&&creds.ebayUserId===identity.userId)
+ }catch{return jsonResponse({error:'eBay could not verify this seller identity, identity access is missing, or the connected account is different. No account was changed.'},409);}
+ if(!refreshed&&connector.seller_account_id===identity.username&&creds.ebayUserId===identity.userId)
   return jsonResponse({success:true,sellerAccountId:identity.username,verified:true,persisted:true});
- const encrypted=await encryptCredentials({...creds,ebayUserId:identity.userId,sellerAccountId:identity.username});
+ const encrypted=await encryptCredentials({...creds,accessToken,expiresAt,ebayUserId:identity.userId,sellerAccountId:identity.username});
  let update=db.from('marketplace_connectors')
-  .update({seller_account_id:identity.username,credential_ref:encrypted,updated_at:new Date().toISOString()})
+  .update({seller_account_id:identity.username,credential_ref:encrypted,...(refreshed?{access_token_expires_at:expiresAt}:{}),updated_at:new Date().toISOString()})
   .eq('id',connector.id).eq('tenant_id',tenantId).eq('marketplace_id','ebay')
   .eq('status','connected').eq('credential_ref',connector.credential_ref);
  update=connector.seller_account_id==null?update.is('seller_account_id',null):update.eq('seller_account_id',connector.seller_account_id);
