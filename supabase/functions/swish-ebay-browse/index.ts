@@ -12,6 +12,7 @@ import { parseEbayListingStatus } from '../_shared/listingStatus.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 import { prepareMemberBinding, readEbayIdentity } from '../_shared/ebayAccountEngine.ts';
+import { boundedSellerRepairChunks, SellerRepairPageError, verifiedSellerSectionPage, type VerifiedSellerSection } from '../_shared/verifiedSellerRepairPage.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -366,9 +367,13 @@ async function repairSellerImportBindings(args:{
   if(verified.userId!==member.ebay_account_id ||
      verified.username.toLowerCase()!==member.seller_account_id.toLowerCase())
    return json({success:false,error:'eBay seller identity differs from the verified SWISH member. Nothing changed.'},409);
+  // ReturnAll can include additional seller lists. Explicitly exclude them,
+  // and independently parse only the requested section from the response.
+  const excludedSections=sections.filter(name=>name!==section)
+   .map(name=>'<'+name+'><Include>false</Include></'+name+'>').join('');
   const xmlRequest=single
    ? '<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials><eBayAuthToken>'+token+'</eBayAuthToken></RequesterCredentials><ItemID>'+args.externalId+'</ItemID><DetailLevel>ReturnAll</DetailLevel></GetItemRequest>'
-   : '<GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials><eBayAuthToken>'+token+'</eBayAuthToken></RequesterCredentials><'+section+'><Include>true</Include><Pagination><EntriesPerPage>100</EntriesPerPage><PageNumber>'+page+'</PageNumber></Pagination></'+section+'><DetailLevel>ReturnAll</DetailLevel></GetMyeBaySellingRequest>';
+   : '<GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials><eBayAuthToken>'+token+'</eBayAuthToken></RequesterCredentials><'+section+'><Include>true</Include><Pagination><EntriesPerPage>100</EntriesPerPage><PageNumber>'+page+'</PageNumber></Pagination></'+section+'>'+excludedSections+'<DetailLevel>ReturnAll</DetailLevel></GetMyeBaySellingRequest>';
   const method=single?'GetItem':'GetMyeBaySelling';
   const response=await fetch(TRADING_API,{method:'POST',headers:{
    'X-EBAY-API-SITEID':SITE_ID,'X-EBAY-API-COMPATIBILITY-LEVEL':'967',
@@ -381,47 +386,53 @@ async function repairSellerImportBindings(args:{
   let totalPages=1;
   let ids:string[]=[];
   if(single){
-    const itemId=xml.match(/<ItemID>(\d+)<\/ItemID>/)?.[1]??'';
-    const seller=xml.match(/<Seller>[\s\S]*?<UserID>([^<]+)<\/UserID>[\s\S]*?<\/Seller>/)?.[1]??'';
+    const itemId=xml.match(/<ItemID>(\\d+)<\\/ItemID>/)?.[1]??'';
+    const seller=xml.match(/<Seller>[\\s\\S]*?<UserID>([^<]+)<\\/UserID>[\\s\\S]*?<\\/Seller>/)?.[1]??'';
     if(itemId!==args.externalId || seller.trim().toLowerCase()!==verified.username.toLowerCase())
      return json({success:false,error:'The listing ID or seller did not match the verified eBay account. No SWISH binding was changed.'},409);
     ids=[itemId];
   }else{
-    const pagesText=xml.match(/<TotalNumberOfPages>(\d+)<\/TotalNumberOfPages>/)?.[1];
-    const sectionBody=xml.match(new RegExp('<'+section+'(?:\\s[^>]*)?>([\\s\\S]*?)<\\/'+section+'>'))?.[1]??'';
-    const sectionCountText=sectionBody.match(/<TotalNumberOfEntries>(\d+)<\/TotalNumberOfEntries>/)?.[1];
-    const reportedCount=sectionCountText==null?NaN:Number(sectionCountText);
-    const explicitlyEmptySection=new RegExp('<'+section+'\\s*/>').test(xml);
-    // Some zero-entry Sold/Unsold responses omit pagination entirely or
-    // return a self-closing list element. Both are explicit zero evidence.
-    if(pagesText==null&&reportedCount!==0&&!explicitlyEmptySection)
-      return json({success:false,error:'eBay seller pagination was not confirmed; no records changed.'},503);
-    totalPages=pagesText==null?0:Number(pagesText);
-    if(!Number.isSafeInteger(totalPages)||totalPages<0)
-     return json({success:false,error:'Invalid eBay seller page count; no records changed.'},503);
-    if(totalPages>50)return json({success:false,error:'This eBay section exceeds the 50-page safety limit. Existing records remain untouched; use a bounded seller date range before repair.',section,page,totalPages},409);
-    const itemMatches=[...xml.matchAll(/<Item(?:\s[^>]*)?>([\s\S]*?)<\/Item>/g)];
-    const parsedIds=itemMatches.map(m=>m[1].match(/<ItemID>(\d+)<\/ItemID>/)?.[1]??'');
-    // SoldList can contain multiple transactions for one eBay item ID.
-    // Duplicate IDs are safe to coalesce, but missing IDs are not.
-    if(parsedIds.some(id=>!/^\d{6,20}$/.test(id)))
-     return json({success:false,error:'Some eBay seller item identities were incomplete; this page was not applied.'},503);
-    ids=[...new Set(parsedIds)];
-    if(page<=totalPages && totalPages>0 && ids.length===0 &&
-       (!Number.isSafeInteger(reportedCount)||reportedCount>0))
-      return json({success:false,error:'eBay returned an empty seller page before pagination completed. No bindings changed.'},503);
+    try{
+      // Never count <Item> tags from unrelated GetMyeBaySelling sections.
+      const requested=verifiedSellerSectionPage(xml,section as VerifiedSellerSection,page);
+      ids=requested.ids;
+      totalPages=requested.totalPages;
+    }catch(error){
+      if(error instanceof SellerRepairPageError)
+       return json({success:false,error:error.message,section,page},error.statusCode);
+      throw error;
+    }
   }
-  if(ids.length>100)return json({success:false,error:'Seller page exceeded the safe 100-listing batch.'},409);
   let result:{updated:number;alreadyLinked:number;unlinked:number;otherNiche:number;conflicts:number;conflictEbayIds:string[]}={
    updated:0,alreadyLinked:0,unlinked:0,otherNiche:0,conflicts:0,conflictEbayIds:[],
   };
-  if(ids.length){
+  // Database RPC accepts at most 100 identities. Do NOT silently truncate a
+  // larger verified seller page; process each bounded chunk in original order.
+  const groups=boundedSellerRepairChunks(ids);
+  for(const batchIds of groups){
    const save=await adminClient().rpc('swish_repair_verified_ebay_import',{
     p_tenant_id:tenantId,p_user_id:userId,p_binding_id:member.id,
-    p_niche_id:nicheId,p_external_ids:ids,
+    p_niche_id:nicheId,p_external_ids:batchIds,
    });
-   if(save.error||!save.data)return json({success:false,error:'The verified re-import database repair is unavailable or failed. Deploy its SWISH migration before retrying; no other seller records were transferred.'},503);
-   result=save.data;
+   if(save.error||!save.data)return json({success:false,
+    error:'The verified re-import database repair is unavailable or failed. Completed earlier batches remain saved; deploy the SWISH migration or retry after checking backend health.',
+    section,page,partial:result.updated+result.alreadyLinked+result.unlinked+result.otherNiche+result.conflicts>0,
+    updated:result.updated,alreadyLinked:result.alreadyLinked,unlinked:result.unlinked,
+    otherNiche:result.otherNiche,conflicts:result.conflicts},503);
+   const done=save.data as Record<string,unknown>;
+   const fields=['updated','alreadyLinked','unlinked','otherNiche','conflicts'] as const;
+   const numbers=fields.map(key=>Number(done[key]));
+   if(numbers.some(n=>!Number.isSafeInteger(n)||n<0)||
+      Number(done.processed)!==batchIds.length||
+      numbers.reduce((sum,n)=>sum+n,0)!==batchIds.length||
+      String(done.sellerAccountId??'').toLowerCase()!==verified.username.toLowerCase())
+    return json({success:false,
+      error:'Seller repair database readback could not be verified. Any earlier confirmed batches remain saved; do not change the linked seller.',
+      section,page,partial:true},503);
+   result.updated+=numbers[0];result.alreadyLinked+=numbers[1];
+   result.unlinked+=numbers[2];result.otherNiche+=numbers[3];result.conflicts+=numbers[4];
+   if(Array.isArray(done.conflictEbayIds))
+    result.conflictEbayIds.push(...done.conflictEbayIds.filter((id:unknown):id is string=>typeof id==='string'));
   }
   return json({success:true,section:single?'GetItem':section,page:single?1:page,totalPages,
    nextPage:single||page>=totalPages?null:page+1,
