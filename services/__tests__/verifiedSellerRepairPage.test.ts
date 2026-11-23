@@ -76,7 +76,8 @@ test('browse repair only uses verified seller pages and existing service-role ow
   expect(scoped).toContain('const requested=verifiedSellerSectionPage(xml,section as VerifiedSellerSection,page)');
   expect(scoped).toContain('const groups=boundedSellerRepairChunks(ids)');
   expect(scoped).toContain("p_external_ids:batchIds");
-  expect(scoped).toContain('excludedSections');
+  expect(scoped).toContain('requestedSections=sections.map(name=>');
+  expect(scoped).toContain("name===section?'true':'false'");
   expect(scoped).toContain('Number(done.processed)!==batchIds.length');
   expect(scoped).toContain(String.raw`xml.match(/<ItemID>(\d+)<\/ItemID>/)`);
   expect(scoped).not.toMatch(/xml\.matchAll\(\/<Item/);
