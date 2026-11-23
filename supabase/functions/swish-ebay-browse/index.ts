@@ -386,8 +386,8 @@ async function repairSellerImportBindings(args:{
   let totalPages=1;
   let ids:string[]=[];
   if(single){
-    const itemId=xml.match(/<ItemID>(\\d+)<\\/ItemID>/)?.[1]??'';
-    const seller=xml.match(/<Seller>[\\s\\S]*?<UserID>([^<]+)<\\/UserID>[\\s\\S]*?<\\/Seller>/)?.[1]??'';
+    const itemId=xml.match(/<ItemID>(\d+)<\/ItemID>/)?.[1]??'';
+    const seller=xml.match(/<Seller>[\s\S]*?<UserID>([^<]+)<\/UserID>[\s\S]*?<\/Seller>/)?.[1]??'';
     if(itemId!==args.externalId || seller.trim().toLowerCase()!==verified.username.toLowerCase())
      return json({success:false,error:'The listing ID or seller did not match the verified eBay account. No SWISH binding was changed.'},409);
     ids=[itemId];
