@@ -112,7 +112,8 @@ test('legacy coin local archive is owner-controlled, does not call eBay and pres
  expect(archive).toContain("membership.role==='owner'||membership.role==='admin'");
  expect(archive).toContain(".eq('tenant_id',tenantId).eq('id',itemId)");
  expect(archive).toContain("String(row.external_listing_id??'')!==expectedExternalId");
- expect(archive).toContain("item.sold_at!=null||item.sold_price!=null");
+ // A zero-valued saved sold_price is not itself proof of a sale.
+ expect(archive).toContain("item.sold_at!=null||(item.sold_price!=null&&Number(item.sold_price)>0)");
  expect(archive).toContain("for(const table of ['sales','orders','ebay_returns'])");
  expect(archive).toContain("table!=='ebay_returns'&&listingIds.length");
  expect(archive).toContain("status:'held'");
