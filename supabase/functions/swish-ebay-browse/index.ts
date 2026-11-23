@@ -367,13 +367,16 @@ async function repairSellerImportBindings(args:{
   if(verified.userId!==member.ebay_account_id ||
      verified.username.toLowerCase()!==member.seller_account_id.toLowerCase())
    return json({success:false,error:'eBay seller identity differs from the verified SWISH member. Nothing changed.'},409);
-  // ReturnAll can include additional seller lists. Explicitly exclude them,
-  // and independently parse only the requested section from the response.
-  const excludedSections=sections.filter(name=>name!==section)
-   .map(name=>'<'+name+'><Include>false</Include></'+name+'>').join('');
+  // ReturnAll can include other seller lists. Explicitly disable those,
+  // retaining the schema's ActiveList, SoldList, UnsoldList ordering.
+  // Independently parse only the requested section from the response.
+  const requestedSections=sections.map(name=>
+   '<'+name+'><Include>'+(name===section?'true':'false')+'</Include>'+
+   (name===section?'<Pagination><EntriesPerPage>100</EntriesPerPage><PageNumber>'+page+'</PageNumber></Pagination>':'')+
+   '</'+name+'>').join('');
   const xmlRequest=single
    ? '<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials><eBayAuthToken>'+token+'</eBayAuthToken></RequesterCredentials><ItemID>'+args.externalId+'</ItemID><DetailLevel>ReturnAll</DetailLevel></GetItemRequest>'
-   : '<GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials><eBayAuthToken>'+token+'</eBayAuthToken></RequesterCredentials><'+section+'><Include>true</Include><Pagination><EntriesPerPage>100</EntriesPerPage><PageNumber>'+page+'</PageNumber></Pagination></'+section+'>'+excludedSections+'<DetailLevel>ReturnAll</DetailLevel></GetMyeBaySellingRequest>';
+   : '<GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials><eBayAuthToken>'+token+'</eBayAuthToken></RequesterCredentials>'+requestedSections+'<DetailLevel>ReturnAll</DetailLevel></GetMyeBaySellingRequest>';
   const method=single?'GetItem':'GetMyeBaySelling';
   const response=await fetch(TRADING_API,{method:'POST',headers:{
    'X-EBAY-API-SITEID':SITE_ID,'X-EBAY-API-COMPATIBILITY-LEVEL':'967',
