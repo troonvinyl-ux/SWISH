@@ -11,6 +11,7 @@ import { nicheBarcodeAllowed } from '../_shared/nichePolicy.ts';
 import { parseEbayListingStatus } from '../_shared/listingStatus.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
+import { prepareMemberBinding, readEbayIdentity } from '../_shared/ebayAccountEngine.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -336,6 +337,93 @@ function parseItemXml(itemXml: string, ebayStatus: string): Record<string, any> 
   };
 }
 
+/**
+ * This is the EXISTING eBay Browse worker, not a second import engine.
+ * Repair pages are read with the signed-in member's verified eBay token.
+ * The browser supplies only the section/page; never seller identity or IDs
+ * that will be trusted as proof of ownership.
+ */
+async function repairSellerImportBindings(args:{
+ tenantId:string;userId:string;nicheId:string;section:unknown;page:unknown;externalId:unknown;
+}):Promise<Response>{
+ const {tenantId,userId,nicheId}=args;
+ if(nicheId!=='coins')return json({success:false,error:'Open the Coins specialist to repair coin seller bindings.'},403);
+ const sections=['ActiveList','SoldList','UnsoldList'] as const;
+ const section=String(args.section??'');
+ const page=Number(args.page);
+ const single=args.externalId!=null;
+ if((!single&&(!sections.includes(section as typeof sections[number])||!Number.isSafeInteger(page)||page<1||page>50)) ||
+    (single&&(typeof args.externalId!=='string'||!/^\d{6,20}$/.test(args.externalId))))
+  return json({success:false,error:'Choose a valid verified seller import page or exact eBay listing ID.'},400);
+ try{
+  const member=await prepareMemberBinding(userId,tenantId);
+  if(!member||member.status!=='connected'||!member.credential_ref)
+   return json({success:false,error:'Connect your own verified eBay account first. Historical tenant connections are not inherited.'},403);
+  const creds=await decryptCredentials(member.credential_ref);
+  const token=String(creds.accessToken??''),appId=String(creds.clientId??'');
+  if(!token||!appId)return json({success:false,error:'Verified eBay member token unavailable. Reconnect the SAME seller account.'},401);
+  const verified=await readEbayIdentity(token);
+  if(verified.userId!==member.ebay_account_id ||
+     verified.username.toLowerCase()!==member.seller_account_id.toLowerCase())
+   return json({success:false,error:'eBay seller identity differs from the verified SWISH member. Nothing changed.'},409);
+  const xmlRequest=single
+   ? '<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials><eBayAuthToken>'+token+'</eBayAuthToken></RequesterCredentials><ItemID>'+args.externalId+'</ItemID><DetailLevel>ReturnAll</DetailLevel></GetItemRequest>'
+   : '<GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials><eBayAuthToken>'+token+'</eBayAuthToken></RequesterCredentials><'+section+'><Include>true</Include><Pagination><EntriesPerPage>100</EntriesPerPage><PageNumber>'+page+'</PageNumber></Pagination></'+section+'><DetailLevel>ReturnAll</DetailLevel></GetMyeBaySellingRequest>';
+  const method=single?'GetItem':'GetMyeBaySelling';
+  const response=await fetch(TRADING_API,{method:'POST',headers:{
+   'X-EBAY-API-SITEID':SITE_ID,'X-EBAY-API-COMPATIBILITY-LEVEL':'967',
+   'X-EBAY-API-CALL-NAME':method,'X-EBAY-API-APP-NAME':appId,'Content-Type':'text/xml',
+  },body:xmlRequest,signal:AbortSignal.timeout(20000)});
+  const xml=await response.text();
+  const ack=xml.match(/<Ack>([^<]+)<\/Ack>/)?.[1];
+  if(!response.ok||!['Success','Warning'].includes(String(ack)))
+   return json({success:false,error:'eBay did not confirm the verified seller listing page. No binding changes were made.'},503);
+  let totalPages=1;
+  let ids:string[]=[];
+  if(single){
+    const itemId=xml.match(/<ItemID>(\d+)<\/ItemID>/)?.[1]??'';
+    const seller=xml.match(/<Seller>[\s\S]*?<UserID>([^<]+)<\/UserID>[\s\S]*?<\/Seller>/)?.[1]??'';
+    if(itemId!==args.externalId || seller.trim().toLowerCase()!==verified.username.toLowerCase())
+     return json({success:false,error:'The listing ID or seller did not match the verified eBay account. No SWISH binding was changed.'},409);
+    ids=[itemId];
+  }else{
+    const pagesText=xml.match(/<TotalNumberOfPages>(\d+)<\/TotalNumberOfPages>/)?.[1];
+    if(pagesText==null||!Number.isSafeInteger(Number(pagesText)))
+     return json({success:false,error:'eBay seller pagination was not confirmed; no records changed.'},503);
+    totalPages=Number(pagesText);
+    if(totalPages>50)return json({success:false,error:'This eBay section exceeds the 50-page safety limit. Existing records remain untouched; use a bounded seller date range before repair.',section,page,totalPages},409);
+    const itemMatches=[...xml.matchAll(/<Item(?:\s[^>]*)?>([\s\S]*?)<\/Item>/g)];
+    ids=[...new Set(itemMatches.map(m=>m[1].match(/<ItemID>(\d+)<\/ItemID>/)?.[1]??'').filter(id=>/^\d{6,20}$/.test(id)))];
+    if(page<=totalPages && itemMatches.length>0 && ids.length!==itemMatches.length)
+      return json({success:false,error:'Some eBay seller item identities were incomplete; this page was not applied.'},503);
+    if(page<=totalPages && totalPages>0 && ids.length===0)
+      return json({success:false,error:'eBay returned an empty seller page before pagination completed. No bindings changed.'},503);
+  }
+  if(ids.length>100)return json({success:false,error:'Seller page exceeded the safe 100-listing batch.'},409);
+  let result:{updated:number;alreadyLinked:number;unlinked:number;conflicts:number;conflictEbayIds:string[]}={
+   updated:0,alreadyLinked:0,unlinked:0,conflicts:0,conflictEbayIds:[],
+  };
+  if(ids.length){
+   const save=await adminClient().rpc('swish_repair_verified_ebay_import',{
+    p_tenant_id:tenantId,p_user_id:userId,p_binding_id:member.id,
+    p_niche_id:nicheId,p_external_ids:ids,
+   });
+   if(save.error||!save.data)return json({success:false,error:'The verified re-import database repair is unavailable or failed. Deploy its SWISH migration before retrying; no other seller records were transferred.'},503);
+   result=save.data;
+  }
+  return json({success:true,section:single?'GetItem':section,page:single?1:page,totalPages,
+   nextPage:single||page>=totalPages?null:page+1,
+   verifiedSeller:verified.username,observed:ids.length,
+   updated:Number(result.updated)||0,alreadyLinked:Number(result.alreadyLinked)||0,
+   unlinked:Number(result.unlinked)||0,conflicts:Number(result.conflicts)||0,
+   conflictEbayIds:Array.isArray(result.conflictEbayIds)?result.conflictEbayIds:[],
+   message:'Verified eBay seller listings were matched to existing SWISH IDs; listing status, price and photos were not changed.'});
+ }catch(cause){
+  console.error('[eBay verified re-import] Failed without disclosing token or listing payload',cause instanceof Error?cause.name:'Error');
+  return json({success:false,error:'Verified seller re-import could not complete this page. Earlier confirmed pages remain saved; refresh your eBay account connection or try again.'},503);
+ }
+}
+
 serveModule(withEdgeFunctionLogging('swish-ebay-browse', async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
@@ -359,6 +447,7 @@ serveModule(withEdgeFunctionLogging('swish-ebay-browse', async (req: Request) =>
   if (!authToken || authToken === Deno.env.get('SUPABASE_ANON_KEY')) {
     return json({ error: 'Authentication required. Please sign in to SWISH.' }, 401);
   }
+  let authenticatedUserId = '';
   try {
     const userClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -369,6 +458,7 @@ serveModule(withEdgeFunctionLogging('swish-ebay-browse', async (req: Request) =>
     if (uErr || !user) {
       return json({ error: 'Invalid or expired authentication token. Please sign in again.' }, 401);
     }
+    authenticatedUserId=user.id;
     const { data: member } = await supabase.from('tenant_memberships').select('id').eq('tenant_id', tenantId).eq('user_id', user.id).maybeSingle();
     if (!member) {
       console.warn(`[SWISH Security] User ${user.id} attempted to access tenant ${tenantId} — not a member`);
@@ -389,6 +479,15 @@ serveModule(withEdgeFunctionLogging('swish-ebay-browse', async (req: Request) =>
       apiKey: Deno.env.get('ONSPACE_AI_API_KEY'),
       baseUrl: Deno.env.get('ONSPACE_AI_BASE_URL'),
     }));
+  }
+
+  // Explicit re-import of verified seller listing identities, not an eBay
+  // End/List operation and never a copy of a legacy tenant connector.
+  if(route==='repair_seller_links'){
+   return repairSellerImportBindings({
+    tenantId,userId:authenticatedUserId,nicheId:String(body.nicheId??''),
+    section:body.section,page:body.page,externalId:body.externalListingId,
+   });
   }
 
   // ── Get connector credentials ─────────────────────────────────────────────
