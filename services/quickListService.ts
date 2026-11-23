@@ -100,8 +100,11 @@ export async function prepareQuickDraft(tenantId:string,nicheId:QuickListNiche,i
  // A category lookup failure must not leave an apparently-listable draft with
  // no eBay leaf category. The caller can retry the same saved inventory item.
  if(requirements.error||!requirements.categoryId)throw new Error(requirements.error??'A verified eBay category is required before creating a draft.');
- const market=research.error?null:research.result,evidencePrice=automaticListingPrice(market);
+ const market=research.error?null:research.result;
  const contents=nicheId==='tunes_flip'?musicContentsEvidence(result.attributes.expected_disc_count,result.attributes.observed_disc_count,String(result.attributes.format??'')):null;
+ // A whole-release valuation is not price evidence for an incomplete or
+ // physically uncounted set. Preserve research internally but do not autofill.
+ const evidencePrice=contents && (contents.status==='incomplete'||contents.status==='unknown')?0:automaticListingPrice(market);
  // A complete Discogs tracklist is not proof that the seller has every record.
  // For an incomplete set, replace unverified whole-release copy before it can
  // become a canonical draft or enter the existing eBay publication pipeline.
@@ -122,7 +125,7 @@ export async function prepareQuickDraft(tenantId:string,nicheId:QuickListNiche,i
  const profile=getSpecialistProfile(nicheId);
  const evidence=Array.isArray(result.attributes._quick_attribute_sources)?result.attributes._quick_attribute_sources as QuickAttributeEvidence[]:[];
  const specificEvidence=specifics.map(row=>{const descriptor=profile?.fields.find(field=>field.specific===row.name);const claims=evidence.filter(entry=>(entry.key===row.name||entry.key===descriptor?.key)&&entry.value===row.value&&entry.accepted);return {key:row.name,value:row.value,sources:[...new Set(claims.flatMap(entry=>entry.sources))],accepted:claims.length>0,note:claims.map(entry=>entry.note).join(' ')};});
- return {listing:saved.listing,generated,requirements,market,specifics,photos:preferredListingPhotos(canonical.item.media,canonical.item.attributes),itemId,quantity,specificEvidence,warnings:[...(requirements.error?[requirements.error]:[]),...(research.error?['Market value unavailable. Enter a price or save for later.']:[])]};
+ return {listing:saved.listing,generated,requirements,market,specifics,photos:preferredListingPhotos(canonical.item.media,canonical.item.attributes),itemId,quantity,specificEvidence,warnings:[...(requirements.error?[requirements.error]:[]),...(research.error?['Market value unavailable. Enter a price or save for later.']:[]),...(contents && (contents.status==='incomplete'||contents.status==='unknown')?['No automatic whole-release price for incomplete or unverified physical contents; enter a supported manual price.']:[])]};
 }
 export interface QuickReviewInput {title:string;description:string;price:string;conditionId:string;conditionNotes:string;specifics:Array<{name:string;value:string}>;reviewedResult?:AIIdentificationResult}
 /** Draft persistence accepts incomplete fields; publication still requires every existing safety check. */
