@@ -105,3 +105,19 @@ test('verified seller re-import fills existing coin and listing ownership, never
  expect(native).toContain("externalListingId:externalId.trim()");
  expect(nativeUi).toContain("Re-import & Repair eBay Links");
 });
+
+test('verified seller repair reports safe database error categories without bypassing owner checks',()=>{
+ const browse=fs.readFileSync('supabase/functions/swish-ebay-browse/index.ts','utf8');
+ const scoped=browse.split('async function repairSellerImportBindings(')[1].split('serveModule(withEdgeFunctionLogging')[0];
+ for(const code of ['PGRST202','42883','42703','42P01','42501','57014','PGRST203'])
+  expect(scoped).toContain(code);
+ expect(scoped).toContain('diagnostic:diagnosis.kind');
+ expect(scoped).toContain('console.warn');
+ expect(scoped).toContain('swish_repair_verified_ebay_import');
+ expect(scoped).toContain('verified.userId!==member.ebay_account_id');
+ expect(scoped).toContain('verifiedSellerSectionPage(xml');
+ expect(scoped).toContain('boundedSellerRepairChunks(ids)');
+ expect(scoped).not.toContain('save.error.message');
+ expect(scoped).not.toContain('JSON.stringify(save.error)');
+ expect(scoped).not.toMatch(/EndFixedPriceItem|AddFixedPriceItem|ReviseFixedPriceItem/);
+});
