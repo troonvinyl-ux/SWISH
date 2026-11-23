@@ -396,7 +396,9 @@ async function repairSellerImportBindings(args:{
     ids=[...new Set(itemMatches.map(m=>m[1].match(/<ItemID>(\d+)<\/ItemID>/)?.[1]??'').filter(id=>/^\d{6,20}$/.test(id)))];
     if(page<=totalPages && itemMatches.length>0 && ids.length!==itemMatches.length)
       return json({success:false,error:'Some eBay seller item identities were incomplete; this page was not applied.'},503);
-    if(page<=totalPages && totalPages>0 && ids.length===0)
+    const reportedCount=Number(xml.match(/<TotalNumberOfEntries>(\d+)<\/TotalNumberOfEntries>/)?.[1]??NaN);
+    if(page<=totalPages && totalPages>0 && ids.length===0 &&
+       (!Number.isSafeInteger(reportedCount)||reportedCount>0))
       return json({success:false,error:'eBay returned an empty seller page before pagination completed. No bindings changed.'},503);
   }
   if(ids.length>100)return json({success:false,error:'Seller page exceeded the safe 100-listing batch.'},409);
