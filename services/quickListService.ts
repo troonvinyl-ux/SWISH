@@ -21,6 +21,7 @@ import { resolveProductionNiche } from './nicheRouting';
 import { nicheBarcodeAllowed } from '@/shared/nichePolicy';
 import { captureCanonicalId } from './captureIdentityService';
 import { automaticListingPrice, automaticSpecifics } from './listingAutofillService';
+import { musicContentsEvidence, protectMusicListingCopy } from '@/shared/listingEvidence';
 import { preferredListingPhotos, availableListingPhotos, processedListingPhotoIssue } from '@/shared/smartStudio';
 export interface QuickRequirements {categoryId:string;categoryName:string;aspects:AntiqueAspect[];conditions:AntiqueConditionPolicy;error?:string}
 export interface QuickDraft {listing:SavedListing;generated:GeneratedListing;requirements:QuickRequirements;market:MarketValueResult|null;specifics:Array<{name:string;value:string}>;photos:string[];itemId:string;warnings?:string[];quantity?:number;specificEvidence?:QuickAttributeEvidence[]}
@@ -100,7 +101,18 @@ export async function prepareQuickDraft(tenantId:string,nicheId:QuickListNiche,i
  // no eBay leaf category. The caller can retry the same saved inventory item.
  if(requirements.error||!requirements.categoryId)throw new Error(requirements.error??'A verified eBay category is required before creating a draft.');
  const market=research.error?null:research.result,evidencePrice=automaticListingPrice(market);
- const generated={...copy.listing,recommended_price:evidencePrice,floor_price:0,ceiling_price:0};
+ const contents=nicheId==='tunes_flip'?musicContentsEvidence(result.attributes.expected_disc_count,result.attributes.observed_disc_count,String(result.attributes.format??'')):null;
+ // A complete Discogs tracklist is not proof that the seller has every record.
+ // For an incomplete set, replace unverified whole-release copy before it can
+ // become a canonical draft or enter the existing eBay publication pipeline.
+ const honestDescription=contents?.status==='incomplete'?[
+  'Item',String(result.attributes.artist??'Music recording')+' — '+String(result.attributes.release_title??'Individual music item'),
+  '', 'Included contents',contents.disclosure,'Which disc is missing is not established by the catalogue reference. No complete-set tracklisting is asserted as included.',
+  '', 'Condition and faults',result.condition||'Condition unknown; inspect the seller photographs.',result.conditionNotes||'Any further faults should be added by the seller during review.',
+  '', 'Unknowns','Exact physical pressing and identity of missing discs are not independently established. Playback not tested unless the seller reports otherwise.',
+ ] .join('\n'):String(copy.listing.description??'');
+ const protectedCopy=contents?protectMusicListingCopy(String(copy.listing.title??result.canonicalTitle),honestDescription,contents):null;
+ const generated={...copy.listing,...(protectedCopy??{}),recommended_price:evidencePrice,floor_price:0,ceiling_price:0};
  const canonical=await getItem(itemId);
  if(canonical.error||!canonical.item||canonical.item.tenantId!==tenantId||!NICHE_MODULES[nicheId].specialists.includes(canonical.item.specialistId))throw new Error(canonical.error??'Canonical photos could not be reopened.');
  const photoIssue=photoPersistenceIssue(canonical.item.media,canonical.item.attributes);if(photoIssue)throw new Error(photoIssue);
@@ -128,7 +140,9 @@ export async function saveQuickReview(tenantId:string,nicheId:QuickListNiche,dra
   if(input.reviewedResult){if(!NICHE_MODULES[nicheId].specialists.includes(input.reviewedResult.specialistId))return {error:'Reviewed specialist scope differs from this item.'};const safety=evaluateSpecialistSafety(nicheId,input.reviewedResult.attributes);if(safety.blocked)return {error:safety.reasons.join(' ')};}
  }
  const supported=draft.requirements.conditions.itemConditions.find(row=>String(row.conditionId)===input.conditionId);
- const saved=await saveListingEditor({tenantId,listingId:draft.listing.id,nicheId,title:input.title,description:input.description,price:input.price||'0',shippingCost:String(draft.listing.shippingCost),floorPrice:'0',ceilingPrice:'0',categoryId:draft.requirements.categoryId,categoryName:draft.requirements.categoryName,condition:supported?.conditionDescription??canonical.item.condition,conditionId:supported?input.conditionId:'',conditionDescription:input.conditionNotes,quantity:String(draft.quantity??1),sku:canonical.item.sku||canonical.item.inventoryId||'',itemSpecifics:input.specifics.filter(row=>row.value.trim()),media:photos});
+ const currentContents=nicheId==='tunes_flip'?musicContentsEvidence(canonical.item.attributes.expected_disc_count,canonical.item.attributes.observed_disc_count,String(canonical.item.attributes.format??'')):null;
+ const safeInput=currentContents?protectMusicListingCopy(input.title,input.description,currentContents):{title:input.title,description:input.description};
+ const saved=await saveListingEditor({tenantId,listingId:draft.listing.id,nicheId,title:safeInput.title,description:safeInput.description,price:input.price||'0',shippingCost:String(draft.listing.shippingCost),floorPrice:'0',ceilingPrice:'0',categoryId:draft.requirements.categoryId,categoryName:draft.requirements.categoryName,condition:supported?.conditionDescription??canonical.item.condition,conditionId:supported?input.conditionId:'',conditionDescription:input.conditionNotes,quantity:String(draft.quantity??1),sku:canonical.item.sku||canonical.item.inventoryId||'',itemSpecifics:input.specifics.filter(row=>row.value.trim()),media:photos});
  if(saved.error)return saved;
  if(mode==='draft')return {error:null};
  const item=await getItem(draft.itemId);if(item.error||!item.item||item.item.tenantId!==tenantId||!NICHE_MODULES[nicheId].specialists.includes(item.item.specialistId))return {error:'Review provenance ownership could not be verified.'};
