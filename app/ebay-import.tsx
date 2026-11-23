@@ -15,6 +15,7 @@ import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { getSupabaseClient } from '@/template';
+import { repairVerifiedNativeEbayLinks } from '@/services/ebayInventoryImportService';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@/constants/theme';
 import { useApp } from '@/hooks/useApp';
 import { useAlert } from '@/template';
@@ -619,6 +620,9 @@ export default function EbayImportScreen() {
   const [repairRunning, setRepairRunning] = useState(false);
   const [repairProgress, setRepairProgress] = useState<RepairProgress | null>(null);
   const [scanningDiagnostic, setScanningDiagnostic] = useState(false);
+  const [bindingRepairing, setBindingRepairing] = useState(false);
+  const [bindingRepairState, setBindingRepairState] = useState<{section:string;page:number;totalPages:number;updated:number;alreadyLinked:number;unlinked:number;conflicts:number;verifiedSeller:string}|null>(null);
+  const [bindingRepairFinished, setBindingRepairFinished] = useState(false);
 
   // Auto-scan repair diagnostic on mount
   useEffect(() => {
@@ -645,6 +649,20 @@ export default function EbayImportScreen() {
       setRepairRunning(false);
     }
   }, [tenant, repairRunning, showAlert]);
+
+  const handleRepairEbayBindings = useCallback(async () => {
+    if(!tenant||bindingRepairing||importing||repairRunning)return;
+    setBindingRepairing(true);setBindingRepairFinished(false);setBindingRepairState(null);
+    try {
+      const summary=await repairVerifiedNativeEbayLinks(tenant.id,'coins',p=>setBindingRepairState({...p}));
+      setBindingRepairState({...summary});setBindingRepairFinished(true);
+      showAlert('eBay seller links repaired',
+        `Verified account: ${summary.verifiedSeller}\n${summary.updated} existing coin records repaired\n${summary.alreadyLinked} already correct\n${summary.conflicts} conflicts retained for review\n${summary.unlinked} listings not yet imported\nNo eBay listing was changed or relisted.`);
+    }catch(reason){
+      showAlert('Re-import requires attention',
+        (reason instanceof Error?reason.message:'This seller import page could not be confirmed.')+'\nEarlier confirmed pages remain saved and rerunning is safe.');
+    }finally{setBindingRepairing(false);}
+  },[tenant,bindingRepairing,importing,repairRunning,showAlert]);
 
   // Load acquisitions for the batch selector
   useEffect(() => {
@@ -849,7 +867,8 @@ export default function EbayImportScreen() {
               setImportProgress({ current: attempted, total: selected.length });
               const candidate = selected[i];
 
-              const { itemId, inventoryId, error } = await importEbayCandidate(tenant.id, candidate);
+              const { itemId, inventoryId, error, bindingWarning } = await importEbayCandidate(tenant.id, candidate);
+              if(bindingWarning) console.warn('[SWISH eBay Import] Saved coin pending verified ownership repair:',candidate.ebayItemId);
               if (error) {
                 errors.push(`${candidate.title.slice(0, 30)}: ${error}`);
                 skipped++;
@@ -896,7 +915,7 @@ export default function EbayImportScreen() {
             if (errors.length === 0) {
               showAlert(
                 'Import Complete',
-                `${imported} item${imported === 1 ? '' : 's'} imported with KC Inventory IDs. Gallery images are being fetched automatically.`,
+                `${imported} item${imported === 1 ? '' : 's'} imported with KC Inventory IDs. If any seller link needs verification, use Re-import & Repair eBay Links. No item will be relisted.`,
                 [{ text: 'Go to Inventory', onPress: () => router.navigate('/(tabs)/inventory' as any) }],
               );
             } else {
@@ -960,6 +979,25 @@ export default function EbayImportScreen() {
           </Pressable>
         ) : null}
       </View>
+
+      {/* One-tap verified eBay ownership repair; only server-observed
+          seller item IDs can be used to fill binding fields. */}
+      <Pressable onPress={() => void handleRepairEbayBindings()}
+        disabled={!tenant||bindingRepairing||importing||repairRunning}
+        style={[s.repairBanner,{borderBottomColor:Colors.success+'50'}]}>
+        {bindingRepairing ? <ActivityIndicator size="small" color={Colors.success}/> :
+          <MaterialIcons name="verified-user" size={20} color={Colors.success}/>}
+        <View style={{flex:1}}>
+          <Text style={s.repairBannerTitle}>
+            {bindingRepairing?'Re-importing verified eBay links…':'Re-import & Repair eBay Links'}
+          </Text>
+          <Text style={s.repairBannerSub}>
+            {bindingRepairState
+              ? `${bindingRepairState.section} ${bindingRepairState.page}/${bindingRepairState.totalPages} · ${bindingRepairState.updated} repaired · ${bindingRepairState.conflicts} conflicts${bindingRepairFinished?' · Complete':''}`
+              : 'Coins: match existing eBay ItemIDs and fill all three seller ownership fields automatically. No relisting.'}
+          </Text>
+        </View>
+      </Pressable>
 
       {/* ── Repair Imported Listings banner ──────────────────────────────── */}
       {(repairDiagnostic?.scanned || repairRunning || repairProgress) ? (
