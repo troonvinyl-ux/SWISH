@@ -160,6 +160,7 @@ async function createOAuthSession(
   clientSecret: string,
   ruName: string,
   sellerAccountId: string,
+  memberUserId: string,
 ): Promise<{ consentUrl: string; error?: string }> {
   // Stage encrypted credentials on the one-time consent session ONLY.
   // Cancelling/expiring consent leaves the current connector and tokens intact.
@@ -168,6 +169,10 @@ async function createOAuthSession(
     clientSecret:    clientSecret.trim(),
     ruName:          ruName.trim(),
     sellerAccountId: sellerAccountId.trim(),
+    // Signed-in initiating member is cryptographically sealed with the
+    // one-time OAuth state. The callback cannot use a browser-supplied user ID.
+    swishMemberUserId: memberUserId,
+    swishTenantId: tenantId,
   });
 
   const stateNonce = generateStateNonce();
@@ -195,6 +200,9 @@ async function createOAuthSession(
     redirect_uri:  ruName.trim(),
     scope:         EBAY_SCOPES,
     state:         stateNonce,
+    // eBay officially supports forcing a fresh login. Prevent a different
+    // SWISH member on the same device from inheriting the last eBay session.
+    prompt:        'login',
   });
 
   const consentUrl = `${EBAY_AUTH_URL}?${params.toString()}`;
@@ -233,7 +241,7 @@ async function handleSubscriberAuthorization(
   }
 
   const { consentUrl, error } = await createOAuthSession(
-    supabase, tenantId, clientId, clientSecret, ruName, '',
+    supabase, tenantId, clientId, clientSecret, ruName, '', verify.userId!,
   );
 
   if (error) return jsonResponse({ error }, 500);
@@ -341,7 +349,7 @@ async function handleAuthorize(
   console.log(`[swish-ebay-oauth] authorize: clientId length=${clientId?.length ?? 0}, ruName length=${ruName?.length ?? 0}`);
 
   const { consentUrl, error } = await createOAuthSession(
-    supabase, tenantId, clientId, clientSecret, ruName, sellerAccountId ?? '',
+    supabase, tenantId, clientId, clientSecret, ruName, sellerAccountId ?? '', verify.userId!,
   );
 
   if (error) return jsonResponse({ error }, 500);
@@ -453,7 +461,7 @@ async function handleCallback(url: URL): Promise<Response> {
     ));
   }
 
-  let credentials: { clientId: string; clientSecret: string; ruName: string; sellerAccountId?: string };
+  let credentials: { clientId: string; clientSecret: string; ruName: string; sellerAccountId?: string; swishMemberUserId?: string; swishTenantId?: string };
   try {
     credentials = await decryptCredentials(stagedCredentialRef) as any;
   } catch (e: any) {
@@ -462,6 +470,16 @@ async function handleCallback(url: URL): Promise<Response> {
   }
 
   const { clientId, clientSecret, ruName, sellerAccountId } = credentials;
+  const memberUserId=String(credentials.swishMemberUserId??'');
+  // Older in-flight sessions did not record the initiating member. Never use
+  // those sessions to assign seller credentials to an arbitrary login.
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(memberUserId) ||
+     credentials.swishTenantId!==tenantId){
+    return htmlResponse(errorPage('Start A Fresh eBay Connection','This authorisation session is not bound to a verified SWISH member. Start again from Marketplaces.','Your existing connection and inventory remain unchanged.'),409);
+  }
+  const checkMember=await supabase.from('tenant_memberships').select('id').eq('tenant_id',tenantId).eq('user_id',memberUserId).maybeSingle();
+  if(checkMember.error||!checkMember.data)
+    return htmlResponse(errorPage('SWISH Member Not Verified','Your SWISH account membership changed during eBay sign-in. Nothing was connected.','Sign in to the correct SWISH account and try again.'),403);
 
   if (!clientId || !clientSecret || !ruName) {
     return htmlResponse(errorPage(
