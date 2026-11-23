@@ -636,8 +636,13 @@ async function handleCallback(url: URL): Promise<Response> {
   if(connectorRow?.credential_ref){
     try{
       const previous=await decryptCredentials(connectorRow.credential_ref);
-      assertVerifiedLegacySeller(verifiedIdentity,connectorRow.seller_account_id,previous.ebayUserId);
-      matchesLegacy=true;
+      // A historical tenant connector with no stored stable eBay ID is NOT
+      // proof that the new member owns that seller's existing credentials.
+      // Such legacy tokens stay untouched until independently verified.
+      if(typeof previous.ebayUserId==='string'&&previous.ebayUserId.trim()){
+        assertVerifiedLegacySeller(verifiedIdentity,connectorRow.seller_account_id,previous.ebayUserId);
+        matchesLegacy=true;
+      }
     }catch{matchesLegacy=false;}
   }
   const memberBinding=await persistVerifiedMemberBinding(supabase,tenantId,memberUserId,verifiedIdentity,{
