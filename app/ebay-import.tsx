@@ -621,7 +621,7 @@ export default function EbayImportScreen() {
   const [repairProgress, setRepairProgress] = useState<RepairProgress | null>(null);
   const [scanningDiagnostic, setScanningDiagnostic] = useState(false);
   const [bindingRepairing, setBindingRepairing] = useState(false);
-  const [bindingRepairState, setBindingRepairState] = useState<{section:string;page:number;totalPages:number;updated:number;alreadyLinked:number;unlinked:number;conflicts:number;verifiedSeller:string}|null>(null);
+  const [bindingRepairState, setBindingRepairState] = useState<{section:string;page:number;totalPages:number;updated:number;alreadyLinked:number;unlinked:number;otherNiche:number;conflicts:number;verifiedSeller:string}|null>(null);
   const [bindingRepairFinished, setBindingRepairFinished] = useState(false);
 
   // Auto-scan repair diagnostic on mount
@@ -657,7 +657,7 @@ export default function EbayImportScreen() {
       const summary=await repairVerifiedNativeEbayLinks(tenant.id,'coins',p=>setBindingRepairState({...p}));
       setBindingRepairState({...summary});setBindingRepairFinished(true);
       showAlert('eBay seller links repaired',
-        `Verified account: ${summary.verifiedSeller}\n${summary.updated} existing coin records repaired\n${summary.alreadyLinked} already correct\n${summary.conflicts} conflicts retained for review\n${summary.unlinked} listings not yet imported\nNo eBay listing was changed or relisted.`);
+        `Verified account: ${summary.verifiedSeller}\n${summary.updated} existing coin records repaired\n${summary.alreadyLinked} already correct\n${summary.conflicts} conflicts retained for review\n${summary.unlinked} unlinked seller listings\n${summary.otherNiche} other niches ignored\nNo eBay listing was changed or relisted.`);
     }catch(reason){
       showAlert('Re-import requires attention',
         (reason instanceof Error?reason.message:'This seller import page could not be confirmed.')+'\nEarlier confirmed pages remain saved and rerunning is safe.');
