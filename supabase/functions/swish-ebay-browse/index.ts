@@ -391,9 +391,11 @@ async function repairSellerImportBindings(args:{
     const sectionBody=xml.match(new RegExp('<'+section+'(?:\\s[^>]*)?>([\\s\\S]*?)<\\/'+section+'>'))?.[1]??'';
     const sectionCountText=sectionBody.match(/<TotalNumberOfEntries>(\d+)<\/TotalNumberOfEntries>/)?.[1];
     const reportedCount=sectionCountText==null?NaN:Number(sectionCountText);
-    // Some zero-entry Sold/Unsold responses omit pagination entirely.
-    // Absence is valid ONLY when the named section explicitly reports zero.
-    if(pagesText==null&&reportedCount!==0)return json({success:false,error:'eBay seller pagination was not confirmed; no records changed.'},503);
+    const explicitlyEmptySection=new RegExp('<'+section+'\\s*/>').test(xml);
+    // Some zero-entry Sold/Unsold responses omit pagination entirely or
+    // return a self-closing list element. Both are explicit zero evidence.
+    if(pagesText==null&&reportedCount!==0&&!explicitlyEmptySection)
+      return json({success:false,error:'eBay seller pagination was not confirmed; no records changed.'},503);
     totalPages=pagesText==null?0:Number(pagesText);
     if(!Number.isSafeInteger(totalPages)||totalPages<0)
      return json({success:false,error:'Invalid eBay seller page count; no records changed.'},503);
