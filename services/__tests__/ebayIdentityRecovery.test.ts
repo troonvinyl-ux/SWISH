@@ -78,3 +78,30 @@ test('new member consent must not overwrite an unidentified shared tenant eBay a
  expect(source).toContain("if(!matchesLegacy)return htmlResponse(successPage())");
  expect(source).toContain("persistVerifiedMemberBinding(supabase,tenantId,memberUserId,verifiedIdentity");
 });
+
+test('verified seller re-import fills existing coin and listing ownership, never relists',()=>{
+ const sql=fs.readFileSync('supabase/migrations/20261123_verified_ebay_reimport_binding_repair.sql','utf8');
+ const browse=fs.readFileSync('supabase/functions/swish-ebay-browse/index.ts','utf8');
+ const native=fs.readFileSync('services/ebayInventoryImportService.ts','utf8');
+ const nativeUi=fs.readFileSync('app/ebay-import.tsx','utf8');
+ expect(sql).toContain("auth.role() is distinct from 'service_role'");
+ expect(sql).toContain("v_binding public.swish_ebay_bindings%rowtype");
+ expect(sql).toContain("btrim(l.external_listing_id)=v_external");
+ expect(sql).toContain("v_count<>1");
+ expect(sql).toContain("v_item.ebay_binding_id is not null and v_item.ebay_binding_id<>v_binding.id");
+ expect(sql).toContain("v_listing.ebay_binding_id is not null and v_listing.ebay_binding_id<>v_binding.id");
+ expect(sql).toContain("ebay_binding_id=v_binding.id,");
+ expect(sql).toContain("ebay_account_id=v_binding.ebay_account_id,ebay_member_id=p_user_id");
+ expect(sql).not.toMatch(/delete from public\.(items|listings)|insert into public\.(items|listings)/i);
+ expect(sql).not.toMatch(/update public\.(items|listings) set (status|price|media|published_at)/i);
+ expect(browse).toContain("route==='repair_seller_links'");
+ expect(browse).toContain("prepareMemberBinding(userId,tenantId)");
+ expect(browse).toContain("readEbayIdentity(token)");
+ expect(browse).toContain("verified.userId!==member.ebay_account_id");
+ expect(browse).toContain("method=single?'GetItem':'GetMyeBaySelling'");
+ expect(browse).toContain("seller.trim().toLowerCase()!==verified.username.toLowerCase()");
+ expect(browse).toContain("swish_repair_verified_ebay_import");
+ expect(native).toContain("repairVerifiedNativeEbayLinks");
+ expect(native).toContain("externalListingId:externalId.trim()");
+ expect(nativeUi).toContain("Re-import & Repair eBay Links");
+});
