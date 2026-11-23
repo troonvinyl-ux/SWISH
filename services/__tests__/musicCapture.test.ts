@@ -44,8 +44,8 @@ describe('Seller-selected music metadata and CD capture (fixture tests, not live
  test('manual corrections, condition and title survive re-identification',()=>{
   const answers={label:'Corrected Label',_title:'My reviewed title',media_grade:'VG+',sleeve_grade:'VG',play_test:'Disc 2 skips',observed_disc_count:'2'};
   const result=musicCaptureResult(musicCaptureResult(null,release(),{})!,release(),answers)!;
-  expect(result.attributes.label).toBe('Corrected Label');expect(result.specialistAnalysis?.fields.label.reason).toContain('manual review');expect(result.canonicalTitle).toBe('My reviewed title');
-  expect(result.condition).toContain('Disc 2 skips');expect(result.attributes.expected_disc_count).toBe('3');expect(result.attributes.observed_disc_count).toBe('2');expect(result.warnings.join(' ')).toContain('Catalogue lists 3 disc(s)');
+  expect(result.attributes.label).toBe('Corrected Label');expect(result.specialistAnalysis?.fields.label.reason).toContain('manual review');expect(result.canonicalTitle).toBe('Incomplete — 2 of 3 discs included — My reviewed title');
+  expect(result.condition).toContain('Disc 2 skips');expect(result.attributes.expected_disc_count).toBe('3');expect(result.attributes.observed_disc_count).toBe('2');expect(result.warnings.join(' ')).toContain('Incomplete — 2 of 3 discs included');
   expect(mappedSpecialistSpecifics(getSpecialistProfile('tunes_flip')!,result.attributes)['Number of Discs']).toBeUndefined();
  });
  test('a manual review cannot manufacture an exact-pressing claim',()=>{expect(musicCaptureResult(null,release(),{pressing_reviewed:'yes'})!.attributes.discogs_pressing_confirmed).toBe(false);expect(musicCaptureResult(null,release(),{pressing_reviewed:'no'})!.attributes.discogs_pressing_confirmed).toBe(false);});
