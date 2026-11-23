@@ -48,11 +48,11 @@ export async function importCanonicalEbayInventory(tenantId:string,nicheId:strin
  * No eBay item IDs supplied by this client are used as ownership evidence. */
 export async function repairVerifiedNativeEbayLinks(
  tenantId:string,nicheId:string,
- onProgress:(state:{section:string;page:number;totalPages:number;updated:number;alreadyLinked:number;unlinked:number;conflicts:number;verifiedSeller:string})=>void,
+ onProgress:(state:{section:string;page:number;totalPages:number;updated:number;alreadyLinked:number;unlinked:number;otherNiche:number;conflicts:number;verifiedSeller:string})=>void,
 ){
  if(nicheId!=='coins')throw new Error('Open Coins before repairing eBay seller bindings.');
  const client=getSupabaseClient();
- let totals={section:'',page:0,totalPages:0,updated:0,alreadyLinked:0,unlinked:0,conflicts:0,verifiedSeller:''};
+ let totals={section:'',page:0,totalPages:0,updated:0,alreadyLinked:0,unlinked:0,otherNiche:0,conflicts:0,verifiedSeller:''};
  for(const section of ['ActiveList','SoldList','UnsoldList']){
   let page:number|null=1;
   while(page!==null){
@@ -72,6 +72,7 @@ export async function repairVerifiedNativeEbayLinks(
     updated:totals.updated+Number(result.data.updated||0),
     alreadyLinked:totals.alreadyLinked+Number(result.data.alreadyLinked||0),
     unlinked:totals.unlinked+Number(result.data.unlinked||0),
+    otherNiche:totals.otherNiche+Number(result.data.otherNiche||0),
     conflicts:totals.conflicts+Number(result.data.conflicts||0)};
    onProgress(totals);
    const next=result.data.nextPage;
