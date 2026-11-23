@@ -152,7 +152,7 @@ const batchSize=batched?(desiredSize??SYNC_BATCH_SIZE):SYNC_BATCH_SIZE;
   const itemId=body?.itemId;
   if(typeof itemId!=='string'||!uuid.test(itemId)||nicheId!=='coins')return json({success:false,error:'Select one saved coin in the Coins workspace'},400);
   try{
-   const auth=req.headers.get('Authorization')?.replace(/^Bearer\\s+/i,'')??'';
+   const auth=req.headers.get('Authorization')?.replace(/^Bearer\s+/i,'')??'';
    const userClient=createClient(Deno.env.get('SUPABASE_URL')??'',Deno.env.get('SUPABASE_ANON_KEY')??'',{auth:{persistSession:false}});
    const {data:{user},error:authError}=await userClient.auth.getUser(auth);
    if(authError||!user)return json({success:false,error:'Sign in again before excluding an eBay item'},401);
@@ -168,7 +168,7 @@ const batchSize=batched?(desiredSize??SYNC_BATCH_SIZE):SYNC_BATCH_SIZE;
     return json({success:false,error:'This item belongs to a different verified eBay member. No changes made.'},409);
    const attrs=item.attributes&&typeof item.attributes==='object'&&!Array.isArray(item.attributes)?item.attributes:{};
    const externalId=String(attrs._ebay_item_id??attrs.ebay_item_id??'');
-   if(!/^\\d{6,20}$/.test(externalId))return json({success:false,error:'A saved eBay item ID is required; nothing was excluded'},400);
+   if(!/^\d{6,20}$/.test(externalId))return json({success:false,error:'A saved eBay item ID is required; nothing was excluded'},400);
    const links=await db.from('listings').select('id,external_listing_id,ebay_binding_id').eq('tenant_id',tenantId).eq('item_id',itemId);
    if(links.error||!links.data||links.data.some((row:any)=>row.external_listing_id&&String(row.external_listing_id)!==externalId||
      row.ebay_binding_id&&row.ebay_binding_id!==member.id))
