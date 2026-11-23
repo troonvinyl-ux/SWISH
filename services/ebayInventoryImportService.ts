@@ -1,6 +1,11 @@
 import {getSupabaseClient} from '@/template';
 import {resolveProductionNiche} from './nicheRouting';
 export interface CanonicalEbayImport {itemId:string;listingId:string;inventoryId:string|null;existing:boolean;bindingConfirmed?:boolean;bindingWarning?:string}
+type VerifiedSellerRepairPage = {
+ success?:boolean;section?:string;page?:number;totalPages?:number;nextPage?:number|null;
+ verifiedSeller?:string;updated?:number;alreadyLinked?:number;unlinked?:number;
+ otherNiche?:number;conflicts?:number;
+};
 /** The existing canonical tables are inserted together, or the whole transaction rolls back. */
 export async function importCanonicalEbayInventory(tenantId:string,nicheId:string,externalId:string,item:Record<string,unknown>,listing:Record<string,unknown>,existingItemId?:string):Promise<CanonicalEbayImport>{
  const niche=resolveProductionNiche(nicheId);
@@ -59,7 +64,7 @@ export async function repairVerifiedNativeEbayLinks(
    const current=await client.rpc('swish_current_module');
    if(current.error||current.data?.tenant_id!==tenantId||current.data?.niche_id!==nicheId)
     throw new Error('Your SWISH workspace changed. Previously verified pages remain saved; reopen Coins.');
-   const result=await client.functions.invoke('swish-ebay-browse',{
+   const result: {data: VerifiedSellerRepairPage|null;error: unknown}=await client.functions.invoke('swish-ebay-browse',{
     body:{route:'repair_seller_links',tenantId,nicheId,section,page},
    });
    if(result.error||result.data?.success!==true||
@@ -75,7 +80,7 @@ export async function repairVerifiedNativeEbayLinks(
     otherNiche:totals.otherNiche+Number(result.data.otherNiche||0),
     conflicts:totals.conflicts+Number(result.data.conflicts||0)};
    onProgress(totals);
-   const next=result.data.nextPage;
+   const next: number|null|undefined=result.data.nextPage;
    page=typeof next==='number'?next:null;
    if(page!==null&&(page<=totals.page||page>50))throw new Error('eBay pagination changed. Earlier confirmed pages remain saved.');
   }
