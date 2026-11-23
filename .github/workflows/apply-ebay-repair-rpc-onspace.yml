@@ -1,0 +1,86 @@
+name: Apply verified eBay repair RPC to existing OnSpace Cloud
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type APPLY_EBAY_REPAIR_RPC to apply the specific additive function in the existing OnSpace database"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: onspace-ebay-repair-rpc
+  cancel-in-progress: false
+
+jobs:
+  deploy-verified-seller-repair:
+    name: Apply and verify service-role-only seller repair function
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ONSPACE_DATABASE_URL: ${{ secrets.ONSPACE_DATABASE_URL }}
+    steps:
+      - name: Confirm explicit production migration consent
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [ "$CONFIRMATION" != "APPLY_EBAY_REPAIR_RPC" ]; then
+            echo "::error::Confirmation must equal APPLY_EBAY_REPAIR_RPC"
+            exit 1
+          fi
+          if [ -z "$ONSPACE_DATABASE_URL" ]; then
+            echo "::error::No ONSPACE_DATABASE_URL repository secret. Ask OnSpace for the EXISTING Cloud Postgres connection URL and set it as a GitHub Actions secret; never place passwords in source."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: Check SQL tool availability
+        run: |
+          command -v psql >/dev/null || { echo "::error::GitHub runner does not have the PostgreSQL client"; exit 1; }
+
+      - name: Confirm required existing SWISH schema without mutating records
+        run: |
+          psql "$ONSPACE_DATABASE_URL" -X -v ON_ERROR_STOP=1 -At <<'SQL' | tee /tmp/swish-ebay-schema-check.txt
+          select case when
+            to_regclass('public.items') is not null
+            and to_regclass('public.listings') is not null
+            and to_regclass('public.swish_ebay_bindings') is not null
+            and to_regprocedure('public.swish_specialist_niche(text)') is not null
+            and to_regprocedure('auth.role()') is not null
+            and exists(select 1 from information_schema.columns where table_schema='public' and table_name='items' and column_name='ebay_binding_id')
+            and exists(select 1 from information_schema.columns where table_schema='public' and table_name='items' and column_name='ebay_member_id')
+            and exists(select 1 from information_schema.columns where table_schema='public' and table_name='items' and column_name='ebay_account_id')
+            and exists(select 1 from information_schema.columns where table_schema='public' and table_name='items' and column_name='attributes')
+            and exists(select 1 from information_schema.columns where table_schema='public' and table_name='listings' and column_name='ebay_binding_id')
+          then 'SWISH_SCHEMA_OK' else 'SWISH_SCHEMA_MISMATCH' end;
+          SQL
+          if ! grep -qx 'SWISH_SCHEMA_OK' /tmp/swish-ebay-schema-check.txt; then
+            echo "::error::Existing OnSpace schema differs from the migration prerequisites. No SQL migration was run."
+            exit 1
+          fi
+
+      - name: Apply only the missing verified seller binding RPC
+        run: |
+          psql "$ONSPACE_DATABASE_URL" -X -v ON_ERROR_STOP=1 -f supabase/migrations/20261123_verified_ebay_reimport_binding_repair.sql
+          # No table recreation, data import, marketplace listing call or other migration is performed.
+
+      - name: Verify function, service-role permission and API schema reload
+        run: |
+          psql "$ONSPACE_DATABASE_URL" -X -v ON_ERROR_STOP=1 -At <<'SQL' | tee /tmp/swish-ebay-rpc-check.txt
+          select case when
+            to_regprocedure('public.swish_repair_verified_ebay_import(uuid,uuid,uuid,text,text[])') is not null
+            and has_function_privilege('service_role','public.swish_repair_verified_ebay_import(uuid,uuid,uuid,text,text[])','EXECUTE')
+            and not has_function_privilege('authenticated','public.swish_repair_verified_ebay_import(uuid,uuid,uuid,text,text[])','EXECUTE')
+            and not has_function_privilege('anon','public.swish_repair_verified_ebay_import(uuid,uuid,uuid,text,text[])','EXECUTE')
+          then 'SWISH_EBAY_REPAIR_READY' else 'SWISH_EBAY_REPAIR_NOT_READY' end;
+          SQL
+          if ! grep -qx 'SWISH_EBAY_REPAIR_READY' /tmp/swish-ebay-rpc-check.txt; then
+            echo "::error::RPC permissions/readback were not confirmed. Do not retry live seller repair yet."
+            exit 1
+          fi
+          psql "$ONSPACE_DATABASE_URL" -X -v ON_ERROR_STOP=1 -c "NOTIFY pgrst, 'reload schema';"
+          echo "Verified eBay repair RPC installed and schema reload requested in the EXISTING OnSpace Cloud database."
