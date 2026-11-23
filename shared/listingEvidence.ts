@@ -21,7 +21,7 @@ export function listingClaimState(claim: ListingClaim): 'reported' | 'catalogue'
 function discNumber(value: unknown): number | null {
   if (typeof value !== 'string' && typeof value !== 'number') return null;
   const raw = String(value).trim();
-  if (!/^\\d{1,3}$/.test(raw)) return null;
+  if (!/^\d{1,3}$/.test(raw)) return null;
   const count = Number(raw);
   return count > 0 && count <= 999 ? count : null;
 }
@@ -35,7 +35,7 @@ export interface MusicContentsEvidence {
 /** A release's catalogue quantity never supplies the seller's physical count. */
 export function musicContentsEvidence(expected: unknown, observed: unknown, format = ''): MusicContentsEvidence {
   const e = discNumber(expected), o = discNumber(observed);
-  const unit = /\\b(vinyl|lp|record|records)\\b/i.test(format) ? 'records' : 'discs';
+  const unit = /\b(vinyl|lp|record|records)\b/i.test(format) ? 'records' : 'discs';
   const status = e !== null && o !== null
     ? (o < e ? 'incomplete' : o > e ? 'extra' : 'count_matches') : 'unknown';
   const disclosure = status === 'incomplete'
@@ -53,11 +53,11 @@ export function musicContentsEvidence(expected: unknown, observed: unknown, form
  */
 export function protectMusicListingCopy(title: string, description: string, evidence: MusicContentsEvidence): {title: string; description: string} {
   const prefix = evidence.status === 'incomplete' ? evidence.disclosure : '';
-  const cleanTitle = title.trim().replace(/^Incomplete\\s*[—-]\\s*\\d+\\s+of\\s+\\d+\\s+(?:records|discs)\\s+included\\s*[|:-]?\\s*/i, '');
+  const cleanTitle = title.trim().replace(/^Incomplete\s*[—-]\s*\d+\s+of\s+\d+\s+(?:records|discs)\s+included\s*[|:-]?\s*/i, '');
   const combined = prefix ? `${prefix} — ${cleanTitle}` : cleanTitle;
-  const safeTitle = combined.length <= 80 ? combined : combined.slice(0, 81).replace(/\\s+\\S*$/, '').slice(0, 80);
+  const safeTitle = combined.length <= 80 ? combined : combined.slice(0, 81).replace(/\s+\S*$/, '').slice(0, 80);
   const line = `Included contents: ${evidence.disclosure}`;
-  const safeDescription = description.includes(evidence.disclosure) ? description : `${line}\\nMissing disc identity is not assumed from catalogue track positions.\\n\\n${description}`;
+  const safeDescription = description.includes(evidence.disclosure) ? description : `${line}\nMissing disc identity is not assumed from catalogue track positions.\n\n${description}`;
   return {title:safeTitle,description:safeDescription};
 }
 /** Unattributed drafts must not repeat an unsupported historical attribution. */
@@ -65,7 +65,7 @@ export function unattributedCoinCopy(weight: unknown, diameter: unknown): {title
   const measured = (value:unknown, unit:string) => {
     if (typeof value !== 'string' && typeof value !== 'number') return 'unknown';
     const number=String(value).trim();
-    return /^\\d+(?:\\.\\d+)?$/.test(number) && Number(number)>0 ? `${number} ${unit} (seller-measured)` : 'unknown';
+    return /^\d+(?:\.\d+)?$/.test(number) && Number(number)>0 ? `${number} ${unit} (seller-measured)` : 'unknown';
   };
   return {
     title:'Unattributed coin — see actual photographs',
@@ -75,14 +75,14 @@ export function unattributedCoinCopy(weight: unknown, diameter: unknown): {title
       '', 'Condition and faults', 'Inspect the actual photographs for wear, marks and surface faults. The coin has not been independently authenticated.',
       '', 'Measurements', `Weight: ${measured(weight,'g')}`, `Diameter: ${measured(diameter,'mm')}`,
       '', 'Unknowns', 'Issuer, denomination, date, origin and authenticity are not established.',
-    ].join('\\n'),
+    ].join('\n'),
   };
 }
 /** Classification must be anchored to the physical object, not its cover art. */
 export function physicalCategory(physicalObject: string, depictedSubject: string): 'books' | 'coins' | 'unknown' {
   const physical = physicalObject.trim().toLowerCase();
-  if (/\\b(book|hardback|hardcover|paperback|bound volume)\\b/.test(physical)) return 'books';
-  if (/\\b(coin|numismatic coin|token)\\b/.test(physical)) return 'coins';
+  if (/\b(book|hardback|hardcover|paperback|bound volume)\b/.test(physical)) return 'books';
+  if (/\b(coin|numismatic coin|token)\b/.test(physical)) return 'coins';
   // A subject such as "Greek coins" provides no category evidence.
   void depictedSubject;
   return 'unknown';
