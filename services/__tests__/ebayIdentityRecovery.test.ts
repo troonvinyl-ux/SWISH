@@ -21,3 +21,18 @@ test('seller name recovery is owner-scoped and never starts new OAuth or silentl
  expect(source).toContain('seller_account_id:        verifiedIdentity.username');
  expect(source).not.toContain("seller_account_id:        sellerAccountId ?? ''");
 });
+
+test('seller verification refreshes existing consent rather than making a new OAuth session',()=>{
+ const oauth=fs.readFileSync('supabase/functions/swish-ebay-oauth/index.ts','utf8');
+ const verify=oauth.split('async function handleVerifyConnectedIdentity(')[1].split('// ════════════════════════════════════════════════════════════════════════════════\n// ACTION: authorize')[0];
+ expect(verify).toContain("verifyUserAndTenant(authHeader,tenantId,db,true)");
+ expect(verify).toContain("if(!refreshToken||!clientId||!clientSecret)");
+ expect(verify).toContain("grant_type:'refresh_token'");
+ expect(verify).toContain("access_token_expires_at:expiresAt");
+ expect(verify).toContain("identity=await readEbayIdentity(accessToken)");
+ expect(verify).toContain("assertVerifiedLegacySeller(identity,connector.seller_account_id,creds.ebayUserId)");
+ expect(verify).toContain(".eq('credential_ref',connector.credential_ref)");
+ expect(verify).not.toContain("createOAuthSession(");
+ expect(verify).not.toContain("start_subscriber_authorization");
+ expect(verify).not.toContain("swish_ebay_bindings");
+});
