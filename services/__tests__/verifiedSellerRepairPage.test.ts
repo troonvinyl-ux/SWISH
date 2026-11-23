@@ -58,7 +58,7 @@ test('seller page rejects malformed identity evidence, mismatched pagination and
     .toThrow(/50-page safety limit/);
   expect(() => verifiedSellerSectionPage(section('ActiveList', ids(100000000001, 201)), 'ActiveList', 1))
     .toThrow(/200-ID response limit/);
-  expect(() => verifiedSellerSectionPage('<UnsoldList/>', 'UnsoldList', 1))
+  expect(verifiedSellerSectionPage('<UnsoldList/>', 'UnsoldList', 1))
     .toEqual({ ids: [], totalPages: 0 });
   expect(() => verifiedSellerSectionPage('<ActiveList/>', 'SoldList', 1))
     .toThrow(/requested seller section/);
