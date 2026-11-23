@@ -27,7 +27,32 @@ import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encryptCredentials, decryptCredentials } from '../_shared/credentialCrypto.ts';
 import { readEbayIdentity } from '../_shared/ebayAccountEngine.ts';
-import { assertVerifiedLegacySeller } from '../_shared/ebayAccountPolicy.ts';
+// OnSpace may retain an older _shared snapshot when a new OAuth entrypoint is
+// deployed. Avoid a named import that would prevent the entire worker booting.
+import * as ebayAccountPolicy from '../_shared/ebayAccountPolicy.ts';
+
+// Keep the verified eBay seller-account invariant even if an older deployed
+// ebayAccountPolicy module does not export the newer compatibility helper.
+// This strict fallback permits only a previously unrecorded identity or the
+// SAME stable eBay user/seller; it never allows an account switch.
+function assertVerifiedLegacySeller(
+ identity: {userId:string;username:string}, savedSeller: unknown, savedUserId: unknown,
+): void {
+ if(typeof ebayAccountPolicy.assertVerifiedLegacySeller === 'function'){
+  ebayAccountPolicy.assertVerifiedLegacySeller(identity,savedSeller,savedUserId);
+  return;
+ }
+ const verifiedId=typeof identity?.userId==='string'?identity.userId.trim():'';
+ const verifiedName=typeof identity?.username==='string'?identity.username.trim():'';
+ if(!verifiedId||!verifiedName||verifiedId.length>256||verifiedName.length>256)
+  throw new Error('eBay account identity could not be verified.');
+ const previousSeller=typeof savedSeller==='string'?savedSeller.trim():'';
+ const previousId=typeof savedUserId==='string'?savedUserId.trim():'';
+ if((previousId&&previousId!==verifiedId)||
+    (previousSeller&&previousSeller!==verifiedName&&previousSeller!==verifiedId))
+  throw new Error('Different eBay account detected. The existing seller binding was not changed.');
+}
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
