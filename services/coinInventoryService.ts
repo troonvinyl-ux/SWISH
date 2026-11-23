@@ -199,7 +199,7 @@ export async function importEbayCandidate(
   tenantId: string,
   candidate: EbayImportCandidate,
   nicheSpecialistId?: string,
-): Promise<{ itemId: string | null; inventoryId: string | null; error: string | null }> {
+): Promise<{ itemId: string | null; inventoryId: string | null; error: string | null; bindingWarning?: string }> {
   const supabase = getSupabaseClient();
 
   if (!candidate.ebayItemId?.trim()) {
@@ -385,7 +385,8 @@ export async function importEbayCandidate(
     };
   try {
     const saved=await importCanonicalEbayInventory(tenantId,scope.data.niche_id,candidate.ebayItemId,itemPayload,listingPayload);
-    return {itemId:saved.itemId,inventoryId:saved.inventoryId,error:null};
+    return {itemId:saved.itemId,inventoryId:saved.inventoryId,error:null,
+      ...(saved.bindingWarning?{bindingWarning:saved.bindingWarning}:{})};
   }catch(cause){return {itemId:null,inventoryId:null,error:cause instanceof Error?cause.message:'Import was not confirmed; no replacement item was created.'};}
 }
 
