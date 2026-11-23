@@ -70,3 +70,11 @@ test('first-use eBay login is fresh and links only the signed-in SWISH member',(
  expect(oauth).toContain("verifyUserAndTenant(authHeader,tenantId,db)");
  expect(oauth).not.toContain("memberUserId=req.headers.get('x-swish-user')");
 });
+
+test('new member consent must not overwrite an unidentified shared tenant eBay account',()=>{
+ const source=fs.readFileSync('supabase/functions/swish-ebay-oauth/index.ts','utf8');
+ expect(source).toContain("if(typeof previous.ebayUserId==='string'&&previous.ebayUserId.trim())");
+ expect(source).toContain("assertVerifiedLegacySeller(verifiedIdentity,connectorRow.seller_account_id,previous.ebayUserId)");
+ expect(source).toContain("if(!matchesLegacy)return htmlResponse(successPage())");
+ expect(source).toContain("persistVerifiedMemberBinding(supabase,tenantId,memberUserId,verifiedIdentity");
+});
