@@ -16,6 +16,7 @@ declare
  v_updated integer:=0;
  v_already integer:=0;
  v_unlinked integer:=0;
+ v_other_niche integer:=0;
  v_conflicts integer:=0;
  v_conflict_ids text[]:=array[]::text[];
 begin
@@ -47,8 +48,15 @@ begin
      and btrim(l.external_listing_id)=v_external for update;
   select * into v_item from public.items i
     where i.id=v_listing.item_id and i.tenant_id=p_tenant_id for update;
-  if not found or public.swish_specialist_niche(v_item.specialist_id) is distinct from p_niche_id
-    or (v_item.ebay_binding_id is not null and v_item.ebay_binding_id<>v_binding.id)
+  if not found then
+    v_conflicts:=v_conflicts+1;v_conflict_ids:=array_append(v_conflict_ids,v_external);continue;
+  end if;
+  -- The verified seller may also have clothes, antiques and other niches.
+  -- Those are not ownership conflicts in the Coins workspace.
+  if public.swish_specialist_niche(v_item.specialist_id) is distinct from p_niche_id then
+    v_other_niche:=v_other_niche+1;continue;
+  end if;
+  if (v_item.ebay_binding_id is not null and v_item.ebay_binding_id<>v_binding.id)
     or (v_item.ebay_account_id is not null and v_item.ebay_account_id<>v_binding.ebay_account_id)
     or (v_item.ebay_member_id is not null and v_item.ebay_member_id<>p_user_id)
     or (v_listing.ebay_binding_id is not null and v_listing.ebay_binding_id<>v_binding.id)
@@ -71,8 +79,8 @@ begin
   v_updated:=v_updated+1;
  end loop;
  return jsonb_build_object('updated',v_updated,'alreadyLinked',v_already,
-   'unlinked',v_unlinked,'conflicts',v_conflicts,'conflictEbayIds',v_conflict_ids,
-   'sellerAccountId',v_binding.seller_account_id,'processed',v_updated+v_already+v_unlinked+v_conflicts);
+   'unlinked',v_unlinked,'otherNiche',v_other_niche,'conflicts',v_conflicts,'conflictEbayIds',v_conflict_ids,
+   'sellerAccountId',v_binding.seller_account_id,'processed',v_updated+v_already+v_unlinked+v_other_niche+v_conflicts);
 end; $$;
 revoke all on function public.swish_repair_verified_ebay_import(uuid,uuid,uuid,text,text[]) from public,anon,authenticated;
 grant execute on function public.swish_repair_verified_ebay_import(uuid,uuid,uuid,text,text[]) to service_role;
