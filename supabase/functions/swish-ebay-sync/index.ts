@@ -219,20 +219,21 @@ const batchSize=batched?(desiredSize??SYNC_BATCH_SIZE):SYNC_BATCH_SIZE;
   const {token,clientId,hasAnalyticsScope}=await getValidToken(client,tenantId);metrics.tokenMs=Date.now()-stageStart;
   if(mode==='refresh_token_only')return await finishResponse({success:true,message:'Existing eBay token is valid'});
   const specialists=[...products[nicheId].specialists,...products[nicheId].legacySpecialists];
-  stageStart=Date.now();const listings:any[]=[];let nextAfterListingId:string|null=null;
+  stageStart=Date.now();const listings:any[]=[];let nextAfterListingId:string|null=null;let scanned=0;
+  const excludedFromSync=(row:any)=>{const item=Array.isArray(row.items)?row.items[0]:row.items;return Boolean(item?.attributes?._swish_ebay_sync_excluded);};
   for(let offset=0;offset<5000;offset+=200){
-   let query=client.from('listings').select('id,item_id,external_listing_id,title,description,price,shipping_cost,watchers,views,category_id,updated_at,items!inner(*)').eq('tenant_id',tenantId).eq('items.tenant_id',tenantId).eq('marketplace_id','ebay').in('items.specialist_id',specialists).is('items.attributes->>_swish_ebay_sync_excluded',null).not('external_listing_id','is',null).neq('external_listing_id','').order('id');
+   let query=client.from('listings').select('id,item_id,external_listing_id,title,description,price,shipping_cost,watchers,views,category_id,updated_at,items!inner(*)').eq('tenant_id',tenantId).eq('items.tenant_id',tenantId).eq('marketplace_id','ebay').in('items.specialist_id',specialists).not('external_listing_id','is',null).neq('external_listing_id','').order('id');
    if(Array.isArray(itemIds))query=query.in('item_id',itemIds);
    if(afterListingId)query=query.gt('id',afterListingId);
    const links=await query.range(offset,offset+(batched?batchSize:199)).abortSignal(AbortSignal.timeout(10000));
    if(links.error)throw new Error('SWISH scoped listings could not be loaded');
    const rows=links.data??[];
-   if(batched){listings.push(...rows.slice(0,batchSize));nextAfterListingId=rows.length>batchSize?String(listings[listings.length-1].id):null;break;}
-   listings.push(...rows);if(rows.length<200)break;
+   if(batched){const page=rows.slice(0,batchSize);scanned+=page.length;listings.push(...page.filter(row=>!excludedFromSync(row)));nextAfterListingId=rows.length>batchSize?String(page[page.length-1].id):null;break;}
+   scanned+=rows.length;listings.push(...rows.filter(row=>!excludedFromSync(row)));if(rows.length<200)break;
    if(offset===4800)throw new Error('Sync selection exceeds the safe bound; select fewer items.');
   }
   metrics.scopedReadMs=Date.now()-stageStart;
-  if(!listings.length)return await finishResponse({success:true,batchComplete:true,nextAfterListingId:null,processed:0,updated:0,failed:0,imagesFetched:0,titlesFixed:0,message:'No imported eBay listings in this niche. Import listings first; no inventory was changed.'});
+  if(!listings.length)return await finishResponse({success:true,batchComplete:true,nextAfterListingId,processed:scanned,updated:0,failed:0,imagesFetched:0,titlesFixed:0,message:scanned?'This batch contains only locally excluded policy-removed items; no eBay calls were made.':'No imported eBay listings in this niche. Import listings first; no inventory was changed.'});
   // Existing-link sync needs exact GetItem observations, not whole-account
   // selling history/discovery. Absence from a summary never means sold/ended.
   const observations=new Map<string,Observation>();const issues:SyncListingIssue[]=[];
@@ -322,6 +323,6 @@ const batchSize=batched?(desiredSize??SYNC_BATCH_SIZE):SYNC_BATCH_SIZE;
   }
   const blocked=issues.filter(issue=>issue.code==='21920397').length;
    const readSkipped=issues.filter(issue=>issue.code==='EBAY_ITEM_READ_TIMEOUT').length;
-  return await finishResponse({success:failed.length===0&&blocked===0&&readSkipped===0,partial:failed.length>0||blocked>0||readSkipped>0,batchComplete:failed.length===0,nextAfterListingId,processed:listings.length,updated,failed:failed.length+blocked+readSkipped,blocked,readSkipped,imagesFetched,titlesFixed,matchedListings:listings.length,orphansFixed:0,issues,failedEbayIds:[...new Set([...failed,...issues.map(issue=>issue.externalListingId)])].slice(0,20),...(failed.length?{error:`${failed.length} listing reconciliations were not confirmed. Reload inventory before retrying.`}:readSkipped?{error:`${readSkipped} eBay item read(s) timed out. No stock or photos were changed for these listings; other confirmed listings were processed.`}:blocked?{error:`${blocked} listing(s) restricted by eBay policy (21920397). Unaffected listings were reconciled; restricted inventory and photos were preserved.`}:{})},failed.length?503:200);
+  return await finishResponse({success:failed.length===0&&blocked===0&&readSkipped===0,partial:failed.length>0||blocked>0||readSkipped>0,batchComplete:failed.length===0,nextAfterListingId,processed:scanned,updated,failed:failed.length+blocked+readSkipped,blocked,readSkipped,imagesFetched,titlesFixed,matchedListings:listings.length,orphansFixed:0,issues,failedEbayIds:[...new Set([...failed,...issues.map(issue=>issue.externalListingId)])].slice(0,20),...(failed.length?{error:`${failed.length} listing reconciliations were not confirmed. Reload inventory before retrying.`}:readSkipped?{error:`${readSkipped} eBay item read(s) timed out. No stock or photos were changed for these listings; other confirmed listings were processed.`}:blocked?{error:`${blocked} listing(s) restricted by eBay policy (21920397). Unaffected listings were reconciled; restricted inventory and photos were preserved.`}:{})},failed.length?503:200);
  }catch(cause){const detail=safeFailure(cause);console.error(`[EbaySync] ${detail}`);return await finishResponse({success:false,batchComplete:false,error:`${detail}. Synchronisation not confirmed.`,requiresReauth:detail.startsWith('REQUIRES_REAUTH:'),partial:true},detail.startsWith('REQUIRES_REAUTH:')?401:503);}
 }));
