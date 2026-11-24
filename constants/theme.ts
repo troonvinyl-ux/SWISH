@@ -3,44 +3,44 @@
 
 export const Colors = {
   // Core backgrounds
-  background: '#09090E',
-  surface: '#13151C',
-  surfaceElevated: '#191C25',
-  surfaceBorder: '#323743',
-  surfaceHighlight: '#232834',
-  specialistSurface: '#17130D',
-  specialistBorder: '#554322',
-  specialistGold: '#D8AD52',
+  background: '#071C26', // Midnight Navy
+  surface: '#102D39', // Deep Ocean
+  surfaceElevated: '#153A48',
+  surfaceBorder: '#29505F',
+  surfaceHighlight: '#1B4554',
+  specialistSurface: '#102D39',
+  specialistBorder: '#4E7480',
+  specialistGold: '#F4C65D',
 
   // Brand
-  primary: '#FFE600',
-  primaryDim: '#302B00',
-  primaryText: '#FFFFFF',
+  primary: '#F4C65D',
+  primaryDim: '#3B3219',
+  primaryText: '#071C26',
 
   // Accent
-  accent: '#FFE600',
-  accentDim: '#302B00',
+  accent: '#19B5AC',
+  accentDim: '#123D42',
 
   // Semantic
-  success: '#22C55E',
-  successDim: '#0D2B1A',
-  warning: '#F59E0B',
-  warningDim: '#2E200A',
-  danger: '#EF4444',
-  dangerDim: '#2A0F0F',
-  info: '#06B6D4',
-  infoDim: '#071E24',
+  success: '#36B37E',
+  successDim: '#103628',
+  warning: '#E6A700',
+  warningDim: '#382B0D',
+  danger: '#D94B4B',
+  dangerDim: '#3A171A',
+  info: '#19B5AC',
+  infoDim: '#123D42',
 
   // Gold — premium / high-value
-  gold: '#F5C842',
-  goldDim: '#2A2000',
+  gold: '#F4C65D',
+  goldDim: '#3B3219',
 
   // Text hierarchy
-  textPrimary: '#F1F2F4',
-  textSecondary: '#B1B7C8',
-  textTertiary: '#9AA3B7',
-  textDisabled: '#33353D',
-  textInverse: '#09090E',
+  textPrimary: '#F5F8FA',
+  textSecondary: '#C2D0D6',
+  textTertiary: '#91A6B2',
+  textDisabled: '#48616B',
+  textInverse: '#071C26',
 
   // Confidence levels
   confidenceHigh: '#22C55E',
@@ -65,11 +65,11 @@ export const Colors = {
   listingCreditBrand: '#F3C928',
 
   // Transparent overlays
-  overlay: 'rgba(9,9,14,0.8)',
-  overlay20: 'rgba(9,9,14,0.2)',
-  overlay50: 'rgba(9,9,14,0.5)',
-  overlay80: 'rgba(9,9,14,0.8)',
-  overlayBlur: 'rgba(17,18,24,0.85)',
+  overlay: 'rgba(7,28,38,0.8)',
+  overlay20: 'rgba(7,28,38,0.2)',
+  overlay50: 'rgba(7,28,38,0.5)',
+  overlay80: 'rgba(7,28,38,0.8)',
+  overlayBlur: 'rgba(16,45,57,0.9)',
 };
 
 export const Typography = {
@@ -159,14 +159,14 @@ export const Shadow = {
     elevation: 8,
   },
   glow: {
-    shadowColor: '#FFE600',
+    shadowColor: '#F4C65D',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.4,
     shadowRadius: 12,
     elevation: 6,
   },
   glowGold: {
-    shadowColor: '#F5C842',
+    shadowColor: '#F4C65D',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,
     shadowRadius: 10,

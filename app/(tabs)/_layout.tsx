@@ -22,7 +22,7 @@ export default function TabLayout(){
   <Tabs screenOptions={{headerShown:false,tabBarStyle,tabBarActiveTintColor:accent,tabBarInactiveTintColor:Colors.textSecondary,tabBarShowLabel:false}}>
    <Tabs.Screen name="index" options={{title:'Home',tabBarIcon:({focused})=>tabIcon('Home','home',focused)}}/>
    <Tabs.Screen name="inventory" options={{title:'Inventory',tabBarIcon:({focused})=>tabIcon('Inventory','inventory-2',focused)}}/>
-   <Tabs.Screen name="scan" options={{title:'Identify',tabBarAccessibilityLabel:'Capture an item with the active specialist',tabBarIcon:()=> <View style={[s.camera,{backgroundColor:accent,shadowColor:accent}]}><MaterialIcons name="photo-camera" size={26} color={Colors.background}/></View>}}/>
+   <Tabs.Screen name="scan" options={{title:'Scan',tabBarAccessibilityLabel:'Scan an item with the active specialist',tabBarIcon:()=> <View style={[s.camera,{backgroundColor:accent,shadowColor:accent}]}><MaterialIcons name="photo-camera" size={26} color={Colors.background}/></View>}}/>
    <Tabs.Screen name="listings" options={{title:'Listings',tabBarIcon:({focused})=>tabIcon('Listings','sell',focused)}}/>
    <Tabs.Screen name="account" options={{title:'More',tabBarIcon:({focused})=>tabIcon('More','menu',focused)}}/>
    <Tabs.Screen name="acquisitions" options={{href:null}}/>

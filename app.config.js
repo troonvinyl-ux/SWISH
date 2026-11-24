@@ -17,7 +17,7 @@ module.exports = ({ config }) => {
     ? { url: process.env['EXPO_PUBLIC_SUPABASE_URL'], anonKey: process.env['EXPO_PUBLIC_SUPABASE_ANON_KEY'] }
     : config.extra?.supabase;
   const easProjectId = process.env['EXPO_PROJECT_ID'] || process.env['EAS_PROJECT_ID'] || config.extra?.eas?.projectId;
-  if (!selected && !masterAdminBuild && !testLabBuild && !easProjectId && !publicSupabase) return { ...config, name: 'SWISH', extra: { ...(config.extra || {}), swishUnifiedBuild: true } };
+  if (!selected && !masterAdminBuild && !testLabBuild && !easProjectId && !publicSupabase) return { ...config, name: 'SWISHFlip', extra: { ...(config.extra || {}), swishUnifiedBuild: true } };
   const otaConfig = easProjectId ? {
     runtimeVersion: niche ? `${config.version || '1.0.0'}-${selected}-isolated-api36-v1` : { policy: 'appVersion' },
     updates: { ...config.updates, url: `https://u.expo.dev/${easProjectId}`, checkAutomatically: 'ON_LOAD', fallbackToCacheTimeout: 0,
@@ -82,7 +82,7 @@ module.exports = ({ config }) => {
   }
   if (!niche) {
     const channel = process.env['SWISH_RELEASE_CHANNEL'] || 'preview-unified';
-    return { ...baseConfig, name: 'SWISH',
+    return { ...baseConfig, name: 'SWISHFlip',
       // Preserve original package, bundle ID and URI scheme. Never infer a new iOS identity.
       runtimeVersion: { policy: 'fingerprint' },
       updates: { ...(baseConfig.updates || {}), enabled: !!easProjectId, disableAntiBrickingMeasures: false, useEmbeddedUpdate: true, checkAutomatically: 'ON_LOAD', fallbackToCacheTimeout: 0,

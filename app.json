@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "onspace-app",
+    "name": "SWISHFlip",
     "slug": "swish",
     "version": "1.0.0",
     "orientation": "default",
-    "icon": "./assets/images/hero-dashboard.jpg",
+    "icon": "./assets/brand/swishflip-app-icon-v1.png",
     "scheme": "onspaceapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
@@ -15,8 +15,8 @@
       "package": "com.swish.inventory",
       "minSdkVersion": 23,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/hero-dashboard.jpg",
-        "backgroundColor": "#09090E"
+        "foregroundImage": "./assets/brand/swishflip-app-icon-v1.png",
+        "backgroundColor": "#071C26"
       },
       "intentFilters": [
         {
@@ -45,10 +45,10 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/hero-dashboard.jpg",
+          "image": "./assets/brand/swishflip-app-icon-v1.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#09090E"
+          "backgroundColor": "#071C26"
         }
       ],
       "expo-web-browser",
