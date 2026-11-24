@@ -8,7 +8,7 @@ import { useOwnerAuthorization } from '@/hooks/useOwnerAuthorization';
 import type { DiscogsMode } from '@/services/discogsService';
 import { Colors,Spacing,Radius,Typography } from '@/constants/theme';
 
-interface MusicCataloguePanelProps { compact?:boolean }
+interface MusicCataloguePanelProps { compact?:boolean; disabled?:boolean }
 const modes:Array<{id:DiscogsMode;label:string}>=[{id:'text',label:'Title'},{id:'barcode',label:'Barcode'},{id:'catalogue',label:'Catalogue no.'},{id:'artist_title',label:'Artist + title'}];
 const candidateLimit=12;
 const candidateLabel=(candidate:{country:string;year:string;format:string[];catalogueNumbers:string[]})=>{
@@ -18,8 +18,8 @@ const candidateLabel=(candidate:{country:string;year:string;format:string[];cata
 };
 
 /** A compact chooser: Discogs helps prefill a seller's draft, it never certifies or vetoes a pressing. */
-export const MusicCataloguePanel=memo(function MusicCataloguePanel({compact=false}:MusicCataloguePanelProps){
- const tunes=useTunesCatalogue();const {state}=tunes;const owner=useOwnerAuthorization();const release=state.release;const disabled=state.busy||!tunes.ready;
+export const MusicCataloguePanel=memo(function MusicCataloguePanel({compact=false,disabled:locked=false}:MusicCataloguePanelProps){
+ const tunes=useTunesCatalogue();const {state}=tunes;const owner=useOwnerAuthorization();const release=state.release;const disabled=locked||state.busy||!tunes.ready;
  const [showChoices,setShowChoices]=useState(false);
  const candidates=state.search?.results.slice(0,candidateLimit)??[];
  const openLink=(url:string)=>{void Linking.openURL(url).catch(()=>{});};

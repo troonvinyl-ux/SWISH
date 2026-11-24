@@ -38,6 +38,23 @@ export function withModuleScope(handler: Handler): Handler {
    const current=await client.rpc('swish_current_module');
    if(current.error) return json('Module authorization unavailable.',503);
    const scope=current.data;
+   // Camera classification is read-only and may start at the global portfolio.
+   // This narrow exception never grants item, catalogue, listing or publish access.
+   if(body.route==='studio_observe'&&new URL(request.url).pathname.split('/').pop()==='swish-identify'){
+    const tenant=body.tenantId;
+    if(typeof tenant!=='string'||!uuid.test(tenant))return json('Valid business identity required.',400);
+    const membership=await client.from('tenant_memberships').select('id').eq('tenant_id',tenant).eq('user_id',user.id).maybeSingle();
+    if(membership.error||!membership.data)return json('Camera session belongs to another account.',403);
+    const requested=body.studioNiche??'auto';
+    if(requested!=='auto'&&!Object.hasOwn(registry.products,requested))return json('Registered specialist required.',400);
+    if(requested!=='auto'&&(scope?.tenant_id!==tenant||scope?.niche_id!==requested))return json('Open the chosen specialist before analysing in it.',403);
+    const candidates=requested==='auto'?Object.keys(registry.products):[requested];
+    const grants=await Promise.all(candidates.map(async id=>{const grant=await client.rpc('swish_can_access_niche',{p_tenant_id:tenant,p_niche_id:id});return !grant.error&&grant.data===true?id:null;}));
+    const allowed=grants.filter((id):id is string=>typeof id==='string');
+    if(!allowed.length)return json('Verified specialist membership required for AI guidance.',403);
+    const headers=new Headers(request.headers);headers.set('Content-Type','application/json');headers.delete('Content-Length');
+    return handler(new Request(request.url,{method:'POST',headers,body:JSON.stringify({...body,_studioAllowedNiches:allowed})}));
+   }
    if(!scope) return json('Open an entitled module in the unified SWISH shell before using this operation.',403);
    // An omitted tenant is filled from trusted session state (e.g. image preparation), never a client guess.
    const tenant=body.tenantId ?? body.tenant_id ?? scope.tenant_id;

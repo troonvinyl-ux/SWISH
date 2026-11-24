@@ -7,6 +7,7 @@ interface CaptureViewfinderInput {
   granted: boolean;
   suspended?: boolean;
   autoOpen?: boolean;
+  immersive?: boolean;
   facing?: string;
   barcodeResolved?: boolean;
   onReset: () => void;
@@ -71,6 +72,10 @@ export function useCaptureViewfinder(input: CaptureViewfinderInput) {
   useEffect(() => {
     if (!input.focused || input.suspended || input.barcodeResolved) close();
   }, [input.focused, input.suspended, input.barcodeResolved, close]);
+
+  // Full-screen Studio opens on initial focus and resumes after backgrounding.
+  // Ordinary inline callers retain their explicit open/close behaviour.
+  useEffect(()=>{if(input.immersive&&input.focused&&!input.suspended&&input.sessionId)setExpanded(true);},[input.immersive,input.focused,input.suspended,input.sessionId]);
 
   useEffect(() => {
     if (!modalClosing) return;

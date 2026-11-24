@@ -11,12 +11,15 @@ export function useQuickListCamera(flow: ReturnType<typeof useQuickList>, nicheI
   const foreground = useScannerForeground();
   const cameraRef = useRef<CameraView>(null), [permission, requestPermission] = useCameraPermissions();
   const [focused, setFocused] = useState(false), [ready, setReady] = useState(false), [taking, setTaking] = useState(false), [error, setError] = useState('');
+  const [flashMode,setFlashMode]=useState<'off'|'on'|'auto'>('off');
+  const cycleFlash=useCallback(()=>setFlashMode(value=>value==='off'?'on':value==='on'?'auto':'off'),[]);
   const flowRef = useRef(flow); flowRef.current = flow;
   const photoFlight = useRef<string | null>(null), mounted = useRef(true), cameraVersion = useRef(0);
 
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; cameraVersion.current++; }; }, []);
   useFocusEffect(useCallback(() => { setFocused(true); return () => { cameraVersion.current++; photoFlight.current = null; setTaking(false); setFocused(false); setReady(false); }; }, []));
   useEffect(() => { cameraVersion.current++; photoFlight.current = null; setTaking(false); setReady(false); setError(''); }, [flow.state.sessionId, foreground]);
+  useEffect(()=>{setFlashMode('off');},[flow.state.sessionId]);
   // A changed session identity invalidates a pending native callback immediately.
   useEffect(() => { cameraVersion.current++; photoFlight.current = null; setTaking(false); }, [flow.isCurrentSession]);
 
@@ -29,7 +32,9 @@ export function useQuickListCamera(flow: ReturnType<typeof useQuickList>, nicheI
   }, []);
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || !scanning) return;
+    // Studio never takes periodic preview photographs. Native barcode decoding
+    // reads the stream; browsers use explicit manual barcode entry instead.
+    if (Platform.OS !== 'web' || !scanning || flow.state.studio) return;
     let active = true; let timer: ReturnType<typeof setTimeout> | null = null;
     const owner = flowRef.current;
     const scan = async () => {
@@ -89,5 +94,5 @@ export function useQuickListCamera(flow: ReturnType<typeof useQuickList>, nicheI
   const onReady = useCallback(() => { if (mounted.current) setReady(true); }, []);
   const onError = useCallback(() => { cameraVersion.current++; photoFlight.current = null; setTaking(false); setReady(false); setError('Camera could not start. Restart the preview, check device permissions or use the photo library.'); }, []);
 
-  return { cameraRef, permission, requestPermission: requestCameraAccess, focused: focused && foreground, ready, taking: taking || deviceCamera.busy, scanning, onBarcode, take, deviceTake: deviceCamera.take, error: deviceCamera.error || error, onReset, onReady, onError };
+  return { flashMode,cycleFlash,cameraRef, permission, requestPermission: requestCameraAccess, focused: focused && foreground, ready, taking: taking || deviceCamera.busy, scanning, onBarcode, take, deviceTake: deviceCamera.take, error: deviceCamera.error || error, onReset, onReady, onError };
 }

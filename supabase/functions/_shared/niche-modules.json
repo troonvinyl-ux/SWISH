@@ -444,6 +444,7 @@
     "dispatch.tsx",
     "buy-decision.tsx",
     "capture.tsx",
+    "listing-studio.tsx",
     "create-listing.tsx",
     "ebay-account.tsx",
     "ebay-analytics.tsx",

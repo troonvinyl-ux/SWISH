@@ -1,3 +1,4 @@
+import { observeListingStudio } from '../_shared/listingStudioObservation.ts';
 import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 // SWISH AI Item Identification — Edge Function v6
 //
@@ -1612,6 +1613,7 @@ serveModule(withEdgeFunctionLogging('swish-identify', async (req: Request) => {
     try { body = await req.json(); } catch { return failure('Identification request must contain valid JSON.', 400, 'INVALID_JSON'); }
     if (!body || typeof body !== 'object' || Array.isArray(body)) return failure('Identification request must be an object.', 400, 'INVALID_INPUT');
     if (typeof body.requestId === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(body.requestId)) requestId = body.requestId;
+    if (body.route === 'studio_observe') return observeListingStudio(body);
     const { images, imageLabels, existingImageUrls, specialistId, acquisitionContext, knownAttributes, tenantId: bodyTenantId, outputMode, captureMode = 'item' } = body;
     const invalidInput = (error: string) => failure(error, 400, 'INVALID_INPUT');
     if (specialistId != null && typeof specialistId !== 'string') return invalidInput('Invalid specialist selection.');

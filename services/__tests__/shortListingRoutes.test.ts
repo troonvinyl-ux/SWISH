@@ -1,8 +1,11 @@
 // Source-only route contracts; not device/native or live seller acceptance.
 import fs from 'node:fs';
 const source=(path:string)=>fs.readFileSync(path,'utf8');
-test('all normal scanner entry points share the short listing workspace',()=>{
- for(const path of ['app/capture.tsx','app/antique-capture.tsx','app/(tabs)/scan.tsx','app/coin-flipper.tsx'])expect(source(path)).toContain('QuickListWorkspace');
+test('scanner entry points use Listing Studio and the existing Quick List engine',()=>{
+ for(const path of ['app/antique-capture.tsx','app/(tabs)/scan.tsx','app/coin-flipper.tsx'])expect(source(path)).toContain('QuickListWorkspace');
+ expect(source('app/capture.tsx')).toContain('<ListingStudioWorkspace');
+ expect(source('app/(tabs)/scan.tsx')).toContain("router.push('/capture')");
+ expect(source('hooks/useListingStudio.ts')).toContain('useQuickList(niche,');
  expect(source('app/capture.tsx')).toContain('tunes.state.savedId');
  expect(source('app/antique-capture.tsx')).toContain('requiredNiche="antiques"');
 });

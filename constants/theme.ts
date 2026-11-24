@@ -65,6 +65,7 @@ export const Colors = {
   listingCreditBrand: '#F3C928',
 
   // Transparent overlays
+  transparent: 'rgba(7,28,38,0)',
   overlay: 'rgba(7,28,38,0.8)',
   overlay20: 'rgba(7,28,38,0.2)',
   overlay50: 'rgba(7,28,38,0.5)',
@@ -174,6 +175,28 @@ export const Shadow = {
   },
 };
 
+// Shared responsive contract. Keep these exports when changing visual branding:
+// the startup shell, scanner tool sheets and music picker read them during render.
+export const Layout = {
+  defaultWidth: 375,
+  defaultHeight: 667,
+  tablet: 768,
+  desktop: 1024,
+  touchTarget: 48,
+  sidebarWidth: 248,
+  contentMaxWidth: 960,
+};
+
+// Camera controls remain compact; recovery sheets and the photo rail share these tokens.
+export const StudioLayout = {
+  railHeight: 88,
+  photoWidth: 72,
+  photoHeight: 72,
+  maxSheetHeight: 640,
+  shutterSize: 80,
+  shutterInnerSize: 64,
+};
+
 export const Animation = {
   fast: 150,
   normal: 250,
@@ -188,4 +211,7 @@ export default {
   Radius,
   Shadow,
   Animation,
+  Layout,
+  CommandTheme,
+  StudioLayout,
 };
