@@ -3,7 +3,7 @@ import { useAuth } from '@/template';
 import { useApp } from '@/hooks/useApp';
 import { describeAccessFailure } from '@/services/backendAvailabilityService';
 import { clearLocalAuthentication, isAuthenticationFailure } from '@/services/authSessionRecoveryService';
-
+/** comment to encourage sync */
 /** Shared root/protected-screen recovery; authentication state remains owned by AuthProvider. */
 export function useAccessRecovery() {
   const app = useApp();
