@@ -69,7 +69,7 @@ export interface DeliveryCapabilityEvidence {
   eligibleTrackedCountriesByService: ReadonlyMap<string, ReadonlySet<string>>;
 }
 
-const isMinorAmount = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+const isMinorAmount = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 
 /** Checks seller intent against listing-specific evidence supplied by the caller. */
 export function deliveryPublicationIssue(
@@ -131,4 +131,71 @@ export function deliveryPublicationIssue(
     }
   }
   return undefined;
+}
+
+const asObject = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+const countryList = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.length <= 250 &&
+  value.every(code => typeof code === 'string' && /^[A-Z]{2}$/.test(code) && code !== 'GB');
+const serviceIdentifier = (value: unknown): value is string | undefined =>
+  value === undefined || (typeof value === 'string' && /^[A-Za-z0-9_ -]{1,100}$/.test(value));
+
+/** Validate and copy the request before storing it. Live eligibility is a separate check. */
+export function parseDeliveryPreferences(value: unknown): DeliveryPreferences | null {
+  const input = asObject(value);
+  if (!input || typeof input.profileName !== 'string' || !input.profileName.trim() ||
+    input.profileName.trim().length > 80 || input.marketplace !== 'EBAY_GB' || input.currency !== 'GBP') return null;
+
+  const domestic = asObject(input.domestic);
+  const international = asObject(input.international);
+  const collection = asObject(input.collection);
+  if (!domestic || !international || !collection) return null;
+  const domesticMode = domestic.mode;
+  const internationalMode = international.mode;
+  const { payer } = domestic;
+  if ((domesticMode !== 'simple_delivery' && domesticMode !== 'custom' && domesticMode !== 'none') ||
+    (payer !== 'buyer' && payer !== 'seller') ||
+    (internationalMode !== 'off' && internationalMode !== 'ebay_managed' && internationalMode !== 'seller_managed') ||
+    typeof collection.enabled !== 'boolean' || typeof collection.only !== 'boolean' ||
+    !serviceIdentifier(domestic.serviceId) || !serviceIdentifier(international.serviceId) ||
+    (international.servicePreference !== undefined && international.servicePreference !== 'tracked') ||
+    !countryList(international.exclusions) || !Array.isArray(international.rates) ||
+    international.rates.length > 250) return null;
+
+  if (domestic.amountMinor !== undefined && !isMinorAmount(domestic.amountMinor)) return null;
+  if (input.handlingDays !== undefined && (typeof input.handlingDays !== 'number' ||
+    !Number.isInteger(input.handlingDays) || input.handlingDays < 0 || input.handlingDays > 30)) return null;
+  if (collection.only && (!collection.enabled || domesticMode !== 'none' || internationalMode !== 'off')) return null;
+
+  const countries = new Set<string>();
+  const exclusions = new Set(international.exclusions);
+  const rates: DeliveryRate[] = [];
+  for (const value of international.rates) {
+    const rate = asObject(value);
+    if (!rate || typeof rate.destinationGroup !== 'string' || !rate.destinationGroup.trim() ||
+      rate.destinationGroup.length > 80 || !isMinorAmount(rate.amountMinor) ||
+      !countryList(rate.countries) || !rate.countries.length ||
+      rate.countries.some(country => countries.has(country) || exclusions.has(country)) ||
+      new Set(rate.countries).size !== rate.countries.length) return null;
+    for (const country of rate.countries) countries.add(country);
+    rates.push({ destinationGroup: rate.destinationGroup.trim(), amountMinor: rate.amountMinor, countries: [...rate.countries] });
+  }
+  if (internationalMode === 'seller_managed' && !rates.length) return null;
+
+  return {
+    profileName: input.profileName.trim(),
+    marketplace: 'EBAY_GB',
+    currency: 'GBP',
+    domestic: { mode: domesticMode, payer, serviceId: domestic.serviceId, amountMinor: domestic.amountMinor },
+    international: {
+      mode: internationalMode,
+      servicePreference: international.servicePreference,
+      serviceId: international.serviceId,
+      rates,
+      exclusions: [...exclusions],
+    },
+    collection: { enabled: collection.enabled, only: collection.only },
+    handlingDays: input.handlingDays,
+  };
 }

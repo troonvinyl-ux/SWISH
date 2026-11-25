@@ -1,6 +1,7 @@
 import {
   coinsInternationalTemplate,
   deliveryPublicationIssue,
+  parseDeliveryPreferences,
   type DeliveryCapabilityEvidence,
 } from '../../supabase/functions/_shared/deliveryPreferences';
 
@@ -58,4 +59,25 @@ test('allows eligible collection only after both postage modes are disabled', ()
   profile.domestic.mode = 'none';
   profile.international.mode = 'off';
   expect(deliveryPublicationIssue(profile, evidence)).toBeUndefined();
+});
+
+test('validates the stored configuration without accepting client ownership fields', () => {
+  const input = { ...coinsInternationalTemplate(), bindingId: 'untrusted', handlingDays: 0 };
+  const stored = parseDeliveryPreferences(input);
+  expect(stored).toMatchObject(coinsInternationalTemplate());
+  expect(stored?.handlingDays).toBe(0);
+  expect(stored).not.toHaveProperty('bindingId');
+  expect(stored?.international.rates).not.toBe(input.international.rates);
+});
+
+test('rejects fractional prices, overlapping destinations and inconsistent collection-only requests', () => {
+  const input = coinsInternationalTemplate();
+  input.international.rates[0].amountMinor = 1295.5;
+  expect(parseDeliveryPreferences(input)).toBeNull();
+  input.international.rates[0].amountMinor = 1295;
+  input.international.rates[0].countries.push('US');
+  expect(parseDeliveryPreferences(input)).toBeNull();
+  input.international.rates[0].countries.pop();
+  input.collection = { enabled: true, only: true };
+  expect(parseDeliveryPreferences(input)).toBeNull();
 });

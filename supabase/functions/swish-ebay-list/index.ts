@@ -31,6 +31,8 @@
 //   get_category_suggestions— search only live/cached eBay leaf categories
 
 import { availableListingPhotos, selectedListingPhotos, processedListingPhotoIssue, studioImageIsUsable, type StudioResult } from '../_shared/smartStudio.ts';
+import { currentMemberEbayBinding } from '../_shared/ebayAccountEngine.ts';
+import { deliveryProfileRoute } from '../_shared/deliveryProfileRoutes.ts';
 import { photoPersistenceIssue } from '../_shared/photoPersistence.ts';
 import { readStudioMetadata } from '../_shared/smartStudioEngine.ts';
 import { serveModule } from '../_shared/moduleScope.ts';
@@ -1372,6 +1374,17 @@ async function handleRequest(req: Request): Promise<Response> {
 
   const auth = await verifyTenantMembership(supabase, authHeader, tenantId, internalSecret);
   if (!auth.ok) return jsonResponse({ error: auth.error }, 401);
+
+  if (route === 'get_delivery_profiles' || route === 'save_delivery_profile') {
+    const binding = currentMemberEbayBinding();
+    if (!binding || binding.user_id !== auth.userId || binding.tenant_id !== tenantId || !body.nicheId) {
+      return jsonResponse({ error: 'Open a specialist with your verified eBay account.' }, 403);
+    }
+    const result = await deliveryProfileRoute(supabase, {
+      tenantId, userId: binding.user_id, bindingId: binding.id, nicheId: body.nicheId,
+    }, body);
+    return jsonResponse(result.data, result.status);
+  }
 
   // Apply the same stored-resource entitlement gate before EVERY marketplace write.
   if (['publish', 'revise', 'end', 'revise_sku', 'inspect_live', 'revise_price'].includes(route)) {
