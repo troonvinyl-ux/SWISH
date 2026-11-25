@@ -1468,11 +1468,12 @@ async function handleRequest(req: Request): Promise<Response> {
     const externalId = String(body.externalListingId ?? '').trim();
     if (!binding || !/^\d{6,20}$/.test(externalId)) return jsonResponse({ error: 'Enter the eBay item number for the pending listing.' }, 422);
     const { data: row, error } = await supabase.from('listings')
-      .select('id,publish_claim_id,external_listing_id,items!inner(sku)')
+      .select('id,title,price,category_id,publish_claim_id,external_listing_id,items!inner(sku,canonical_title,attributes)')
       .eq('id', body.listingId).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle();
     if (error || !row?.publish_claim_id || row.external_listing_id) return jsonResponse({ error: 'This listing has no pending submission to link. Refresh its saved status.' }, 409);
-    const sku = String((row.items as unknown as { sku?: string })?.sku ?? '').trim();
-    if (!sku) return jsonResponse({ error: 'The draft has no stock SKU to match against eBay.' }, 422);
+    const pendingItem = row.items as unknown as { sku?: string; canonical_title?: string; attributes?: Record<string, unknown> };
+    const sku = String(pendingItem?.sku ?? '').trim();
+    const options = pendingItem?.attributes?.ebay_listing_options as { listingType?: string; startPrice?: number } | undefined;
     const creds = await getEbayCredentials(supabase, tenantId, false);
     if ('error' in creds) return jsonResponse({ error: creds.error }, 400);
     const request = `<?xml version="1.0" encoding="utf-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials><eBayAuthToken>${xmlEscape(creds.accessToken)}</eBayAuthToken></RequesterCredentials><ItemID>${externalId}</ItemID><DetailLevel>ReturnAll</DetailLevel></GetItemRequest>`;
@@ -1480,9 +1481,14 @@ async function handleRequest(req: Request): Promise<Response> {
     if (!result.ok) return jsonResponse({ error: 'eBay could not confirm that item number.' }, 422);
     let observation;
     try {
-      observation = verifyPendingEbayItem(result.xml, externalId, binding.seller_account_id, xmlEscape(sku));
+      observation = verifyPendingEbayItem(result.xml, externalId, binding.seller_account_id, xmlEscape(sku), {
+        title: String(row.title ?? pendingItem?.canonical_title ?? '').trim().slice(0, 80),
+        categoryId: String(row.category_id || pendingItem?.attributes?.ebay_category_id || pendingItem?.attributes?._ebay_category_id || '').trim(),
+        startingPrice: Number(options?.listingType === 'Chinese' ? options.startPrice : row.price),
+        decode: decodeXmlEntities,
+      });
     } catch {
-      return jsonResponse({ error: 'The eBay item could not be matched to this seller and stock SKU. The pending submission is still protected.' }, 422);
+      return jsonResponse({ error: 'The eBay item could not be matched to this seller and saved listing details. The pending submission is still protected.' }, 422);
     }
     const applied = await supabase.rpc('swish_recover_pending_ebay_publish', {
       p_tenant_id: tenantId, p_listing_id: row.id, p_claim_id: row.publish_claim_id, p_binding_id: binding.id,

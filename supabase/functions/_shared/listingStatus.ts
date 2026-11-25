@@ -23,15 +23,32 @@ export function parseEbayListingStatus(xml: string, expectedId: string): EbaySta
   return { externalId, status, quantity, quantitySold, endedAt };
 }
 
-/** A seller-entered item number is only a candidate. Require seller and stock evidence. */
-export function verifyPendingEbayItem(xml: string, expectedId: string, seller: string, escapedSku: string) {
+interface PendingListingDetails {
+  title: string;
+  categoryId: string;
+  startingPrice: number;
+  decode: (value: string) => string;
+}
+
+/** A seller-entered item number is a candidate until eBay confirms its identity. */
+export function verifyPendingEbayItem(xml: string, expectedId: string, seller: string, escapedSku: string, details?: PendingListingDetails) {
   const observation = parseEbayListingStatus(xml, expectedId);
   const item = tag(xml, 'Item');
   const observedSeller = tag(tag(item, 'Seller'), 'UserID');
   const startedAt = tag(tag(item, 'ListingDetails'), 'StartTime');
+  const observedSku = tag(item, 'SKU');
+  const startPrice = tag(item, 'StartPrice');
+  const exactDetails = details && details.title && details.categoryId &&
+    details.decode(tag(item, 'Title')) === details.title &&
+    tag(tag(item, 'PrimaryCategory'), 'CategoryID') === details.categoryId &&
+    /^\d+(?:\.\d{1,2})?$/.test(startPrice) &&
+    details.startingPrice > 0 && Number(startPrice) === details.startingPrice &&
+    tag(item, 'Currency') === 'GBP';
+  // A conflicting SKU is stronger evidence than an otherwise identical title.
+  const sameItem = escapedSku && observedSku ? escapedSku === observedSku : exactDetails;
   if (!seller || observedSeller.toLowerCase() !== seller.toLowerCase() ||
-    !escapedSku || tag(item, 'SKU') !== escapedSku || !Number.isFinite(Date.parse(startedAt))) {
-    throw new Error('eBay could not verify the seller, stock SKU and start time for this pending listing.');
+    !sameItem || !Number.isFinite(Date.parse(startedAt))) {
+    throw new Error('eBay could not verify the seller, listing details and start time for this pending listing.');
   }
   return { ...observation, startedAt };
 }
