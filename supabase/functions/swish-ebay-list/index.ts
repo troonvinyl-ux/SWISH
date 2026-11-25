@@ -2602,6 +2602,8 @@ async function handleRequest(req: Request): Promise<Response> {
     callName = 'AddFixedPriceItem';
   }
 
+  const publishBinding = currentMemberEbayBinding();
+  if (!publishBinding) return jsonResponse({ error: 'Verify the connected seller before publishing.' }, 403);
   const { data: claimId, error: claimError } = await supabase.rpc('swish_claim_listing_publish', { p_listing_id: listingId, p_tenant_id: tenantId });
   if (claimError || !claimId) return jsonResponse({ success: false, code: 'PUBLISH_RECONCILIATION_REQUIRED', error: 'This listing is already being submitted or has an unconfirmed outcome. Sync eBay before retrying; do not create another draft.' }, 409);
   // On network timeout the claim intentionally remains: eBay may have accepted the request.
@@ -2620,44 +2622,28 @@ async function handleRequest(req: Request): Promise<Response> {
 
   const externalListingId = parseItemId(responseXml);
   if (!externalListingId) return jsonResponse({ success: false, code: 'PUBLISH_RECONCILIATION_REQUIRED', error: 'eBay did not return a listing ID. The result must be reconciled before retrying.' }, 502);
-  const publishedAt = new Date().toISOString();
+  const startTime = responseXml.match(/<StartTime>([^<]+)<\/StartTime>/i)?.[1]?.trim();
+  const publishedAt = startTime && Number.isFinite(Date.parse(startTime)) ? startTime : new Date().toISOString();
 
   const warnings: string[] = confidenceGate.advisory ? [confidenceGate.advisory] : [];
   let reconciliationPending = false;
   try {
-    const { data: persistedListing, error: listingSaveError } = await supabase.from('listings').update({
-      publish_claim_id: null,
-      publish_claimed_at: null,
-      status: 'active',
-      external_listing_id: externalListingId,
-      published_at: publishedAt,
-      updated_at: publishedAt,
-    }).eq('id', listingId).eq('tenant_id', tenantId).eq('publish_claim_id', claimId).select('id,external_listing_id').maybeSingle();
-    if (listingSaveError || !persistedListing || persistedListing.external_listing_id !== externalListingId) throw new Error('Accepted listing could not be saved');
-
-    if (item?.id) {
-      const { data: transitioned, error: itemSaveError } = await supabase.rpc('swish_transition_item', {
-        p_tenant_id: tenantId,
-        p_item_id: item.id,
-        p_status: 'listed',
-        p_notes: `eBay listing published: ${externalListingId}`,
-        p_marketplace: 'ebay',
-      });
-      if (itemSaveError || transitioned !== true) {
-        reconciliationPending = true;
-        console.error(`[SWISH publish] Lifecycle reconciliation failed: code=${itemSaveError?.code ?? 'unconfirmed'}`);
-        warnings.push('Published on eBay; SWISH stock synchronisation is pending. Do not submit again.');
-      }
+    // A successful Trading response belongs to this request's existing claim.
+    // Link the ID, bind the seller, update stock and release the claim together.
+    const { error: applyError } = await supabase.rpc('swish_recover_pending_ebay_publish', {
+      p_tenant_id: tenantId, p_listing_id: listingId, p_claim_id: claimId, p_binding_id: publishBinding.id,
+      p_external_id: externalListingId, p_status: 'active', p_quantity: Math.max(1, quantity),
+      p_quantity_sold: 0, p_started_at: publishedAt, p_ended_at: null,
+    });
+    if (applyError) {
+      reconciliationPending = true;
+      console.error(`[SWISH publish] Accepted listing reconciliation failed: code=${applyError.code ?? 'unknown'}`);
     }
-
-    if (catResult.wasResolved && resolvedCategoryId) {
-      await supabase.from('listings').update({ category_id: resolvedCategoryId }).eq('id', listingId);
-    }
-  } catch (dbErr: any) {
-    console.error(`[SWISH] DB update after successful publish failed: ${dbErr.message}`);
+  } catch {
     reconciliationPending = true;
-    warnings.push('Published on eBay; SWISH database synchronisation is pending. Do not submit again.');
+    console.error('[SWISH publish] Accepted listing reconciliation unavailable.');
   }
+  if (reconciliationPending) warnings.push('Published on eBay; SWISH is still linking the existing listing. Use Refresh status.');
 
   return jsonResponse({
     success: true,
