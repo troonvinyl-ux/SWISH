@@ -22,3 +22,16 @@ export function parseEbayListingStatus(xml: string, expectedId: string): EbaySta
   const endedAt = status !== 'active' && end && Number.isFinite(Date.parse(end)) && Date.parse(end) <= Date.now() ? end : null;
   return { externalId, status, quantity, quantitySold, endedAt };
 }
+
+/** A seller-entered item number is only a candidate. Require seller and stock evidence. */
+export function verifyPendingEbayItem(xml: string, expectedId: string, seller: string, escapedSku: string) {
+  const observation = parseEbayListingStatus(xml, expectedId);
+  const item = tag(xml, 'Item');
+  const observedSeller = tag(tag(item, 'Seller'), 'UserID');
+  const startedAt = tag(tag(item, 'ListingDetails'), 'StartTime');
+  if (!seller || observedSeller.toLowerCase() !== seller.toLowerCase() ||
+    !escapedSku || tag(item, 'SKU') !== escapedSku || !Number.isFinite(Date.parse(startedAt))) {
+    throw new Error('eBay could not verify the seller, stock SKU and start time for this pending listing.');
+  }
+  return { ...observation, startedAt };
+}

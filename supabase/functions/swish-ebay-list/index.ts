@@ -39,7 +39,7 @@ import { serveModule } from '../_shared/moduleScope.ts';
 import { ebayAdminClient, ebayFetch as fetch } from '../_shared/ebayAccountScope.ts';
 import { descriptionXml, verifyRevisionContent } from '../_shared/ebayRevisionContract.ts';
 import { parseLiveContent } from '../_shared/ebayLiveContent.ts';
-import { parseEbayListingStatus } from '../_shared/listingStatus.ts';
+import { parseEbayListingStatus, verifyPendingEbayItem } from '../_shared/listingStatus.ts';
 import { confirmSellerListingEnd } from '../_shared/ebayEndPolicy.ts';
 import { withEdgeFunctionLogging } from '../_shared/edgeFunctionLogging.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -1387,7 +1387,7 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 
   // Apply the same stored-resource entitlement gate before EVERY marketplace write.
-  if (['publish', 'revise', 'end', 'revise_sku', 'inspect_live', 'revise_price'].includes(route)) {
+  if (['publish', 'revise', 'end', 'revise_sku', 'inspect_live', 'revise_price', 'recover_pending_publish'].includes(route)) {
     if (!body.listingId || !auth.userId) return jsonResponse({ error: 'Authenticated saved listing required.' }, 400);
     const { data: resource, error: resourceError } = await supabase.from('listings')
       .select('item_id, items!inner(tenant_id,specialist_id,attributes,media)')
@@ -1461,6 +1461,36 @@ async function handleRequest(req: Request): Promise<Response> {
       console.error(`[SWISH API Usage] Request failed: ${e?.message ?? e}`);
       return jsonResponse({ success: false, error: 'Could not reach eBay Developer Analytics. Please retry.' }, 502);
     }
+  }
+
+  if (route === 'recover_pending_publish') {
+    const binding = currentMemberEbayBinding();
+    const externalId = String(body.externalListingId ?? '').trim();
+    if (!binding || !/^\d{6,20}$/.test(externalId)) return jsonResponse({ error: 'Enter the eBay item number for the pending listing.' }, 422);
+    const { data: row, error } = await supabase.from('listings')
+      .select('id,publish_claim_id,external_listing_id,items!inner(sku)')
+      .eq('id', body.listingId).eq('tenant_id', tenantId).eq('marketplace_id', 'ebay').maybeSingle();
+    if (error || !row?.publish_claim_id || row.external_listing_id) return jsonResponse({ error: 'This listing has no pending submission to link. Refresh its saved status.' }, 409);
+    const sku = String((row.items as unknown as { sku?: string })?.sku ?? '').trim();
+    if (!sku) return jsonResponse({ error: 'The draft has no stock SKU to match against eBay.' }, 422);
+    const creds = await getEbayCredentials(supabase, tenantId, false);
+    if ('error' in creds) return jsonResponse({ error: creds.error }, 400);
+    const request = `<?xml version="1.0" encoding="utf-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials><eBayAuthToken>${xmlEscape(creds.accessToken)}</eBayAuthToken></RequesterCredentials><ItemID>${externalId}</ItemID><DetailLevel>ReturnAll</DetailLevel></GetItemRequest>`;
+    const result = await callEbayTradingApi(request, 'GetItem', creds.clientId);
+    if (!result.ok) return jsonResponse({ error: 'eBay could not confirm that item number.' }, 422);
+    let observation;
+    try {
+      observation = verifyPendingEbayItem(result.xml, externalId, binding.seller_account_id, xmlEscape(sku));
+    } catch {
+      return jsonResponse({ error: 'The eBay item could not be matched to this seller and stock SKU. The pending submission is still protected.' }, 422);
+    }
+    const applied = await supabase.rpc('swish_recover_pending_ebay_publish', {
+      p_tenant_id: tenantId, p_listing_id: row.id, p_claim_id: row.publish_claim_id, p_binding_id: binding.id,
+      p_external_id: externalId, p_status: observation.status, p_quantity: observation.quantity,
+      p_quantity_sold: observation.quantitySold, p_started_at: observation.startedAt, p_ended_at: observation.endedAt,
+    });
+    if (applied.error) return jsonResponse({ error: 'eBay returned a match, but SWISH could not safely link it. Check whether the item already exists in inventory.' }, 409);
+    return jsonResponse({ success: true, externalListingId: externalId, status: observation.status });
   }
 
   if (route === 'get_selected_delivery_policy') {
@@ -2559,10 +2589,10 @@ async function handleRequest(req: Request): Promise<Response> {
   if (effectiveListingType === 'Chinese') {
     const auctionStartPrice = Number(isAntique ? antiqueOptions.startPrice : startPrice ?? Math.max(price * 0.5, 0.99));
     if (isAntique && (!Number.isFinite(auctionStartPrice) || auctionStartPrice <= 0 || quantity !== 1 || ![3,5,7,10].includes(Number(antiqueOptions.auctionDays ?? 7)) || (antiqueOptions.reservePrice && (!Number.isFinite(Number(antiqueOptions.reservePrice)) || Number(antiqueOptions.reservePrice) <= auctionStartPrice)))) return jsonResponse({ error: 'Auction requires quantity one, positive start price, a supported duration and a reserve above the start price.' }, 422);
-    requestXml = buildAuctionXML({ token: creds.accessToken, title, description, categoryId: resolvedCategoryId, conditionId, startPrice: auctionStartPrice, reservePrice: isAntique ? antiqueOptions.reservePrice ? Number(antiqueOptions.reservePrice) : undefined : reservePrice ? Number(reservePrice) : undefined, quantity: 1, durationDays: isAntique ? Number(antiqueOptions.auctionDays ?? 7) : Number(auctionDays) || 7, itemSpecifics, mediaUrls, sellerProfilesXml, ...(isAntique ? { conditionDescription: item.condition_notes, sku: item.sku } : {}) });
+    requestXml = buildAuctionXML({ token: creds.accessToken, title, description, categoryId: resolvedCategoryId, conditionId, startPrice: auctionStartPrice, reservePrice: isAntique ? antiqueOptions.reservePrice ? Number(antiqueOptions.reservePrice) : undefined : reservePrice ? Number(reservePrice) : undefined, quantity: 1, durationDays: isAntique ? Number(antiqueOptions.auctionDays ?? 7) : Number(auctionDays) || 7, itemSpecifics, mediaUrls, sellerProfilesXml, sku: item?.sku, ...(isAntique ? { conditionDescription: item.condition_notes } : {}) });
     callName = 'AddItem';
   } else {
-    requestXml = buildBuyItNowXML({ token: creds.accessToken, title, description, categoryId: resolvedCategoryId, conditionId, price, quantity, itemSpecifics, mediaUrls, sellerProfilesXml, ...(isAntique ? { conditionDescription: item.condition_notes, sku: item.sku, bestOfferEnabled: antiqueOptions.bestOfferEnabled === true } : {}) });
+    requestXml = buildBuyItNowXML({ token: creds.accessToken, title, description, categoryId: resolvedCategoryId, conditionId, price, quantity, itemSpecifics, mediaUrls, sellerProfilesXml, sku: item?.sku, ...(isAntique ? { conditionDescription: item.condition_notes, bestOfferEnabled: antiqueOptions.bestOfferEnabled === true } : {}) });
     callName = 'AddFixedPriceItem';
   }
 
@@ -2573,6 +2603,9 @@ async function handleRequest(req: Request): Promise<Response> {
   const errors = parseErrors(responseXml);
 
   if (!ok) {
+    if (!/<Ack>Failure<\/Ack>/i.test(responseXml) || parseItemId(responseXml)) {
+      return jsonResponse({ success: false, code: 'PUBLISH_RECONCILIATION_REQUIRED', error: 'eBay did not confirm the outcome. Link the existing eBay item before retrying.' }, 502);
+    }
     await supabase.from('listings').update({ publish_claim_id: null, publish_claimed_at: null })
       .eq('id', listingId).eq('tenant_id', tenantId).eq('publish_claim_id', claimId);
     console.error(`[SWISH] eBay ${callName} rejected the request.`);
