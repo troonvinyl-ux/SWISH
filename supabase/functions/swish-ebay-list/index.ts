@@ -1463,6 +1463,36 @@ async function handleRequest(req: Request): Promise<Response> {
     }
   }
 
+  if (route === 'get_selected_delivery_policy') {
+    const { fulfillmentId } = await getSelectedPolicyIds(supabase, tenantId, {});
+    if (!fulfillmentId) return jsonResponse({ policy: null });
+    const creds = await getEbayCredentials(supabase, tenantId, false);
+    if ('error' in creds) return jsonResponse({ error: creds.error }, 400);
+    try {
+      const response = await fetch(`${EBAY_ACCOUNT_API}/fulfillment_policy/${encodeURIComponent(fulfillmentId)}`, {
+        headers: { Authorization: `Bearer ${creds.accessToken}`, 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_GB' },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!response.ok) return jsonResponse({ error: 'eBay could not return your selected delivery policy.' }, 502);
+      const policy = await response.json();
+      if (String(policy.fulfillmentPolicyId ?? '') !== fulfillmentId) {
+        return jsonResponse({ error: 'eBay returned an unexpected delivery policy.' }, 502);
+      }
+      return jsonResponse({ policy: {
+        fulfillmentPolicyId: fulfillmentId,
+        name: policy.name,
+        fulfillmentType: policy.fulfillmentType,
+        shippingOptions: policy.shippingOptions,
+        shipToLocations: policy.shipToLocations,
+        globalShipping: policy.globalShipping,
+        localPickup: policy.localPickup,
+        pickupDropOff: policy.pickupDropOff,
+      } });
+    } catch {
+      return jsonResponse({ error: 'The selected eBay delivery policy could not be checked. Retry shortly.' }, 502);
+    }
+  }
+
   // ── Route: get_seller_policies ────────────────────────────────────────────
   if (route === 'get_seller_policies') {
     const creds = await getEbayCredentials(supabase, tenantId, false);
